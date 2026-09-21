@@ -1177,6 +1177,23 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:1000px){.smart-days-grid,.smart-times-bottom{grid-template-columns:1fr}.smart-learning-strip p{margin-left:0;max-width:none;width:100%}}
 @media(max-width:560px){.smart-time-row{grid-template-columns:24px 90px 1fr}.smart-learning-strip>div{min-width:72px}}
 
+
+/* ===== Tested vs experimental smart slots ===== */
+.smart-tested-badge{
+  color:#79dba4!important;
+  border-color:rgba(92,211,145,.26)!important;
+  background:rgba(53,151,98,.10)!important;
+}
+.smart-test-badge{
+  color:#e3b76f!important;
+  border-color:rgba(227,183,111,.26)!important;
+  background:rgba(152,107,42,.10)!important;
+}
+.smart-legend-chip{color:#aeb6c2!important}
+.smart-level.good{color:#79dba4!important}
+.smart-level.strong{color:#ff8cb4!important}
+.smart-level.test{color:#e3b76f!important}
+
 </style>
 </head>
 <body>
@@ -1554,7 +1571,7 @@ async function syncFromBackend(){
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
-      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual"
+      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual")
     };
   }
   save();
@@ -1566,7 +1583,7 @@ async function syncAllCloudSlots(){
     if(!x?.cloud||!x.scheduleId) continue;
     jobs.push(cloudFetch("?action=schedule",{
       method:"PATCH",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id:x.scheduleId,scheduled_at:x.scheduledAt,status:x.status||"scheduled",smart_mode:x.smartMode||"manual",caption:x.caption||""})
+      body:JSON.stringify({id:x.scheduleId,scheduled_at:x.scheduledAt,status:x.status||"scheduled",smart_mode:x.smartMode||"manual",smart_strategy:x.smartStrategy||(x.smartMode==="auto"?"tested":"manual"),caption:x.caption||""})
     }).catch(()=>null));
   }
   await Promise.all(jobs);
@@ -2164,6 +2181,7 @@ function calendarPage(){
       <div class="summary-chip">${weekScheduledCount()}/35 posições preenchidas</div>
       <div class="summary-chip">Intervalo mínimo: ${automationData?.settings?.min_gap_minutes||state.minGap} min</div>
       <div class="summary-chip">Posts próximos ficam bloqueados para evitar mudanças de última hora</div>
+      <div class="summary-chip smart-legend-chip">✓ 4 Testados + 🧪 1 Teste por dia</div>
     </div>
     <div class="calendar-content-days">
       <span>Com vídeos:</span>
@@ -2186,6 +2204,12 @@ function renderSlot(date,i){
   const x=slotData(date,i), time=x?.time||state.defaultTimes[i];
   if(!x)return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
   const st=getStatus(x),isAuto=x.smartMode==="auto";
+  const strategy=x.smartStrategy||(isAuto?"tested":"manual");
+  const smartBadge=strategy==="test"
+    ? '<span class="badge smart-test-badge">🧪 Teste</span>'
+    : strategy==="tested"
+      ? '<span class="badge smart-tested-badge">✓ Testado</span>'
+      : "";
   return `<div class="slot filled ui31-slot" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
       <button class="ui31-thumb" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo">▶</button>
@@ -2204,7 +2228,7 @@ function renderSlot(date,i){
     </div>
     <div class="ui31-slot-bottom">
       <span class="badge ${statusClass(st)}">${statusLabel(st)}</span>
-      ${isAuto?'<span class="badge smart-badge">✦ Auto</span>':""}
+      ${smartBadge}
       ${x.caption?'<span class="slot-caption-dot" title="Com legenda">●</span>':""}
     </div>
   </div>`;
@@ -2228,15 +2252,26 @@ function smartRecommendationsForDate(date){
     .filter(r=>Number(r.weekday)===dow)
     .sort((a,b)=>Number(a.rank)-Number(b.rank));
 }
-function bestAvailableSmartTime(date,preferredIndex=0){
+function smartChoiceForSlot(date,preferredIndex=0){
   const recs=smartRecommendationsForDate(date);
-  if(!recs.length)return state.defaultTimes[preferredIndex]||"12:00";
+  if(!recs.length)return {
+    time:state.defaultTimes[preferredIndex]||"12:00",
+    strategy:"tested",
+    recommendation:null
+  };
   const order=[...recs.slice(preferredIndex),...recs.slice(0,preferredIndex)];
   for(const r of order){
     const t=String(r.recommended_time||"").slice(0,5);
-    if(t&&validateSchedule(date,t).ok)return t;
+    if(t&&validateSchedule(date,t).ok)return {
+      time:t,
+      strategy:r.recommendation_type==="test"?"test":"tested",
+      recommendation:r
+    };
   }
-  return state.defaultTimes[preferredIndex]||"12:00";
+  return {time:state.defaultTimes[preferredIndex]||"12:00",strategy:"tested",recommendation:null};
+}
+function bestAvailableSmartTime(date,preferredIndex=0){
+  return smartChoiceForSlot(date,preferredIndex).time;
 }
 function updateScheduleModalSmartTime(){
   const day=$("#modalDay"),time=$("#modalTime"),smart=$("#modalSmart");
@@ -2245,7 +2280,12 @@ function updateScheduleModalSmartTime(){
   time.disabled=auto;
   if(auto){
     const free=firstFreeSlot(day.value);
-    time.value=bestAvailableSmartTime(day.value,Math.max(0,free));
+    const choice=smartChoiceForSlot(day.value,Math.max(0,free));
+    time.value=choice.time;
+    const hint=$("#modalSmartHint");
+    if(hint)hint.textContent=choice.strategy==="test"
+      ?"🧪 Este será o horário de teste do dia."
+      :"✓ Horário testado com base no histórico.";
   }
 }
 async function handleQuickSlotVideo(input){
@@ -2257,13 +2297,14 @@ async function handleQuickSlotVideo(input){
   try{
     toast("Enviando "+file.name+"…","ok");
     const auto=smartSchedulerEnabled();
-    const chosenTime=auto?bestAvailableSmartTime(target.date,target.slot):(state.defaultTimes[target.slot]||"12:00");
-    const ok=await addVideoToSlot(file,target.date,target.slot,chosenTime,"",auto?"auto":"manual");
+    const choice=auto?smartChoiceForSlot(target.date,target.slot):{time:state.defaultTimes[target.slot]||"12:00",strategy:"manual"};
+    const chosenTime=choice.time;
+    const ok=await addVideoToSlot(file,target.date,target.slot,chosenTime,"",auto?"auto":"manual",choice.strategy);
     if(ok){
       await syncFromBackend();
       renderAll();
       setTimeout(()=>jumpToCalendarDay(target.date),40);
-      toast(file.name+" agendado às "+chosenTime+(auto?" pelo Smart Scheduler.":"."),"ok");
+      toast(file.name+" agendado às "+chosenTime+(auto?(choice.strategy==="test"?" como horário de teste.":" em horário testado."):"."),"ok");
     }
   }catch(e){
     console.error("Quick schedule upload error:",e);
@@ -2275,17 +2316,19 @@ async function handleQuickSlotVideo(input){
 function firstFreeSlot(date){
   for(let i=0;i<5;i++)if(!slotData(date,i))return i;return -1
 }
-async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto"){
-  const t=time||(smartMode==="auto"?bestAvailableSmartTime(date,slot):(state.defaultTimes[slot]||"12:00"));
+async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto",smartStrategy=null){
+  const choice=smartMode==="auto"?smartChoiceForSlot(date,slot):null;
+  const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
+  const strategy=smartStrategy||(smartMode==="auto"?(choice?.strategy||"tested"):"manual");
   const valid=validateSchedule(date,t);
   if(!valid.ok){alert(valid.msg);return false}
   if(state.slots[keyFor(date,slot)]){alert("Essa posição já está ocupada.");return false}
   if(!cloudSession){alert("Entre na sua conta do CloudentFlow em Configurações para salvar vídeos no backend.");showPage("settings");return false}
   const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
-  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);
+  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
   const schedule=res.schedule,video=res.video;
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode};
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy};
   save();log(`${file.name} enviado ao Storage e agendado no backend para ${date} às ${t}.`,"ok");return true
 }
 function updateSlotTime(date,slot,time){
@@ -2408,7 +2451,7 @@ function openScheduleModal(){
       <div class="field"><label>Horário</label><input id="modalTime" type="time" value="12:00"></div>
       <div class="field full smart-schedule-choice">
         <label><input id="modalSmart" type="checkbox" ${auto?"checked":""} onchange="updateScheduleModalSmartTime()"> <b>Usar melhor horário automaticamente</b></label>
-        <small>Prioriza horários de Reels que tiveram desempenho muito acima da sua média.</small>
+        <small id="modalSmartHint">Selecionando automaticamente 4 horários testados + 1 horário de teste.</small>
       </div>
       <div class="field full"><label>Legenda</label><textarea id="modalCaption" placeholder="Legenda do Reel..."></textarea></div>
       <div class="field full"><label>Arquivo</label><input id="modalFile" type="file" accept="video/*"></div>
@@ -2422,19 +2465,20 @@ async function confirmScheduleModal(){
   if(!file){alert("Escolha um vídeo.");return}
   const free=firstFreeSlot(date);if(free<0){alert("Esse dia já está com 5 vídeos.");return}
   const auto=$("#modalSmart")?.checked??false;
-  const time=auto?bestAvailableSmartTime(date,free):$("#modalTime").value;
+  const choice=auto?smartChoiceForSlot(date,free):{time:$("#modalTime").value,strategy:"manual"};
+  const time=choice.time;
   const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
 
   const btn=document.querySelector('#modalHost .btn.primary');
   if(btn){btn.disabled=true;btn.textContent="Enviando…"}
   try{
-    const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual");
+    const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual",choice.strategy);
     if(ok){
       await syncFromBackend();
       closeModal();
       renderAll();
       setTimeout(()=>jumpToCalendarDay(date),40);
-      toast(file.name+" agendado para "+date+" às "+time+(auto?" pelo Smart Scheduler.":"."),"ok");
+      toast(file.name+" agendado para "+date+" às "+time+(auto?(choice.strategy==="test"?" como horário de teste.":" em horário testado."):"."),"ok");
     }
   }catch(e){
     console.error("Schedule upload error:",e);
@@ -2970,13 +3014,18 @@ function recommendationSupport(rec){
   return {count:nearby.length,best};
 }
 function smartConfidenceLabel(rec){
-  const c=Number(rec.confidence||0),n=Number(rec.sample_count||0);
-  if(c>=80&&n>=2)return {label:"Forte",cls:"strong",icon:"🔥"};
-  if(c>=55)return {label:"Bom",cls:"good",icon:"●"};
-  return {label:"Experimental",cls:"test",icon:"◌"};
+  if(rec.recommendation_type==="test")return {label:"Teste",cls:"test",icon:"🧪"};
+  const c=Number(rec.confidence||0);
+  return {label:"Testado",cls:c>=80?"strong":"good",icon:"✓"};
 }
 function smartReason(rec){
   const s=recommendationSupport(rec);
+  if(rec.recommendation_type==="test"){
+    return {
+      main:"Horário escolhido para teste controlado",
+      extra:"O sistema vai comparar o resultado em 30min, 2h, 6h, 24h e 48h"
+    };
+  }
   if(s.best){
     const p=localMetricParts(s.best.timestamp);
     const hh=String(p.hour).padStart(2,"0")+":"+String(p.minute).padStart(2,"0");
