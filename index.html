@@ -483,7 +483,7 @@ const navItems=[
   ["queue","ϟ","Fila de geração"],
   ["calendar","◫","Calendário"],
   ["metrics","⌁","Métricas"],
-  ["testReel","▷","Reel teste"],
+  ["testReel","▷","Teste de publicação"],
   ["settings","⚙","Configurações"]
 ];
 const SUPABASE_URL="https://dxrhvudvutmgrmfkmzxo.supabase.co";
@@ -1178,7 +1178,7 @@ function overview(){
       <div class="card panel-v2">
         <div class="panel-title-row"><div><span class="panel-kicker">Ações rápidas</span><h2>Atalhos</h2></div></div>
         <div class="quick-actions">
-          <button onclick="showPage('testReel')"><span>▷</span><div><b>Testar Reel</b><small>Preparar publicação</small></div></button>
+          <button onclick="showPage('testReel')"><span>▷</span><div><b>Testar publicação</b><small>Preparar publicação</small></div></button>
           <button onclick="showPage('aiComments')"><span>◌</span><div><b>Comentários IA</b><small>Ajustar respostas</small></div></button>
           <button onclick="showPage('settings')"><span>⚙</span><div><b>Integrações</b><small>Gerenciar conexões</small></div></button>
         </div>
@@ -1782,7 +1782,7 @@ async function prepareTestReel(){
     setTestReelStatus("Falha no teste: "+e.message,"err");
   }finally{
     const btn=$("#prepareTestReelBtn");
-    if(btn){btn.disabled=false;btn.textContent="Preparar Reel para teste"}
+    if(btn){btn.disabled=false;btn.textContent="Preparar publicação"}
   }
 }
 async function continueTestPublication(){
@@ -1836,12 +1836,12 @@ function testReelPage(){
           <div class="field"><label>Vídeo</label><input id="testReelFile" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" onchange="previewTestReelFile(this)"></div>
           <video id="testReelPreview" class="test-preview hidden" controls playsinline style="margin-top:12px"></video>
           <div class="field" style="margin-top:12px"><label>Legenda</label><textarea id="testReelCaption" maxlength="2200" placeholder="Legenda do Reel…"></textarea></div>
-          <label class="switch" style="margin-top:10px"><input id="testReelFeed" type="checkbox"> <b>Também mostrar no Feed quando eu publicar</b></label>
-          <div class="note" style="margin-top:10px">MP4/MOV · 3s a 15min · até 1GB · 9:16 recomendado. “Preparar Reel para teste” apenas cria/processa o container. Não publica.</div>
-          <div class="api-warning" style="margin-top:10px"><b>Importante:</b> quando você apertar “Publicar de verdade”, será um Reel real. Com “Também mostrar no Feed” desligado, ele continua aparecendo na aba Reels.</div>
+          <label class="switch" style="margin-top:10px"><input id="testReelFeed" type="checkbox"> <b>Também mostrar no Feed</b></label>
+          <div class="note" style="margin-top:10px">MP4/MOV · 3s a 15min · até 1GB · 9:16 recomendado. “Preparar publicação” apenas cria/processa o container. Não publica.</div>
+          <div class="api-warning" style="margin-top:10px"><b>Importante:</b> esta tela testa o fluxo de publicação da API. “Publicar de verdade” cria um Reel real. Isso NÃO é o recurso Trial Reels/Reels de teste do Instagram.</div>
           <div id="testReelStatus" class="test-status">${state.testPublicationId?(ready?"Vídeo processado e pronto para publicação real.":"Existe um teste pendente. Verifique o processamento."):"Escolha um vídeo para começar."}</div>
           <div class="toolbar" style="margin-top:12px">
-            <button class="btn primary" id="prepareTestReelBtn" onclick="prepareTestReel()" ${connected?"":"disabled"}>Preparar Reel para teste</button>
+            <button class="btn primary" id="prepareTestReelBtn" onclick="prepareTestReel()" ${connected?"":"disabled"}>Preparar publicação</button>
             ${state.testPublicationId?`<button class="btn" onclick="continueTestPublication()">Verificar processamento</button><button class="btn danger" onclick="publishPreparedTestReel()">Publicar de verdade</button>`:""}
           </div>
         </div>
@@ -1853,7 +1853,7 @@ function testReelPage(){
             <div class="row">
               <div><b>${esc(x.file_name||"Reel")}</b><div class="muted">${new Date(x.created_at).toLocaleString("pt-BR")} · ${x.share_to_feed?"Reels + Feed":"Somente Reels"}</div></div>
               <span class="badge ${x.status==="published"?"green":x.status==="failed"?"red":"yellow"}">${esc(x.status)}</span>
-            </div>`).join(""):`<div class="empty">Nenhum teste preparado ainda.</div>`}
+            </div>`).join(""):`<div class="empty">Nenhum teste de publicação preparado ainda.</div>`}
         </div>
       </div>
     </div>`;
