@@ -1785,8 +1785,23 @@ function settings(){
   `;
 }
 
+function safeRenderPage(id,fn){
+  try{fn()}
+  catch(err){
+    console.error("CloudentFlow render error:",id,err);
+    const el=$("#"+id);
+    if(el)el.innerHTML=`<div class="card"><div class="empty-state-v2"><b>Não consegui carregar esta área.</b><span>${esc(err?.message||"Erro inesperado")}</span><button class="btn btn-sm" onclick="renderAll()">Tentar novamente</button></div></div>`;
+  }
+}
 function renderAll(){
-  overview();aiComments();queue();calendarPage();metrics();testReelPage();settings();
+  safeRenderPage("overview",overview);
+  safeRenderPage("aiComments",aiComments);
+  safeRenderPage("queue",queue);
+  safeRenderPage("calendar",calendarPage);
+  safeRenderPage("metrics",metrics);
+  safeRenderPage("testReel",testReelPage);
+  safeRenderPage("settings",settings);
+
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
   if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
   if(stat)stat.textContent=instagramIntegration?.enabled?"Conta conectada":"Configurar integração";
