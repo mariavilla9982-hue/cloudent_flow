@@ -585,6 +585,11 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   opacity:.35;
 }
 
+
+.health-led.pending{background:#6b7380!important;box-shadow:none!important}
+.health-led.warn{background:#d5b458!important;box-shadow:none!important}
+.health-led.error{background:#ff6f78!important;box-shadow:none!important}
+
 </style>
 </head>
 <body>
@@ -1002,17 +1007,41 @@ function activityFeedItems(limit=20){
   const local=(state.logs||[]).map(l=>({time:l.t,type:l.type==="warn"?"warn":l.type==="error"?"error":"info",title:l.m,detail:"Interface"}));
   return [...server,...local].filter(x=>x.time).sort((a,b)=>new Date(b.time)-new Date(a.time)).slice(0,limit);
 }
+function workerVisualState(worker,graceMinutes=8){
+  if(!worker)return {label:"atualizando",cls:"pending",online:null};
+  const hb=worker.last_heartbeat?new Date(worker.last_heartbeat).getTime():0;
+  const recent=hb && (Date.now()-hb)<graceMinutes*60*1000;
+  const online=worker.online===true||recent;
+  if(online)return {label:"online",cls:"on",online:true};
+  if(worker.last_error)return {label:"erro",cls:"error",online:false};
+  return {label:"heartbeat atrasado",cls:"warn",online:false};
+}
 function renderWorkerMiniSummary(){
   const workers=automationData?.workers||[];
   const pub=workers.find(w=>w.worker_name==="instagram_publish"),aut=workers.find(w=>w.worker_name==="automation");
-  return `<div><span class="health-led ${pub?.online?"on":""}"></span><b>Publicação</b><small>${pub?.online?"online":"offline"}</small></div><div><span class="health-led ${aut?.online?"on":""}"></span><b>Métricas + IA</b><small>${aut?.online?"online":"offline"}</small></div>`;
+  const ps=workerVisualState(pub,4),as=workerVisualState(aut,8);
+  return `<div><span class="health-led ${ps.online===true?"on":""} ${ps.cls}"></span><b>Publicação</b><small>${ps.label}</small></div><div><span class="health-led ${as.online===true?"on":""} ${as.cls}"></span><b>Métricas + Scheduler</b><small>${as.label}</small></div>`;
 }
-function toggleActivityPanel(forceOpen=false){
+
+async function toggleActivityPanel(forceOpen=false){
   const host=$("#activityPanelHost");if(!host)return;
   const open=forceOpen||!host.classList.contains("open");
   if(!open){host.className="";host.innerHTML="";return}
-  const items=activityFeedItems(40);
+
   host.className="open";
+  host.innerHTML=`<div class="activity-drawer-backdrop" onclick="toggleActivityPanel()"></div>
+    <aside class="activity-drawer">
+      <div class="activity-drawer-head"><div><span>ATIVIDADE</span><h3>CloudentFlow ao vivo</h3></div><button onclick="toggleActivityPanel()">×</button></div>
+      <div class="activity-worker-summary"><div><span class="health-led pending"></span><b>Publicação</b><small>atualizando</small></div><div><span class="health-led pending"></span><b>Métricas + Scheduler</b><small>atualizando</small></div></div>
+      <div class="activity-drawer-list"><div class="ui3-empty">Carregando atividade do servidor…</div></div>
+    </aside>`;
+
+  if(cloudSession){
+    try{await Promise.all([loadAutomationStatus(),loadServerLogs()])}catch(e){}
+  }
+
+  if(!host.classList.contains("open"))return;
+  const items=activityFeedItems(40);
   host.innerHTML=`<div class="activity-drawer-backdrop" onclick="toggleActivityPanel()"></div>
     <aside class="activity-drawer">
       <div class="activity-drawer-head"><div><span>ATIVIDADE</span><h3>CloudentFlow ao vivo</h3></div><button onclick="toggleActivityPanel()">×</button></div>
@@ -1020,7 +1049,9 @@ function toggleActivityPanel(forceOpen=false){
       <div class="activity-drawer-list">${items.map(a=>`<div class="activity-event ${a.type}"><span class="activity-event-dot"></span><div><b>${esc(a.title)}</b><small>${esc(a.detail)} · ${relativeTime(a.time)}</small></div></div>`).join("")||'<div class="ui3-empty">Sem eventos recentes.</div>'}</div>
       <button class="btn drawer-refresh" onclick="refreshLiveData(true)">↻ Atualizar agora</button>
     </aside>`;
+  updateLiveChrome();
 }
+
 function commandItems(){
   return [
     {icon:"＋",title:"Agendar vídeo",hint:"Calendário",run:()=>{closeCommandPalette();showPage("calendar");openScheduleModal()}},
@@ -1051,19 +1082,26 @@ function renderCommandResults(q=""){
 function updateLiveChrome(){
   const workers=automationData?.workers||[];
   const pub=workers.find(w=>w.worker_name==="instagram_publish"),aut=workers.find(w=>w.worker_name==="automation");
+  const ps=workerVisualState(pub,4),as=workerVisualState(aut,8);
   const pending=(automationData?.jobs||[]).filter(j=>j.status==="pending"||j.status==="running").length;
   const failed=(automationData?.jobs||[]).filter(j=>j.status==="failed").length;
   const pill=$("#liveWorkerPill"),txt=$("#liveWorkerText"),count=$("#notificationCount");
+
   if(pill){
-    const all=!!pub?.online&&!!aut?.online;
-    pill.classList.toggle("working",pending>0);pill.classList.toggle("offline",!all);
-    if(txt)txt.textContent=pending>0?"CloudentFlow trabalhando · "+pending:(all?"Automação online":"Verificando automação");
+    const loaded=!!pub&&!!aut;
+    const all=ps.online===true&&as.online===true;
+    pill.classList.toggle("working",loaded&&pending>0);
+    pill.classList.toggle("offline",loaded&&!all);
+    if(txt){
+      txt.textContent=!loaded?"Sincronizando automação…":pending>0?"CloudentFlow trabalhando · "+pending:(all?"Automação online":"Verificar automação");
+    }
   }
   if(count){
     const n=failed+Math.min(9,activityFeedItems(20).filter(x=>x.type==="error"||x.type==="warn").length);
     count.textContent=String(n);count.classList.toggle("hidden",n===0);
   }
 }
+
 async function refreshLiveData(showFeedback=false){
   if(!cloudSession)return;
   try{
