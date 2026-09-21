@@ -520,6 +520,71 @@ button:disabled,.btn:disabled{
 @media(max-width:1000px){.activity-timeline{grid-template-columns:1fr 1fr}.live-worker-pill{display:none}}@media(max-width:650px){.activity-timeline{grid-template-columns:1fr}.command-trigger{display:none}.top-actions{gap:5px}}
 @media(prefers-reduced-motion:reduce){.page:not(.hidden)>*,.live-pulse{animation:none!important}}
 
+
+/* ===== Motion balance: subtle SaaS mode ===== */
+.page:not(.hidden)>*{
+  animation:none!important;
+}
+.ui3-kpi,.ui3-panel,.ui31-status-card,.day-column,.reel-instagram-card{
+  transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease!important;
+}
+.ui3-kpi:hover,.ui3-panel:hover,.ui31-status-card:hover{
+  transform:none!important;
+  border-color:#292f39!important;
+  box-shadow:0 5px 16px rgba(0,0,0,.06)!important;
+}
+button,.btn,.nav button,.quick-actions button,.more-popover button{
+  transition:background-color .14s ease,border-color .14s ease,color .14s ease,opacity .14s ease!important;
+}
+button:not(:disabled):hover,.btn:not(:disabled):hover,
+.quick-actions button:hover,.nav button:hover,.more-popover button:hover{
+  transform:none!important;
+}
+button:not(:disabled):active,.btn:not(:disabled):active{
+  transform:scale(.99)!important;
+}
+.btn.primary{
+  box-shadow:0 4px 12px rgba(255,63,127,.10)!important;
+}
+.btn.primary::after{
+  display:none!important;
+}
+.btn.primary:not(:disabled):hover{
+  box-shadow:0 5px 14px rgba(255,63,127,.14)!important;
+}
+.btn.primary:not(:disabled):focus-visible{
+  animation:none!important;
+  outline:1px solid rgba(255,99,153,.34)!important;
+  outline-offset:2px;
+}
+.btn.danger:not(:disabled):hover,.btn.success:not(:disabled):hover{
+  box-shadow:none!important;
+}
+.nav button::after{
+  display:none!important;
+}
+.nav button:hover .nav-icon{
+  transform:none!important;
+}
+.quick-actions button>span,.quick-actions button:hover>span{
+  transform:none!important;
+}
+.live-pulse{
+  animation:none!important;
+  box-shadow:0 0 0 3px rgba(77,212,139,.06);
+}
+.live-worker-pill:hover{
+  transform:none!important;
+}
+.more-popover,.activity-drawer,.command-palette{
+  animation-duration:.10s!important;
+}
+.booting .page:not(.hidden) .ui3-kpi:after,
+.booting .page:not(.hidden) .card:after{
+  animation:none!important;
+  opacity:.35;
+}
+
 </style>
 </head>
 <body>
