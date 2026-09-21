@@ -1089,6 +1089,39 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:1000px){.ai-layout{grid-template-columns:1fr}.ai-context-card{order:-1}.ai-snapshot-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.ai-snapshot-grid{grid-template-columns:1fr}.ai-msg{max-width:94%}.ai-context-card{display:none}}
 
+
+/* ===== Calendar scheduled-day visibility ===== */
+.calendar-content-days{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  margin:0 0 10px;padding:8px 0;
+}
+.calendar-content-days>span{
+  font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#626b79;
+}
+.calendar-content-days>small{font-size:8px;color:#697281}
+.calendar-content-days button{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 8px;border:1px solid #262d37;border-radius:8px;
+  background:#0d1015;color:#d9dde4;
+}
+.calendar-content-days button:hover{border-color:#453040;background:#141017}
+.calendar-content-days button b{font-size:8.5px}
+.calendar-content-days button small{
+  font-size:7.5px;color:#ff6b9e;background:#21111a;border-radius:999px;padding:2px 5px;
+}
+.ui31-day.has-content{
+  border-color:#342531!important;
+  box-shadow:inset 0 2px 0 rgba(255,63,127,.32);
+}
+.ui31-day.has-content .count{
+  color:#ff77a6;border-color:#4a2634;background:#1a0f15;
+}
+.calendar-day-focus{animation:calendarDayFocus .9s ease}
+@keyframes calendarDayFocus{
+  0%,100%{box-shadow:inset 0 2px 0 rgba(255,63,127,.32)}
+  50%{box-shadow:0 0 0 2px rgba(255,63,127,.32),0 0 28px rgba(255,63,127,.12)}
+}
+
 </style>
 </head>
 <body>
@@ -2039,6 +2072,20 @@ function weekScheduledCount(){
   const dates=new Set(weekDates().map(localISO));
   return Object.entries(state.slots).filter(([k,v])=>v&&dates.has(k.split("#")[0])).length;
 }
+function calendarDaysWithPosts(){
+  return weekDates().map(d=>{
+    const date=localISO(d);
+    return {date,count:filledCount(date),label:d.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"})};
+  }).filter(x=>x.count>0);
+}
+function jumpToCalendarDay(date){
+  const el=document.querySelector('.day-column[data-day="'+date+'"]');
+  if(!el)return;
+  el.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"});
+  el.classList.add("calendar-day-focus");
+  setTimeout(()=>el.classList.remove("calendar-day-focus"),900);
+}
+
 function calendarPage(){
   const dates=weekDates(), weekdays=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
   const auto=automationData?.settings?.automation||{};
@@ -2060,13 +2107,19 @@ function calendarPage(){
       <div class="summary-chip">Intervalo mínimo: ${automationData?.settings?.min_gap_minutes||state.minGap} min</div>
       <div class="summary-chip">Posts próximos ficam bloqueados para evitar mudanças de última hora</div>
     </div>
+    <div class="calendar-content-days">
+      <span>Com vídeos:</span>
+      ${calendarDaysWithPosts().length
+        ? calendarDaysWithPosts().map(x=>`<button onclick="jumpToCalendarDay('${x.date}')"><b>${x.label}</b><small>${x.count} vídeo${x.count===1?"":"s"}</small></button>`).join("")
+        : '<small>Nenhum vídeo nesta semana.</small>'}
+    </div>
     <div class="ui3-calendar-scroll"><div class="week-grid ui3-seven-days">${dates.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}</div></div>
   `;
   $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
 }
 function dayColumn(d,label){
   const iso=localISO(d), count=filledCount(iso);
-  return `<div class="day-column ui31-day" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
+  return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
     <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count">${count}/5</div></div>
     <div class="day-slots">${Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("")}</div>
   </div>`;
