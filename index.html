@@ -493,7 +493,7 @@ const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
 const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[];
+let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[], automationWorkerStatus=null;
 let testReelObjectUrl=null;
 const SESSION_KEY="cloudentflow-user-session";
 
@@ -602,6 +602,7 @@ async function initCloud(){
     if(backendOnline){
       await syncFromBackend();
       await loadInstagramStatus();
+      await loadAutomationStatus();
     }
   }
 }
@@ -629,6 +630,15 @@ async function edgeFetch(fullUrl,options={},retry=true){
   }
   return data;
 }
+async function loadAutomationStatus(){
+  if(!cloudSession){automationWorkerStatus=null;return}
+  try{
+    automationWorkerStatus=await cloudFetch("?resource=automation");
+  }catch(e){
+    automationWorkerStatus={online:false,worker:null,error:e.message};
+  }
+}
+
 async function loadInstagramStatus(){
   if(!cloudSession){instagramIntegration=null;liveInstagramMetrics=[];return}
   try{
@@ -1162,6 +1172,7 @@ function overview(){
           <div class="health-row"><div class="health-icon ig">◎</div><div><b>Instagram</b><span>${igConnected?"@"+esc(instagramIntegration.account_label||"conectado"):"Aguardando conexão"}</span></div><span class="status-pill ${igConnected?"ok":"warn"}">${igConnected?"Conectado":"Pendente"}</span></div>
           <div class="health-row"><div class="health-icon db">◇</div><div><b>Cloud Backend</b><span>Supabase + Storage</span></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Login"}</span></div>
           <div class="health-row"><div class="health-icon ai">✦</div><div><b>Smart Scheduler</b><span>Aprendizado de horários</span></div><span class="status-pill ok">Ativo</span></div>
+          <div class="health-row"><div class="health-icon db">↻</div><div><b>Automação 24/7</b><span>${automationWorkerStatus?.online?"Worker verificando a fila a cada minuto":"Aguardando heartbeat do worker"}</span></div><span class="status-pill ${automationWorkerStatus?.online?"ok":"warn"}">${automationWorkerStatus?.online?"Online":"Verificando"}</span></div>
         </div>
       </div>
     </div>
@@ -1877,6 +1888,10 @@ function settings(){
       <div class="integration-card">
         <div class="integration-top"><div class="integration-icon">✦</div><span class="integration-status ok">Ativo</span></div>
         <h3>Smart Scheduler</h3><p>${100-state.smartSettings.exploration}% otimização · ${state.smartSettings.exploration}% exploração.</p>
+      </div>
+      <div class="integration-card">
+        <div class="integration-top"><div class="integration-icon">↻</div><span class="integration-status ${automationWorkerStatus?.online?"ok":"pending"}">${automationWorkerStatus?.online?"24/7 ativo":"Verificando"}</span></div>
+        <h3>Publicação automática</h3><p>Worker no servidor verifica a fila a cada minuto, mesmo com seu PC desligado.</p>
       </div>
     </div>
 
