@@ -475,6 +475,31 @@ button:disabled,.btn:disabled{
 @media(max-width:760px){.main{padding-left:14px;padding-right:14px}.ui3-page-head{align-items:flex-start;flex-direction:column}.ui3-kpis{grid-template-columns:1fr 1fr}.ui3-chart-wrap{height:300px}.ui3-chart-wrap svg{height:245px}.ui3-settings-form{grid-template-columns:1fr}.ui3-preview-strip{overflow-x:auto;grid-template-columns:repeat(4,120px)}}
 @media(max-width:480px){.ui3-kpis{grid-template-columns:1fr}.ui3-time-row{display:grid;grid-template-columns:1fr 1fr}.ui3-tabs{width:100%;overflow-x:auto}.ui3-tabs button{white-space:nowrap}}
 
+
+/* ===== CloudentFlow UI 3.1 polish ===== */
+.ui31-day{min-width:0!important;overflow:visible!important;padding:9px!important}
+.ui31-day .day-head{align-items:flex-start}.ui31-day .day-head>div:first-child small{display:block;color:#606877;font-size:8px;margin-top:2px}.ui31-day .day-name{font-size:10px!important;text-transform:capitalize}
+.ui31-day .day-slots{display:grid;gap:8px}
+.ui31-empty-slot{width:100%;min-height:72px!important;display:flex!important;align-items:center!important;gap:8px!important;text-align:left!important;border:1px dashed #262c36!important;background:#090b0f!important;color:#8790a0!important;padding:9px!important}
+.ui31-empty-slot:hover{border-color:#4a3140!important;background:#0e0c11!important;color:#fff!important}.ui31-empty-slot b,.ui31-empty-slot small{display:block}.ui31-empty-slot b{font-size:9px}.ui31-empty-slot small{font-size:8px;color:#687180;margin-top:2px}.slot-plus{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:#11151c;color:#ff6399}
+.ui31-slot{min-height:84px!important;padding:9px!important;overflow:visible!important;border-left:2px solid #ff3f7f!important}
+.ui31-slot-top{display:grid;grid-template-columns:32px minmax(0,1fr) 24px;gap:7px;align-items:center}.ui31-thumb{width:32px;height:44px;border:0;border-radius:7px;background:#15121a;color:#ff6399;font-size:10px;display:grid;place-items:center}.ui31-thumb:hover{background:#211722}
+.ui31-slot-copy{min-width:0}.ui31-slot-copy b,.ui31-slot-copy span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ui31-slot-copy b{font-size:9px}.ui31-slot-copy span{font-size:8px;color:#6f7787;margin-top:3px}
+.ui31-slot-bottom{display:flex;align-items:center;gap:5px;margin-top:7px;min-height:18px}.smart-badge{color:#bca1ff!important;background:#171226!important}.slot-caption-dot{font-size:6px;color:#63d898;margin-left:auto}
+.slot-menu{position:relative}.slot-menu summary{list-style:none;width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:#7e8796;cursor:pointer}.slot-menu summary::-webkit-details-marker{display:none}.slot-menu summary:hover{background:#171b22;color:#fff}.slot-menu-pop{position:absolute;right:0;top:27px;z-index:60;width:145px;background:#0e1117;border:1px solid #282e39;border-radius:9px;padding:4px;box-shadow:0 14px 38px rgba(0,0,0,.36)}.slot-menu-pop button{width:100%;border:0;background:transparent;color:#c9ced7;text-align:left;padding:7px 8px;border-radius:6px;font-size:9px}.slot-menu-pop button:hover{background:#181c24}.slot-menu-pop .danger-link{color:#ff7a83}
+.week-grid.ui3-seven-days{grid-template-columns:repeat(7,minmax(165px,1fr))!important;min-width:1180px!important;gap:7px!important}.ui3-calendar-scroll{padding-bottom:12px}
+.ui31-chart{height:340px;border-radius:12px;background:#090b0f;border:1px solid #191d24;padding:16px 16px 8px}.ui31-chart svg{width:100%;height:285px;overflow:visible}.chart-hover-dot{fill:#090b0f;stroke:#ff4c88;stroke-width:3;vector-effect:non-scaling-stroke;opacity:.25;cursor:pointer;transition:.16s}.chart-hover-dot:hover{opacity:1;r:9}
+.metric-filter .active-filter{background:#1b141a;border-color:#583047;color:#ff73a5}
+.ui3-rank-row{width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left}.ui3-rank-row:hover{background:#101319;padding-left:5px;padding-right:5px}
+.reels-instagram-grid{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:10px}.reel-instagram-card{border:0;background:transparent;padding:0;text-align:left}.reel-media-layer{position:relative;aspect-ratio:9/16;max-height:390px;border:1px solid #242934;border-radius:12px;overflow:hidden;background:#07080b}.reel-media-layer video,.reel-media-layer img{width:100%;height:100%;object-fit:cover;display:block}.reel-media-layer:after{content:"";position:absolute;inset:45% 0 0;background:linear-gradient(transparent,rgba(0,0,0,.78));pointer-events:none}.reel-instagram-card:hover .reel-media-layer{transform:translateY(-2px);border-color:#4d3040;box-shadow:0 12px 30px rgba(0,0,0,.25)}.reel-media-layer{transition:.18s}
+.reel-card-top{position:absolute;z-index:2;top:9px;left:9px;right:9px;display:flex;justify-content:space-between;align-items:center;color:#fff;text-shadow:0 1px 4px #000}.reel-card-top span{font-size:8px;font-weight:950;letter-spacing:.08em}.reel-card-bottom{position:absolute;z-index:2;left:9px;right:9px;bottom:9px;color:#fff}.reel-card-bottom b,.reel-card-bottom span{display:block;text-shadow:0 1px 5px #000}.reel-card-bottom b{font-size:9px}.reel-card-bottom span{font-size:8px;margin-top:3px}
+.reel-preview-modal{background:rgba(0,0,0,.84)!important;backdrop-filter:blur(10px)}.reel-phone-shell{position:relative;width:min(390px,92vw);height:min(82vh,780px);aspect-ratio:9/16;background:#050608;border:1px solid #252a33;border-radius:28px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}.reel-phone-shell>video,.reel-phone-shell>img{width:100%;height:100%;object-fit:cover}.reel-topbar{position:absolute;z-index:5;top:0;left:0;right:0;padding:18px 18px 34px;display:flex;justify-content:space-between;color:#fff;background:linear-gradient(rgba(0,0,0,.62),transparent)}.reel-close{position:absolute;z-index:10;right:-48px;top:0;width:36px;height:36px;border-radius:50%;border:1px solid #313640;background:#12151b;color:#fff;font-size:20px}.reel-overlay{position:absolute;z-index:5;left:0;right:0;bottom:0;padding:70px 64px 20px 18px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.84))}.reel-overlay b,.reel-overlay span,.reel-overlay small{display:block;text-shadow:0 1px 4px #000}.reel-overlay b{font-size:11px}.reel-overlay span{font-size:10px;line-height:1.35;margin-top:6px}.reel-overlay small{font-size:9px;margin-top:7px;color:#e1e2e5}.reel-side-actions{position:absolute;z-index:6;right:12px;bottom:24px;display:grid;gap:15px;color:#fff}.reel-side-actions>span{display:grid;place-items:center;font-size:22px;text-shadow:0 1px 5px #000}.reel-side-actions small{font-size:8px;margin-top:3px}.reel-no-media{height:100%;display:grid;place-items:center;color:#697181}
+.ui31-status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.ui31-status-card{display:grid;grid-template-columns:12px 1fr;gap:10px;align-items:center;background:#0d0f14;border:1px solid #20242d;border-radius:12px;padding:15px}.ui31-status-card small,.ui31-status-card b,.ui31-status-card em{display:block}.ui31-status-card small{font-size:8px;color:#656d7b;font-weight:900;letter-spacing:.08em}.ui31-status-card b{font-size:18px;margin:4px 0 2px;text-transform:capitalize}.ui31-status-card em{font-size:8px;color:#697180;font-style:normal}.status-orb{width:9px;height:9px;border-radius:50%;background:#59616e}.status-orb.ok{background:#52d68f}.status-orb.bad{background:#ff6f78}
+.ui31-automation-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.65fr);gap:12px}.ui31-best-times{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.ui31-best-times>div{background:#0a0c10;border:1px solid #20252f;border-radius:9px;padding:10px}.ui31-best-times small,.ui31-best-times b,.ui31-best-times span,.ui31-best-times em{display:block}.ui31-best-times small{font-size:8px;color:#5d6573}.ui31-best-times b{font-size:18px;margin:3px 0}.ui31-best-times span,.ui31-best-times em{font-size:8px;color:#737b89;font-style:normal}.ui31-week-board{display:grid;gap:3px;margin-top:14px}.ui31-week-board>div{display:grid;grid-template-columns:42px 1fr;gap:8px;align-items:center;padding:8px;border-radius:8px}.ui31-week-board>div.today{background:#10151a}.ui31-week-board>b{font-size:9px}.ui31-week-board>div>div{display:flex;gap:5px;flex-wrap:wrap}.ui31-week-board span{font-size:8px;padding:4px 6px;border-radius:999px;background:#12161d;color:#87909e;border:1px solid #202631}.ui31-week-board span.top{color:#ff83ad;border-color:#553044;background:#1c1117}
+.automation-rules-card{align-self:start}.ui31-toggle-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-top:1px solid #191d24}.ui31-toggle-row:first-of-type{border-top:0}.ui31-toggle-row b,.ui31-toggle-row span{display:block}.ui31-toggle-row b{font-size:10px}.ui31-toggle-row>div>span{font-size:8px;color:#6f7786;margin-top:2px}.ui31-toggle-row.compact{margin-top:6px}.modern-toggle input{display:none}.modern-toggle>span{position:relative;width:38px;height:21px;border-radius:999px;background:#262b34;display:block;cursor:pointer;transition:.18s}.modern-toggle>span:after{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;border-radius:50%;background:#8a92a0;transition:.18s}.modern-toggle input:checked+span{background:#183524}.modern-toggle input:checked+span:after{left:20px;background:#61dd98}.ui31-rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:8px 0}.input-suffix{display:grid;grid-template-columns:1fr auto;align-items:center;border:1px solid #252a34;border-radius:8px;background:#0a0c10}.input-suffix input{border:0;background:transparent}.input-suffix span{font-size:8px;color:#697180;padding-right:9px}.save-auto-btn{width:100%;margin-top:10px!important}
+@media(max-width:1100px){.reels-instagram-grid{grid-template-columns:repeat(3,1fr)}.ui31-automation-layout{grid-template-columns:1fr}.ui31-status-grid{grid-template-columns:1fr 1fr}.ui31-best-times{grid-template-columns:repeat(5,minmax(85px,1fr))}}
+@media(max-width:650px){.reels-instagram-grid{grid-template-columns:repeat(2,1fr)}.ui31-status-grid{grid-template-columns:1fr}.ui31-best-times{grid-template-columns:1fr 1fr}.ui31-rule-grid{grid-template-columns:1fr}.reel-close{right:10px;top:10px}.reel-topbar{padding-right:60px}}
+
 </style>
 </head>
 <body>
@@ -818,8 +843,8 @@ async function syncFromBackend(){
     const v=row.videos||{};
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
-      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",
-      time,status:row.status||"agendado",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual"
+      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
+      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual"
     };
   }
   save();
@@ -934,8 +959,22 @@ function firstValidDefaultSlot(date,ignoreKey=null){
   return null;
 }
 function getStatus(x){
-  return x.status||"agendado";
+  const s=String(x?.status||"scheduled").toLowerCase();
+  return ({
+    scheduled:"agendado",queued:"fila",processing:"publicando",published:"publicado",failed:"erro",cancelled:"cancelado",
+    agendado:"agendado",fila:"fila",publicando:"publicando",publicado:"publicado",erro:"erro"
+  })[s]||"agendado";
 }
+function statusLabel(s){
+  return {agendado:"Agendado",fila:"Na fila",publicando:"Processando",publicado:"Publicado",erro:"Erro",cancelado:"Cancelado"}[s]||"Agendado";
+}
+function statusClass(s){
+  if(s==="publicado") return "green";
+  if(s==="erro"||s==="cancelado") return "red";
+  if(s==="fila"||s==="publicando") return "yellow";
+  return "gray";
+}
+
 function statusLabel(s){
   return {agendado:"Agendado",fila:"Na fila",publicando:"Publicando",publicado:"Publicado",erro:"Erro"}[s]||"Agendado";
 }
@@ -1252,11 +1291,39 @@ function calendarPage(){
 }
 function dayColumn(d,label){
   const iso=localISO(d), count=filledCount(iso);
-  return `<div class="day-column" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
-    <div class="day-head"><div class="day-name">${label}, ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</div><div class="count">${count}/5</div></div>
+  return `<div class="day-column ui31-day" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
+    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count">${count}/5</div></div>
     <div class="day-slots">${Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("")}</div>
-  </div>`
+  </div>`;
 }
+function renderSlot(date,i){
+  const x=slotData(date,i), time=x?.time||state.defaultTimes[i];
+  if(!x)return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
+  const st=getStatus(x),isAuto=x.smartMode==="auto";
+  return `<div class="slot filled ui31-slot" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
+    <div class="ui31-slot-top">
+      <button class="ui31-thumb" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo">▶</button>
+      <div class="ui31-slot-copy">
+        <b title="${esc(x.name)}">${esc(x.name)}</b>
+        <span>${x.time} · ${fmtSize(x.size)}</span>
+      </div>
+      <details class="slot-menu" onclick="event.stopPropagation()">
+        <summary title="Ações">•••</summary>
+        <div class="slot-menu-pop">
+          <button onclick="previewScheduled('${date}',${i})">▶ Ver preview</button>
+          <button onclick="openEditScheduleModal('${date}',${i})">Editar</button>
+          <button class="danger-link" onclick="removeSlot('${date}',${i})">Excluir</button>
+        </div>
+      </details>
+    </div>
+    <div class="ui31-slot-bottom">
+      <span class="badge ${statusClass(st)}">${statusLabel(st)}</span>
+      ${isAuto?'<span class="badge smart-badge">✦ Auto</span>':""}
+      ${x.caption?'<span class="slot-caption-dot" title="Com legenda">●</span>':""}
+    </div>
+  </div>`;
+}
+
 function renderSlot(date,i){
   const x=slotData(date,i), time=x?.time||state.defaultTimes[i];
   if(!x)return `<div class="slot empty" onclick="pickForSlot('${date}',${i})"><span>＋</span><span>Posição livre <small class="muted">· ${time}</small></span></div>`;
@@ -1308,13 +1375,49 @@ async function removeSlot(date,slot){
   }else if(db){try{await dbDelete(x.videoId)}catch{}}
   delete state.slots[k];save();log(`${x.name} removido do calendário, banco e fila.`,"warn")
 }
-async function previewScheduled(date,slot){
-  const x=slotData(date,slot);
-  if(x?.cloud){alert("O vídeo está seguro no Storage privado. O preview remoto será ligado junto da integração final; o arquivo já está salvo no backend.");return}
-  const rec=await dbGet(x.videoId);if(!rec?.blob)return;const url=URL.createObjectURL(rec.blob);
-  $("#modalHost").innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box"><div class="modal-head"><div><b>${esc(x.name)}</b><div class="muted">${date} · ${x.time}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div><video src="${url}" controls autoplay></video></div></div>`;
-  $("#modalHost .modal").dataset.url=url
+async function getScheduledPreviewUrl(x){
+  if(!x?.cloud)return null;
+  if(!x.storagePath)throw new Error("Caminho do vídeo não encontrado.");
+  if(!cloudSession)throw new Error("Faça login para abrir o vídeo.");
+  const encoded=x.storagePath.split("/").map(encodeURIComponent).join("/");
+  const r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/videos/"+encoded,{
+    method:"POST",
+    headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token,"Content-Type":"application/json"},
+    body:JSON.stringify({expiresIn:3600})
+  });
+  let data=null;try{data=await r.json()}catch{}
+  if(!r.ok)throw new Error(data?.message||data?.error||"Não consegui abrir o vídeo.");
+  const signed=data?.signedURL||data?.signedUrl;
+  if(!signed)throw new Error("URL temporária indisponível.");
+  return signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
 }
+async function previewScheduled(date,slot){
+  const x=slotData(date,slot);if(!x)return;
+  let url=null,objectUrl=false;
+  try{
+    if(x.cloud)url=await getScheduledPreviewUrl(x);
+    else{
+      const rec=await dbGet(x.videoId);
+      if(!rec?.blob)throw new Error("Vídeo local indisponível.");
+      url=URL.createObjectURL(rec.blob);objectUrl=true;
+    }
+    $("#modalHost").innerHTML=`<div class="modal reel-preview-modal" onclick="if(event.target===this)closeModal()">
+      <div class="reel-phone-shell">
+        <button class="reel-close" onclick="closeModal()">×</button>
+        <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
+        <video src="${esc(url)}" controls autoplay playsinline></video>
+        <div class="reel-overlay">
+          <b>@${esc(instagramIntegration?.account_label||"cloudentflow")}</b>
+          <span>${esc(x.caption||x.name||"")}</span>
+          <small>${date} · ${x.time} · ${statusLabel(getStatus(x))}</small>
+        </div>
+      </div>
+    </div>`;
+    const modal=$("#modalHost .modal");
+    if(objectUrl)modal.dataset.url=url;
+  }catch(e){alert(e.message)}
+}
+
 function closeModal(){const m=$("#modalHost .modal");if(m?.dataset.url)URL.revokeObjectURL(m.dataset.url);$("#modalHost").innerHTML=""}
 let dragInfo=null;
 function dragSlot(e,date,slot){dragInfo={date,slot};e.dataTransfer.setData("text/plain","slot")}
@@ -1519,24 +1622,67 @@ function queue(){
     <td style="padding:10px"><span class="badge ${statusClass(getStatus(x))}">${statusLabel(getStatus(x))}</span></td>  </tr>`).join("")}</tbody></table>`:`<div class="muted" style="padding:35px;text-align:center">Nenhum vídeo no calendário.</div>`}</div>`;
 }
 function setMetricsPeriod(days){metricsPeriod=days;metrics()}
-function analyticsChart(rows){
-  const data=[...rows].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+function aggregateMetricsByDay(rows){
+  const map=new Map();
+  for(const m of rows){
+    const d=new Date(m.timestamp);
+    const key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    const cur=map.get(key)||{date:key,views:0,reach:0,likes:0,saves:0,count:0};
+    cur.views+=+m.views||0;cur.reach+=+m.reach||0;cur.likes+=+m.likes||0;cur.saves+=+m.saves||0;cur.count++;
+    map.set(key,cur);
+  }
+  return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
+}
+function analyticsChart(rows,metric="views"){
+  const data=aggregateMetricsByDay(rows);
   if(!data.length)return '<div class="ui3-chart-empty">Sem dados para este período.</div>';
-  const W=1000,H=300,P=28,max=Math.max(1,...data.map(x=>+x.views||0));
+  const W=1000,H=300,P=34,max=Math.max(1,...data.map(x=>+x[metric]||0));
   const pts=data.map((m,i)=>{
     const x=data.length===1?W/2:P+i*(W-P*2)/(data.length-1);
-    const y=H-P-(+m.views||0)/(max*1.12)*(H-P*2);
+    const y=H-P-(+m[metric]||0)/(max*1.12)*(H-P*2);
     return {x,y,m};
   });
-  const line=pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
-  const area=line+' L '+pts[pts.length-1].x.toFixed(1)+' '+(H-P)+' L '+pts[0].x.toFixed(1)+' '+(H-P)+' Z';
-  return `<div class="ui3-chart-wrap"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3f7f" stop-opacity=".28"/><stop offset="100%" stop-color="#ff3f7f" stop-opacity="0"/></linearGradient></defs>
-    <g class="chart-grid"><line x1="28" y1="65" x2="972" y2="65"/><line x1="28" y1="150" x2="972" y2="150"/><line x1="28" y1="235" x2="972" y2="235"/></g>
-    <path d="${area}" fill="url(#chartFill)"/><path d="${line}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
-    ${pts.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="5" fill="#090a0e" stroke="#ff4c88" stroke-width="3" vector-effect="non-scaling-stroke"/>`).join("")}
-  </svg><div class="ui3-chart-labels"><span>${new Date(data[0].timestamp).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span><span>${data.length} Reels</span><span>${new Date(data[data.length-1].timestamp).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span></div></div>`;
+  let line="";
+  pts.forEach((p,i)=>{
+    if(i===0)line+=`M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    else{
+      const prev=pts[i-1],mx=((prev.x+p.x)/2).toFixed(1);
+      line+=` C ${mx} ${prev.y.toFixed(1)}, ${mx} ${p.y.toFixed(1)}, ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    }
+  });
+  const area=line+` L ${pts[pts.length-1].x.toFixed(1)} ${H-P} L ${pts[0].x.toFixed(1)} ${H-P} Z`;
+  return `<div class="ui31-chart">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <defs><linearGradient id="chartFill31" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3f7f" stop-opacity=".25"/><stop offset="100%" stop-color="#ff3f7f" stop-opacity="0"/></linearGradient></defs>
+      <g class="chart-grid"><line x1="34" y1="65" x2="966" y2="65"/><line x1="34" y1="150" x2="966" y2="150"/><line x1="34" y1="235" x2="966" y2="235"/></g>
+      <path d="${area}" fill="url(#chartFill31)"/>
+      <path d="${line}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+      ${pts.map(p=>`<circle class="chart-hover-dot" cx="${p.x}" cy="${p.y}" r="7"><title>${new Date(p.m.date+"T12:00:00").toLocaleDateString("pt-BR")} · ${Number(p.m[metric]||0).toLocaleString("pt-BR")} ${metric==="reach"?"alcance":"views"} · ${p.m.count} Reels</title></circle>`).join("")}
+    </svg>
+    <div class="ui3-chart-labels"><span>${new Date(data[0].date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span><span>${data.length} dias · ${rows.length} Reels</span><span>${new Date(data[data.length-1].date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span></div>
+  </div>`;
 }
+
+function openReelPreview(id){
+  const m=liveInstagramMetrics.find(x=>String(x.id||x.record_id)===String(id));if(!m)return;
+  const media=m.media_url
+    ?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls autoplay muted loop playsinline></video>`
+    :m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}" alt="">`:`<div class="reel-no-media">Preview indisponível</div>`;
+  $("#modalHost").innerHTML=`<div class="modal reel-preview-modal" onclick="if(event.target===this)closeModal()">
+    <div class="reel-phone-shell">
+      <button class="reel-close" onclick="closeModal()">×</button>
+      <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
+      ${media}
+      <div class="reel-overlay">
+        <b>@${esc(instagramIntegration?.account_label||"Instagram")}</b>
+        <span>${esc((m.caption||"Sem legenda").slice(0,160))}</span>
+        <small>▶ ${(+m.views||0).toLocaleString("pt-BR")} · ♥ ${(+m.likes||0).toLocaleString("pt-BR")} · ◎ ${(+m.reach||0).toLocaleString("pt-BR")}</small>
+      </div>
+      <div class="reel-side-actions"><span>♥<small>${(+m.likes||0).toLocaleString("pt-BR")}</small></span><span>◌<small>${(+m.comments||0).toLocaleString("pt-BR")}</small></span><span>↗<small>${(+m.shares||0).toLocaleString("pt-BR")}</small></span></div>
+    </div>
+  </div>`;
+}
+function setMetricsPeriod(days){metricsPeriod=days;metrics()}
 function metrics(){
   const cutoff=Date.now()-metricsPeriod*86400000;
   const rows=liveInstagramMetrics.filter(m=>new Date(m.timestamp).getTime()>=cutoff);
@@ -1546,8 +1692,8 @@ function metrics(){
 
   $("#metrics").innerHTML=`
     <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance dos seus Reels</h2><p>Métricas reais coletadas automaticamente depois de cada publicação.</p></div>
-      <div class="toolbar"><button class="btn" onclick="setMetricsPeriod(7)">7 dias</button><button class="btn" onclick="setMetricsPeriod(30)">30 dias</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar agora</button></div>
+      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance dos seus Reels</h2><p>Dados reais, agrupados por dia para ficar fácil enxergar tendência.</p></div>
+      <div class="toolbar metric-filter"><button class="btn ${metricsPeriod===7?"active-filter":""}" onclick="setMetricsPeriod(7)">7 dias</button><button class="btn ${metricsPeriod===30?"active-filter":""}" onclick="setMetricsPeriod(30)">30 dias</button><button class="btn primary" onclick="syncInstagramToday()">↻ Sincronizar</button></div>
     </div>
     <div class="ui3-kpis">
       <div class="ui3-kpi"><span>Visualizações</span><strong>${total.views.toLocaleString("pt-BR")}</strong><small>${metricsPeriod} dias</small></div>
@@ -1556,22 +1702,29 @@ function metrics(){
       <div class="ui3-kpi"><span>Curtidas</span><strong>${total.likes.toLocaleString("pt-BR")}</strong><small>engajamento</small></div>
     </div>
     <div class="card ui3-analytics-card">
-      <div class="ui3-panel-head"><div><span>Visualizações</span><h3>Desempenho ao longo do período</h3></div><span class="source-pill">Instagram · dados reais</span></div>
-      ${analyticsChart(rows)}
+      <div class="ui3-panel-head"><div><span>Visualizações</span><h3>Evolução diária</h3></div><span class="source-pill">Instagram · dados reais</span></div>
+      ${analyticsChart(rows,"views")}
     </div>
     <div class="ui3-analytics-grid">
       <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>Ranking</span><h3>Conteúdos com mais views</h3></div></div>
+        <div class="ui3-panel-head"><div><span>Ranking</span><h3>Melhores conteúdos</h3></div></div>
         <div class="ui3-ranking">${ranking.slice(0,8).map((m,i)=>`
-          <div class="ui3-rank-row"><b>#${i+1}</b><div><strong>${esc((m.caption||"Sem legenda").slice(0,64))}</strong><span>${new Date(m.timestamp).toLocaleDateString("pt-BR")} · ${(+m.likes||0).toLocaleString("pt-BR")} curtidas</span></div><em>${(+m.views||0).toLocaleString("pt-BR")}</em></div>`).join("")||'<div class="ui3-empty">Sem dados.</div>'}</div>
+          <button class="ui3-rank-row" onclick="openReelPreview('${esc(String(m.id||m.record_id))}')"><b>#${i+1}</b><div><strong>${esc((m.caption||"Sem legenda").slice(0,64))}</strong><span>${new Date(m.timestamp).toLocaleDateString("pt-BR")} · ${(+m.likes||0).toLocaleString("pt-BR")} curtidas</span></div><em>${(+m.views||0).toLocaleString("pt-BR")}</em></button>`).join("")||'<div class="ui3-empty">Sem dados.</div>'}</div>
       </div>
       <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>Reels</span><h3>Previews recentes</h3></div></div>
-        <div class="ui3-preview-strip">${ranking.slice(0,4).map(m=>`
-          <div class="ui3-preview-card">${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls playsinline preload="metadata"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div>▶</div>'}<span>${(+m.views||0).toLocaleString("pt-BR")} views</span></div>`).join("")||'<div class="ui3-empty">Sincronize para carregar os previews.</div>'}</div>
+        <div class="ui3-panel-head"><div><span>Reels</span><h3>Previews recentes</h3></div><small class="muted">Clique para abrir como Reel</small></div>
+        <div class="reels-instagram-grid">${ranking.slice(0,6).map(m=>`
+          <button class="reel-instagram-card" onclick="openReelPreview('${esc(String(m.id||m.record_id))}')">
+            <div class="reel-media-layer">
+              ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" muted loop playsinline autoplay preload="metadata"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">▶</div>'}
+              <div class="reel-card-top"><span>REEL</span><b>⋮</b></div>
+              <div class="reel-card-bottom"><b>@${esc(instagramIntegration?.account_label||"Instagram")}</b><span>▶ ${(+m.views||0).toLocaleString("pt-BR")} views</span></div>
+            </div>
+          </button>`).join("")||'<div class="ui3-empty">Sincronize para carregar os previews.</div>'}</div>
       </div>
     </div>`;
 }
+
 function setTestReelStatus(message,type=""){
   const el=$("#testReelStatus");if(!el)return;
   el.className="test-status "+type;el.textContent=message;
@@ -1787,41 +1940,42 @@ function automationPage(){
   const today=(a.recommendations||[]).filter(r=>+r.weekday===dow).slice(0,5);
   const pending=(a.jobs||[]).filter(j=>j.status==="pending").length;
   const failed=(a.jobs||[]).filter(j=>j.status==="failed").length;
+  const days=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
   $("#automation").innerHTML=`
     <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">AUTOMAÇÃO</span><h2>O CloudentFlow trabalha sozinho.</h2><p>Publica, mede resultados, aprende horários e reorganiza a agenda no servidor.</p></div>
-      <button class="btn" onclick="refreshAutomation()">↻ Atualizar status</button>
+      <div><span class="ui3-eyebrow">AUTOMAÇÃO</span><h2>Operação automática</h2><p>O servidor publica, acompanha resultados e ajusta horários sem depender do seu computador.</p></div>
+      <button class="btn" onclick="refreshAutomation()">↻ Atualizar</button>
     </div>
-    <div class="ui3-kpis">
-      <div class="ui3-kpi"><span>Publicação 24/7</span><strong class="${pub?.online?"good-text":"warn-text"}">${pub?.online?"ONLINE":"OFFLINE"}</strong><small>a cada minuto</small></div>
-      <div class="ui3-kpi"><span>Métricas + IA</span><strong class="${aut?.online?"good-text":"warn-text"}">${aut?.online?"ONLINE":"OFFLINE"}</strong><small>a cada 5 minutos</small></div>
-      <div class="ui3-kpi"><span>Jobs pendentes</span><strong>${pending}</strong><small>fila do servidor</small></div>
-      <div class="ui3-kpi"><span>Erros</span><strong class="${failed?"bad-text":""}">${failed}</strong><small>jobs que precisam atenção</small></div>
+    <div class="ui31-status-grid">
+      <div class="ui31-status-card"><span class="health-led ${pub?.online?"on":""}"></span><div><small>PUBLICAÇÃO 24/7</small><b>${pub?.online?"Online":"Offline"}</b><em>verifica a cada minuto</em></div></div>
+      <div class="ui31-status-card"><span class="health-led ${aut?.online?"on":""}"></span><div><small>MÉTRICAS + SCHEDULER</small><b>${aut?.online?"Online":"Offline"}</b><em>ciclo a cada 5 minutos</em></div></div>
+      <div class="ui31-status-card"><span class="status-orb neutral"></span><div><small>JOBS PENDENTES</small><b>${pending}</b><em>fila do servidor</em></div></div>
+      <div class="ui31-status-card"><span class="status-orb ${failed?"bad":"ok"}"></span><div><small>ERROS</small><b>${failed}</b><em>${failed?"precisam atenção":"tudo saudável"}</em></div></div>
     </div>
-    <div class="ui3-grid-main">
+    <div class="ui31-automation-layout">
       <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>Smart Scheduler</span><h3>Melhores horários de hoje</h3></div><span class="status-pill ok">Dados reais</span></div>
-        <div class="ui3-time-row">${today.map((r,i)=>`<div class="ui3-time"><small>#${i+1}</small><b>${String(r.recommended_time).slice(0,5)}</b><span>${r.confidence}% · ${r.sample_count} amostras</span></div>`).join("")||'<div class="ui3-empty">Sem recomendações ainda.</div>'}</div>
-        <div class="ui3-week-recs">${[0,1,2,3,4,5,6].map(d=>{const rr=(a.recommendations||[]).filter(r=>+r.weekday===d).slice(0,5);return `<div><b>${["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][d]}</b><span>${rr.map(x=>String(x.recommended_time).slice(0,5)).join(" · ")||"—"}</span></div>`}).join("")}</div>
+        <div class="ui3-panel-head"><div><span>Smart Scheduler</span><h3>Horários recomendados</h3></div><span class="status-pill ok">Dados reais</span></div>
+        <div class="ui31-best-times">${today.map((r,i)=>`<div><small>#${i+1}</small><b>${String(r.recommended_time).slice(0,5)}</b><span>${r.confidence}% confiança</span><em>${r.sample_count} amostras</em></div>`).join("")||'<div class="ui3-empty">Sem recomendações ainda.</div>'}</div>
+        <div class="ui31-week-board">${days.map((day,d)=>{const rr=(a.recommendations||[]).filter(r=>+r.weekday===d).slice(0,5);return `<div class="${d===dow?"today":""}"><b>${day}</b><div>${rr.map((x,i)=>`<span class="${i===0?"top":""}">${String(x.recommended_time).slice(0,5)}</span>`).join("")||"<span>—</span>"}</div></div>`}).join("")}</div>
       </div>
-      <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>Configuração</span><h3>Regras automáticas</h3></div></div>
-        <div class="ui3-settings-form">
-          <label><span>Automação geral</span><input id="autoEnabled" type="checkbox" ${cfg.enabled!==false?"checked":""}></label>
-          <label><span>Reorganizar calendário sozinho</span><input id="autoOptimize" type="checkbox" ${cfg.autoOptimizeCalendar!==false?"checked":""}></label>
-          <div class="field"><label>Bloquear posts próximos (min)</label><input id="autoLock" type="number" value="${cfg.lockWindowMinutes||120}"></div>
-          <div class="field"><label>Intervalo mínimo (min)</label><input id="autoGap" type="number" value="${a.settings?.min_gap_minutes||60}"></div>
+      <div class="card ui3-panel automation-rules-card">
+        <div class="ui3-panel-head"><div><span>Regras</span><h3>Configuração automática</h3></div></div>
+        <div class="ui31-toggle-row"><div><b>Automação geral</b><span>Permite os workers operarem normalmente.</span></div><label class="modern-toggle"><input id="autoEnabled" type="checkbox" ${cfg.enabled!==false?"checked":""}><span></span></label></div>
+        <div class="ui31-toggle-row"><div><b>Reorganizar calendário</b><span>Ajusta somente posts fora da janela de bloqueio.</span></div><label class="modern-toggle"><input id="autoOptimize" type="checkbox" ${cfg.autoOptimizeCalendar!==false?"checked":""}><span></span></label></div>
+        <div class="ui31-rule-grid">
+          <div class="field"><label>Bloquear posts próximos</label><div class="input-suffix"><input id="autoLock" type="number" value="${cfg.lockWindowMinutes||120}"><span>min</span></div></div>
+          <div class="field"><label>Intervalo mínimo</label><div class="input-suffix"><input id="autoGap" type="number" value="${a.settings?.min_gap_minutes||60}"><span>min</span></div></div>
           <div class="field"><label>Posts por dia</label><input id="autoPosts" type="number" value="${a.settings?.posts_per_day||5}"></div>
-          <label><span>Smart Scheduler</span><input id="autoSmart" type="checkbox" ${smart.enabled!==false?"checked":""}></label>
-          <div class="field"><label>Janela analisada (dias)</label><input id="autoLookback" type="number" value="${smart.lookbackDays||60}"></div>
+          <div class="field"><label>Janela analisada</label><div class="input-suffix"><input id="autoLookback" type="number" value="${smart.lookbackDays||60}"><span>dias</span></div></div>
           <div class="field"><label>Mínimo de amostras</label><input id="autoSamples" type="number" value="${smart.minSamples||3}"></div>
         </div>
-        <button class="btn primary" style="margin-top:14px" onclick="saveAutomationSettings('auto')">Salvar automação</button>
-        <div class="note" style="margin-top:8px">Alterações entram em efeito no próximo ciclo do worker.</div>
+        <div class="ui31-toggle-row compact"><div><b>Smart Scheduler</b><span>Aprende com métricas reais.</span></div><label class="modern-toggle"><input id="autoSmart" type="checkbox" ${smart.enabled!==false?"checked":""}><span></span></label></div>
+        <button class="btn primary save-auto-btn" onclick="saveAutomationSettings('auto')">Salvar alterações</button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
+
 function setSettingsTab(tab){
   settingsTab=tab;
   if(tab==="logs"&&cloudSession)loadServerLogs().then(settings);
