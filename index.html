@@ -1048,6 +1048,47 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:800px){.follower-live-summary{grid-template-columns:1fr 1fr}.follower-live-state{grid-column:1/-1}}
 @media(max-width:520px){.follower-live-summary{grid-template-columns:1fr}.follower-live-state{grid-column:auto}.follower-chart{height:285px}.follower-chart svg{height:238px}}
 
+
+/* ===== Cloudent AI Beta ===== */
+.ai-page-head{margin-bottom:14px}
+.ai-beta-badge{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #28303a;border-radius:999px;background:#0c1015;color:#8f98a7;font-size:9px;font-weight:800}
+.ai-beta-badge i{width:6px;height:6px;border-radius:50%;background:#a983ff}
+.ai-snapshot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.ai-snapshot-grid button{border:1px solid #1f252e;background:#0d1015;color:#fff;border-radius:10px;padding:12px;text-align:left}
+.ai-snapshot-grid button:hover{border-color:#343b47;background:#11151b}
+.ai-snapshot-grid small,.ai-snapshot-grid b,.ai-snapshot-grid span{display:block}
+.ai-snapshot-grid small{font-size:7px;color:#606a79;font-weight:900;letter-spacing:.09em}
+.ai-snapshot-grid b{font-size:19px;margin:5px 0 3px;letter-spacing:-.03em}
+.ai-snapshot-grid span{font-size:8px;color:#737d8d}
+.ai-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:10px}
+.ai-chat-card{padding:0!important;overflow:hidden;min-height:600px;display:flex;flex-direction:column}
+.ai-chat-head{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;border-bottom:1px solid #1c222b}
+.ai-chat-head>div{display:flex;align-items:center;gap:9px}
+.ai-chat-head b,.ai-chat-head small{display:block}.ai-chat-head b{font-size:10.5px}.ai-chat-head small{font-size:8px;color:#687281}
+.ai-orb{width:29px;height:29px;border-radius:8px;display:grid;place-items:center;background:#181325;border:1px solid #34294a;color:#b997ff}
+.ai-chat{flex:1;min-height:350px;max-height:520px;overflow:auto;padding:18px;display:grid;align-content:start;gap:16px}
+.ai-msg{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;max-width:82%}
+.ai-msg.user{margin-left:auto;grid-template-columns:minmax(0,1fr) 28px}
+.ai-msg.user .ai-msg-avatar{grid-column:2;grid-row:1}.ai-msg.user>div:last-child{grid-column:1;grid-row:1}
+.ai-msg-avatar{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:#171b22;border:1px solid #272e38;color:#a8b0bd;font-size:9px;font-weight:900}
+.ai-msg.assistant .ai-msg-avatar{background:#181325;border-color:#34294a;color:#b997ff}
+.ai-msg>div:last-child{padding-top:1px}.ai-msg span{display:block;font-size:8px;color:#697382;margin-bottom:4px;font-weight:800}
+.ai-msg p{margin:0;padding:9px 11px;border-radius:10px;background:#0b0e13;border:1px solid #1c222b;color:#d7dbe2;font-size:10px;line-height:1.5;white-space:pre-wrap}
+.ai-msg.user p{background:#18111a;border-color:#382230;color:#f0dce5}
+.ai-quick-prompts{display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px}
+.ai-quick-prompts button{border:1px solid #222933;background:#0b0e13;color:#7f8997;border-radius:999px;padding:6px 8px;font-size:8px}
+.ai-quick-prompts button:hover{color:#fff;border-color:#393f4a}
+.ai-composer{display:grid;grid-template-columns:1fr 36px;gap:7px;padding:10px 14px 14px;border-top:1px solid #171c23}
+.ai-composer textarea{resize:none;min-height:38px;max-height:100px;padding:10px 11px!important;font-size:10px!important}
+.ai-composer button{border:0;border-radius:9px;background:#ff3f7f;color:#fff;font-size:18px;font-weight:900}
+.ai-context-card{align-self:start;padding:14px!important}
+.ai-context-list{display:grid;gap:3px}.ai-context-list>div{display:grid;grid-template-columns:8px 1fr;gap:9px;align-items:center;padding:9px 0;border-top:1px solid #181d24}.ai-context-list>div:first-child{border-top:0}
+.ai-context-list i{width:7px;height:7px;border-radius:50%;background:#525a67}.ai-context-list i.on{background:#4dd48b}
+.ai-context-list b,.ai-context-list small{display:block}.ai-context-list b{font-size:9px}.ai-context-list small{font-size:8px;color:#687281;margin-top:1px}
+.ai-beta-note{margin-top:12px;padding:10px;border:1px solid #2d2639;background:#111019;border-radius:9px}.ai-beta-note b{font-size:9px;color:#bca1ff}.ai-beta-note p{margin:5px 0 0;color:#747d8d;font-size:8px;line-height:1.45}
+@media(max-width:1000px){.ai-layout{grid-template-columns:1fr}.ai-context-card{order:-1}.ai-snapshot-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.ai-snapshot-grid{grid-template-columns:1fr}.ai-msg{max-width:94%}.ai-context-card{display:none}}
+
 </style>
 </head>
 <body>
@@ -1087,6 +1128,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   <section id="calendar" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
   <section id="automation" class="page hidden"></section>
+  <section id="cloudentAI" class="page hidden"></section>
   <section id="settings" class="page hidden"></section>
 </main>
 </div>
@@ -1103,6 +1145,7 @@ const navItems=[
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
   ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Automação"],
+  ["cloudentAI","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3 14.1 8.9 20 11l-5.9 2.1L12 19l-2.1-5.9L4 11l5.9-2.1L12 3Z\"></path><path d=\"m18 3 .8 2.2L21 6l-2.2.8L18 9l-.8-2.2L15 6l2.2-.8L18 3Z\"></path></svg>","Cloudent AI"],
   ["settings","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.08A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.08A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.08A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.39.28.7.63.88 1.08.17.44.21.92.12 1.39-.08.47-.29.9-.6 1.26-.11.13-.24.24-.4.34Z\"></path></svg>","Configurações"]
 ];
 const SUPABASE_URL="https://dxrhvudvutmgrmfkmzxo.supabase.co";
@@ -1120,6 +1163,7 @@ const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
 let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30;
+let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
 const defaultComments=[
   {id:"c1",user:"@gabrielx",text:"que vídeo absurdo kkkkk",time:"há 2 min"},
   {id:"c2",user:"@lara.22",text:"qual app você usa pra fazer isso?",time:"há 5 min"},
@@ -1538,6 +1582,7 @@ function commandItems(){
     {icon:"⌁",title:"Abrir métricas",hint:"Analytics",run:()=>{closeCommandPalette();showPage("metrics")}},
     {icon:"↻",title:"Sincronizar Instagram",hint:"Métricas",run:()=>{closeCommandPalette();syncInstagramToday()}},
     {icon:"✦",title:"Abrir automação",hint:"Workers 24/7",run:()=>{closeCommandPalette();showPage("automation")}},
+    {icon:"✧",title:"Abrir Cloudent AI",hint:"Análise inteligente",run:()=>{closeCommandPalette();showPage("cloudentAI")}},
     {icon:"⚙",title:"Configurações",hint:"Sistema",run:()=>{closeCommandPalette();showPage("settings")}}
   ];
 }
@@ -1630,7 +1675,7 @@ function toggleSidebarPin(){
 function nav(){
   const groups=[
     {label:"Workspace",pages:["overview","calendar"]},
-    {label:"Inteligência",pages:["metrics","automation"]},
+    {label:"Inteligência",pages:["metrics","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
   ];
   const byId=Object.fromEntries(navItems.map(x=>[x[0],x]));
@@ -2756,6 +2801,161 @@ function setSettingsTab(tab){
   if(tab==="logs"&&cloudSession)loadServerLogs().then(settings);
   else settings();
 }
+function cloudentAISnapshot(){
+  const metrics=[...liveInstagramMetrics];
+  const totals=metrics.reduce((a,m)=>({
+    views:a.views+(+m.views||0),
+    reach:a.reach+(+m.reach||0),
+    likes:a.likes+(+m.likes||0),
+    comments:a.comments+(+m.comments||0),
+    shares:a.shares+(+m.shares||0),
+    saves:a.saves+(+m.saves||0)
+  }),{views:0,reach:0,likes:0,comments:0,shares:0,saves:0});
+  const best=[...metrics].sort((a,b)=>(+b.views||0)-(+a.views||0))[0]||null;
+  const followers=Number(followerStats?.current?.followers_count||0);
+  const daily=followerStats?.daily||[];
+  const todayFollower=daily[daily.length-1]||null;
+  const followerDelta=Number(todayFollower?.net_change||0);
+  const weekday=new Date().getDay();
+  const recs=(automationData?.recommendations||[]).filter(r=>+r.weekday===weekday).sort((a,b)=>+a.rank-+b.rank);
+  const future=allScheduled().filter(x=>new Date(x.scheduledAt).getTime()>=Date.now() && !["publicado","erro","cancelado"].includes(getStatus(x)));
+  const workers=automationData?.workers||[];
+  const pub=workers.find(w=>w.worker_name==="instagram_publish");
+  const aut=workers.find(w=>w.worker_name==="automation");
+  return {metrics,totals,best,followers,followerDelta,recs,future,pub,aut};
+}
+function cloudentAIIntro(){
+  return {
+    role:"assistant",
+    text:"Eu sou o Cloudent AI Beta. Já consigo analisar os dados reais que o CloudentFlow carregou: Reels, seguidores, horários, calendário e automação. Ainda estou em modo de teste local, sem um modelo externo conectado."
+  };
+}
+function ensureCloudentAIIntro(){
+  if(!cloudentAIHistory.length)cloudentAIHistory=[cloudentAIIntro()];
+}
+function saveCloudentAIHistory(){
+  localStorage.setItem("cloudentflow-ai-history",JSON.stringify(cloudentAIHistory.slice(-30)));
+}
+function clearCloudentAI(){
+  cloudentAIHistory=[cloudentAIIntro()];
+  saveCloudentAIHistory();
+  cloudentAIPage();
+}
+function aiFormat(n){return Number(n||0).toLocaleString("pt-BR")}
+function buildCloudentAIResponse(question){
+  const q=String(question||"").toLowerCase().trim();
+  const d=cloudentAISnapshot();
+  const bestTime=d.recs[0]?String(d.recs[0].recommended_time).slice(0,5):null;
+  const bestCaption=d.best?.caption?String(d.best.caption).replace(/\s+/g," ").slice(0,90):"Sem legenda";
+  const engagement=d.totals.reach?((d.totals.likes+d.totals.comments+d.totals.shares+d.totals.saves)/d.totals.reach*100):0;
+  const next=d.future[0];
+
+  if(/hor[aá]rio|quando.*post|melhor.*hora|postar/.test(q)){
+    if(!bestTime)return "Ainda não tenho recomendação suficiente para hoje. O Smart Scheduler precisa de mais amostras reais antes de eu confiar em um horário.";
+    const r=d.recs[0];
+    return `Hoje, o horário mais forte nos dados atuais é ${bestTime}, com ${r.confidence}% de confiança. ${d.recs[1]?"A segunda opção é "+String(d.recs[1].recommended_time).slice(0,5)+".":""} Eu usaria isso como referência, não como garantia de views.`;
+  }
+  if(/seguidor|crescimento|crescer/.test(q)){
+    if(!d.followers)return "Ainda não recebi a contagem atual de seguidores.";
+    return `A conta está com ${aiFormat(d.followers)} seguidores. Hoje o monitor registrou ${d.followerDelta>=0?"+":""}${d.followerDelta}. O rastreador consulta a conta a cada minuto, então mudanças aparecem automaticamente no CloudentFlow.`;
+  }
+  if(/melhor.*reel|melhor.*v[ií]deo|mais views|viral|vencedor/.test(q)){
+    if(!d.best)return "Ainda não tenho Reels carregados para comparar.";
+    return `O Reel com mais views entre os dados carregados tem ${aiFormat(d.best.views)} views e ${aiFormat(d.best.likes)} curtidas. A legenda começa com: “${bestCaption}”. Posso usar esse vídeo como referência para comparar horário, alcance e engajamento com os demais.`;
+  }
+  if(/calend[aá]rio|pr[oó]ximo.*post|agenda|fila/.test(q)){
+    if(!d.future.length)return "Não há publicações futuras na fila agora.";
+    return `Existem ${d.future.length} posts futuros. O próximo é “${next.name||"Vídeo"}” em ${fmtDateTime(next.scheduledAt)}. ${next.smartMode==="auto"?"Esse horário foi otimizado pelo Smart Scheduler.":"Esse horário está marcado como manual."}`;
+  }
+  if(/status|worker|autom[aá]t|funcionando|online/.test(q)){
+    return `Publicação 24/7: ${d.pub?.online?"online":"sem confirmação recente"}. Métricas + Scheduler: ${d.aut?.online?"online":"sem confirmação recente"}. Há ${d.future.length} posts futuros na fila.`;
+  }
+  if(/engaj|curtida|coment|salv|compart/.test(q)){
+    return `Nos dados carregados: ${aiFormat(d.totals.likes)} curtidas, ${aiFormat(d.totals.comments)} comentários, ${aiFormat(d.totals.shares)} compartilhamentos e ${aiFormat(d.totals.saves)} salvamentos. O engajamento agregado sobre alcance está em aproximadamente ${engagement.toFixed(2).replace(".",",")}%. Esse número é uma leitura simples do conjunto, não uma previsão.`;
+  }
+  if(/o que.*fa[çc]o|recomenda|melhorar|views|insight|resumo/.test(q)){
+    const parts=[];
+    if(bestTime)parts.push(`Seu melhor horário estimado hoje é ${bestTime}`);
+    if(d.best)parts.push(`seu Reel líder tem ${aiFormat(d.best.views)} views`);
+    if(d.followers)parts.push(`a conta está com ${aiFormat(d.followers)} seguidores (${d.followerDelta>=0?"+":""}${d.followerDelta} hoje)`);
+    if(d.future.length)parts.push(`há ${d.future.length} posts futuros já preparados`);
+    return (parts.length?parts.join(". ")+". ":"Ainda há poucos dados para um resumo completo. ")+"Eu priorizaria repetir padrões dos Reels que já performaram melhor e testar os horários sugeridos pelo Scheduler, comparando resultado por alguns dias.";
+  }
+
+  return `Consigo analisar agora: melhores horários, seguidores, melhor Reel, engajamento, próximos posts e status da automação. Como este é o Beta local, perguntas muito abertas ainda são respondidas com base nesses dados estruturados. Depois podemos conectar um modelo de IA para conversa livre.`;
+}
+function sendCloudentAI(prefill=null){
+  ensureCloudentAIIntro();
+  const input=$("#cloudentAIInput");
+  const text=String(prefill??input?.value??"").trim();
+  if(!text)return;
+  cloudentAIHistory.push({role:"user",text});
+  cloudentAIHistory.push({role:"assistant",text:buildCloudentAIResponse(text)});
+  cloudentAIHistory=cloudentAIHistory.slice(-30);
+  saveCloudentAIHistory();
+  if(input)input.value="";
+  cloudentAIPage();
+  setTimeout(()=>{const box=$("#cloudentAIChat");if(box)box.scrollTop=box.scrollHeight},20);
+}
+function cloudentAIKeydown(e){
+  if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendCloudentAI()}
+}
+function cloudentAIPage(){
+  ensureCloudentAIIntro();
+  const d=cloudentAISnapshot();
+  const bestTime=d.recs[0]?String(d.recs[0].recommended_time).slice(0,5):"—";
+  const bestViews=d.best?aiFormat(d.best.views):"—";
+  const followers=d.followers?aiFormat(d.followers):"—";
+
+  $("#cloudentAI").innerHTML=`
+    <div class="ui3-page-head ai-page-head">
+      <div><span class="ui3-eyebrow">BETA</span><h2>Cloudent AI</h2><p>Seu copiloto para entender métricas, horários, seguidores e calendário.</p></div>
+      <div class="ai-beta-badge"><i></i><span>Análise local</span></div>
+    </div>
+
+    <div class="ai-snapshot-grid">
+      <button onclick="sendCloudentAI('Qual é o melhor horário para postar hoje?')"><small>MELHOR HORÁRIO</small><b>${bestTime}</b><span>Perguntar sobre horário →</span></button>
+      <button onclick="sendCloudentAI('Como estão meus seguidores hoje?')"><small>SEGUIDORES</small><b>${followers}</b><span>${d.followerDelta>=0?"+":""}${d.followerDelta} hoje →</span></button>
+      <button onclick="sendCloudentAI('Qual foi meu melhor Reel?')"><small>TOP REEL</small><b>${bestViews}</b><span>views no líder →</span></button>
+      <button onclick="sendCloudentAI('Como está minha automação?')"><small>AUTOMAÇÃO</small><b>${d.pub?.online&&d.aut?.online?"ONLINE":"VERIFICAR"}</b><span>Status dos workers →</span></button>
+    </div>
+
+    <div class="ai-layout">
+      <div class="card ai-chat-card">
+        <div class="ai-chat-head">
+          <div><span class="ai-orb">✦</span><div><b>Cloudent AI</b><small>Dados do seu próprio CloudentFlow</small></div></div>
+          <button class="btn btn-sm" onclick="clearCloudentAI()">Limpar conversa</button>
+        </div>
+        <div id="cloudentAIChat" class="ai-chat">
+          ${cloudentAIHistory.map(m=>`<div class="ai-msg ${m.role}"><div class="ai-msg-avatar">${m.role==="assistant"?"✦":"V"}</div><div><span>${m.role==="assistant"?"Cloudent AI":"Você"}</span><p>${esc(m.text)}</p></div></div>`).join("")}
+        </div>
+        <div class="ai-quick-prompts">
+          <button onclick="sendCloudentAI('O que eu devo fazer para melhorar minhas views?')">Como melhorar views?</button>
+          <button onclick="sendCloudentAI('Qual é o melhor horário para postar hoje?')">Melhor horário</button>
+          <button onclick="sendCloudentAI('Qual foi meu melhor Reel?')">Melhor Reel</button>
+          <button onclick="sendCloudentAI('Como estão meus seguidores hoje?')">Seguidores hoje</button>
+        </div>
+        <div class="ai-composer">
+          <textarea id="cloudentAIInput" rows="1" placeholder="Pergunte sobre seus dados…" onkeydown="cloudentAIKeydown(event)"></textarea>
+          <button onclick="sendCloudentAI()" title="Enviar">↑</button>
+        </div>
+      </div>
+
+      <aside class="card ai-context-card">
+        <div class="ui3-panel-head"><div><span>Contexto</span><h3>O que ela consegue ler</h3></div></div>
+        <div class="ai-context-list">
+          <div><i class="${liveInstagramMetrics.length?"on":""}"></i><span><b>Métricas dos Reels</b><small>${liveInstagramMetrics.length} conteúdos carregados</small></span></div>
+          <div><i class="${d.followers?"on":""}"></i><span><b>Seguidores</b><small>monitoramento automático</small></span></div>
+          <div><i class="${d.recs.length?"on":""}"></i><span><b>Smart Scheduler</b><small>${d.recs.length} horários de hoje</small></span></div>
+          <div><i class="${d.future.length?"on":""}"></i><span><b>Calendário</b><small>${d.future.length} posts futuros</small></span></div>
+          <div><i class="${d.pub?.online&&d.aut?.online?"on":""}"></i><span><b>Automação</b><small>workers 24/7</small></span></div>
+        </div>
+        <div class="ai-beta-note"><b>Modo Beta</b><p>Essa versão analisa os dados localmente. A próxima evolução é conectar um modelo de IA externo para respostas livres, mantendo esses dados como contexto.</p></div>
+      </aside>
+    </div>
+  `;
+}
+
 function settings(){
   const user=cloudSession?.user,ig=instagramIntegration;
   const a=automationData||{settings:{},workers:[]};
@@ -2807,6 +3007,7 @@ function renderAll(){
   safeRenderPage("calendar",calendarPage);
   safeRenderPage("metrics",metrics);
   safeRenderPage("automation",automationPage);
+  safeRenderPage("cloudentAI",cloudentAIPage);
   safeRenderPage("settings",settings);
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
   if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
