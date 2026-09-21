@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CloudentFlow — Stage 4 Smart Scheduler</title>
+<style>
+:root{
+  --bg:#07080b;--panel:#0f1117;--panel2:#12141b;--line:#272b36;--muted:#9297a7;
+  --text:#f7f8fb;--pink:#ff3f7f;--pink2:#b44cff;--green:#43d38a;--yellow:#f6c85f;--red:#ff7070;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 84% 0,#1a0c13 0,transparent 31%),var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button,input,select,textarea{font:inherit} button{cursor:pointer} button:disabled{opacity:.45;cursor:not-allowed}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;background:#090a0f;border-right:1px solid var(--line);padding:20px 16px}
+.brand{display:flex;gap:10px;align-items:center;font-size:20px;font-weight:900;margin-bottom:25px}
+.logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,var(--pink),var(--pink2));box-shadow:0 8px 25px #ff3f7f40}
+.nav button{width:100%;display:flex;gap:12px;align-items:center;border:0;background:transparent;color:#9297a7;border-radius:10px;padding:12px 14px;margin:4px 0;text-align:left}
+.nav button.active{color:white;background:linear-gradient(90deg,#241019,#111018);border-left:3px solid var(--pink)}
+.sidebar-foot{position:absolute;bottom:18px;left:16px;right:16px}
+.mode{padding:10px;border-radius:9px;background:#0d1a14;border:1px solid #244032;color:#69e1a0;font-weight:800;margin-bottom:12px}
+.main{min-width:0;padding:34px 42px 70px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px}.kicker{font-size:11px;letter-spacing:.12em;color:#9095a5;font-weight:800}
+h1{font-size:36px;margin:5px 0 24px} h2{font-size:20px;margin:0 0 14px} h3{font-size:15px;margin:0}
+.btn{border:1px solid var(--line);background:#151821;color:#fff;border-radius:10px;padding:10px 14px;font-weight:800}
+.btn.primary{border:0;background:linear-gradient(135deg,var(--pink),#ef476f);box-shadow:0 8px 22px #ff3f7f2a}
+.btn.ghost{background:transparent}.btn.danger{background:#210e0e;border-color:#5c2525;color:#ff9292}.btn.success{background:#0d1b14;border-color:#285039;color:#7ce0a9}
+.card{background:linear-gradient(180deg,#11131a,#0e1016);border:1px solid var(--line);border-radius:16px;padding:20px}
+.banner{border:1px solid #6b5220;background:#1d180d;color:#ffd770;padding:13px 16px;border-radius:11px;margin-bottom:22px}
+.muted{color:var(--muted)}.note{font-size:12px;color:#8c91a0}.hidden{display:none!important}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric .num{font-size:30px;font-weight:900;margin:8px 0 3px}.metric .label{color:#a8adbc;font-weight:700}
+.section-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:16px}.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+input,select,textarea{background:#0b0d12;border:1px solid #2b303c;color:white;border-radius:10px;padding:10px 12px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--pink)}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid #303543;border-radius:999px;padding:5px 8px;font-size:12px;font-weight:800}
+.badge.green{color:#79e2ab;background:#0b1b13;border-color:#244d34}.badge.yellow{color:#ffd873;background:#211a0a;border-color:#56451d}.badge.red{color:#ff9797;background:#210e0e;border-color:#5c2525}.badge.gray{color:#bac0cf;background:#141720}
+.stage-board{display:grid;gap:8px}.stage-row{display:flex;gap:10px;padding:9px 10px;background:#0b0d12;border-radius:9px}
+
+/* Calendar */
+.calendar-wrap{max-width:1320px}
+.calendar-top{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.calendar-top .left{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.field label{display:block;color:#a7acba;font-size:12px;font-weight:800;margin-bottom:6px}
+.week-grid{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:10px;align-items:start}
+.day-column{border:1px solid var(--line);border-radius:14px;background:#0e1016;padding:14px;min-height:390px}
+.day-column.weekend{grid-column:auto}.day-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}.day-name{font-weight:900}.count{font-size:11px;border:1px solid #2f3440;border-radius:999px;padding:3px 7px}
+.day-slots{display:grid;gap:8px}
+.slot{min-height:70px;border:1px dashed #3b404d;border-radius:10px;padding:9px 10px;background:#0c0e14;transition:.18s}
+.slot.empty{display:flex;align-items:center;gap:8px;color:#dde0e8;font-size:12px;font-weight:800;cursor:pointer}.slot.empty:hover{border-color:var(--pink);background:#150d12}
+.slot.filled{border-style:solid;border-left:3px solid var(--pink);position:relative}
+.slot-line{display:flex;justify-content:space-between;gap:8px;align-items:center}.slot-title{font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:145px}
+.slot-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;color:#a8adba;font-size:11px}.slot-actions{display:flex;gap:5px;margin-top:8px}.slot-actions .btn{padding:6px 8px;font-size:11px}
+.slot-time{width:74px;padding:5px 7px;font-size:11px}
+.calendar-bottom{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:10px;margin-top:10px;max-width:516px}
+.drag{border-color:var(--pink)!important;background:#170d13!important}
+.day-drop{min-height:20px}
+.week-summary{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0 16px}
+.summary-chip{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#0c0e14;color:#b7bcc9;font-size:12px}
+
+/* Comments AI */
+.comments-layout{display:grid;grid-template-columns:minmax(300px,.75fr) minmax(0,1.45fr);gap:16px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}.field textarea{width:100%;min-height:105px;resize:vertical}
+.counter-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.counter{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#0b0d12}
+.comment-list{display:grid;gap:10px}.comment-card{border:1px solid var(--line);border-radius:13px;padding:13px;background:#0c0e14}.comment-top{display:flex;justify-content:space-between;gap:10px}.user{font-weight:900}.comment-text{margin:7px 0 10px}.comment-actions{display:flex;gap:7px;flex-wrap:wrap}.draft{margin-top:10px;border-left:3px solid var(--pink);padding:9px 10px;background:#120d12;border-radius:8px}
+.liked{color:#ff7fac;border-color:#6c2943!important}.reply-selected{border-color:#ff3f7f!important;background:#170d13!important}
+.api-warning{padding:11px 12px;border:1px solid #65491e;border-radius:10px;background:#1b150a;color:#f5cc70;margin-top:12px}
+.switch{display:flex;align-items:center;gap:9px}.toggle{width:48px;height:26px;border-radius:999px;background:#333;position:relative}.toggle:after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:white;top:3px;left:4px;transition:.2s}.toggle.on{background:var(--green)}.toggle.on:after{left:24px}
+.rule-box{padding:10px;border:1px solid var(--line);border-radius:10px;background:#0b0d12;margin-top:10px}
+.reply-preview{font-style:italic;color:#e3c8d3}
+
+
+/* Smart Scheduler — Stage 4 */
+.smart-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-bottom:16px}
+.smart-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.smart-stat{padding:15px;border:1px solid var(--line);border-radius:13px;background:#0b0d12}
+.smart-stat .value{font-size:28px;font-weight:950;margin:5px 0}
+.smart-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+.smart-controls input,.smart-controls select{width:100%}
+.smart-week{display:grid;grid-template-columns:repeat(7,minmax(145px,1fr));gap:9px}
+.smart-day{border:1px solid var(--line);border-radius:13px;background:#0b0d12;padding:12px;min-height:160px}
+.smart-day-title{font-weight:900;margin-bottom:8px}
+.smart-time{display:flex;justify-content:space-between;gap:6px;align-items:center;padding:6px 7px;margin:5px 0;border-radius:8px;background:#141720;font-size:12px}
+.smart-time.test{border-left:3px solid var(--yellow)}
+.smart-time.best{border-left:3px solid var(--green)}
+.rank-table{width:100%;border-collapse:collapse}
+.rank-table th,.rank-table td{padding:10px;border-bottom:1px solid #222633;text-align:left}
+.rank-table th{color:#aeb3c3;font-size:12px}
+.scorebar{height:8px;background:#1b1e27;border-radius:999px;overflow:hidden;min-width:100px}
+.scorebar>span{display:block;height:100%;background:linear-gradient(90deg,var(--pink),var(--pink2));border-radius:999px}
+.confidence{font-size:11px;font-weight:900;padding:4px 7px;border-radius:999px;background:#152018;color:#79e2ab;border:1px solid #29543a}
+.reason-list{display:grid;gap:8px;margin-top:12px}
+.reason{padding:10px 12px;border-radius:10px;background:#0b0d12;border:1px solid var(--line)}
+.sample-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.sample-grid .field input{width:100%}
+.source-pill{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:900;background:#1d180d;border:1px solid #6b5220;color:#ffd770}
+.smart-alert{padding:11px 12px;border-radius:10px;border:1px solid #29543a;background:#0d1812;color:#8be0b0}
+@media(max-width:1200px){.smart-week{grid-template-columns:repeat(4,1fr)}.smart-controls,.sample-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:850px){.smart-hero{grid-template-columns:1fr}.smart-grid{grid-template-columns:repeat(2,1fr)}.smart-week{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.smart-grid,.smart-controls,.sample-grid,.smart-week{grid-template-columns:1fr}}
+
+
+/* Stage 5 backend */
+.backend-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:999px;border:1px solid #303543;font-size:12px;font-weight:900}
+.backend-pill.online{color:#79e2ab;background:#0b1b13;border-color:#244d34}
+.backend-pill.offline{color:#ffcf70;background:#211a0a;border-color:#56451d}
+.auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.auth-card{padding:14px;border:1px solid var(--line);border-radius:12px;background:#0b0d12}
+.auth-card input{width:100%;margin-top:8px}
+.cloud-note{padding:10px 12px;border-radius:10px;background:#0c1118;border:1px solid #26364e;color:#b9d7ff;margin-top:10px}
+
+/* misc */
+.log{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#090b10;border:1px solid var(--line);border-radius:12px;padding:12px;max-height:250px;overflow:auto}.log div{padding:5px 0;border-bottom:1px dashed #1c202a}.ok{color:#66db9c}.warn{color:#f5ca67}.err{color:#ff8080}
+.modal{position:fixed;inset:0;background:#000c;display:grid;place-items:center;z-index:90;padding:20px}.modal-box{width:min(760px,96vw);background:#0d0f15;border:1px solid #303541;border-radius:16px;padding:16px}.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.modal video{width:100%;max-height:65vh;border-radius:10px;background:#000}
+@media(max-width:1200px){.week-grid{grid-template-columns:repeat(3,1fr)}.comments-layout{grid-template-columns:1fr}}
+@media(max-width:850px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.sidebar-foot{position:static;margin-top:20px}.main{padding:22px}.grid4{grid-template-columns:repeat(2,1fr)}.week-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.grid4,.week-grid,.formgrid{grid-template-columns:1fr}.calendar-bottom{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="logo">✦</div><span>Cloudent<span style="color:#ff3f7f">Flow</span></span></div>
+  <div class="nav" id="nav"></div>
+  <div class="sidebar-foot">
+    <div class="mode">● Modo de teste</div>
+    <b>CloudentFlow</b><div class="muted">Stage 4 — Smart Scheduler</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div><div class="kicker">SEU ESTÚDIO DE CONTEÚDO</div><h1 id="pageTitle">Visão geral</h1></div>
+    <button class="btn primary" id="newVideoBtn">＋ Novo vídeo</button>
+  </div>
+
+  <section id="overview" class="page"></section>
+  <section id="aiComments" class="page hidden"></section>
+  <section id="queue" class="page hidden"></section>
+  <section id="calendar" class="page hidden"></section>
+  <section id="metrics" class="page hidden"></section>
+  <section id="settings" class="page hidden"></section>
+</main>
+</div>
+
+<input id="videoPicker" type="file" accept="video/*" hidden>
+<div id="modalHost"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const navItems=[
+  ["overview","▦","Visão geral"],
+  ["aiComments","◌","Comentários IA"],
+  ["queue","ϟ","Fila de geração"],
+  ["calendar","◫","Calendário"],
+  ["metrics","⌁","Métricas"],
+  ["settings","⚙","Configurações"]
+];
+const SUPABASE_URL="https://dxrhvudvutmgrmfkmzxo.supabase.co";
+const SUPABASE_KEY="sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI";
+const EDGE_URL=SUPABASE_URL+"/functions/v1/cloudent-api";
+const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
+const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
+const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
+let sb=null, cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[];
+
+let currentPage="overview", pendingTarget=null, db=null;
+const defaultComments=[
+  {id:"c1",user:"@gabrielx",text:"que vídeo absurdo kkkkk",time:"há 2 min"},
+  {id:"c2",user:"@lara.22",text:"qual app você usa pra fazer isso?",time:"há 5 min"},
+  {id:"c3",user:"@pedrozz",text:"posta mais desse tipo",time:"há 7 min"},
+  {id:"c4",user:"@mariaf",text:"ficou muito bom 🔥",time:"há 10 min"},
+  {id:"c5",user:"@jvsz",text:"como faz essa edição?",time:"há 13 min"},
+  {id:"c6",user:"@biax",text:"mds eu não esperava o final",time:"há 16 min"},
+  {id:"c7",user:"@luan7",text:"parte 2 quando?",time:"há 18 min"},
+  {id:"c8",user:"@ana.rs",text:"amei esse",time:"há 21 min"},
+  {id:"c9",user:"@caios",text:"isso é IA?",time:"há 27 min"},
+  {id:"c10",user:"@sthefany",text:"quero tutorial",time:"há 31 min"},
+  {id:"c11",user:"@rkzin",text:"kkkkkk genial",time:"há 38 min"},
+  {id:"c12",user:"@yasmin",text:"salvei pra ver depois",time:"há 42 min"}
+];
+
+
+function defaultSmartSamples(){
+  const rows=[], times=["09:00","12:00","15:00","18:00","21:00"];
+  const hourFactor={"09:00":0.70,"12:00":0.91,"15:00":0.78,"18:00":1.08,"21:00":1.24};
+  const today=new Date(); today.setHours(12,0,0,0);
+  for(let back=1;back<=21;back++){
+    const d=new Date(today); d.setDate(today.getDate()-back);
+    const dow=d.getDay();
+    const dayFactor=[1.12,0.92,0.96,1.00,1.03,1.10,1.16][dow];
+    times.forEach((time,j)=>{
+      const noise=0.87+(((back*13+j*17+dow*5)%27)/100);
+      const factor=hourFactor[time]*dayFactor*noise;
+      const reach=Math.max(800,Math.round(5200*factor));
+      const views=Math.round(reach*(1.08+((back+j)%7)/100));
+      const likes=Math.round(reach*(0.042+((j+dow)%5)*0.004));
+      const comments=Math.max(2,Math.round(reach*(0.0025+((back+j)%4)*0.0005)));
+      const shares=Math.max(2,Math.round(reach*(0.004+((j+dow)%4)*0.001)));
+      const saves=Math.max(2,Math.round(reach*(0.005+((back+dow)%5)*0.001)));
+      rows.push({
+        id:`demo-${back}-${j}`,date:localISO(d),time,views,reach,likes,comments,shares,saves,source:"demo"
+      });
+    });
+  }
+  return rows;
+}
+
+const saved=JSON.parse(localStorage.getItem("cloudentflow-stage4")||localStorage.getItem("cloudentflow-stage3")||"null")||{};
+
+const state={
+  weekStart:saved.weekStart||mondayISO(new Date()),
+  slots:saved.slots||{},
+  postsPerDay:5,
+  defaultTimes:saved.defaultTimes||["09:00","12:00","15:00","18:00","21:00"],
+  minGap:saved.minGap||60,
+  logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"Calendário semanal e Comentários IA carregados."}],
+  comments:saved.comments||defaultComments,
+  replySelected:new Set(saved.replySelected||[]),
+  likeSelected:new Set(saved.likeSelected||[]),
+  drafts:saved.drafts||{},
+  commentSettings:saved.commentSettings||{
+    enabled:true,replies:5,likes:10,tone:"Natural",delayMin:10,delayMax:45,
+    instructions:"Responda curto, natural e sem parecer robô. Não use a mesma frase duas vezes.",
+    onlyPositive:false,questionsFirst:true
+  },
+  performance:saved.performance||{"09:00":67,"12:00":81,"15:00":72,"18:00":96,"21:00":120},
+  smartSamples:saved.smartSamples||defaultSmartSamples(),
+  smartSettings:saved.smartSettings||{
+    enabled:true,
+    exploration:20,
+    minSamples:3,
+    lookbackDays:60,
+    autoOptimize:false,
+    daySpecificWeight:70,
+    lastRun:null
+  }
+};
+
+
+async function initCloud(){
+  if(!window.supabase?.createClient) return;
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  const {data}=await sb.auth.getSession();
+  cloudSession=data.session||null;
+  if(cloudSession){
+    await testBackend();
+    await syncFromBackend();
+    await loadInstagramStatus();
+  }
+  sb.auth.onAuthStateChange(async (_event,session)=>{
+    cloudSession=session||null;
+    backendOnline=false;
+    if(cloudSession){await testBackend();await syncFromBackend();await loadInstagramStatus()}
+    renderAll();
+  });
+}
+async function cloudFetch(path="",options={}){
+  if(!cloudSession) throw new Error("Faça login no CloudentFlow primeiro.");
+  const headers={...(options.headers||{}),Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
+  const res=await fetch(EDGE_URL+path,{...options,headers});
+  let data=null; try{data=await res.json()}catch{}
+  if(!res.ok) throw new Error(data?.error||("Erro "+res.status));
+  return data;
+}
+
+async function edgeFetch(fullUrl,options={}){
+  if(!cloudSession) throw new Error("Faça login no CloudentFlow primeiro.");
+  const headers={...(options.headers||{}),Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
+  const res=await fetch(fullUrl,{...options,headers});
+  let data=null; try{data=await res.json()}catch{}
+  if(!res.ok) throw new Error(data?.error||data?.message||("Erro "+res.status));
+  return data;
+}
+async function loadInstagramStatus(){
+  if(!cloudSession){instagramIntegration=null;return}
+  try{
+    const r=await edgeFetch(IG_STATUS_URL);
+    instagramIntegration=r.integration||null;
+  }catch(e){instagramIntegration=null}
+}
+async function connectInstagram(){
+  if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
+  const token=$("#instagramToken")?.value?.trim();
+  if(!token){alert("Cole seu token do Instagram.");return}
+  const btn=$("#connectInstagramBtn"); if(btn){btn.disabled=true;btn.textContent="Conectando..."}
+  try{
+    const r=await edgeFetch(IG_CONNECT_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({credential:token})
+    });
+    instagramIntegration={
+      provider:"instagram",enabled:true,account_label:r.profile?.username||r.profile?.name||"Instagram",
+      external_account_id:r.profile?.id||"",config:{status:"connected",account_type:r.profile?.account_type||null},
+      last_verified_at:new Date().toISOString()
+    };
+    if($("#instagramToken"))$("#instagramToken").value="";
+    log(`Instagram conectado: @${r.profile?.username||r.profile?.name||"conta"}.`,"ok");
+  }catch(e){alert("Falha ao conectar Instagram: "+e.message)}
+  finally{renderAll()}
+}
+async function syncInstagramToday(){
+  if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
+  const btn=$("#syncTodayBtn"); if(btn){btn.disabled=true;btn.textContent="Buscando métricas..."}
+  try{
+    const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"POST"});
+    liveInstagramMetrics=r.media||[];
+    log(`Métricas reais sincronizadas: ${r.count||0} vídeo(s) de hoje.`,"ok");
+  }catch(e){
+    alert("Não consegui buscar as métricas: "+e.message);
+    log("Falha ao sincronizar métricas do Instagram: "+e.message,"err");
+  }finally{renderAll()}
+}
+function igMetricCard(label,value,sub=""){
+  return `<div class="smart-stat"><div class="muted">${label}</div><div class="value">${Number(value||0).toLocaleString("pt-BR")}</div><div class="note">${sub}</div></div>`;
+}
+async function testBackend(){
+  try{await cloudFetch();backendOnline=true}catch(e){backendOnline=false}
+}
+async function signUpCloud(){
+  const email=$("#authEmail")?.value?.trim(),password=$("#authPassword")?.value||"";
+  if(!email||password.length<6){alert("Informe email e senha com pelo menos 6 caracteres.");return}
+  const {data,error}=await sb.auth.signUp({email,password});
+  if(error){alert(error.message);return}
+  if(data.session){cloudSession=data.session;await testBackend();await syncFromBackend();renderAll()}
+  else alert("Conta criada. Confira seu email se o Supabase pedir confirmação e depois entre.");
+}
+async function signInCloud(){
+  const email=$("#authEmail")?.value?.trim(),password=$("#authPassword")?.value||"";
+  const {data,error}=await sb.auth.signInWithPassword({email,password});
+  if(error){alert(error.message);return}
+  cloudSession=data.session;await testBackend();await syncFromBackend();renderAll()
+}
+async function signOutCloud(){if(sb)await sb.auth.signOut();cloudSession=null;backendOnline=false;renderAll()}
+async function syncFromBackend(){
+  if(!cloudSession)return;
+  const q=await cloudFetch("?resource=queue");
+  state.slots={};
+  for(const row of q){
+    const d=new Date(row.scheduled_at);
+    const date=localISO(d), time=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    let slot=firstFreeSlot(date); if(slot<0) continue;
+    const v=row.videos||{};
+    state.slots[keyFor(date,slot)]={
+      cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
+      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",
+      time,status:row.status||"agendado",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual"
+    };
+  }
+  save();
+}
+async function syncAllCloudSlots(){
+  if(!cloudSession)return;
+  const jobs=[];
+  for(const x of Object.values(state.slots)){
+    if(!x?.cloud||!x.scheduleId) continue;
+    jobs.push(cloudFetch("?action=schedule",{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id:x.scheduleId,scheduled_at:x.scheduledAt,status:x.status||"scheduled",smart_mode:x.smartMode||"manual",caption:x.caption||""})
+    }).catch(()=>null));
+  }
+  await Promise.all(jobs);
+}
+
+function mondayISO(d){
+  d=new Date(d); d.setHours(0,0,0,0); const day=d.getDay(), diff=(day===0?-6:1-day); d.setDate(d.getDate()+diff);
+  return localISO(d);
+}
+function localISO(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function save(){
+  const data={...state,replySelected:[...state.replySelected],likeSelected:[...state.likeSelected]};
+  localStorage.setItem("cloudentflow-stage4",JSON.stringify(data));
+}
+function log(m,type="ok"){state.logs.unshift({t:new Date().toISOString(),type,m});state.logs=state.logs.slice(0,100);save();renderAll()}
+function fmtDateTime(x){return new Date(x).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
+function fmtSize(n=0){return n<1024**2?(n/1024).toFixed(1)+" KB":(n/1024/1024).toFixed(1)+" MB"}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+function keyFor(date,slot){return `${date}#${slot}`}
+
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const r=indexedDB.open("cloudentflow-calendar-db",1);
+    r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("videos"))d.createObjectStore("videos",{keyPath:"id"})};
+    r.onsuccess=()=>{db=r.result;resolve(db)};r.onerror=()=>reject(r.error)
+  })
+}
+function store(mode="readonly"){return db.transaction("videos",mode).objectStore("videos")}
+function dbPut(x){return new Promise((res,rej)=>{const r=store("readwrite").put(x);r.onsuccess=()=>res(x);r.onerror=()=>rej(r.error)})}
+function dbGet(id){return new Promise((res,rej)=>{const r=store().get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function dbDelete(id){return new Promise((res,rej)=>{const r=store("readwrite").delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+
+function nav(){
+  $("#nav").innerHTML=navItems.map((x,i)=>`<button class="${i===0?"active":""}" data-page="${x[0]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("");
+  $$("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page))
+}
+function showPage(id){
+  currentPage=id; $$(".page").forEach(x=>x.classList.add("hidden")); $("#"+id).classList.remove("hidden");
+  $$("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
+  $("#pageTitle").textContent=navItems.find(x=>x[0]===id)[2];renderAll()
+}
+
+function weekDates(){
+  const start=new Date(state.weekStart+"T00:00:00");return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})
+}
+function slotData(date,slot){return state.slots[keyFor(date,slot)]||null}
+function filledCount(date){return Array.from({length:5},(_,i)=>slotData(date,i)).filter(Boolean).length}
+function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
+
+function minutesOf(time){
+  if(!/^\d{2}:\d{2}$/.test(time||"")) return NaN;
+  const [h,m]=time.split(":").map(Number);
+  if(h<0||h>23||m<0||m>59) return NaN;
+  return h*60+m;
+}
+function dateSlots(date,ignoreKey=null){
+  return Object.entries(state.slots)
+    .filter(([k,v])=>v && k.startsWith(date+"#") && k!==ignoreKey)
+    .map(([k,v])=>({key:k,...v}));
+}
+function validateSchedule(date,time,ignoreKey=null){
+  const mins=minutesOf(time);
+  if(!Number.isFinite(mins)) return {ok:false,msg:"Horário inválido."};
+  const items=dateSlots(date,ignoreKey);
+  if(items.length>=5) return {ok:false,msg:"Esse dia já possui 5 vídeos."};
+  for(const item of items){
+    const other=minutesOf(item.time);
+    if(other===mins) return {ok:false,msg:`Já existe um vídeo às ${time}.`};
+    if(Math.abs(other-mins)<state.minGap) return {ok:false,msg:`Mantenha pelo menos ${state.minGap} minutos entre os vídeos.`};
+  }
+  return {ok:true};
+}
+function firstValidDefaultSlot(date,ignoreKey=null){
+  for(let i=0;i<5;i++){
+    const k=keyFor(date,i);
+    if(!state.slots[k] || k===ignoreKey){
+      const time=state.defaultTimes[i]||"12:00";
+      if(validateSchedule(date,time,ignoreKey).ok) return {slot:i,time};
+    }
+  }
+  return null;
+}
+function getStatus(x){
+  return x.status||"agendado";
+}
+function statusLabel(s){
+  return {agendado:"Agendado",fila:"Na fila",publicando:"Publicando",publicado:"Publicado",erro:"Erro"}[s]||"Agendado";
+}
+function statusClass(s){
+  if(s==="publicado") return "green";
+  if(s==="erro") return "red";
+  if(s==="fila"||s==="publicando") return "yellow";
+  return "gray";
+}
+function syncQueue(){
+  save();
+  if(cloudSession) syncAllCloudSlots();
+}
+
+
+const WEEKDAY_NAMES=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+
+function median(values){
+  if(!values.length)return 0;
+  const a=[...values].sort((x,y)=>x-y),m=Math.floor(a.length/2);
+  return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
+function sampleScore(s){
+  const reach=Math.max(1,+s.reach||1),views=Math.max(0,+s.views||0);
+  const viewRate=clamp(views/reach,0,2);
+  const likeRate=(+s.likes||0)/reach*100;
+  const commentRate=(+s.comments||0)/reach*100;
+  const shareRate=(+s.shares||0)/reach*100;
+  const saveRate=(+s.saves||0)/reach*100;
+  // Taxas ganham mais peso que volume absoluto para reduzir viés de um único vídeo gigante.
+  return (
+    Math.log10(reach+10)*10 +
+    viewRate*18 +
+    likeRate*2.2 +
+    commentRate*6.0 +
+    shareRate*8.0 +
+    saveRate*8.0
+  );
+}
+function sampleWeight(s){
+  const age=Math.max(0,(Date.now()-new Date(s.date+"T12:00:00").getTime())/86400000);
+  const halfLife=30;
+  return Math.pow(.5,age/halfLife);
+}
+function recentSamples(){
+  const days=state.smartSettings.lookbackDays;
+  const cutoff=Date.now()-days*86400000;
+  return state.smartSamples.filter(s=>new Date(s.date+"T23:59:59").getTime()>=cutoff);
+}
+function robustWeightedScore(samples,prior=0){
+  if(!samples.length)return {score:prior,n:0,raw:prior,confidence:0};
+  const values=samples.map(sampleScore),med=median(values);
+  const mad=median(values.map(v=>Math.abs(v-med)))||1;
+  let sum=0,weights=0;
+  samples.forEach((s,i)=>{
+    const clipped=clamp(values[i],med-2.5*mad,med+2.5*mad);
+    const w=sampleWeight(s);sum+=clipped*w;weights+=w
+  });
+  const raw=weights?sum/weights:med;
+  // Bayesian shrinkage: horários com pouca amostra ficam puxados para a média geral.
+  const priorWeight=Math.max(1,state.smartSettings.minSamples);
+  const score=(raw*weights+prior*priorWeight)/(weights+priorWeight);
+  const confidence=Math.round(clamp((samples.length/state.smartSettings.minSamples)*65 + Math.min(35,weights*7),0,100));
+  return {score,n:samples.length,raw,confidence};
+}
+function globalPriorScore(){
+  const samples=recentSamples();if(!samples.length)return 60;
+  return median(samples.map(sampleScore));
+}
+function hourBucket(time){return Number(String(time).slice(0,2))}
+function weekdayOfSample(s){return new Date(s.date+"T12:00:00").getDay()}
+function statsForHour(hour,weekday=null){
+  const samples=recentSamples(),prior=globalPriorScore();
+  const exact=samples.filter(s=>hourBucket(s.time)===hour && (weekday===null||weekdayOfSample(s)===weekday));
+  return robustWeightedScore(exact,prior);
+}
+function estimatedHourScore(hour,weekday){
+  const day=statsForHour(hour,weekday),global=statsForHour(hour,null),prior=globalPriorScore();
+  if(day.n){
+    const w=state.smartSettings.daySpecificWeight/100;
+    return {score:day.score*w+global.score*(1-w),n:day.n,confidence:Math.round(day.confidence*w+global.confidence*(1-w)),direct:true};
+  }
+  if(global.n)return {score:global.score*.97,n:0,confidence:Math.round(global.confidence*.55),direct:false};
+  // Interpola horas sem dados usando vizinhos conhecidos e uma penalidade leve.
+  const known=[];
+  for(let h=8;h<=23;h++){
+    const st=statsForHour(h,weekday);
+    if(st.n)known.push({h,score:st.score,confidence:st.confidence})
+  }
+  if(!known.length)return {score:prior*.9,n:0,confidence:5,direct:false};
+  known.sort((a,b)=>Math.abs(a.h-hour)-Math.abs(b.h-hour));
+  const nearest=known.slice(0,2);
+  const score=nearest.reduce((a,x)=>a+x.score/(1+Math.abs(x.h-hour)),0)/
+    nearest.reduce((a,x)=>a+1/(1+Math.abs(x.h-hour)),0);
+  return {score:score*.94,n:0,confidence:Math.round(nearest[0].confidence*.35),direct:false};
+}
+function smartCandidates(date,fixedTimes=[]){
+  const weekday=new Date(date+"T12:00:00").getDay();
+  const fixed=fixedTimes.map(minutesOf).filter(Number.isFinite);
+  const rows=[];
+  for(let h=8;h<=23;h++){
+    const time=String(h).padStart(2,"0")+":00",mins=h*60;
+    if(fixed.some(x=>Math.abs(x-mins)<state.minGap))continue;
+    const st=estimatedHourScore(h,weekday);
+    rows.push({time,mins,...st})
+  }
+  return rows;
+}
+function recommendTimesForDate(date,fixedTimes=[],limit=state.postsPerDay){
+  const settings=state.smartSettings,candidates=smartCandidates(date,fixedTimes);
+  const exploreCount=settings.exploration<=0?0:Math.max(1,Math.round(limit*settings.exploration/100));
+  const exploitCount=Math.max(0,limit-exploreCount);
+  const chosen=[],canUse=c=>chosen.every(x=>Math.abs(x.mins-c.mins)>=state.minGap);
+
+  [...candidates].sort((a,b)=>b.score-a.score).forEach(c=>{
+    if(chosen.filter(x=>x.mode==="best").length>=exploitCount)return;
+    if(canUse(c))chosen.push({...c,mode:"best"})
+  });
+
+  [...candidates]
+    .filter(c=>!chosen.some(x=>x.time===c.time))
+    .sort((a,b)=>(a.n-b.n)||(b.score-a.score))
+    .forEach(c=>{
+      if(chosen.length>=limit)return;
+      if(canUse(c))chosen.push({...c,mode:"test"})
+    });
+
+  [...candidates].sort((a,b)=>b.score-a.score).forEach(c=>{
+    if(chosen.length>=limit)return;
+    if(!chosen.some(x=>x.time===c.time)&&canUse(c))chosen.push({...c,mode:"best"})
+  });
+
+  return chosen.sort((a,b)=>a.mins-b.mins).slice(0,limit);
+}
+function aggregateDayStats(){
+  const samples=recentSamples(),prior=globalPriorScore();
+  return Array.from({length:7},(_,dow)=>{
+    const subset=samples.filter(s=>weekdayOfSample(s)===dow);
+    return {dow,...robustWeightedScore(subset,prior)}
+  })
+}
+function bestGlobalHour(){
+  const rows=[];for(let h=8;h<=23;h++){const st=estimatedHourScore(h,1);const global=statsForHour(h,null);rows.push({hour:h,time:String(h).padStart(2,"0")+":00",score:global.n?global.score:st.score,n:global.n,confidence:global.confidence})}
+  return rows.sort((a,b)=>b.score-a.score)[0]
+}
+function smartConfidence(){
+  const samples=recentSamples(),days=new Set(samples.map(s=>weekdayOfSample(s))).size;
+  let trusted=0;
+  for(let dow=0;dow<7;dow++)for(let h=8;h<=23;h++)if(statsForHour(h,dow).n>=state.smartSettings.minSamples)trusted++;
+  const sampleFactor=Math.min(1,samples.length/100),coverage=Math.min(1,trusted/35),dayFactor=days/7;
+  const pct=Math.round((sampleFactor*.45+coverage*.35+dayFactor*.20)*100);
+  return {pct,label:pct>=75?"Alta":pct>=45?"Média":"Baixa",trusted,total:samples.length}
+}
+function rankingRows(){
+  const rows=[];
+  for(let dow=0;dow<7;dow++){
+    for(let h=8;h<=23;h++){
+      const st=statsForHour(h,dow);
+      if(st.n)rows.push({dow,h,time:String(h).padStart(2,"0")+":00",...st})
+    }
+  }
+  return rows.sort((a,b)=>b.score-a.score);
+}
+function setSmartSetting(key,value){
+  state.smartSettings[key]=value;save();metrics()
+}
+function toggleSmartScheduler(){
+  state.smartSettings.enabled=!state.smartSettings.enabled;save();log(`Smart Scheduler ${state.smartSettings.enabled?"ativado":"pausado"}.`,state.smartSettings.enabled?"ok":"warn")
+}
+function recalcSmart(){
+  state.smartSettings.lastRun=new Date().toISOString();save();log("Smart Scheduler recalculou scores, confiança e horários sugeridos.","ok")
+}
+function optimizeFutureCalendar(){
+  if(!state.smartSettings.enabled){alert("Ative o Smart Scheduler primeiro.");return}
+  if(!confirm("Reorganizar os horários futuros usando as recomendações atuais? Os vídeos continuam nos mesmos dias."))return;
+  const now=new Date();let changed=0;
+  const dates=[...new Set(Object.keys(state.slots).map(k=>k.split("#")[0]))].sort();
+  dates.forEach(date=>{
+    const end=new Date(date+"T23:59:59");if(end<now)return;
+    const entries=Object.entries(state.slots)
+      .filter(([k,x])=>k.startsWith(date+"#")&&x)
+      .sort((a,b)=>minutesOf(a[1].time)-minutesOf(b[1].time));
+    const fixed=entries.filter(([,x])=>["publicado","publicando"].includes(getStatus(x)));
+    const movable=entries.filter(([,x])=>!["publicado","publicando"].includes(getStatus(x)));
+    if(!movable.length)return;
+    const fixedTimes=fixed.map(([,x])=>x.time);
+    const recs=recommendTimesForDate(date,fixedTimes,movable.length);
+    movable.forEach(([k,x],idx)=>{
+      const rec=recs[idx];if(!rec)return;
+      if(x.time!==rec.time){
+        x.time=rec.time;x.smartMode=rec.mode;
+        const [h,m]=rec.time.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);x.scheduledAt=at.toISOString();
+        changed++
+      }
+    })
+  });
+  state.smartSettings.lastRun=new Date().toISOString();syncQueue();
+  log(`Smart Scheduler ajustou ${changed} horário(s) futuro(s) sem trocar os vídeos de dia.`,"ok")
+}
+function addSmartSample(){
+  const date=$("#sampleDate").value,time=$("#sampleTime").value;
+  if(!date||!time){alert("Preencha data e horário.");return}
+  const fields=["views","reach","likes","comments","shares","saves"],obj={id:crypto.randomUUID(),date,time,source:"manual"};
+  for(const f of fields)obj[f]=Math.max(0,+$("#sample_"+f).value||0);
+  if(!obj.reach){alert("Alcance precisa ser maior que zero.");return}
+  state.smartSamples.push(obj);state.smartSettings.lastRun=new Date().toISOString();save();log(`Nova amostra manual adicionada: ${date} ${time}.`,"ok")
+}
+function resetSmartDemo(){
+  if(!confirm("Restaurar os dados simulados do Smart Scheduler?"))return;
+  state.smartSamples=defaultSmartSamples();state.smartSettings.lastRun=new Date().toISOString();save();log("Dados simulados restaurados.","ok")
+}
+function clearSmartSamples(){
+  if(!confirm("Apagar todas as amostras de teste/manual?"))return;
+  state.smartSamples=[];state.smartSettings.lastRun=new Date().toISOString();save();log("Amostras do Smart Scheduler apagadas.","warn")
+}
+
+
+function overview(){
+  const total=allScheduled().length, comments=state.comments.length;
+  $("#overview").innerHTML=`
+  <div class="banner">📈 <b>Estágio 6 em teste:</b> conecte seu Instagram em Configurações e abra Métricas para puxar os vídeos publicados hoje e ver dados reais.</div>
+  <div class="grid4">
+    <div class="card metric"><div class="label">Vídeos na semana</div><div class="num">${total}</div><div class="muted">de 35 posições</div></div>
+    <div class="card metric"><div class="label">Meta diária</div><div class="num">5</div><div class="muted">vídeos por dia</div></div>
+    <div class="card metric"><div class="label">Respostas IA</div><div class="num">${state.commentSettings.replies}</div><div class="muted">por publicação</div></div>
+    <div class="card metric"><div class="label">Confiança IA</div><div class="num">${smartConfidence().pct}%</div><div class="muted">${smartConfidence().label} · dados de teste/manual</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:16px">
+    <div class="card"><h2>Fluxo principal</h2><div class="stage-board">
+      <div class="stage-row"><span>1.</span><b>Calendário</b><span class="muted">Envie cada vídeo direto no dia/posição que ele será postado.</span></div>
+      <div class="stage-row"><span>2.</span><b>Comentários IA</b><span class="muted">Defina estilo e quantidade de respostas.</span></div>
+      <div class="stage-row"><span>3.</span><b>Métricas</b><span class="muted">Depois o sistema aprende os melhores horários.</span></div>
+    </div></div>
+    <div class="card"><h2>Status dos estágios</h2><div class="stage-board">
+      <div class="stage-row"><span>✅</span><b>Estágio 1</b><span>Interface base</span></div>
+      <div class="stage-row"><span>✅</span><b>Estágio 2</b><span>Estrutura revisada</span></div>
+      <div class="stage-row"><span>✅</span><b>Estágio 3</b><span>Calendário e agendamento completos</span></div>
+      <div class="stage-row"><span>✅</span><b>Estágio 4</b><span>Smart Scheduler concluído</span></div>
+      <div class="stage-row"><span>✅</span><b>Estágio 5</b><span>Banco, Storage e backend concluídos</span></div>
+      <div class="stage-row"><span>🟡</span><b>Estágio 6</b><span>Instagram + teste de métricas reais</span></div>
+      ${[7,8,9,10].map(i=>`<div class="stage-row"><span>❌</span><b>Estágio ${i}</b><span>Não concluído</span></div>`).join("")}
+    </div></div>
+  </div>`;
+}
+
+function weekScheduledCount(){
+  const dates=new Set(weekDates().map(localISO));
+  return Object.entries(state.slots).filter(([k,v])=>v&&dates.has(k.split("#")[0])).length;
+}
+function calendarPage(){
+  const dates=weekDates(), weekdays=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
+  const weekdayCols=dates.slice(0,5), weekend=dates.slice(5);
+  $("#calendar").innerHTML=`
+  <div class="calendar-wrap">
+    <div class="banner">🗓️ <b>Agenda de conteúdo:</b> 5 posições por dia. Clique em qualquer “Posição livre” para enviar o vídeo daquele horário.</div>
+    <div class="calendar-top">
+      <div class="left">
+        <div class="field"><label>Início da semana</label><input id="weekStart" type="date" value="${state.weekStart}"></div>
+        <button class="btn primary" onclick="openScheduleModal()">＋ Agendar vídeo</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn success" onclick="optimizeFutureCalendar()">🤖 Otimizar horários IA</button>
+        <button class="btn" onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button>
+        <button class="btn danger" onclick="clearCurrentWeek()">Limpar semana</button>
+        <button class="btn" onclick="shiftWeek(-7)">← Semana anterior</button>
+        <button class="btn" onclick="goCurrentWeek()">Hoje</button>
+        <button class="btn" onclick="shiftWeek(7)">Próxima semana →</button>
+      </div>
+    </div>
+    <div class="week-summary">
+      <div class="summary-chip">🎬 ${weekScheduledCount()}/35 posições preenchidas</div>
+      <div class="summary-chip">✅ conflitos bloqueados</div>
+      <div class="summary-chip">↔ reagendamento preserva vídeo/legenda</div>
+      <div class="summary-chip">🔄 fila sincronizada automaticamente</div>
+      <div class="summary-chip">⏱ intervalo mínimo: ${state.minGap} min</div>
+      <div class="summary-chip">🧠 IA: ${state.smartSettings.enabled?"ativa":"pausada"} · confiança ${smartConfidence().pct}%</div>
+    </div>
+    <div class="week-grid">
+      ${weekdayCols.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}
+    </div>
+    <div class="calendar-bottom">
+      ${weekend.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}
+    </div>
+    <div class="note" style="margin-top:16px">O Smart Scheduler já pode reorganizar horários futuros. Nesta etapa ele usa dados simulados/manuais; no Estágio 7 a fonte será substituída pelas métricas reais do Instagram.</div>
+  </div>`;
+  $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
+}
+function dayColumn(d,label){
+  const iso=localISO(d), count=filledCount(iso);
+  return `<div class="day-column" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
+    <div class="day-head"><div class="day-name">${label}, ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</div><div class="count">${count}/5</div></div>
+    <div class="day-slots">${Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("")}</div>
+  </div>`
+}
+function renderSlot(date,i){
+  const x=slotData(date,i), time=x?.time||state.defaultTimes[i];
+  if(!x)return `<div class="slot empty" onclick="pickForSlot('${date}',${i})"><span>＋</span><span>Posição livre <small class="muted">· ${time}</small></span></div>`;
+  const st=getStatus(x);
+  return `<div class="slot filled" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
+    <div class="slot-line">
+      <div class="slot-title" title="${esc(x.name)}">${esc(x.name)}</div>
+      <span class="badge ${statusClass(st)}">${statusLabel(st)}</span>
+    </div>
+    <div class="slot-meta"><span>🕒 ${x.time}</span><span>${fmtSize(x.size)}</span><span>${x.caption?"legenda ✓":"sem legenda"}</span></div>
+    <div class="slot-actions">
+      <button class="btn" onclick="previewScheduled('${date}',${i})">▶</button>
+      <button class="btn" onclick="openEditScheduleModal('${date}',${i})">Editar</button>
+      <button class="btn danger" onclick="removeSlot('${date}',${i})">Excluir</button>
+    </div>
+  </div>`
+}
+function pickForSlot(date,slot){pendingTarget={date,slot};$("#videoPicker").click()}
+function firstFreeSlot(date){
+  for(let i=0;i<5;i++)if(!slotData(date,i))return i;return -1
+}
+async function addVideoToSlot(file,date,slot,time=null,caption=""){
+  const t=time||state.defaultTimes[slot]||"12:00";
+  const valid=validateSchedule(date,t);
+  if(!valid.ok){alert(valid.msg);return false}
+  if(state.slots[keyFor(date,slot)]){alert("Essa posição já está ocupada.");return false}
+  if(!cloudSession){alert("Entre na sua conta do CloudentFlow em Configurações para salvar vídeos no backend.");showPage("settings");return false}
+  const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
+  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode","manual");
+  const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
+  const schedule=res.schedule,video=res.video;
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode:"manual"};
+  save();log(`${file.name} enviado ao Storage e agendado no backend para ${date} às ${t}.`,"ok");return true
+}
+function updateSlotTime(date,slot,time){
+  const k=keyFor(date,slot),x=slotData(date,slot);if(!x)return;
+  const valid=validateSchedule(date,time,k);
+  if(!valid.ok){alert(valid.msg);renderAll();return}
+  x.time=time;
+  const [h,m]=time.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
+  x.scheduledAt=at.toISOString();syncQueue();renderAll()
+}
+async function removeSlot(date,slot){
+  const k=keyFor(date,slot),x=state.slots[k];if(!x)return;
+  if(!confirm(`Remover "${x.name}" deste horário?`))return;
+  if(x.cloud&&x.scheduleId){
+    try{await cloudFetch("?action=schedule",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:x.scheduleId})})}
+    catch(e){alert(e.message);return}
+  }else if(db){try{await dbDelete(x.videoId)}catch{}}
+  delete state.slots[k];save();log(`${x.name} removido do calendário, banco e fila.`,"warn")
+}
+async function previewScheduled(date,slot){
+  const x=slotData(date,slot);
+  if(x?.cloud){alert("O vídeo está seguro no Storage privado. O preview remoto será ligado junto da integração final; o arquivo já está salvo no backend.");return}
+  const rec=await dbGet(x.videoId);if(!rec?.blob)return;const url=URL.createObjectURL(rec.blob);
+  $("#modalHost").innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box"><div class="modal-head"><div><b>${esc(x.name)}</b><div class="muted">${date} · ${x.time}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div><video src="${url}" controls autoplay></video></div></div>`;
+  $("#modalHost .modal").dataset.url=url
+}
+function closeModal(){const m=$("#modalHost .modal");if(m?.dataset.url)URL.revokeObjectURL(m.dataset.url);$("#modalHost").innerHTML=""}
+let dragInfo=null;
+function dragSlot(e,date,slot){dragInfo={date,slot};e.dataTransfer.setData("text/plain","slot")}
+function dropOnDay(e,date){
+  e.preventDefault();if(!dragInfo)return;
+  const oldKey=keyFor(dragInfo.date,dragInfo.slot),x=state.slots[oldKey];if(!x)return;
+  if(dragInfo.date===date){dragInfo=null;return}
+  const target=firstValidDefaultSlot(date,oldKey);
+  if(!target){alert("Não há posição válida nesse dia respeitando limite e intervalo mínimo.");return}
+  delete state.slots[oldKey];
+  x.time=target.time;
+  const [h,m]=x.time.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
+  x.scheduledAt=at.toISOString();
+  state.slots[keyFor(date,target.slot)]=x;
+  dragInfo=null;syncQueue();log(`${x.name} reagendado para ${date} às ${x.time}.`,"ok")
+}
+function shiftWeek(days){const d=new Date(state.weekStart+"T00:00:00");d.setDate(d.getDate()+days);state.weekStart=localISO(d);save();calendarPage()}
+function goCurrentWeek(){state.weekStart=mondayISO(new Date());save();calendarPage()}
+
+function applyDefaultTimesToWeek(){
+  const dates=weekDates().map(localISO);
+  for(const date of dates){
+    const occupied=Object.entries(state.slots)
+      .filter(([k,v])=>v&&k.startsWith(date+"#"))
+      .sort((a,b)=>Number(a[0].split("#")[1])-Number(b[0].split("#")[1]));
+    occupied.forEach(([k,x],idx)=>{
+      const proposed=state.defaultTimes[Math.min(idx,4)];
+      if(validateSchedule(date,proposed,k).ok){
+        x.time=proposed;
+        const [h,m]=proposed.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
+        x.scheduledAt=at.toISOString();
+      }
+    });
+  }
+  syncQueue();log("Horários padrão aplicados à semana sem criar conflitos.","ok")
+}
+async function clearCurrentWeek(){
+  if(!confirm("Remover todos os vídeos agendados desta semana?"))return;
+  const dates=new Set(weekDates().map(localISO));
+  const keys=Object.keys(state.slots).filter(k=>dates.has(k.split("#")[0]));
+  for(const k of keys){const x=state.slots[k];if(x?.videoId)await dbDelete(x.videoId);delete state.slots[k]}
+  syncQueue();log("Semana atual limpa.","warn")
+}
+
+function openScheduleModal(){
+  const dates=weekDates();
+  $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
+    <div class="modal-head"><div><b>Agendar vídeo</b><div class="muted">Escolha o dia, horário, legenda e arquivo.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="formgrid">
+      <div class="field"><label>Dia</label><select id="modalDay">${dates.map(d=>`<option value="${localISO(d)}">${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`).join("")}</select></div>
+      <div class="field"><label>Horário</label><input id="modalTime" type="time" value="12:00"></div>
+      <div class="field full"><label>Legenda</label><textarea id="modalCaption" placeholder="Legenda do Reel..."></textarea></div>
+      <div class="field full"><label>Arquivo</label><input id="modalFile" type="file" accept="video/*"></div>
+    </div>
+    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="confirmScheduleModal()">Salvar no calendário</button></div>
+  </div></div>`;
+}
+async function confirmScheduleModal(){
+  const date=$("#modalDay").value,time=$("#modalTime").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
+  if(!file){alert("Escolha um vídeo.");return}
+  const free=firstFreeSlot(date);if(free<0){alert("Esse dia já está com 5 vídeos.");return}
+  const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
+  const ok=await addVideoToSlot(file,date,free,time,caption);if(ok)closeModal()
+}
+function openEditScheduleModal(date,slot){
+  const x=slotData(date,slot);if(!x)return;
+  const dates=weekDates();
+  $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
+    <div class="modal-head"><div><b>Editar agendamento</b><div class="muted">${esc(x.name)}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="formgrid">
+      <div class="field"><label>Novo dia</label><select id="editDay">${dates.map(d=>{const iso=localISO(d);return `<option value="${iso}" ${iso===date?"selected":""}>${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`}).join("")}</select></div>
+      <div class="field"><label>Horário</label><input id="editTime" type="time" value="${x.time}"></div>
+      <div class="field full"><label>Legenda</label><textarea id="editCaption">${esc(x.caption||"")}</textarea></div>
+      <div class="field full"><label>Trocar vídeo (opcional)</label><input id="editFile" type="file" accept="video/*"><div class="note">Se não escolher outro arquivo, o vídeo atual será mantido.</div></div>
+      <div class="field"><label>Status local</label><select id="editStatus">
+        ${["agendado","fila","publicando","publicado","erro"].map(s=>`<option value="${s}" ${getStatus(x)===s?"selected":""}>${statusLabel(s)}</option>`).join("")}
+      </select></div>
+    </div>
+    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="confirmEditSchedule('${date}',${slot})">Salvar alterações</button></div>
+  </div></div>`;
+}
+async function confirmEditSchedule(oldDate,oldSlot){
+  const oldKey=keyFor(oldDate,oldSlot),x=state.slots[oldKey];if(!x)return;
+  const newDate=$("#editDay").value,newTime=$("#editTime").value,newCaption=$("#editCaption").value,newStatus=$("#editStatus").value,file=$("#editFile").files[0];
+  const movingDay=newDate!==oldDate;
+  let targetSlot=oldSlot;
+  if(movingDay){
+    const free=firstFreeSlot(newDate);
+    if(free<0){alert("O novo dia já está com 5 vídeos.");return}
+    targetSlot=free;
+  }
+  const valid=validateSchedule(newDate,newTime,movingDay?null:oldKey);
+  if(!valid.ok){alert(valid.msg);return}
+
+  if(file){
+    if(x.cloud){alert("Para trocar o arquivo de um agendamento online, remova este item e envie o novo vídeo. Os demais dados podem ser editados normalmente.");return}
+    await dbDelete(x.videoId);
+    const id=crypto.randomUUID();
+    await dbPut({id,name:file.name,size:file.size,type:file.type,blob:file,added:new Date().toISOString()});
+    x.videoId=id;x.name=file.name;x.size=file.size;x.type=file.type;
+  }
+  x.time=newTime;x.caption=newCaption;x.status=newStatus;
+  const [h,m]=newTime.split(":").map(Number),at=new Date(newDate+"T00:00:00");at.setHours(h,m,0,0);x.scheduledAt=at.toISOString();
+  if(movingDay){delete state.slots[oldKey];state.slots[keyFor(newDate,targetSlot)]=x}
+  syncQueue();closeModal();log(`${x.name} atualizado e fila sincronizada.`,"ok")
+}
+function aiComments(){
+  const s=state.commentSettings;
+  $("#aiComments").innerHTML=`
+  <div class="comments-layout">
+    <div>
+      <div class="card">
+        <div class="section-head"><div><h2>Comportamento da IA</h2><div class="muted">Diga exatamente como você quer que ela responda.</div></div><div class="switch"><b>${s.enabled?"ATIVO":"PAUSADO"}</b><div class="toggle ${s.enabled?"on":""}" onclick="toggleCommentAI()"></div></div></div>
+        <div class="formgrid">
+          <div class="field"><label>Responder por vídeo</label><select id="replyCount" onchange="setCommentSetting('replies',+this.value)"><option ${s.replies===4?"selected":""}>4</option><option ${s.replies===5?"selected":""}>5</option></select></div>
+          <div class="field"><label>Selecionar curtidas</label><input type="number" value="${s.likes}" min="0" max="10" onchange="setCommentSetting('likes',Math.min(10,+this.value))"></div>
+          <div class="field"><label>Tom</label><select onchange="setCommentSetting('tone',this.value)">${["Natural","Engraçado","Direto","Carinhoso","Profissional","Personalizado"].map(x=>`<option ${s.tone===x?"selected":""}>${x}</option>`).join("")}</select></div>
+          <div class="field"><label>Atraso das respostas</label><div style="display:flex;gap:7px"><input type="number" value="${s.delayMin}" min="0" style="width:50%" onchange="setCommentSetting('delayMin',+this.value)"><input type="number" value="${s.delayMax}" min="1" style="width:50%" onchange="setCommentSetting('delayMax',+this.value)"></div></div>
+          <div class="field full"><label>Instruções para a IA</label><textarea onchange="setCommentSetting('instructions',this.value)">${esc(s.instructions)}</textarea></div>
+        </div>
+        <div class="rule-box"><label><input type="checkbox" ${s.questionsFirst?"checked":""} onchange="setCommentSetting('questionsFirst',this.checked)"> Dar prioridade para comentários com perguntas</label></div>
+        <div class="rule-box"><label><input type="checkbox" ${s.onlyPositive?"checked":""} onchange="setCommentSetting('onlyPositive',this.checked)"> Responder apenas comentários positivos</label></div>
+        <div class="api-warning"><b>Curtir comentários:</b> você pode selecionar até 10 aqui, mas a execução automática fica pendente porque a API oficial do Instagram não expõe essa ação atualmente.</div>
+        <div class="toolbar" style="margin-top:14px"><button class="btn primary" onclick="autoSelectReplies()">Escolher ${s.replies} para responder</button><button class="btn" onclick="generateDrafts()">Gerar prévias</button></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Programação</h2>
+        <div class="counter-row">
+          <div class="counter"><b>${state.replySelected.size}/${s.replies}</b><div class="muted">respostas</div></div>
+          <div class="counter"><b>${state.likeSelected.size}/${s.likes}</b><div class="muted">curtidas selecionadas</div></div>
+        </div>
+        <p class="note">Quando a API real estiver conectada, as respostas serão enviadas nos atrasos configurados. As curtidas ficam como lista manual até haver suporte oficial.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-head"><div><h2>Comentários recentes</h2><div class="muted">Dados simulados nesta etapa; depois serão puxados do Reel real.</div></div><button class="btn" onclick="resetCommentDemo()">Resetar teste</button></div>
+      <div class="comment-list">${state.comments.map(renderComment).join("")}</div>
+    </div>
+  </div>`;
+}
+function renderComment(c){
+  const r=state.replySelected.has(c.id),l=state.likeSelected.has(c.id),d=state.drafts[c.id];
+  return `<div class="comment-card ${r?"reply-selected":""}">
+    <div class="comment-top"><div><span class="user">${esc(c.user)}</span> <span class="muted">· ${c.time}</span></div><span class="badge gray">Reel recente</span></div>
+    <div class="comment-text">${esc(c.text)}</div>
+    <div class="comment-actions">
+      <button class="btn ${r?"success":""}" onclick="toggleReply('${c.id}')">${r?"✓ Responder":"Responder"}</button>
+      <button class="btn ${l?"liked":""}" onclick="toggleLike('${c.id}')">${l?"♥ Selecionado":"♡ Curtir"}</button>
+    </div>
+    ${d?`<div class="draft"><b>Prévia da IA</b><div class="reply-preview">${esc(d)}</div><div class="note">Será programada entre ${state.commentSettings.delayMin} e ${state.commentSettings.delayMax} min após a detecção.</div></div>`:""}
+  </div>`
+}
+function setCommentSetting(k,v){state.commentSettings[k]=v;save();aiComments()}
+function toggleCommentAI(){state.commentSettings.enabled=!state.commentSettings.enabled;save();aiComments()}
+function toggleReply(id){
+  const max=state.commentSettings.replies;
+  if(state.replySelected.has(id))state.replySelected.delete(id);else{if(state.replySelected.size>=max){alert(`Você configurou no máximo ${max} respostas por vídeo.`);return}state.replySelected.add(id)}
+  save();aiComments()
+}
+function toggleLike(id){
+  const max=state.commentSettings.likes;
+  if(state.likeSelected.has(id))state.likeSelected.delete(id);else{if(state.likeSelected.size>=max){alert(`Máximo de ${max} comentários selecionados para curtir.`);return}state.likeSelected.add(id)}
+  save();aiComments()
+}
+function autoSelectReplies(){
+  state.replySelected.clear();
+  let list=[...state.comments];
+  if(state.commentSettings.questionsFirst)list.sort((a,b)=>(b.text.includes("?")?1:0)-(a.text.includes("?")?1:0));
+  list.slice(0,state.commentSettings.replies).forEach(c=>state.replySelected.add(c.id));
+  save();aiComments()
+}
+function generateDrafts(){
+  if(!state.replySelected.size)autoSelectReplies();
+  const tone=state.commentSettings.tone;
+  const bank={
+    Natural:["valeu demais 😄","boa kkkkk, vou trazer mais","sim! vou mostrar isso melhor no próximo","tamo junto 🔥","curti que você percebeu isso"],
+    Engraçado:["kkkkkk eu também não tava pronto 😂","calma que a parte 2 vem aí 😭","essa me quebrou kkkkk","aí você me complica 😂","prometo que o próximo piora kkk"],
+    Direto:["Valeu!","Vou postar mais.","Sim, foi IA.","Tutorial em breve.","Parte 2 chegando."],
+    Carinhoso:["obrigadooo 🫶","fico feliz que você gostou 💕","vou trazer mais sim 🥹","valeu pelo carinho ❤️","amei seu comentário 🫶"],
+    Profissional:["Obrigado pelo feedback!","Vou preparar um conteúdo explicando isso.","Sim, posso mostrar o processo em outro vídeo.","Agradeço por acompanhar.","Ótima pergunta; vou abordar isso em breve."],
+    Personalizado:["Resposta seguindo suas instruções personalizadas.","Vou responder mantendo exatamente o tom configurado.","Resposta personalizada preparada.","Vou variar a resposta sem parecer automático.","Prévia personalizada pronta."]
+  };
+  let i=0;for(const id of state.replySelected){const c=state.comments.find(x=>x.id===id);let arr=bank[tone]||bank.Natural;let base=arr[i++%arr.length];
+    if(c?.text.includes("?") && tone!=="Direto") base="boa pergunta — vou responder isso melhor no próximo 👀";
+    state.drafts[id]=base;
+  }
+  save();aiComments()
+}
+function resetCommentDemo(){state.replySelected.clear();state.likeSelected.clear();state.drafts={};save();aiComments()}
+
+function queue(){
+  const q=allScheduled();
+  $("#queue").innerHTML=`<div class="section-head"><div><h2>Fila de publicação</h2><div class="muted">Esta fila é derivada do calendário: mover, editar ou excluir um vídeo atualiza tudo automaticamente.</div></div><button class="btn primary" onclick="showPage('calendar')">Abrir calendário</button></div>
+  <div class="card">${q.length?`<table style="width:100%;border-collapse:collapse"><thead><tr>
+    <th style="padding:10px;text-align:left">Data</th><th style="padding:10px;text-align:left">Vídeo</th><th style="padding:10px;text-align:left">Legenda</th><th style="padding:10px;text-align:left">Status</th>
+  </tr></thead><tbody>${q.map(x=>`<tr style="border-top:1px solid #222633">
+    <td style="padding:10px">${fmtDateTime(x.scheduledAt)}</td>
+    <td style="padding:10px"><b>${esc(x.name)}</b></td>
+    <td style="padding:10px">${x.caption?esc(x.caption.slice(0,55)):"—"}</td>
+    <td style="padding:10px"><span class="badge ${statusClass(getStatus(x))}">${statusLabel(getStatus(x))}</span></td>  </tr>`).join("")}</tbody></table>`:`<div class="muted" style="padding:35px;text-align:center">Nenhum vídeo no calendário.</div>`}</div>`;
+}
+function metrics(){
+  const conf=smartConfidence(),bestHour=bestGlobalHour(),dayStats=aggregateDayStats().sort((a,b)=>b.score-a.score),bestDay=dayStats[0];
+  const ranks=rankingRows(),maxScore=Math.max(1,...ranks.map(x=>x.score)),samples=recentSamples();
+  const dates=weekDates();
+  const ss=state.smartSettings;
+  const totalLive=liveInstagramMetrics.reduce((a,m)=>({
+    views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0),
+    comments:a.comments+(+m.comments||0),shares:a.shares+(+m.shares||0),saves:a.saves+(+m.saves||0)
+  }),{views:0,reach:0,likes:0,comments:0,shares:0,saves:0});
+  const liveSection=`
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-head">
+        <div><h2>Métricas reais — vídeos de hoje</h2><div class="muted">Puxa direto do Instagram e salva snapshots no banco.</div></div>
+        <div class="toolbar">
+          <span class="source-pill">${instagramIntegration?.enabled?"Instagram conectado":"Conecte o Instagram"}</span>
+          <button class="btn primary" id="syncTodayBtn" onclick="syncInstagramToday()" ${instagramIntegration?.enabled?"":"disabled"}>Atualizar agora</button>
+        </div>
+      </div>
+      ${liveInstagramMetrics.length?`
+        <div class="smart-grid">
+          ${igMetricCard("Visualizações",totalLive.views)}
+          ${igMetricCard("Alcance",totalLive.reach)}
+          ${igMetricCard("Curtidas",totalLive.likes)}
+          ${igMetricCard("Comentários",totalLive.comments)}
+          ${igMetricCard("Compartilhamentos",totalLive.shares)}
+          ${igMetricCard("Salvamentos",totalLive.saves)}
+          ${igMetricCard("Vídeos hoje",liveInstagramMetrics.length)}
+          ${igMetricCard("Coleta","", "dados atuais da API")}
+        </div>
+        <div style="display:grid;gap:10px;margin-top:16px">
+          ${liveInstagramMetrics.map((m,i)=>`
+            <div class="comment-card">
+              <div class="comment-top">
+                <div><b>Vídeo ${i+1}</b> <span class="muted">· ${new Date(m.timestamp).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span></div>
+                <span class="badge green">${esc(m.media_product_type||m.media_type||"MEDIA")}</span>
+              </div>
+              <div class="comment-text">${esc((m.caption||"Sem legenda").slice(0,120))}</div>
+              <div class="counter-row">
+                <div class="counter"><b>${Number(m.views||0).toLocaleString("pt-BR")}</b><div class="muted">views</div></div>
+                <div class="counter"><b>${Number(m.reach||0).toLocaleString("pt-BR")}</b><div class="muted">alcance</div></div>
+                <div class="counter"><b>${Number(m.likes||0).toLocaleString("pt-BR")}</b><div class="muted">curtidas</div></div>
+                <div class="counter"><b>${Number(m.comments||0).toLocaleString("pt-BR")}</b><div class="muted">comentários</div></div>
+                <div class="counter"><b>${Number(m.shares||0).toLocaleString("pt-BR")}</b><div class="muted">compart.</div></div>
+                <div class="counter"><b>${Number(m.saves||0).toLocaleString("pt-BR")}</b><div class="muted">salvos</div></div>
+              </div>
+              ${m.insights_error?`<div class="api-warning">Algumas métricas não foram liberadas pela API para este vídeo: ${esc(m.insights_error)}</div>`:""}
+            </div>`).join("")}
+        </div>
+      `:`
+        <div class="empty" style="padding:35px">
+          ${instagramIntegration?.enabled?"Clique em “Atualizar agora” para buscar os vídeos que você publicou hoje.":"Vá em Configurações e conecte seu Instagram primeiro."}
+        </div>`}
+    </div>`;
+  $("#metrics").innerHTML=liveSection+`
+    <div class="smart-alert">🧠 <b>Motor do Smart Scheduler ativo:</b> ele usa média robusta, peso maior para dados recentes e redução de confiança para horários com poucas amostras. Assim, um único vídeo viral não decide sozinho o calendário.</div>
+
+    <div class="smart-hero" style="margin-top:16px">
+      <div class="card">
+        <div class="section-head">
+          <div><h2>Smart Scheduler</h2><div class="muted">Escolhe 5 horários por dia e continua testando novos horários.</div></div>
+          <div class="switch"><b>${ss.enabled?"ATIVO":"PAUSADO"}</b><div class="toggle ${ss.enabled?"on":""}" onclick="toggleSmartScheduler()"></div></div>
+        </div>
+
+        <div class="smart-grid">
+          <div class="smart-stat"><div class="muted">Melhor horário geral</div><div class="value">${bestHour?.time||"—"}</div><div class="note">${bestHour?Math.round(bestHour.score):0} pontos</div></div>
+          <div class="smart-stat"><div class="muted">Melhor dia</div><div class="value" style="font-size:22px">${bestDay?WEEKDAY_NAMES[bestDay.dow]:"—"}</div><div class="note">${bestDay?bestDay.n:0} amostras</div></div>
+          <div class="smart-stat"><div class="muted">Confiança</div><div class="value">${conf.pct}%</div><span class="confidence">${conf.label}</span></div>
+          <div class="smart-stat"><div class="muted">Dados analisados</div><div class="value">${samples.length}</div><div class="note">últimos ${ss.lookbackDays} dias</div></div>
+        </div>
+
+        <div class="smart-controls">
+          <div class="field"><label>Exploração de novos horários</label><input type="number" min="0" max="40" value="${ss.exploration}" onchange="setSmartSetting('exploration',clamp(+this.value,0,40))"><div class="note">${100-ss.exploration}% melhores / ${ss.exploration}% testes</div></div>
+          <div class="field"><label>Mínimo de amostras</label><input type="number" min="2" max="20" value="${ss.minSamples}" onchange="setSmartSetting('minSamples',Math.max(2,+this.value))"></div>
+          <div class="field"><label>Janela analisada (dias)</label><input type="number" min="14" max="180" value="${ss.lookbackDays}" onchange="setSmartSetting('lookbackDays',Math.max(14,+this.value))"></div>
+          <div class="field"><label>Peso do dia da semana (%)</label><input type="number" min="0" max="100" value="${ss.daySpecificWeight}" onchange="setSmartSetting('daySpecificWeight',clamp(+this.value,0,100))"></div>
+        </div>
+
+        <div class="toolbar" style="margin-top:15px">
+          <button class="btn" onclick="recalcSmart()">Recalcular análise</button>
+          <button class="btn primary" onclick="optimizeFutureCalendar()">Aplicar à agenda futura</button>
+        </div>
+        <div class="note" style="margin-top:8px">Última análise: ${ss.lastRun?fmtDateTime(ss.lastRun):"ainda não executada manualmente"}.</div>
+      </div>
+
+      <div class="card">
+        <h2>Por que esses horários?</h2>
+        <div class="reason-list">
+          <div class="reason"><b>1. Desempenho relativo</b><div class="muted">Views, alcance, curtidas, comentários, compartilhamentos e salvamentos viram um score.</div></div>
+          <div class="reason"><b>2. Anti-viral isolado</b><div class="muted">Outliers são limitados e horários com pouca amostra são puxados para a média geral.</div></div>
+          <div class="reason"><b>3. Dados recentes pesam mais</b><div class="muted">O que funcionou recentemente influencia mais que dados antigos.</div></div>
+          <div class="reason"><b>4. Exploração contínua</b><div class="muted">Parte dos posts testa horários pouco usados para descobrir mudanças no comportamento.</div></div>
+        </div>
+        <div class="source-pill" style="margin-top:12px">Fonte atual: teste + entrada manual</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-head"><div><h2>Recomendação desta semana</h2><div class="muted">Verde = melhor horário conhecido · amarelo = horário de teste.</div></div></div>
+      <div class="smart-week">
+        ${dates.map(d=>{
+          const date=localISO(d),recs=recommendTimesForDate(date);
+          return `<div class="smart-day">
+            <div class="smart-day-title">${d.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"})}</div>
+            ${recs.map(r=>`<div class="smart-time ${r.mode}">
+              <b>${r.time}</b><span>${r.mode==="test"?"TESTE":"TOP"}</span>
+            </div>`).join("")}
+          </div>`
+        }).join("")}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-head"><div><h2>Ranking por dia e horário</h2><div class="muted">Amostras suficientes aumentam a confiança.</div></div></div>
+      ${ranks.length?`<table class="rank-table"><thead><tr><th>#</th><th>Dia</th><th>Horário</th><th>Score</th><th>Amostras</th><th>Confiança</th></tr></thead><tbody>
+        ${ranks.slice(0,12).map((r,i)=>`<tr>
+          <td>${i+1}</td><td>${WEEKDAY_NAMES[r.dow]}</td><td><b>${r.time}</b></td>
+          <td><div style="display:flex;align-items:center;gap:9px"><div class="scorebar"><span style="width:${Math.round(r.score/maxScore*100)}%"></span></div>${Math.round(r.score)}</div></td>
+          <td>${r.n}</td><td>${r.confidence}%</td>
+        </tr>`).join("")}
+      </tbody></table>`:`<div class="muted">Ainda não há dados suficientes.</div>`}
+    </div>
+
+    <div class="card">
+      <div class="section-head"><div><h2>Dados de teste / entrada manual</h2><div class="muted">Use isso para validar o cérebro agora. No Estágio 7 estes campos serão alimentados automaticamente pelo Instagram.</div></div>
+        <div class="toolbar"><button class="btn" onclick="resetSmartDemo()">Restaurar dados demo</button><button class="btn danger" onclick="clearSmartSamples()">Limpar dados</button></div>
+      </div>
+      <div class="sample-grid">
+        <div class="field"><label>Data</label><input id="sampleDate" type="date" value="${localISO(new Date())}"></div>
+        <div class="field"><label>Horário</label><input id="sampleTime" type="time" value="20:00"></div>
+        <div class="field"><label>Views</label><input id="sample_views" type="number" value="8500"></div>
+        <div class="field"><label>Alcance</label><input id="sample_reach" type="number" value="7000"></div>
+        <div class="field"><label>Curtidas</label><input id="sample_likes" type="number" value="420"></div>
+        <div class="field"><label>Comentários</label><input id="sample_comments" type="number" value="34"></div>
+        <div class="field"><label>Compartilhamentos</label><input id="sample_shares" type="number" value="75"></div>
+        <div class="field"><label>Salvamentos</label><input id="sample_saves" type="number" value="92"></div>
+      </div>
+      <button class="btn primary" style="margin-top:13px" onclick="addSmartSample()">Adicionar resultado</button>
+    </div>`;
+}
+function settings(){
+  const user=cloudSession?.user;
+  const ig=instagramIntegration;
+  $("#settings").innerHTML=`
+  <div class="card">
+    <div class="section-head"><div><h2>Cloud Backend</h2><div class="muted">Supabase/PostgreSQL + Storage privado + Edge Functions.</div></div>
+      <span class="backend-pill ${backendOnline?"online":"offline"}">${backendOnline?"● Backend online":"● Faça login"}</span>
+    </div>
+    ${user?`
+      <div class="auth-card"><b>${esc(user.email||"Conta conectada")}</b><div class="muted">Sessão autenticada. Seus uploads e agendamentos ficam no backend.</div>
+      <div class="toolbar" style="margin-top:10px"><button class="btn" onclick="testBackend().then(renderAll)">Testar backend</button><button class="btn danger" onclick="signOutCloud()">Sair</button></div></div>
+    `:`
+      <div class="auth-grid">
+        <div class="auth-card"><b>Entrar / criar conta</b><input id="authEmail" type="email" placeholder="Seu email"><input id="authPassword" type="password" placeholder="Senha (mín. 6 caracteres)">
+          <div class="toolbar" style="margin-top:10px"><button class="btn primary" onclick="signInCloud()">Entrar</button><button class="btn" onclick="signUpCloud()">Criar conta</button></div>
+        </div>
+        <div class="auth-card"><b>O que já está online</b><div class="muted" style="margin-top:8px">Banco, Storage privado, fila, logs, API e estrutura de Instagram.</div></div>
+      </div>`}
+    <div class="cloud-note">Você não precisa entrar no painel do Supabase.</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="section-head">
+      <div><h2>Instagram</h2><div class="muted">Conexão segura para publicação e métricas reais.</div></div>
+      <span class="backend-pill ${ig?.enabled?"online":"offline"}">${ig?.enabled?"● Instagram conectado":"● Não conectado"}</span>
+    </div>
+    ${ig?.enabled?`
+      <div class="auth-card">
+        <b>@${esc(ig.account_label||"Instagram")}</b>
+        <div class="muted">Conta conectada · ID ${esc(ig.external_account_id||"—")}</div>
+        <div class="toolbar" style="margin-top:10px">
+          <button class="btn primary" id="syncTodayBtn" onclick="syncInstagramToday()">Buscar métricas de hoje</button>
+          <button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar conexão</button>
+        </div>
+      </div>
+    `:`
+      <div class="auth-card">
+        <b>Conectar sua API do Instagram</b>
+        <div class="muted" style="margin-top:6px">Cole seu token aqui uma única vez. Ele é enviado direto ao backend e salvo no Vault do Supabase; o HTML não guarda o token.</div>
+        <input id="instagramToken" type="password" placeholder="Cole seu access token do Instagram">
+        <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>
+      </div>`}
+  </div>
+
+  <div class="card" style="margin-top:16px"><h2>Configuração atual</h2><div class="formgrid">
+    <div class="field"><label>Posts por dia</label><input value="5" disabled></div>
+    <div class="field"><label>Intervalo mínimo entre posts (min)</label><input type="number" min="0" value="${state.minGap}" onchange="state.minGap=Math.max(0,+this.value);save();renderAll()"></div>
+    <div class="field"><label>Fuso</label><input value="America/Recife" disabled></div>
+    <div class="field"><label>Smart Scheduler</label><input value="${state.smartSettings.enabled?'Ativo':'Pausado'}" disabled></div>
+  </div></div>
+
+  <div class="card" style="margin-top:16px"><h2>Atividade local</h2><div class="log">${state.logs.map(x=>`<div class="${x.type}">[${fmtDateTime(x.t)}] ${esc(x.m)}</div>`).join("")}</div></div>`;
+}
+function renderAll(){overview();aiComments();queue();calendarPage();metrics();settings()}
+
+$("#videoPicker").onchange=async e=>{
+  const file=e.target.files[0];if(!file||!pendingTarget)return;
+  await addVideoToSlot(file,pendingTarget.date,pendingTarget.slot);pendingTarget=null;e.target.value=""
+};
+$("#newVideoBtn").onclick=()=>showPage("calendar");
+
+async function init(){
+  nav();
+  try{await openDB()}catch(e){}
+  renderAll();
+  await initCloud();
+  renderAll();
+}
+init();
+</script>
+</body>
+</html>
