@@ -504,6 +504,22 @@ button:disabled,.btn:disabled{
 #toastHost{position:fixed;right:20px;bottom:20px;z-index:9999;display:grid;gap:8px;pointer-events:none}
 .ctf-toast{min-width:220px;max-width:380px;padding:10px 12px;border-radius:9px;background:#11151b;border:1px solid #2a303a;color:#e9ebef;font-size:10px;font-weight:800;opacity:0;transform:translateY(8px);transition:.2s;box-shadow:0 18px 45px rgba(0,0,0,.35)}
 .ctf-toast.show{opacity:1;transform:translateY(0)}.ctf-toast.ok{border-color:#23432e;color:#79dfa3}.ctf-toast.err{border-color:#51282e;color:#ff8990}
+/* ===== UI Motion + Live Activity ===== */
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(77,212,139,0)}50%{box-shadow:0 0 0 6px rgba(77,212,139,.10)}}
+@keyframes panelIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shimmer{0%{background-position:-220% 0}100%{background-position:220% 0}}
+.page:not(.hidden)>*{animation:panelIn .28s cubic-bezier(.2,.8,.2,1) both}
+.ui3-kpi,.ui3-panel,.ui31-status-card,.day-column,.reel-instagram-card{transition:transform .2s cubic-bezier(.2,.8,.2,1),border-color .2s ease,box-shadow .2s ease}
+.ui3-kpi:hover,.ui3-panel:hover,.ui31-status-card:hover{border-color:#2d3440;box-shadow:0 12px 32px rgba(0,0,0,.12)}
+.live-worker-pill{display:flex;align-items:center;gap:7px;border:1px solid #20342a;background:#0e1512;color:#9fd1b0;border-radius:999px;padding:7px 10px;font-size:9px;font-weight:900;cursor:pointer;transition:.2s}.live-worker-pill:hover{transform:translateY(-1px);border-color:#315240}.live-worker-pill.working{color:#c8ffd9;border-color:#315f43;background:#101b15}.live-worker-pill.offline{color:#d2b96f;background:#18150d;border-color:#3b311a}.live-pulse{width:7px;height:7px;border-radius:50%;background:#4dd48b;animation:livePulse 1.8s ease-in-out infinite}.live-worker-pill.offline .live-pulse{background:#d4b655;animation:none}
+.top-icon-btn{position:relative;width:34px;height:34px;border:1px solid #252b35;border-radius:9px;background:#101319;color:#9ba3b2;display:grid;place-items:center;cursor:pointer}.top-icon-btn:hover{color:#fff;background:#161a22;border-color:#343b47}.command-trigger{grid-template-columns:auto auto;gap:2px;width:42px}.command-trigger small{font-size:7px;color:#5f6776}.notification-trigger i{position:absolute;right:-4px;top:-5px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#ff3f7f;color:#fff;font-size:7px;font-style:normal;display:grid;place-items:center;border:2px solid #08090c}.notification-trigger i.hidden{display:none}
+.live-activity-card{margin-top:12px;padding:16px}.activity-timeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.activity-event{display:grid;grid-template-columns:9px 1fr;gap:8px;align-items:start;padding:9px;border:1px solid #1c2028;background:#0a0c10;border-radius:9px}.activity-event-dot{width:7px;height:7px;border-radius:50%;background:#687181;margin-top:3px}.activity-event.publish .activity-event-dot{background:#4dd48b}.activity-event.metric .activity-event-dot{background:#6da6ff}.activity-event.smart .activity-event-dot{background:#b68cff}.activity-event.warn .activity-event-dot{background:#e5b955}.activity-event.error .activity-event-dot{background:#ff6b72}.activity-event b,.activity-event small{display:block}.activity-event b{font-size:9px;line-height:1.25}.activity-event small{font-size:8px;color:#687180;margin-top:3px}
+#activityPanelHost{position:relative;z-index:200}#activityPanelHost.open{position:fixed;inset:0}.activity-drawer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)}.activity-drawer{position:absolute;right:0;top:0;bottom:0;width:min(410px,92vw);background:#0b0d11;border-left:1px solid #252a34;padding:18px;box-shadow:-20px 0 60px rgba(0,0,0,.38);animation:drawerIn .22s ease-out}@keyframes drawerIn{from{transform:translateX(24px);opacity:.4}to{transform:translateX(0);opacity:1}}.activity-drawer-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:1px solid #1d2129}.activity-drawer-head span{font-size:8px;color:#606878;letter-spacing:.12em;font-weight:900}.activity-drawer-head h3{margin:3px 0 0;font-size:15px}.activity-drawer-head button{border:0;background:#151922;color:#fff;width:30px;height:30px;border-radius:8px;font-size:18px}.activity-worker-summary{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:12px 0}.activity-worker-summary>div{display:grid;grid-template-columns:9px 1fr;column-gap:7px;padding:9px;border:1px solid #1d222b;border-radius:8px;background:#0e1116}.activity-worker-summary b,.activity-worker-summary small{grid-column:2;display:block}.activity-worker-summary b{font-size:9px}.activity-worker-summary small{font-size:8px;color:#687180}.activity-drawer-list{display:grid;gap:6px;max-height:calc(100vh - 190px);overflow:auto;padding-right:3px}.drawer-refresh{width:100%;margin-top:10px}
+#commandPaletteHost{position:relative;z-index:300}.command-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.58);backdrop-filter:blur(5px)}.command-palette{position:fixed;top:14vh;left:50%;transform:translateX(-50%);width:min(580px,92vw);background:#0d1015;border:1px solid #2b313c;border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.52);overflow:hidden;animation:commandIn .18s ease-out}@keyframes commandIn{from{opacity:0;transform:translate(-50%,-8px) scale(.985)}to{opacity:1;transform:translate(-50%,0) scale(1)}}.command-search-row{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;padding:13px;border-bottom:1px solid #20242d}.command-search-row input{border:0!important;box-shadow:none!important;background:transparent!important;font-size:13px;padding:5px}.command-search-row kbd{font-size:7px;border:1px solid #2c323d;border-radius:5px;padding:4px 5px;color:#6f7786;background:#11151b}.command-results{padding:6px;max-height:390px;overflow:auto}.command-results button{width:100%;display:grid;grid-template-columns:28px 1fr auto;gap:9px;align-items:center;text-align:left;border:0;background:transparent;color:#dce0e7;padding:9px;border-radius:8px}.command-results button:hover{background:#171b23}.command-results button>span{width:28px;height:28px;border-radius:7px;background:#151922;color:#ff6399;display:grid;place-items:center}.command-results b,.command-results small{display:block}.command-results b{font-size:10px}.command-results small{font-size:8px;color:#67707f;margin-top:2px}.command-results em{font-style:normal;color:#555e6d}.command-empty{padding:22px;color:#687180;text-align:center;font-size:10px}
+.booting .page:not(.hidden) .ui3-kpi,.booting .page:not(.hidden) .card{position:relative;overflow:hidden}.booting .page:not(.hidden) .ui3-kpi:after,.booting .page:not(.hidden) .card:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.025),transparent);background-size:220% 100%;animation:shimmer 1.3s linear infinite;pointer-events:none}
+@media(max-width:1000px){.activity-timeline{grid-template-columns:1fr 1fr}.live-worker-pill{display:none}}@media(max-width:650px){.activity-timeline{grid-template-columns:1fr}.command-trigger{display:none}.top-actions{gap:5px}}
+@media(prefers-reduced-motion:reduce){.page:not(.hidden)>*,.live-pulse{animation:none!important}}
+
 </style>
 </head>
 <body>
@@ -528,7 +544,12 @@ button:disabled,.btn:disabled{
 <main class="main">
   <div class="topbar">
     <div><div class="kicker">CLOUDENTFLOW / WORKSPACE</div><h1 id="pageTitle">Visão geral</h1></div>
-    <div class="top-actions"><span class="top-status"><span class="status-dot"></span> Operacional</span><button class="btn primary" id="newVideoBtn">＋ Agendar vídeo</button></div>
+    <div class="top-actions">
+      <button class="live-worker-pill" id="liveWorkerPill" onclick="showPage('automation')" title="Status da automação"><span class="live-pulse"></span><span id="liveWorkerText">Sincronizando…</span></button>
+      <button class="top-icon-btn command-trigger" onclick="openCommandPalette()" title="Comandos rápidos"><span>⌘</span><small>K</small></button>
+      <button class="top-icon-btn notification-trigger" onclick="toggleActivityPanel()" title="Atividade"><span>◔</span><i id="notificationCount" class="hidden">0</i></button>
+      <button class="btn primary" id="newVideoBtn">＋ Agendar vídeo</button>
+    </div>
   </div>
 
   <section id="overview" class="page"></section>
@@ -541,6 +562,8 @@ button:disabled,.btn:disabled{
 
 <input id="videoPicker" type="file" accept="video/*" hidden>
 <div id="modalHost"></div>
+<div id="activityPanelHost"></div>
+<div id="commandPaletteHost"></div>
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
@@ -889,6 +912,103 @@ function toast(message,type="ok"){
   requestAnimationFrame(()=>el.classList.add("show"));
   setTimeout(()=>{el.classList.remove("show");setTimeout(()=>el.remove(),220)},2600);
 }
+function relativeTime(value){
+  const t=new Date(value).getTime();if(!Number.isFinite(t))return "agora";
+  const s=Math.max(0,Math.round((Date.now()-t)/1000));
+  if(s<45)return "agora";
+  if(s<3600)return "há "+Math.floor(s/60)+" min";
+  if(s<86400)return "há "+Math.floor(s/3600)+" h";
+  return "há "+Math.floor(s/86400)+" d";
+}
+function activityDetail(l){
+  const e=String(l.event_type||"");
+  if(e.includes("automatic_reel_published"))return "Reel publicado automaticamente";
+  if(e.includes("calendar_auto_optimized"))return "Smart Scheduler";
+  if(e.includes("metric"))return "Métricas";
+  if(e.includes("automation"))return "Automação";
+  return "Servidor";
+}
+function activityFeedItems(limit=20){
+  const server=(serverLogs||[]).map(l=>{
+    const ev=String(l.event_type||"");
+    const type=l.level==="error"?"error":l.level==="warn"?"warn":ev.includes("publish")?"publish":ev.includes("metric")?"metric":(ev.includes("schedul")||ev.includes("calendar"))?"smart":"info";
+    return {time:l.created_at,type,title:l.message||l.event_type||"Atividade",detail:activityDetail(l)};
+  });
+  const local=(state.logs||[]).map(l=>({time:l.t,type:l.type==="warn"?"warn":l.type==="error"?"error":"info",title:l.m,detail:"Interface"}));
+  return [...server,...local].filter(x=>x.time).sort((a,b)=>new Date(b.time)-new Date(a.time)).slice(0,limit);
+}
+function renderWorkerMiniSummary(){
+  const workers=automationData?.workers||[];
+  const pub=workers.find(w=>w.worker_name==="instagram_publish"),aut=workers.find(w=>w.worker_name==="automation");
+  return `<div><span class="health-led ${pub?.online?"on":""}"></span><b>Publicação</b><small>${pub?.online?"online":"offline"}</small></div><div><span class="health-led ${aut?.online?"on":""}"></span><b>Métricas + IA</b><small>${aut?.online?"online":"offline"}</small></div>`;
+}
+function toggleActivityPanel(forceOpen=false){
+  const host=$("#activityPanelHost");if(!host)return;
+  const open=forceOpen||!host.classList.contains("open");
+  if(!open){host.className="";host.innerHTML="";return}
+  const items=activityFeedItems(40);
+  host.className="open";
+  host.innerHTML=`<div class="activity-drawer-backdrop" onclick="toggleActivityPanel()"></div>
+    <aside class="activity-drawer">
+      <div class="activity-drawer-head"><div><span>ATIVIDADE</span><h3>CloudentFlow ao vivo</h3></div><button onclick="toggleActivityPanel()">×</button></div>
+      <div class="activity-worker-summary">${renderWorkerMiniSummary()}</div>
+      <div class="activity-drawer-list">${items.map(a=>`<div class="activity-event ${a.type}"><span class="activity-event-dot"></span><div><b>${esc(a.title)}</b><small>${esc(a.detail)} · ${relativeTime(a.time)}</small></div></div>`).join("")||'<div class="ui3-empty">Sem eventos recentes.</div>'}</div>
+      <button class="btn drawer-refresh" onclick="refreshLiveData(true)">↻ Atualizar agora</button>
+    </aside>`;
+}
+function commandItems(){
+  return [
+    {icon:"＋",title:"Agendar vídeo",hint:"Calendário",run:()=>{closeCommandPalette();showPage("calendar");openScheduleModal()}},
+    {icon:"◫",title:"Abrir calendário",hint:"Workspace",run:()=>{closeCommandPalette();showPage("calendar")}},
+    {icon:"⌁",title:"Abrir métricas",hint:"Analytics",run:()=>{closeCommandPalette();showPage("metrics")}},
+    {icon:"↻",title:"Sincronizar Instagram",hint:"Métricas",run:()=>{closeCommandPalette();syncInstagramToday()}},
+    {icon:"✦",title:"Abrir automação",hint:"Workers 24/7",run:()=>{closeCommandPalette();showPage("automation")}},
+    {icon:"⚙",title:"Configurações",hint:"Sistema",run:()=>{closeCommandPalette();showPage("settings")}}
+  ];
+}
+function openCommandPalette(){
+  const host=$("#commandPaletteHost");if(!host)return;
+  host.innerHTML=`<div class="command-backdrop" onclick="closeCommandPalette()"></div><div class="command-palette">
+    <div class="command-search-row"><span>⌕</span><input id="commandSearch" placeholder="Digite uma ação…" autocomplete="off"><kbd>ESC</kbd></div>
+    <div id="commandResults" class="command-results"></div>
+  </div>`;
+  renderCommandResults("");
+  setTimeout(()=>$("#commandSearch")?.focus(),20);
+  $("#commandSearch").oninput=e=>renderCommandResults(e.target.value);
+}
+function closeCommandPalette(){const h=$("#commandPaletteHost");if(h)h.innerHTML=""}
+function renderCommandResults(q=""){
+  const el=$("#commandResults");if(!el)return;
+  const s=q.trim().toLowerCase(),rows=commandItems().filter(x=>!s||x.title.toLowerCase().includes(s)||x.hint.toLowerCase().includes(s));
+  el.innerHTML=rows.map((x,i)=>`<button data-command="${i}"><span>${x.icon}</span><div><b>${x.title}</b><small>${x.hint}</small></div><em>↵</em></button>`).join("")||'<div class="command-empty">Nenhuma ação encontrada.</div>';
+  el.querySelectorAll("button").forEach((b,i)=>b.onclick=()=>rows[i].run());
+}
+function updateLiveChrome(){
+  const workers=automationData?.workers||[];
+  const pub=workers.find(w=>w.worker_name==="instagram_publish"),aut=workers.find(w=>w.worker_name==="automation");
+  const pending=(automationData?.jobs||[]).filter(j=>j.status==="pending"||j.status==="running").length;
+  const failed=(automationData?.jobs||[]).filter(j=>j.status==="failed").length;
+  const pill=$("#liveWorkerPill"),txt=$("#liveWorkerText"),count=$("#notificationCount");
+  if(pill){
+    const all=!!pub?.online&&!!aut?.online;
+    pill.classList.toggle("working",pending>0);pill.classList.toggle("offline",!all);
+    if(txt)txt.textContent=pending>0?"CloudentFlow trabalhando · "+pending:(all?"Automação online":"Verificando automação");
+  }
+  if(count){
+    const n=failed+Math.min(9,activityFeedItems(20).filter(x=>x.type==="error"||x.type==="warn").length);
+    count.textContent=String(n);count.classList.toggle("hidden",n===0);
+  }
+}
+async function refreshLiveData(showFeedback=false){
+  if(!cloudSession)return;
+  try{
+    await Promise.all([loadAutomationStatus(),loadServerLogs(),syncFromBackend()]);
+    updateLiveChrome();renderAll();
+    if($("#activityPanelHost")?.classList.contains("open"))toggleActivityPanel(true);
+    if(showFeedback)toast("Dados atualizados.","ok");
+  }catch(e){if(showFeedback)toast(e.message,"err")}
+}
+
 function keyFor(date,slot){return `${date}#${slot}`}
 
 function openDB(){
@@ -929,7 +1049,6 @@ function showPage(id){
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   $("#pageTitle").textContent=meta[2];
   renderAll();
-  if(id==="testReel" && cloudSession)loadTestReelHistory().then(testReelPage).catch(()=>{});
 }
 
 function weekDates(){
@@ -1262,6 +1381,13 @@ function overview(){
           <div class="ui3-best-thumb">${best.thumbnail_url?`<img src="${esc(best.thumbnail_url)}">`:"▶"}</div>
           <div><b>${esc((best.caption||"Sem legenda").slice(0,72))}</b><span>${(+best.views||0).toLocaleString("pt-BR")} views · ${(+best.likes||0).toLocaleString("pt-BR")} curtidas</span></div>
         </div>`:`<div class="ui3-empty"><span>Sem métricas carregadas.</span></div>`}
+      </div>
+    </div>
+
+    <div class="card live-activity-card">
+      <div class="ui3-panel-head"><div><span>Live activity</span><h3>O que o CloudentFlow está fazendo</h3></div><button class="btn btn-sm" onclick="toggleActivityPanel(true)">Ver tudo</button></div>
+      <div class="activity-timeline">
+        ${activityFeedItems(5).map(a=>`<div class="activity-event ${a.type}"><span class="activity-event-dot"></span><div><b>${esc(a.title)}</b><small>${esc(a.detail)} · ${relativeTime(a.time)}</small></div></div>`).join("")||`<div class="ui3-empty"><span>A atividade do servidor aparecerá aqui.</span></div>`}
       </div>
     </div>`;
 }
@@ -2029,28 +2155,30 @@ function renderAll(){
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
   if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
   if(stat)stat.textContent=instagramIntegration?.enabled?"Conta conectada":"Configurar integração";
+  updateLiveChrome();
 }
-$("#videoPicker").onchange=async e=>{
-  const file=e.target.files[0];if(!file||!pendingTarget)return;
-  await addVideoToSlot(file,pendingTarget.date,pendingTarget.slot);pendingTarget=null;e.target.value=""
-};
-$("#newVideoBtn").onclick=()=>showPage("calendar");
 
 async function init(){
   nav();
   renderAll();
-
-  // Local DB opens in the background so it can never block the SaaS shell.
+  document.body.classList.add("booting");
   openDB().catch(err=>console.warn("IndexedDB unavailable:",err));
-
   try{
     await initCloud();
+    if(cloudSession)await loadServerLogs();
   }catch(err){
     console.error("Cloud init error:",err);
   }
-
+  document.body.classList.remove("booting");
   renderAll();
+
+  document.addEventListener("keydown",e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openCommandPalette()}
+    if(e.key==="Escape"){closeCommandPalette();if($("#activityPanelHost")?.classList.contains("open"))toggleActivityPanel()}
+  });
+  setInterval(()=>{if(cloudSession&&!document.hidden)refreshLiveData(false)},60000);
 }
+
 init();
 </script>
 </body>
