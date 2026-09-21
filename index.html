@@ -1224,6 +1224,71 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 }
 .smart-auto-unlock:hover{color:#fff}
 
+
+/* ===== Final polish: loading, Reel analytics and mobile ===== */
+.loading-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:12px 0}
+.loading-panels{display:grid;grid-template-columns:1.4fr .8fr;gap:9px}
+.loading-block{height:92px;border-radius:10px;border:1px solid #1b2028;background:linear-gradient(90deg,#0b0e13 20%,#121721 45%,#0b0e13 70%);background-size:240% 100%;animation:loadingSweep 1.25s ease-in-out infinite}
+.loading-block.tall{height:260px}
+@keyframes loadingSweep{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+.reel-detail-head{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;margin-bottom:12px}
+.reel-detail-head h2{margin:2px 0;font-size:20px}.reel-detail-head p{margin:0;color:#707988;font-size:9px}
+.reel-detail-layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:10px}
+.reel-detail-media{padding:9px!important;align-self:start}.reel-detail-media video,.reel-detail-media img{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:9px;background:#05070a}
+.reel-detail-media>div:last-child{padding:9px 3px 3px}.reel-detail-media b{font-size:9px}.reel-detail-media p{font-size:8px;color:#77808e;line-height:1.4;margin:5px 0 0}
+.reel-detail-kpis{margin-bottom:9px}
+.reel-evolution-chart{height:245px}.reel-evolution-chart svg{width:100%;height:100%}
+.reel-snapshot-timeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px;margin-top:8px}
+.reel-snapshot-timeline>div{padding:8px;border:1px solid #1c222b;border-radius:8px;background:#090c10}
+.reel-snapshot-timeline b,.reel-snapshot-timeline span,.reel-snapshot-timeline small{display:block}
+.reel-snapshot-timeline b{font-size:8px;color:#ff7aa8}.reel-snapshot-timeline span{font-size:10px;font-weight:800;margin-top:3px}.reel-snapshot-timeline small{font-size:7px;color:#6b7482;margin-top:2px}
+.reel-detail-empty,.reel-detail-error{padding:40px;text-align:center;color:#747e8d}.reel-detail-error h2{color:#fff}
+
+@media(max-width:760px){
+  body{padding-bottom:72px}
+  .app,.app.sidebar-collapsed{display:block!important}
+  .sidebar,.sidebar.compact,.sidebar.compact:hover{
+    position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;
+    width:100%!important;height:66px!important;min-height:66px!important;padding:7px 8px!important;
+    border-right:0!important;border-top:1px solid #20252e!important;background:rgba(8,10,14,.97)!important;
+    z-index:120!important;overflow:hidden!important;
+  }
+  .sidebar .brand,.sidebar .workspace-switch,.sidebar .nav-label,.sidebar .sidebar-foot,.sidebar .sidebar-pin{display:none!important}
+  .sidebar .nav,.sidebar.compact .nav,.sidebar.compact:hover .nav{
+    display:flex!important;gap:4px!important;margin:0!important;overflow-x:auto!important;overflow-y:hidden!important;
+    scrollbar-width:none!important;width:100%!important;height:52px!important;
+  }
+  .sidebar .nav::-webkit-scrollbar{display:none}
+  .sidebar .nav-group,.sidebar.compact .nav-group,.sidebar.compact:hover .nav-group{display:contents!important}
+  .sidebar .nav button,.sidebar.compact .nav button,.sidebar.compact:hover .nav button{
+    flex:0 0 62px!important;width:62px!important;height:50px!important;min-height:50px!important;
+    padding:5px 4px!important;margin:0!important;border-radius:9px!important;display:flex!important;
+    flex-direction:column!important;justify-content:center!important;align-items:center!important;gap:3px!important;
+    font-size:7px!important;border-left:1px solid transparent!important;
+  }
+  .sidebar .nav button b,.sidebar.compact .nav button b,.sidebar.compact:hover .nav button b{display:block!important;font-size:7px!important;white-space:nowrap!important}
+  .sidebar .nav-icon,.sidebar.compact .nav-icon,.sidebar.compact:hover .nav-icon{width:17px!important;height:17px!important;flex-basis:17px!important}
+  .main{margin:0!important;width:100%!important;padding-bottom:76px!important}
+  .topbar{padding-left:12px!important;padding-right:12px!important}
+  .content{padding:10px!important}
+  .ui3-page-head{align-items:flex-start!important;gap:10px!important}
+  .ui3-page-head h2{font-size:17px!important}
+  .ui3-kpis,.loading-kpis{grid-template-columns:1fr 1fr!important}
+  .ui3-grid-main,.ui3-grid-bottom,.loading-panels,.reel-detail-layout,.smart-days-grid,.smart-times-bottom{grid-template-columns:1fr!important}
+  .ui3-calendar-scroll{overflow-x:auto!important;padding-bottom:4px}
+  .ui3-seven-days{min-width:1420px!important}
+  .reel-detail-head{grid-template-columns:auto 1fr!important}.reel-detail-head>button:last-child{grid-column:1/-1!important;width:100%}
+  .reel-detail-media{max-width:320px;width:100%;margin:0 auto}
+  .reel-detail-kpis{grid-template-columns:1fr 1fr!important}
+  .follower-live-summary{grid-template-columns:1fr 1fr!important}
+  .ai-layout{grid-template-columns:1fr!important}
+}
+@media(max-width:430px){
+  .ui3-kpis,.loading-kpis,.reel-detail-kpis,.follower-live-summary{grid-template-columns:1fr!important}
+  .topbar .topbar-actions .btn:not(.primary){display:none}
+}
+
 </style>
 </head>
 <body>
@@ -1262,6 +1327,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   <section id="overview" class="page"></section>
   <section id="calendar" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
+  <section id="reelDetail" class="page hidden"></section>
   <section id="smartTimes" class="page hidden"></section>
   <section id="automation" class="page hidden"></section>
   <section id="cloudentAI" class="page hidden"></section>
@@ -1293,30 +1359,14 @@ const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false;
-let testReelObjectUrl=null;
+let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false;
+let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
 let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30;
 let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
-const defaultComments=[
-  {id:"c1",user:"@gabrielx",text:"que vídeo absurdo kkkkk",time:"há 2 min"},
-  {id:"c2",user:"@lara.22",text:"qual app você usa pra fazer isso?",time:"há 5 min"},
-  {id:"c3",user:"@pedrozz",text:"posta mais desse tipo",time:"há 7 min"},
-  {id:"c4",user:"@mariaf",text:"ficou muito bom 🔥",time:"há 10 min"},
-  {id:"c5",user:"@jvsz",text:"como faz essa edição?",time:"há 13 min"},
-  {id:"c6",user:"@biax",text:"mds eu não esperava o final",time:"há 16 min"},
-  {id:"c7",user:"@luan7",text:"parte 2 quando?",time:"há 18 min"},
-  {id:"c8",user:"@ana.rs",text:"amei esse",time:"há 21 min"},
-  {id:"c9",user:"@caios",text:"isso é IA?",time:"há 27 min"},
-  {id:"c10",user:"@sthefany",text:"quero tutorial",time:"há 31 min"},
-  {id:"c11",user:"@rkzin",text:"kkkkkk genial",time:"há 38 min"},
-  {id:"c12",user:"@yasmin",text:"salvei pra ver depois",time:"há 42 min"}
-];
-
-
 function defaultSmartSamples(){
   const rows=[], times=["09:00","12:00","15:00","18:00","21:00"];
   const hourFactor={"09:00":0.70,"12:00":0.91,"15:00":0.78,"18:00":1.08,"21:00":1.24};
@@ -1350,16 +1400,7 @@ const state={
   postsPerDay:5,
   defaultTimes:saved.defaultTimes||["09:00","12:00","15:00","18:00","21:00"],
   minGap:saved.minGap||60,
-  logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"Calendário semanal e Comentários IA carregados."}],
-  comments:saved.comments||defaultComments,
-  replySelected:new Set(saved.replySelected||[]),
-  likeSelected:new Set(saved.likeSelected||[]),
-  drafts:saved.drafts||{},
-  commentSettings:saved.commentSettings||{
-    enabled:true,replies:5,likes:10,tone:"Natural",delayMin:10,delayMax:45,
-    instructions:"Responda curto, natural e sem parecer robô. Não use a mesma frase duas vezes.",
-    onlyPositive:false,questionsFirst:true
-  },
+  logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"CloudentFlow carregado."}],
   performance:saved.performance||{"09:00":67,"12:00":81,"15:00":72,"18:00":96,"21:00":120},
   smartSamples:saved.smartSamples||defaultSmartSamples(),
   smartSettings:saved.smartSettings||{
@@ -1370,8 +1411,7 @@ const state={
     autoOptimize:false,
     daySpecificWeight:70,
     lastRun:null
-  },
-  testPublicationId:saved.testPublicationId||null
+  }
 };
 
 
@@ -1601,7 +1641,7 @@ async function syncFromBackend(){
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
-      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
+      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,platform:row.platform||"instagram",smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
     };
   }
   save();
@@ -1625,8 +1665,7 @@ function mondayISO(d){
 }
 function localISO(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function save(){
-  const data={...state,replySelected:[...state.replySelected],likeSelected:[...state.likeSelected]};
-  localStorage.setItem("cloudentflow-stage4",JSON.stringify(data));
+  localStorage.setItem("cloudentflow-stage4",JSON.stringify(state));
 }
 function log(m,type="ok"){state.logs.unshift({t:new Date().toISOString(),type,m});state.logs=state.logs.slice(0,100);save();renderAll()}
 function fmtDateTime(x){return new Date(x).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
@@ -2105,7 +2144,24 @@ function clearSmartSamples(){
 }
 
 
+function loadingShell(title="Sincronizando dados"){
+  return `<div class="ui-loading-page">
+    <div class="ui3-page-head"><div><span class="ui3-eyebrow">CLOUDENTFLOW</span><h2>${title}</h2><p>Buscando os dados reais do servidor…</p></div></div>
+    <div class="loading-kpis">${Array.from({length:4},()=>'<div class="loading-block"></div>').join("")}</div>
+    <div class="loading-panels"><div class="loading-block tall"></div><div class="loading-block tall"></div></div>
+  </div>`;
+}
+function showInternalPage(id,title){
+  previousPageBeforeReel=currentPage==="reelDetail"?previousPageBeforeReel:currentPage;
+  currentPage=id;
+  document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
+  const page=$("#"+id);if(page)page.classList.remove("hidden");
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("active"));
+  if($("#pageTitle"))$("#pageTitle").textContent=title;
+}
+
 function overview(){
+  if(cloudLoading){$("#overview").innerHTML=loadingShell("Carregando sua operação");return}
   const scheduled=allScheduled();
   const now=Date.now();
   const future=scheduled.filter(x=>new Date(x.scheduledAt).getTime()>=now && !["publicado","erro"].includes(getStatus(x)));
@@ -2418,7 +2474,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   if(state.slots[keyFor(date,slot)]){alert("Essa posição já está ocupada.");return false}
   if(!cloudSession){alert("Entre na sua conta do CloudentFlow em Configurações para salvar vídeos no backend.");showPage("settings");return false}
   const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
-  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);
+  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);fd.append("platform","instagram");
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
   const schedule=res.schedule,video=res.video;
   state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked};
@@ -2622,103 +2678,6 @@ async function confirmEditSchedule(oldDate,oldSlot){
   if(movingDay){delete state.slots[oldKey];state.slots[keyFor(newDate,targetSlot)]=x}
   syncQueue();closeModal();log(`${x.name} atualizado e fila sincronizada.`,"ok")
 }
-function aiComments(){
-  const s=state.commentSettings;
-  $("#aiComments").innerHTML=`
-  <div class="comments-layout">
-    <div>
-      <div class="card">
-        <div class="section-head"><div><h2>Comportamento da IA</h2><div class="muted">Diga exatamente como você quer que ela responda.</div></div><div class="switch"><b>${s.enabled?"ATIVO":"PAUSADO"}</b><div class="toggle ${s.enabled?"on":""}" onclick="toggleCommentAI()"></div></div></div>
-        <div class="formgrid">
-          <div class="field"><label>Responder por vídeo</label><select id="replyCount" onchange="setCommentSetting('replies',+this.value)"><option ${s.replies===4?"selected":""}>4</option><option ${s.replies===5?"selected":""}>5</option></select></div>
-          <div class="field"><label>Selecionar curtidas</label><input type="number" value="${s.likes}" min="0" max="10" onchange="setCommentSetting('likes',Math.min(10,+this.value))"></div>
-          <div class="field"><label>Tom</label><select onchange="setCommentSetting('tone',this.value)">${["Natural","Engraçado","Direto","Carinhoso","Profissional","Personalizado"].map(x=>`<option ${s.tone===x?"selected":""}>${x}</option>`).join("")}</select></div>
-          <div class="field"><label>Atraso das respostas</label><div style="display:flex;gap:7px"><input type="number" value="${s.delayMin}" min="0" style="width:50%" onchange="setCommentSetting('delayMin',+this.value)"><input type="number" value="${s.delayMax}" min="1" style="width:50%" onchange="setCommentSetting('delayMax',+this.value)"></div></div>
-          <div class="field full"><label>Instruções para a IA</label><textarea onchange="setCommentSetting('instructions',this.value)">${esc(s.instructions)}</textarea></div>
-        </div>
-        <div class="rule-box"><label><input type="checkbox" ${s.questionsFirst?"checked":""} onchange="setCommentSetting('questionsFirst',this.checked)"> Dar prioridade para comentários com perguntas</label></div>
-        <div class="rule-box"><label><input type="checkbox" ${s.onlyPositive?"checked":""} onchange="setCommentSetting('onlyPositive',this.checked)"> Responder apenas comentários positivos</label></div>
-        <div class="api-warning"><b>Curtir comentários:</b> você pode selecionar até 10 aqui, mas a execução automática fica pendente porque a API oficial do Instagram não expõe essa ação atualmente.</div>
-        <div class="toolbar" style="margin-top:14px"><button class="btn primary" onclick="autoSelectReplies()">Escolher ${s.replies} para responder</button><button class="btn" onclick="generateDrafts()">Gerar prévias</button></div>
-      </div>
-
-      <div class="card" style="margin-top:16px">
-        <h2>Programação</h2>
-        <div class="counter-row">
-          <div class="counter"><b>${state.replySelected.size}/${s.replies}</b><div class="muted">respostas</div></div>
-          <div class="counter"><b>${state.likeSelected.size}/${s.likes}</b><div class="muted">curtidas selecionadas</div></div>
-        </div>
-        <p class="note">Quando a API real estiver conectada, as respostas serão enviadas nos atrasos configurados. As curtidas ficam como lista manual até haver suporte oficial.</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-head"><div><h2>Comentários recentes</h2><div class="muted">Revise, selecione e prepare respostas em um só lugar.</div></div><button class="btn btn-sm" onclick="resetCommentDemo()">Limpar seleção</button></div>
-      <div class="comment-list">${state.comments.map(renderComment).join("")}</div>
-    </div>
-  </div>`;
-}
-function renderComment(c){
-  const r=state.replySelected.has(c.id),l=state.likeSelected.has(c.id),d=state.drafts[c.id];
-  return `<div class="comment-card ${r?"reply-selected":""}">
-    <div class="comment-top"><div><span class="user">${esc(c.user)}</span> <span class="muted">· ${c.time}</span></div><span class="badge gray">Reel recente</span></div>
-    <div class="comment-text">${esc(c.text)}</div>
-    <div class="comment-actions">
-      <button class="btn ${r?"success":""}" onclick="toggleReply('${c.id}')">${r?"✓ Responder":"Responder"}</button>
-      <button class="btn ${l?"liked":""}" onclick="toggleLike('${c.id}')">${l?"♥ Selecionado":"♡ Curtir"}</button>
-    </div>
-    ${d?`<div class="draft"><b>Prévia da IA</b><div class="reply-preview">${esc(d)}</div><div class="note">Será programada entre ${state.commentSettings.delayMin} e ${state.commentSettings.delayMax} min após a detecção.</div></div>`:""}
-  </div>`
-}
-function setCommentSetting(k,v){state.commentSettings[k]=v;save();aiComments()}
-function toggleCommentAI(){state.commentSettings.enabled=!state.commentSettings.enabled;save();aiComments()}
-function toggleReply(id){
-  const max=state.commentSettings.replies;
-  if(state.replySelected.has(id))state.replySelected.delete(id);else{if(state.replySelected.size>=max){alert(`Você configurou no máximo ${max} respostas por vídeo.`);return}state.replySelected.add(id)}
-  save();aiComments()
-}
-function toggleLike(id){
-  const max=state.commentSettings.likes;
-  if(state.likeSelected.has(id))state.likeSelected.delete(id);else{if(state.likeSelected.size>=max){alert(`Máximo de ${max} comentários selecionados para curtir.`);return}state.likeSelected.add(id)}
-  save();aiComments()
-}
-function autoSelectReplies(){
-  state.replySelected.clear();
-  let list=[...state.comments];
-  if(state.commentSettings.questionsFirst)list.sort((a,b)=>(b.text.includes("?")?1:0)-(a.text.includes("?")?1:0));
-  list.slice(0,state.commentSettings.replies).forEach(c=>state.replySelected.add(c.id));
-  save();aiComments()
-}
-function generateDrafts(){
-  if(!state.replySelected.size)autoSelectReplies();
-  const tone=state.commentSettings.tone;
-  const bank={
-    Natural:["valeu demais 😄","boa kkkkk, vou trazer mais","sim! vou mostrar isso melhor no próximo","tamo junto 🔥","curti que você percebeu isso"],
-    Engraçado:["kkkkkk eu também não tava pronto 😂","calma que a parte 2 vem aí 😭","essa me quebrou kkkkk","aí você me complica 😂","prometo que o próximo piora kkk"],
-    Direto:["Valeu!","Vou postar mais.","Sim, foi IA.","Tutorial em breve.","Parte 2 chegando."],
-    Carinhoso:["obrigadooo 🫶","fico feliz que você gostou 💕","vou trazer mais sim 🥹","valeu pelo carinho ❤️","amei seu comentário 🫶"],
-    Profissional:["Obrigado pelo feedback!","Vou preparar um conteúdo explicando isso.","Sim, posso mostrar o processo em outro vídeo.","Agradeço por acompanhar.","Ótima pergunta; vou abordar isso em breve."],
-    Personalizado:["Resposta seguindo suas instruções personalizadas.","Vou responder mantendo exatamente o tom configurado.","Resposta personalizada preparada.","Vou variar a resposta sem parecer automático.","Prévia personalizada pronta."]
-  };
-  let i=0;for(const id of state.replySelected){const c=state.comments.find(x=>x.id===id);let arr=bank[tone]||bank.Natural;let base=arr[i++%arr.length];
-    if(c?.text.includes("?") && tone!=="Direto") base="boa pergunta — vou responder isso melhor no próximo 👀";
-    state.drafts[id]=base;
-  }
-  save();aiComments()
-}
-function resetCommentDemo(){state.replySelected.clear();state.likeSelected.clear();state.drafts={};save();aiComments()}
-
-function queue(){
-  const q=allScheduled();
-  $("#queue").innerHTML=`<div class="section-head"><div><h2>Fila de publicação</h2><div class="muted">Esta fila é derivada do calendário: mover, editar ou excluir um vídeo atualiza tudo automaticamente.</div></div><button class="btn primary" onclick="showPage('calendar')">Abrir calendário</button></div>
-  <div class="card">${q.length?`<table style="width:100%;border-collapse:collapse"><thead><tr>
-    <th style="padding:10px;text-align:left">Data</th><th style="padding:10px;text-align:left">Vídeo</th><th style="padding:10px;text-align:left">Legenda</th><th style="padding:10px;text-align:left">Status</th>
-  </tr></thead><tbody>${q.map(x=>`<tr style="border-top:1px solid #222633">
-    <td style="padding:10px">${fmtDateTime(x.scheduledAt)}</td>
-    <td style="padding:10px"><b>${esc(x.name)}</b></td>
-    <td style="padding:10px">${x.caption?esc(x.caption.slice(0,55)):"—"}</td>
-    <td style="padding:10px"><span class="badge ${statusClass(getStatus(x))}">${statusLabel(getStatus(x))}</span></td>  </tr>`).join("")}</tbody></table>`:`<div class="muted" style="padding:35px;text-align:center">Nenhum vídeo no calendário.</div>`}</div>`;
-}
 function setMetricsPeriod(days){metricsPeriod=days;metrics()}
 function aggregateMetricsByDay(rows){
   const map=new Map();
@@ -2813,8 +2772,80 @@ function followerLiveSummary(){
   </div>`;
 }
 
+function reelTimelineLabel(snapshot,publishedAt){
+  if(!publishedAt)return new Date(snapshot.collected_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+  const mins=Math.max(0,Math.round((new Date(snapshot.collected_at)-new Date(publishedAt))/60000));
+  if(mins<60)return mins+" min";
+  if(mins<1440)return Math.round(mins/60)+" h";
+  return Math.round(mins/1440)+" d";
+}
+function reelEvolutionChart(snaps=[]){
+  if(!snaps.length)return '<div class="reel-detail-empty">Ainda não existem leituras desse Reel.</div>';
+  const W=900,H=230,P=30,max=Math.max(1,...snaps.map(x=>Number(x.views||0)));
+  const pts=snaps.map((s,i)=>{
+    const x=snaps.length===1?W/2:P+i*(W-P*2)/(snaps.length-1);
+    const y=H-P-(Number(s.views||0)/max)*(H-P*2);
+    return {x,y,s};
+  });
+  const path=pts.map((p,i)=>(i?"L":"M")+" "+p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" ");
+  return `<div class="reel-evolution-chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <g class="chart-grid"><line x1="30" y1="55" x2="870" y2="55"/><line x1="30" y1="115" x2="870" y2="115"/><line x1="30" y1="175" x2="870" y2="175"/></g>
+    <path d="${path}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+    ${pts.map(p=>`<circle class="chart-hover-dot" cx="${p.x}" cy="${p.y}" r="6"><title>${Number(p.s.views||0).toLocaleString("pt-BR")} views</title></circle>`).join("")}
+  </svg></div>`;
+}
+async function openReelAnalytics(id){
+  previousPageBeforeReel=currentPage==="reelDetail"?"metrics":currentPage;
+  showInternalPage("reelDetail","Detalhe do Reel");
+  $("#reelDetail").innerHTML=loadingShell("Abrindo Reel");
+  try{
+    currentReelDetail=await cloudFetch("?resource=reel-detail&id="+encodeURIComponent(id));
+    reelDetailPage();
+  }catch(e){
+    $("#reelDetail").innerHTML=`<div class="reel-detail-error"><button class="btn" onclick="backFromReelDetail()">← Voltar</button><h2>Não consegui abrir esse Reel</h2><p>${esc(e.message)}</p></div>`;
+  }
+}
+function backFromReelDetail(){
+  currentReelDetail=null;
+  showPage(previousPageBeforeReel&&previousPageBeforeReel!=="reelDetail"?previousPageBeforeReel:"metrics");
+}
+function reelDetailPage(){
+  const d=currentReelDetail;if(!d)return;
+  const m=d.media||{},s=d.schedule||{},snaps=d.snapshots||[];
+  const last=snaps[snaps.length-1]||{},first=snaps[0]||{};
+  const published=s.published_at||m.posted_at;
+  const growth=Number(last.views||0)-Number(first.views||0);
+  $("#reelDetail").innerHTML=`
+    <div class="reel-detail-head">
+      <button class="btn" onclick="backFromReelDetail()">← Voltar</button>
+      <div><span class="ui3-eyebrow">REEL ANALYTICS</span><h2>Evolução do Reel</h2><p>${published?new Date(published).toLocaleString("pt-BR"):"Data indisponível"}</p></div>
+      <button class="btn" onclick="openReelPreview('${esc(String(m.id||m.ig_media_id))}')">Ver como Reel</button>
+    </div>
+    <div class="reel-detail-layout">
+      <div class="card reel-detail-media">
+        ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls playsinline></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">Preview indisponível</div>'}
+        <div><b>@${esc(instagramIntegration?.account_label||"Instagram")}</b><p>${esc(m.caption||"Sem legenda")}</p></div>
+      </div>
+      <div class="reel-detail-main">
+        <div class="ui3-kpis reel-detail-kpis">
+          <div class="ui3-kpi"><span>Views</span><strong>${Number(last.views||0).toLocaleString("pt-BR")}</strong><small>${growth>=0?"+":""}${growth.toLocaleString("pt-BR")} desde a 1ª leitura</small></div>
+          <div class="ui3-kpi"><span>Alcance</span><strong>${Number(last.reach||0).toLocaleString("pt-BR")}</strong><small>última leitura</small></div>
+          <div class="ui3-kpi"><span>Compart.</span><strong>${Number(last.shares||0).toLocaleString("pt-BR")}</strong><small>sinal de distribuição</small></div>
+          <div class="ui3-kpi"><span>Salvamentos</span><strong>${Number(last.saves||0).toLocaleString("pt-BR")}</strong><small>intenção forte</small></div>
+        </div>
+        <div class="card ui3-panel">
+          <div class="ui3-panel-head"><div><span>EVOLUÇÃO</span><h3>30min → 2h → 6h → 24h → 48h</h3></div><small class="muted">${snaps.length} leituras</small></div>
+          ${reelEvolutionChart(snaps)}
+          <div class="reel-snapshot-timeline">
+            ${snaps.map(x=>`<div><b>${reelTimelineLabel(x,published)}</b><span>${Number(x.views||0).toLocaleString("pt-BR")} views</span><small>${Number(x.reach||0).toLocaleString("pt-BR")} alcance · ${Number(x.shares||0).toLocaleString("pt-BR")} shares</small></div>`).join("")||'<div class="ui3-empty">Aguardando a primeira coleta.</div>'}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function openReelPreview(id){
-  const m=liveInstagramMetrics.find(x=>String(x.id||x.record_id)===String(id));if(!m)return;
+  const m=liveInstagramMetrics.find(x=>String(x.id||x.record_id||x.ig_media_id)===String(id))||currentReelDetail?.media;if(!m)return;
   const media=m.media_url
     ?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls autoplay muted loop playsinline></video>`
     :m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}" alt="">`:`<div class="reel-no-media">Preview indisponível</div>`;
@@ -2833,6 +2864,7 @@ function openReelPreview(id){
   </div>`;
 }
 function metrics(){
+  if(cloudLoading){$("#metrics").innerHTML=loadingShell("Carregando métricas");return}
   const cutoff=Date.now()-metricsPeriod*86400000;
   const rows=liveInstagramMetrics.filter(m=>new Date(m.timestamp).getTime()>=cutoff);
   const total=rows.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0),saves:a.saves+(+m.saves||0)}),{views:0,reach:0,likes:0,saves:0});
@@ -2862,12 +2894,12 @@ function metrics(){
       <div class="card ui3-panel">
         <div class="ui3-panel-head"><div><span>Ranking</span><h3>Melhores conteúdos</h3></div></div>
         <div class="ui3-ranking">${ranking.slice(0,8).map((m,i)=>`
-          <button class="ui3-rank-row" onclick="openReelPreview('${esc(String(m.id||m.record_id))}')"><b>#${i+1}</b><div><strong>${esc((m.caption||"Sem legenda").slice(0,64))}</strong><span>${new Date(m.timestamp).toLocaleDateString("pt-BR")} · ${(+m.likes||0).toLocaleString("pt-BR")} curtidas</span></div><em>${(+m.views||0).toLocaleString("pt-BR")}</em></button>`).join("")||'<div class="ui3-empty">Sem dados.</div>'}</div>
+          <button class="ui3-rank-row" onclick="openReelAnalytics('${esc(String(m.id||m.record_id))}')"><b>#${i+1}</b><div><strong>${esc((m.caption||"Sem legenda").slice(0,64))}</strong><span>${new Date(m.timestamp).toLocaleDateString("pt-BR")} · ${(+m.likes||0).toLocaleString("pt-BR")} curtidas</span></div><em>${(+m.views||0).toLocaleString("pt-BR")}</em></button>`).join("")||'<div class="ui3-empty">Sem dados.</div>'}</div>
       </div>
       <div class="card ui3-panel">
         <div class="ui3-panel-head"><div><span>Reels</span><h3>Previews recentes</h3></div><small class="muted">Clique para abrir como Reel</small></div>
         <div class="reels-instagram-grid">${ranking.slice(0,6).map(m=>`
-          <button class="reel-instagram-card" onclick="openReelPreview('${esc(String(m.id||m.record_id))}')">
+          <button class="reel-instagram-card" onclick="openReelAnalytics('${esc(String(m.id||m.record_id))}')">
             <div class="reel-media-layer">
               ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" muted loop playsinline autoplay preload="metadata"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">▶</div>'}
               <div class="reel-card-top"><span>REEL</span><b>⋮</b></div>
@@ -2877,184 +2909,6 @@ function metrics(){
       </div>
     </div>`;
   followerChanged=false;
-}
-
-function setTestReelStatus(message,type=""){
-  const el=$("#testReelStatus");if(!el)return;
-  el.className="test-status "+type;el.textContent=message;
-}
-async function inspectTestVideo(file){
-  if(!file)return null;
-  const allowed=["video/mp4","video/quicktime"];
-  if(!allowed.includes(file.type) && !/\.(mp4|mov)$/i.test(file.name))throw new Error("Use um vídeo MP4 ou MOV.");
-  if(file.size>1024*1024*1024)throw new Error("O vídeo passa de 1 GB.");
-  const url=URL.createObjectURL(file);
-  try{
-    return await new Promise((resolve,reject)=>{
-      const v=document.createElement("video");
-      v.preload="metadata";v.src=url;
-      v.onloadedmetadata=()=>{
-        const info={duration:v.duration,width:v.videoWidth,height:v.videoHeight};
-        if(info.duration<3)reject(new Error("O Reel precisa ter pelo menos 3 segundos."));
-        else if(info.duration>900)reject(new Error("O Reel não pode passar de 15 minutos."));
-        else if(info.width>1920)reject(new Error("A largura do vídeo passa de 1920 px."));
-        else resolve(info);
-      };
-      v.onerror=()=>reject(new Error("Não consegui ler os dados desse vídeo."));
-    });
-  }finally{URL.revokeObjectURL(url)}
-}
-async function previewTestReelFile(input){
-  const file=input.files?.[0];if(!file)return;
-  try{
-    const info=await inspectTestVideo(file);
-    if(testReelObjectUrl)URL.revokeObjectURL(testReelObjectUrl);
-    testReelObjectUrl=URL.createObjectURL(file);
-    const v=$("#testReelPreview");v.src=testReelObjectUrl;v.classList.remove("hidden");
-    const ratio=info.width&&info.height?info.width/info.height:0;
-    const ratioNote=Math.abs(ratio-9/16)>.08?" · proporção diferente de 9:16":" · 9:16 adequado";
-    setTestReelStatus(`Pronto para teste: ${file.name} · ${Math.round(info.duration)}s · ${info.width}×${info.height}${ratioNote}`,"ok");
-  }catch(e){input.value="";setTestReelStatus(e.message,"err")}
-}
-async function uploadTestReelToStorage(file){
-  const uid=cloudSession?.user?.id;if(!uid)throw new Error("Faça login no Cloud Backend.");
-  const ext=(file.name.split(".").pop()||"mp4").toLowerCase();
-  const path=`${uid}/test/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const encoded=path.split("/").map(encodeURIComponent).join("/");
-  const res=await fetch(`${SUPABASE_URL}/storage/v1/object/videos/${encoded}`,{
-    method:"POST",
-    headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token,"Content-Type":file.type||"video/mp4","x-upsert":"false"},
-    body:file
-  });
-  let data=null;try{data=await res.json()}catch{}
-  if(!res.ok)throw new Error(data?.message||data?.error||"Falha ao enviar o vídeo ao Storage.");
-  return path;
-}
-async function pollTestPublication(publicationId){
-  state.testPublicationId=publicationId;save();
-  for(let i=0;i<18;i++){
-    setTestReelStatus(`Instagram processando o vídeo… verificação ${i+1}/18`,"warn");
-    const st=await edgeFetch(IG_PUBLISH_TEST_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"status",publication_id:publicationId})
-    });
-    if(st.status==="failed"){
-      setTestReelStatus("O Instagram recusou o processamento: "+(st.detail||"erro desconhecido"),"err");
-      await loadTestReelHistory();testReelPage();return;
-    }
-    if(st.status==="ready"){
-      setTestReelStatus("✅ Teste concluído: o Instagram processou o vídeo e ele está pronto. Nada foi publicado ainda.","ok");
-      await loadTestReelHistory();testReelPage();return;
-    }
-    await new Promise(r=>setTimeout(r,5000));
-  }
-  setTestReelStatus("O vídeo continua processando. Use “Verificar processamento” daqui a pouco.","warn");
-  await loadTestReelHistory();testReelPage();
-}
-async function prepareTestReel(){
-  if(!cloudSession){focusCloudLogin();return}
-  if(!instagramIntegration?.enabled){alert("Conecte o Instagram primeiro.");showPage("settings");return}
-  const input=$("#testReelFile"),file=input?.files?.[0];
-  if(!file){setTestReelStatus("Escolha um vídeo primeiro.","err");return}
-  const caption=$("#testReelCaption")?.value||"";
-  const shareToFeed=!!$("#testReelFeed")?.checked;
-  try{await inspectTestVideo(file)}catch(e){setTestReelStatus(e.message,"err");return}
-
-  if(!confirm(`Preparar este vídeo para teste em @${instagramIntegration.account_label||"Instagram"}? Nesta etapa ele NÃO será publicado.`))return;
-
-  try{
-    const btn=$("#prepareTestReelBtn");
-    if(btn){btn.disabled=true;btn.textContent="Enviando vídeo…"}
-    setTestReelStatus("Enviando vídeo para o Storage seguro…","warn");
-    const storagePath=await uploadTestReelToStorage(file);
-    setTestReelStatus("Criando container de Reel no Instagram…","warn");
-    const created=await edgeFetch(IG_PUBLISH_TEST_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"create",storage_path:storagePath,caption,share_to_feed:shareToFeed})
-    });
-    state.testPublicationId=created.publication.id;save();
-    await pollTestPublication(created.publication.id);
-  }catch(e){
-    setTestReelStatus("Falha no teste: "+e.message,"err");
-  }finally{
-    const btn=$("#prepareTestReelBtn");
-    if(btn){btn.disabled=false;btn.textContent="Preparar publicação"}
-  }
-}
-async function continueTestPublication(){
-  if(!state.testPublicationId)return;
-  try{await pollTestPublication(state.testPublicationId)}
-  catch(e){setTestReelStatus("Falha: "+e.message,"err")}
-}
-async function publishPreparedTestReel(){
-  const id=state.testPublicationId;
-  if(!id){setTestReelStatus("Nenhum Reel preparado para publicar.","err");return}
-
-  try{
-    const st=await edgeFetch(IG_PUBLISH_TEST_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"status",publication_id:id})
-    });
-    if(st.status!=="ready"){
-      setTestReelStatus("O Reel ainda não está pronto. Clique em “Verificar processamento”.","warn");
-      return;
-    }
-    if(!confirm(`ATENÇÃO: agora o Reel será publicado DE VERDADE em @${instagramIntegration?.account_label||"Instagram"}. Continuar?`))return;
-
-    setTestReelStatus("Publicando Reel de verdade no Instagram…","warn");
-    const pub=await edgeFetch(IG_PUBLISH_TEST_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"publish",publication_id:id})
-    });
-    state.testPublicationId=null;save();
-    setTestReelStatus("✅ Reel publicado com sucesso. ID: "+pub.instagram_media_id,"ok");
-    await loadTestReelHistory();testReelPage();
-    setTimeout(()=>syncInstagramToday().catch(()=>{}),12000);
-  }catch(e){
-    setTestReelStatus("Falha ao publicar: "+e.message,"err");
-  }
-}
-function testReelPage(){
-  const connected=!!instagramIntegration?.enabled;
-  const pending=testReelHistory.find(x=>x.id===state.testPublicationId);
-  const ready=pending?.status==="ready";
-  $("#testReel").innerHTML=`
-    <div class="product-notice"><div class="notice-icon">▷</div><div><b>Teste de publicação</b><span>Prepare e processe o vídeo primeiro. A publicação só acontece depois da confirmação final.</span></div></div>
-    <div class="test-reel-grid">
-      <div class="card">
-        <div class="section-head">
-          <div><h2>Teste de Reel</h2><div class="muted">Conta: ${connected?"@"+esc(instagramIntegration.account_label||"Instagram"):"Instagram não conectado"}</div></div>
-          <span class="backend-pill ${connected?"online":"offline"}">${connected?"● API pronta":"● Configure o Instagram"}</span>
-        </div>
-        <div class="test-drop">
-          <div class="field"><label>Vídeo</label><input id="testReelFile" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" onchange="previewTestReelFile(this)"></div>
-          <video id="testReelPreview" class="test-preview hidden" controls playsinline style="margin-top:12px"></video>
-          <div class="field" style="margin-top:12px"><label>Legenda</label><textarea id="testReelCaption" maxlength="2200" placeholder="Legenda do Reel…"></textarea></div>
-          <label class="switch" style="margin-top:10px"><input id="testReelFeed" type="checkbox"> <b>Também mostrar no Feed</b></label>
-          <div class="note" style="margin-top:10px">MP4/MOV · 3s a 15min · até 1GB · 9:16 recomendado. “Preparar publicação” apenas cria/processa o container. Não publica.</div>
-          <div class="api-warning" style="margin-top:10px"><b>Importante:</b> esta tela testa o fluxo de publicação da API. “Publicar de verdade” cria um Reel real. Isso NÃO é o recurso Trial Reels/Reels de teste do Instagram.</div>
-          <div id="testReelStatus" class="test-status">${state.testPublicationId?(ready?"Vídeo processado e pronto para publicação real.":"Existe um teste pendente. Verifique o processamento."):"Escolha um vídeo para começar."}</div>
-          <div class="toolbar" style="margin-top:12px">
-            <button class="btn primary" id="prepareTestReelBtn" onclick="prepareTestReel()" ${connected?"":"disabled"}>Preparar publicação</button>
-            ${state.testPublicationId?`<button class="btn" onclick="continueTestPublication()">Verificar processamento</button><button class="btn danger" onclick="publishPreparedTestReel()">Publicar de verdade</button>`:""}
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="section-head"><div><h2>Últimos testes</h2><div class="muted">Containers preparados e publicações realizadas por esta etapa.</div></div><button class="btn" onclick="loadTestReelHistory().then(testReelPage)">Atualizar</button></div>
-        <div class="publish-history">
-          ${testReelHistory.length?testReelHistory.slice(0,10).map(x=>`
-            <div class="row">
-              <div><b>${esc(x.file_name||"Reel")}</b><div class="muted">${new Date(x.created_at).toLocaleString("pt-BR")} · ${x.share_to_feed?"Reels + Feed":"Somente Reels"}</div></div>
-              <span class="badge ${x.status==="published"?"green":x.status==="failed"?"red":"yellow"}">${esc(x.status)}</span>
-            </div>`).join(""):`<div class="empty">Nenhum teste de publicação preparado ainda.</div>`}
-        </div>
-      </div>
-    </div>`;
 }
 
 async function loadServerLogs(){
@@ -3451,6 +3305,7 @@ function renderAll(){
   safeRenderPage("overview",overview);
   safeRenderPage("calendar",calendarPage);
   safeRenderPage("metrics",metrics);
+  if(currentReelDetail)safeRenderPage("reelDetail",reelDetailPage);
   safeRenderPage("smartTimes",smartTimesPage);
   safeRenderPage("automation",automationPage);
   safeRenderPage("cloudentAI",cloudentAIPage);
@@ -3473,6 +3328,7 @@ async function init(){
   }catch(err){
     console.error("Cloud init error:",err);
   }
+  cloudLoading=false;
   document.body.classList.remove("booting");
   renderAll();
 
