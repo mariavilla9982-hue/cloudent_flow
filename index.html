@@ -388,8 +388,14 @@ async function loadInstagramStatus(){
     instagramIntegration=r.integration||null;
     if(instagramIntegration?.enabled){
       try{
-        const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"GET"});
+        let stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"GET"});
         liveInstagramMetrics=stored.media||[];
+        if(liveInstagramMetrics.length && !liveInstagramMetrics.some(m=>m.media_url)){
+          try{
+            stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
+            liveInstagramMetrics=stored.media||[];
+          }catch{}
+        }
         mergeInstagramIntoSmartSamples(liveInstagramMetrics);
       }catch{}
     }
@@ -1403,80 +1409,128 @@ async function uploadTestReelToStorage(file){
   if(!res.ok)throw new Error(data?.message||data?.error||"Falha ao enviar o vídeo ao Storage.");
   return path;
 }
-async function pollTestPublication(publicationId,autoPublish=true){
+async function pollTestPublication(publicationId){
   state.testPublicationId=publicationId;save();
   for(let i=0;i<18;i++){
-    setTestReelStatus(`Instagram processando o Reel… verificação ${i+1}/18`,"warn");
-    const st=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",publication_id:publicationId})});
-    if(st.status==="failed"){setTestReelStatus("O Instagram recusou o processamento: "+(st.detail||"erro desconhecido"),"err");await loadTestReelHistory();testReelPage();return}
+    setTestReelStatus(`Instagram processando o vídeo… verificação ${i+1}/18`,"warn");
+    const st=await edgeFetch(IG_PUBLISH_TEST_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"status",publication_id:publicationId})
+    });
+    if(st.status==="failed"){
+      setTestReelStatus("O Instagram recusou o processamento: "+(st.detail||"erro desconhecido"),"err");
+      await loadTestReelHistory();testReelPage();return;
+    }
     if(st.status==="ready"){
-      if(!autoPublish){setTestReelStatus("Vídeo processado e pronto para publicar.","ok");return}
-      setTestReelStatus("Vídeo pronto. Publicando Reel teste…","warn");
-      const pub=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"publish",publication_id:publicationId})});
-      state.testPublicationId=null;save();
-      setTestReelStatus("✅ Reel teste publicado. ID: "+pub.instagram_media_id,"ok");
-      await loadTestReelHistory();testReelPage();
-      setTimeout(()=>syncInstagramToday().catch(()=>{}),12000);
-      return;
+      setTestReelStatus("✅ Teste concluído: o Instagram processou o vídeo e ele está pronto. Nada foi publicado ainda.","ok");
+      await loadTestReelHistory();testReelPage();return;
     }
     await new Promise(r=>setTimeout(r,5000));
   }
-  setTestReelStatus("O vídeo ainda está processando. Use “Continuar publicação” daqui a pouco.","warn");
+  setTestReelStatus("O vídeo continua processando. Use “Verificar processamento” daqui a pouco.","warn");
   await loadTestReelHistory();testReelPage();
 }
-async function publishTestReel(){
+async function prepareTestReel(){
   if(!cloudSession){focusCloudLogin();return}
   if(!instagramIntegration?.enabled){alert("Conecte o Instagram primeiro.");showPage("settings");return}
   const input=$("#testReelFile"),file=input?.files?.[0];
   if(!file){setTestReelStatus("Escolha um vídeo primeiro.","err");return}
   const caption=$("#testReelCaption")?.value||"";
-  const isTrial=$("#testReelTrial")?.checked!==false;
-  const shareToFeed=!isTrial && !!$("#testReelFeed")?.checked;
+  const shareToFeed=!!$("#testReelFeed")?.checked;
   try{await inspectTestVideo(file)}catch(e){setTestReelStatus(e.message,"err");return}
-  const kind=isTrial?"Reel teste (Trial Reel)":"Reel normal";
-  if(!confirm(`Publicar agora este vídeo como ${kind} em @${instagramIntegration.account_label||"Instagram"}?`))return;
+
+  if(!confirm(`Preparar este vídeo para teste em @${instagramIntegration.account_label||"Instagram"}? Nesta etapa ele NÃO será publicado.`))return;
+
   try{
-    const btn=$("#publishTestReelBtn");if(btn){btn.disabled=true;btn.textContent="Enviando vídeo…"}
+    const btn=$("#prepareTestReelBtn");
+    if(btn){btn.disabled=true;btn.textContent="Enviando vídeo…"}
     setTestReelStatus("Enviando vídeo para o Storage seguro…","warn");
     const storagePath=await uploadTestReelToStorage(file);
-    setTestReelStatus("Criando container no Instagram…","warn");
-    const created=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"create",storage_path:storagePath,caption,is_trial:isTrial,share_to_feed:shareToFeed})});
+    setTestReelStatus("Criando container de Reel no Instagram…","warn");
+    const created=await edgeFetch(IG_PUBLISH_TEST_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"create",storage_path:storagePath,caption,share_to_feed:shareToFeed})
+    });
     state.testPublicationId=created.publication.id;save();
-    await pollTestPublication(created.publication.id,true);
-  }catch(e){setTestReelStatus("Falha: "+e.message,"err")}
-  finally{const btn=$("#publishTestReelBtn");if(btn){btn.disabled=false;btn.textContent="Publicar Reel teste"}}
+    await pollTestPublication(created.publication.id);
+  }catch(e){
+    setTestReelStatus("Falha no teste: "+e.message,"err");
+  }finally{
+    const btn=$("#prepareTestReelBtn");
+    if(btn){btn.disabled=false;btn.textContent="Preparar Reel para teste"}
+  }
 }
 async function continueTestPublication(){
   if(!state.testPublicationId)return;
-  try{await pollTestPublication(state.testPublicationId,true)}catch(e){setTestReelStatus("Falha: "+e.message,"err")}
+  try{await pollTestPublication(state.testPublicationId)}
+  catch(e){setTestReelStatus("Falha: "+e.message,"err")}
+}
+async function publishPreparedTestReel(){
+  const id=state.testPublicationId;
+  if(!id){setTestReelStatus("Nenhum Reel preparado para publicar.","err");return}
+
+  try{
+    const st=await edgeFetch(IG_PUBLISH_TEST_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"status",publication_id:id})
+    });
+    if(st.status!=="ready"){
+      setTestReelStatus("O Reel ainda não está pronto. Clique em “Verificar processamento”.","warn");
+      return;
+    }
+    if(!confirm(`ATENÇÃO: agora o Reel será publicado DE VERDADE em @${instagramIntegration?.account_label||"Instagram"}. Continuar?`))return;
+
+    setTestReelStatus("Publicando Reel de verdade no Instagram…","warn");
+    const pub=await edgeFetch(IG_PUBLISH_TEST_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"publish",publication_id:id})
+    });
+    state.testPublicationId=null;save();
+    setTestReelStatus("✅ Reel publicado com sucesso. ID: "+pub.instagram_media_id,"ok");
+    await loadTestReelHistory();testReelPage();
+    setTimeout(()=>syncInstagramToday().catch(()=>{}),12000);
+  }catch(e){
+    setTestReelStatus("Falha ao publicar: "+e.message,"err");
+  }
 }
 function testReelPage(){
   const connected=!!instagramIntegration?.enabled;
+  const pending=testReelHistory.find(x=>x.id===state.testPublicationId);
+  const ready=pending?.status==="ready";
   $("#testReel").innerHTML=`
-    <div class="banner">🧪 <b>Estágio 8 — Reel teste:</b> envie um vídeo, confira o preview e publique pela API. Nada é publicado sem você clicar e confirmar.</div>
+    <div class="banner">🧪 <b>Estágio 8 — teste de publicação:</b> primeiro o CloudentFlow envia e processa o vídeo sem publicar. Só o botão vermelho “Publicar de verdade” cria o post no Instagram.</div>
     <div class="test-reel-grid">
       <div class="card">
-        <div class="section-head"><div><h2>Publicar Reel teste</h2><div class="muted">Conta: ${connected?"@"+esc(instagramIntegration.account_label||"Instagram"):"Instagram não conectado"}</div></div><span class="backend-pill ${connected?"online":"offline"}">${connected?"● API pronta":"● Configure o Instagram"}</span></div>
+        <div class="section-head">
+          <div><h2>Teste de Reel</h2><div class="muted">Conta: ${connected?"@"+esc(instagramIntegration.account_label||"Instagram"):"Instagram não conectado"}</div></div>
+          <span class="backend-pill ${connected?"online":"offline"}">${connected?"● API pronta":"● Configure o Instagram"}</span>
+        </div>
         <div class="test-drop">
           <div class="field"><label>Vídeo</label><input id="testReelFile" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" onchange="previewTestReelFile(this)"></div>
           <video id="testReelPreview" class="test-preview hidden" controls playsinline style="margin-top:12px"></video>
           <div class="field" style="margin-top:12px"><label>Legenda</label><textarea id="testReelCaption" maxlength="2200" placeholder="Legenda do Reel…"></textarea></div>
-          <div class="toolbar" style="margin-top:10px">
-            <label class="switch"><input id="testReelTrial" type="checkbox" checked onchange="document.querySelector('#testReelFeedWrap').style.display=this.checked?'none':'flex'"> <b>Publicar como Reel teste / Trial Reel</b></label>
-            <label class="switch" id="testReelFeedWrap" style="display:none"><input id="testReelFeed" type="checkbox"> Também mostrar no Feed</label>
-          </div>
-          <div class="note" style="margin-top:10px">MP4/MOV · 3s a 15min · até 1GB · 9:16 recomendado. O vídeo é enviado ao Storage privado e a Meta recebe uma URL temporária.</div>
-          <div id="testReelStatus" class="test-status">${state.testPublicationId?"Existe uma publicação pendente. Você pode continuar o processamento.":"Escolha um vídeo para começar."}</div>
+          <label class="switch" style="margin-top:10px"><input id="testReelFeed" type="checkbox"> <b>Também mostrar no Feed quando eu publicar</b></label>
+          <div class="note" style="margin-top:10px">MP4/MOV · 3s a 15min · até 1GB · 9:16 recomendado. “Preparar Reel para teste” apenas cria/processa o container. Não publica.</div>
+          <div class="api-warning" style="margin-top:10px"><b>Importante:</b> quando você apertar “Publicar de verdade”, será um Reel real. Com “Também mostrar no Feed” desligado, ele continua aparecendo na aba Reels.</div>
+          <div id="testReelStatus" class="test-status">${state.testPublicationId?(ready?"Vídeo processado e pronto para publicação real.":"Existe um teste pendente. Verifique o processamento."):"Escolha um vídeo para começar."}</div>
           <div class="toolbar" style="margin-top:12px">
-            <button class="btn primary" id="publishTestReelBtn" onclick="publishTestReel()" ${connected?"":"disabled"}>Publicar Reel teste</button>
-            ${state.testPublicationId?`<button class="btn" onclick="continueTestPublication()">Continuar publicação</button>`:""}
+            <button class="btn primary" id="prepareTestReelBtn" onclick="prepareTestReel()" ${connected?"":"disabled"}>Preparar Reel para teste</button>
+            ${state.testPublicationId?`<button class="btn" onclick="continueTestPublication()">Verificar processamento</button><button class="btn danger" onclick="publishPreparedTestReel()">Publicar de verdade</button>`:""}
           </div>
         </div>
       </div>
       <div class="card">
-        <div class="section-head"><div><h2>Últimos testes</h2><div class="muted">Histórico de publicações feitas por esta etapa.</div></div><button class="btn" onclick="loadTestReelHistory().then(testReelPage)">Atualizar</button></div>
+        <div class="section-head"><div><h2>Últimos testes</h2><div class="muted">Containers preparados e publicações realizadas por esta etapa.</div></div><button class="btn" onclick="loadTestReelHistory().then(testReelPage)">Atualizar</button></div>
         <div class="publish-history">
-          ${testReelHistory.length?testReelHistory.slice(0,10).map(x=>`<div class="row"><div><b>${esc(x.file_name||"Reel")}</b><div class="muted">${new Date(x.created_at).toLocaleString("pt-BR")} · ${x.is_trial?"Trial Reel":"Reel normal"}</div></div><span class="badge ${x.status==="published"?"green":x.status==="failed"?"red":"yellow"}">${esc(x.status)}</span></div>`).join(""):`<div class="empty">Nenhum Reel teste publicado por aqui ainda.</div>`}
+          ${testReelHistory.length?testReelHistory.slice(0,10).map(x=>`
+            <div class="row">
+              <div><b>${esc(x.file_name||"Reel")}</b><div class="muted">${new Date(x.created_at).toLocaleString("pt-BR")} · ${x.share_to_feed?"Reels + Feed":"Somente Reels"}</div></div>
+              <span class="badge ${x.status==="published"?"green":x.status==="failed"?"red":"yellow"}">${esc(x.status)}</span>
+            </div>`).join(""):`<div class="empty">Nenhum teste preparado ainda.</div>`}
         </div>
       </div>
     </div>`;
