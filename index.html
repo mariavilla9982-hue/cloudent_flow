@@ -1124,6 +1124,16 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   50%{box-shadow:0 0 0 2px rgba(255,63,127,.32),0 0 28px rgba(255,63,127,.12)}
 }
 
+
+/* ===== Smart scheduling choice ===== */
+.smart-schedule-choice{
+  padding:10px 11px;border:1px solid #292231;border-radius:9px;background:#100d14;
+}
+.smart-schedule-choice label{display:flex!important;align-items:center;gap:7px;color:#e5e0e7!important}
+.smart-schedule-choice input{width:14px!important;height:14px!important;accent-color:#ff3f7f}
+.smart-schedule-choice b{font-size:9px}
+.smart-schedule-choice small{display:block;margin:5px 0 0 21px;color:#777f8d;font-size:8px;line-height:1.4}
+
 </style>
 </head>
 <body>
@@ -2162,6 +2172,36 @@ function pickForSlot(date,slot){
   input.click();
 }
 
+function smartSchedulerEnabled(){
+  return automationData?.settings?.automation?.autoOptimizeCalendar!==false &&
+    automationData?.settings?.smart_scheduler?.enabled!==false;
+}
+function smartRecommendationsForDate(date){
+  const dow=new Date(date+"T12:00:00").getDay();
+  return (automationData?.recommendations||[])
+    .filter(r=>Number(r.weekday)===dow)
+    .sort((a,b)=>Number(a.rank)-Number(b.rank));
+}
+function bestAvailableSmartTime(date,preferredIndex=0){
+  const recs=smartRecommendationsForDate(date);
+  if(!recs.length)return state.defaultTimes[preferredIndex]||"12:00";
+  const order=[...recs.slice(preferredIndex),...recs.slice(0,preferredIndex)];
+  for(const r of order){
+    const t=String(r.recommended_time||"").slice(0,5);
+    if(t&&validateSchedule(date,t).ok)return t;
+  }
+  return state.defaultTimes[preferredIndex]||"12:00";
+}
+function updateScheduleModalSmartTime(){
+  const day=$("#modalDay"),time=$("#modalTime"),smart=$("#modalSmart");
+  if(!day||!time||!smart)return;
+  const auto=smart.checked;
+  time.disabled=auto;
+  if(auto){
+    const free=firstFreeSlot(day.value);
+    time.value=bestAvailableSmartTime(day.value,Math.max(0,free));
+  }
+}
 async function handleQuickSlotVideo(input){
   const file=input?.files?.[0];
   const target=pendingTarget;
@@ -2170,12 +2210,14 @@ async function handleQuickSlotVideo(input){
 
   try{
     toast("Enviando "+file.name+"…","ok");
-    const ok=await addVideoToSlot(file,target.date,target.slot,state.defaultTimes[target.slot]||"12:00","");
+    const auto=smartSchedulerEnabled();
+    const chosenTime=auto?bestAvailableSmartTime(target.date,target.slot):(state.defaultTimes[target.slot]||"12:00");
+    const ok=await addVideoToSlot(file,target.date,target.slot,chosenTime,"",auto?"auto":"manual");
     if(ok){
       await syncFromBackend();
       renderAll();
       setTimeout(()=>jumpToCalendarDay(target.date),40);
-      toast(file.name+" agendado com sucesso.","ok");
+      toast(file.name+" agendado às "+chosenTime+(auto?" pelo Smart Scheduler.":"."),"ok");
     }
   }catch(e){
     console.error("Quick schedule upload error:",e);
@@ -2187,17 +2229,17 @@ async function handleQuickSlotVideo(input){
 function firstFreeSlot(date){
   for(let i=0;i<5;i++)if(!slotData(date,i))return i;return -1
 }
-async function addVideoToSlot(file,date,slot,time=null,caption=""){
-  const t=time||state.defaultTimes[slot]||"12:00";
+async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto"){
+  const t=time||(smartMode==="auto"?bestAvailableSmartTime(date,slot):(state.defaultTimes[slot]||"12:00"));
   const valid=validateSchedule(date,t);
   if(!valid.ok){alert(valid.msg);return false}
   if(state.slots[keyFor(date,slot)]){alert("Essa posição já está ocupada.");return false}
   if(!cloudSession){alert("Entre na sua conta do CloudentFlow em Configurações para salvar vídeos no backend.");showPage("settings");return false}
   const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
-  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode","manual");
+  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
   const schedule=res.schedule,video=res.video;
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode:"manual"};
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode};
   save();log(`${file.name} enviado ao Storage e agendado no backend para ${date} às ${t}.`,"ok");return true
 }
 function updateSlotTime(date,slot,time){
@@ -2312,33 +2354,41 @@ async function clearCurrentWeek(){
 
 function openScheduleModal(){
   const dates=weekDates();
+  const auto=smartSchedulerEnabled();
   $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
-    <div class="modal-head"><div><b>Agendar vídeo</b><div class="muted">Escolha o dia, horário, legenda e arquivo.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="modal-head"><div><b>Agendar vídeo</b><div class="muted">O Smart Scheduler usa o histórico dos seus Reels para escolher o horário.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
     <div class="formgrid">
-      <div class="field"><label>Dia</label><select id="modalDay">${dates.map(d=>`<option value="${localISO(d)}">${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`).join("")}</select></div>
+      <div class="field"><label>Dia</label><select id="modalDay" onchange="updateScheduleModalSmartTime()">${dates.map(d=>`<option value="${localISO(d)}">${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`).join("")}</select></div>
       <div class="field"><label>Horário</label><input id="modalTime" type="time" value="12:00"></div>
+      <div class="field full smart-schedule-choice">
+        <label><input id="modalSmart" type="checkbox" ${auto?"checked":""} onchange="updateScheduleModalSmartTime()"> <b>Usar melhor horário automaticamente</b></label>
+        <small>Prioriza horários de Reels que tiveram desempenho muito acima da sua média.</small>
+      </div>
       <div class="field full"><label>Legenda</label><textarea id="modalCaption" placeholder="Legenda do Reel..."></textarea></div>
       <div class="field full"><label>Arquivo</label><input id="modalFile" type="file" accept="video/*"></div>
     </div>
     <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="confirmScheduleModal()">Salvar no calendário</button></div>
   </div></div>`;
+  setTimeout(updateScheduleModalSmartTime,0);
 }
 async function confirmScheduleModal(){
-  const date=$("#modalDay").value,time=$("#modalTime").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
+  const date=$("#modalDay").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
   if(!file){alert("Escolha um vídeo.");return}
   const free=firstFreeSlot(date);if(free<0){alert("Esse dia já está com 5 vídeos.");return}
+  const auto=$("#modalSmart")?.checked??false;
+  const time=auto?bestAvailableSmartTime(date,free):$("#modalTime").value;
   const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
 
   const btn=document.querySelector('#modalHost .btn.primary');
   if(btn){btn.disabled=true;btn.textContent="Enviando…"}
   try{
-    const ok=await addVideoToSlot(file,date,free,time,caption);
+    const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual");
     if(ok){
       await syncFromBackend();
       closeModal();
       renderAll();
       setTimeout(()=>jumpToCalendarDay(date),40);
-      toast(file.name+" agendado para "+date+" às "+time+".","ok");
+      toast(file.name+" agendado para "+date+" às "+time+(auto?" pelo Smart Scheduler.":"."),"ok");
     }
   }catch(e){
     console.error("Schedule upload error:",e);
