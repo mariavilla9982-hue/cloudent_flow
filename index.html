@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CloudentFlow — Stage 4 Smart Scheduler</title>
+<title>CloudentFlow — Content Automation SaaS</title>
 <style>
 :root{
   --bg:#07080b;--panel:#0f1117;--panel2:#12141b;--line:#272b36;--muted:#9297a7;
@@ -108,6 +108,67 @@ input:focus,select:focus,textarea:focus{border-color:var(--pink)}
 .auth-card input{width:100%;margin-top:8px}
 .cloud-note{padding:10px 12px;border-radius:10px;background:#0c1118;border:1px solid #26364e;color:#b9d7ff;margin-top:10px}
 
+
+/* SaaS polish */
+:root{
+  --bg:#07080c;--panel:#0e1118;--panel2:#131722;--line:#242a38;--muted:#8f97aa;
+  --text:#f8f9fc;--pink:#ff3b82;--pink2:#8f5cff;--green:#43d38a;--yellow:#f6c85f;--red:#ff7070;
+  --blue:#6da9ff;--shadow:0 20px 60px rgba(0,0,0,.28);
+}
+body{background:
+  radial-gradient(circle at 78% -10%,rgba(143,92,255,.13),transparent 28%),
+  radial-gradient(circle at 25% 0,rgba(255,59,130,.09),transparent 26%),
+  var(--bg)}
+.app{grid-template-columns:258px minmax(0,1fr)}
+.sidebar{background:rgba(8,10,15,.94);backdrop-filter:blur(18px);padding:22px 16px;border-right:1px solid rgba(255,255,255,.07)}
+.brand{font-size:19px;margin:2px 7px 26px}
+.logo{width:38px;height:38px;border-radius:12px;box-shadow:0 10px 32px rgba(255,59,130,.24)}
+.nav button{font-weight:750;padding:12px 13px;border:1px solid transparent;transition:.16s ease}
+.nav button:hover{background:#11151e;color:#fff;border-color:#222938}
+.nav button.active{background:linear-gradient(90deg,rgba(255,59,130,.13),rgba(143,92,255,.07));border:1px solid rgba(255,59,130,.18);border-left:3px solid var(--pink)}
+.sidebar-foot{padding-top:14px;border-top:1px solid rgba(255,255,255,.06)}
+.mode{display:inline-flex;width:auto;padding:7px 9px;border-radius:999px;font-size:11px}
+.main{padding:0 38px 70px;max-width:1600px;width:100%;margin:0 auto}
+.topbar{position:sticky;top:0;z-index:25;margin:0 -12px 26px;padding:24px 12px 14px;background:linear-gradient(180deg,rgba(7,8,12,.97) 70%,rgba(7,8,12,.72));backdrop-filter:blur(18px)}
+.topbar h1{font-size:30px;letter-spacing:-.04em;margin-bottom:0}
+.top-actions{display:flex;align-items:center;gap:10px}
+.top-status{display:inline-flex;align-items:center;gap:7px;border:1px solid #263044;background:#0d121c;padding:9px 11px;border-radius:999px;color:#aab4c7;font-size:12px;font-weight:800}
+.status-dot{width:7px;height:7px;border-radius:999px;background:var(--green);box-shadow:0 0 0 4px rgba(67,211,138,.09)}
+.btn{transition:.16s ease;box-shadow:none}
+.btn:hover{transform:translateY(-1px);border-color:#3a4254}
+.btn.primary{background:linear-gradient(135deg,#ff3b82,#c742ff);box-shadow:0 10px 26px rgba(255,59,130,.2)}
+.card{background:linear-gradient(180deg,rgba(18,22,31,.96),rgba(13,16,23,.96));border-color:rgba(255,255,255,.075);box-shadow:0 14px 38px rgba(0,0,0,.12)}
+.saas-hero{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(320px,.7fr);gap:24px;padding:28px;margin-bottom:18px;border:1px solid rgba(255,255,255,.08);border-radius:20px;background:
+ linear-gradient(135deg,rgba(255,59,130,.08),rgba(143,92,255,.05) 45%,rgba(109,169,255,.04)),
+ #0d1017;box-shadow:var(--shadow)}
+.saas-hero:after{content:"";position:absolute;width:300px;height:300px;border-radius:50%;right:-120px;top:-150px;background:radial-gradient(circle,rgba(143,92,255,.22),transparent 68%);pointer-events:none}
+.hero-copy{position:relative;z-index:1}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:999px;background:#121722;border:1px solid #293144;color:#bac3d3;font-size:11px;font-weight:850;margin-bottom:14px}
+.hero-title{font-size:34px;line-height:1.05;letter-spacing:-.045em;margin:0 0 12px;max-width:760px}
+.hero-sub{font-size:14px;color:#9ba4b7;max-width:690px;margin:0 0 20px}
+.hero-actions{display:flex;gap:9px;flex-wrap:wrap}
+.hero-panel{position:relative;z-index:1;display:grid;gap:10px;align-content:start}
+.health-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 13px;border:1px solid #232a38;border-radius:12px;background:rgba(8,10,15,.62)}
+.health-item b{font-size:12px}.health-item span{font-size:11px}
+.integration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.integration-card{padding:16px;border:1px solid #242b39;border-radius:14px;background:#0b0e14}
+.integration-top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}
+.integration-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#141925;border:1px solid #293142}
+.integration-card h3{font-size:13px;margin:0}.integration-card p{font-size:11px;color:#8f97aa;margin:5px 0 0}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kpi{padding:17px}.kpi-head{display:flex;justify-content:space-between;align-items:center;color:#a8afbf;font-size:12px}.kpi-value{font-size:29px;font-weight:950;letter-spacing:-.04em;margin:9px 0 4px}.kpi-delta{font-size:11px;color:#7fdca8}
+.workspace-grid{display:grid;grid-template-columns:1.35fr .65fr;gap:16px}
+.mini-list{display:grid;gap:8px}.mini-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 12px;border:1px solid #222936;border-radius:11px;background:#0b0e14}
+.mini-row strong{font-size:12px}.mini-row span{font-size:11px;color:#929aad}
+.section-label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#7f879a;font-weight:900;margin-bottom:8px}
+.setup-steps{display:grid;gap:10px}.setup-step{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}.setup-num{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:#151a24;border:1px solid #2a3241;font-size:11px;font-weight:900;color:#dce1ea}
+.setup-step b{font-size:12px}.setup-step div div{font-size:11px;color:#8f97aa;margin-top:3px}
+.integration-status{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:900;padding:5px 7px;border-radius:999px}
+.integration-status.ok{color:#76dfa6;background:#0e1d15;border:1px solid #27513a}
+.integration-status.pending{color:#ffd36f;background:#211a0d;border:1px solid #5b4922}
+@media(max-width:1100px){.saas-hero,.workspace-grid{grid-template-columns:1fr}.kpi-grid,.integration-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.main{padding:0 14px 50px}.topbar{padding-top:18px}.top-status{display:none}.saas-hero{padding:20px}.hero-title{font-size:28px}.kpi-grid,.integration-grid{grid-template-columns:1fr}}
+
 /* misc */
 .log{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#090b10;border:1px solid var(--line);border-radius:12px;padding:12px;max-height:250px;overflow:auto}.log div{padding:5px 0;border-bottom:1px dashed #1c202a}.ok{color:#66db9c}.warn{color:#f5ca67}.err{color:#ff8080}
 .modal{position:fixed;inset:0;background:#000c;display:grid;place-items:center;z-index:90;padding:20px}.modal-box{width:min(760px,96vw);background:#0d0f15;border:1px solid #303541;border-radius:16px;padding:16px}.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.modal video{width:100%;max-height:65vh;border-radius:10px;background:#000}
@@ -122,15 +183,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--pink)}
   <div class="brand"><div class="logo">✦</div><span>Cloudent<span style="color:#ff3f7f">Flow</span></span></div>
   <div class="nav" id="nav"></div>
   <div class="sidebar-foot">
-    <div class="mode">● Modo de teste</div>
-    <b>CloudentFlow</b><div class="muted">Stage 4 — Smart Scheduler</div>
+    <div class="mode">● Cloud workspace</div>
+    <b>CloudentFlow</b><div class="muted">Content Operations SaaS</div>
   </div>
 </aside>
 
 <main class="main">
   <div class="topbar">
     <div><div class="kicker">SEU ESTÚDIO DE CONTEÚDO</div><h1 id="pageTitle">Visão geral</h1></div>
-    <button class="btn primary" id="newVideoBtn">＋ Novo vídeo</button>
+    <div class="top-actions"><span class="top-status"><span class="status-dot"></span> Sistema online</span><button class="btn primary" id="newVideoBtn">＋ Novo vídeo</button></div>
   </div>
 
   <section id="overview" class="page"></section>
@@ -145,7 +206,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--pink)}
 <input id="videoPicker" type="file" accept="video/*" hidden>
 <div id="modalHost"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const navItems=[
@@ -162,7 +222,8 @@ const EDGE_URL=SUPABASE_URL+"/functions/v1/cloudent-api";
 const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
 const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
-let sb=null, cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[];
+let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[];
+const SESSION_KEY="cloudentflow-user-session";
 
 let currentPage="overview", pendingTarget=null, db=null;
 const defaultComments=[
@@ -238,75 +299,81 @@ const state={
 };
 
 
+
+async function authRequest(path,options={}){
+  const headers={"apikey":SUPABASE_KEY,"Content-Type":"application/json",...(options.headers||{})};
+  const res=await fetch(SUPABASE_URL+"/auth/v1"+path,{...options,headers});
+  let data=null;try{data=await res.json()}catch{}
+  if(!res.ok)throw new Error(data?.msg||data?.message||data?.error_description||data?.error||("Erro "+res.status));
+  return data;
+}
+function persistCloudSession(session){
+  cloudSession=session||null;
+  if(session)localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+  else localStorage.removeItem(SESSION_KEY);
+}
+async function refreshCloudSession(){
+  if(!cloudSession?.refresh_token)return false;
+  try{
+    const r=await authRequest("/token?grant_type=refresh_token",{
+      method:"POST",body:JSON.stringify({refresh_token:cloudSession.refresh_token})
+    });
+    persistCloudSession(r);return true;
+  }catch(e){persistCloudSession(null);return false}
+}
 async function initCloud(){
-  if(!window.supabase?.createClient) return;
-  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  const {data}=await sb.auth.getSession();
-  cloudSession=data.session||null;
+  try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
+  if(cloudSession?.expires_at && cloudSession.expires_at*1000<Date.now()+60000)await refreshCloudSession();
   if(cloudSession){
     await testBackend();
-    await syncFromBackend();
-    await loadInstagramStatus();
+    if(backendOnline){
+      await syncFromBackend();
+      await loadInstagramStatus();
+    }
   }
-  sb.auth.onAuthStateChange(async (_event,session)=>{
-    cloudSession=session||null;
-    backendOnline=false;
-    if(cloudSession){await testBackend();await syncFromBackend();await loadInstagramStatus()}
-    renderAll();
-  });
 }
-async function cloudFetch(path="",options={}){
+async function cloudFetch(path="",options={},retry=true){
   if(!cloudSession) throw new Error("Faça login no CloudentFlow primeiro.");
   const headers={...(options.headers||{}),Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
   const res=await fetch(EDGE_URL+path,{...options,headers});
-  let data=null; try{data=await res.json()}catch{}
-  if(!res.ok) throw new Error(data?.error||("Erro "+res.status));
+  if(res.status===401&&retry&&await refreshCloudSession())return cloudFetch(path,options,false);
+  let data=null;try{data=await res.json()}catch{}
+  if(!res.ok)throw new Error(data?.error||data?.message||("Erro "+res.status));
   return data;
 }
-
-async function edgeFetch(fullUrl,options={}){
+async function edgeFetch(fullUrl,options={},retry=true){
   if(!cloudSession) throw new Error("Faça login no CloudentFlow primeiro.");
   const headers={...(options.headers||{}),Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
   const res=await fetch(fullUrl,{...options,headers});
-  let data=null; try{data=await res.json()}catch{}
-  if(!res.ok) throw new Error(data?.error||data?.message||("Erro "+res.status));
+  if(res.status===401&&retry&&await refreshCloudSession())return edgeFetch(fullUrl,options,false);
+  let data=null;try{data=await res.json()}catch{}
+  if(!res.ok)throw new Error(data?.error||data?.message||("Erro "+res.status));
   return data;
 }
 async function loadInstagramStatus(){
   if(!cloudSession){instagramIntegration=null;return}
-  try{
-    const r=await edgeFetch(IG_STATUS_URL);
-    instagramIntegration=r.integration||null;
-  }catch(e){instagramIntegration=null}
+  try{const r=await edgeFetch(IG_STATUS_URL);instagramIntegration=r.integration||null}
+  catch(e){instagramIntegration=null}
 }
 async function connectInstagram(){
   if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
   const token=$("#instagramToken")?.value?.trim();
   if(!token){alert("Cole seu token do Instagram.");return}
-  const btn=$("#connectInstagramBtn"); if(btn){btn.disabled=true;btn.textContent="Conectando..."}
+  const btn=$("#connectInstagramBtn");if(btn){btn.disabled=true;btn.textContent="Conectando..."}
   try{
-    const r=await edgeFetch(IG_CONNECT_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({credential:token})
-    });
-    instagramIntegration={
-      provider:"instagram",enabled:true,account_label:r.profile?.username||r.profile?.name||"Instagram",
-      external_account_id:r.profile?.id||"",config:{status:"connected",account_type:r.profile?.account_type||null},
-      last_verified_at:new Date().toISOString()
-    };
+    const r=await edgeFetch(IG_CONNECT_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:token})});
+    instagramIntegration={provider:"instagram",enabled:true,account_label:r.profile?.username||r.profile?.name||"Instagram",external_account_id:r.profile?.id||"",config:{status:"connected",account_type:r.profile?.account_type||null},last_verified_at:new Date().toISOString()};
     if($("#instagramToken"))$("#instagramToken").value="";
-    log(`Instagram conectado: @${r.profile?.username||r.profile?.name||"conta"}.`,"ok");
+    log("Instagram conectado com sucesso.","ok");
   }catch(e){alert("Falha ao conectar Instagram: "+e.message)}
   finally{renderAll()}
 }
 async function syncInstagramToday(){
   if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
-  const btn=$("#syncTodayBtn"); if(btn){btn.disabled=true;btn.textContent="Buscando métricas..."}
   try{
     const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"POST"});
     liveInstagramMetrics=r.media||[];
-    log(`Métricas reais sincronizadas: ${r.count||0} vídeo(s) de hoje.`,"ok");
+    log("Métricas reais sincronizadas: "+(r.count||0)+" vídeo(s) de hoje.","ok");
   }catch(e){
     alert("Não consegui buscar as métricas: "+e.message);
     log("Falha ao sincronizar métricas do Instagram: "+e.message,"err");
@@ -321,18 +388,29 @@ async function testBackend(){
 async function signUpCloud(){
   const email=$("#authEmail")?.value?.trim(),password=$("#authPassword")?.value||"";
   if(!email||password.length<6){alert("Informe email e senha com pelo menos 6 caracteres.");return}
-  const {data,error}=await sb.auth.signUp({email,password});
-  if(error){alert(error.message);return}
-  if(data.session){cloudSession=data.session;await testBackend();await syncFromBackend();renderAll()}
-  else alert("Conta criada. Confira seu email se o Supabase pedir confirmação e depois entre.");
+  try{
+    const r=await authRequest("/signup",{method:"POST",body:JSON.stringify({email,password})});
+    const session=r?.access_token?r:r?.session;
+    if(session?.access_token){
+      persistCloudSession(session);await testBackend();await syncFromBackend();await loadInstagramStatus();renderAll();
+    }else alert("Conta criada. Se a confirmação por email estiver ativa, confirme seu email e depois entre.");
+  }catch(e){alert(e.message)}
 }
 async function signInCloud(){
   const email=$("#authEmail")?.value?.trim(),password=$("#authPassword")?.value||"";
-  const {data,error}=await sb.auth.signInWithPassword({email,password});
-  if(error){alert(error.message);return}
-  cloudSession=data.session;await testBackend();await syncFromBackend();renderAll()
+  if(!email||!password){alert("Informe email e senha.");return}
+  try{
+    const r=await authRequest("/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
+    persistCloudSession(r);await testBackend();await syncFromBackend();await loadInstagramStatus();renderAll();
+  }catch(e){alert(e.message)}
 }
-async function signOutCloud(){if(sb)await sb.auth.signOut();cloudSession=null;backendOnline=false;renderAll()}
+async function signOutCloud(){
+  if(cloudSession?.access_token){
+    try{await fetch(SUPABASE_URL+"/auth/v1/logout",{method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token}})}catch{}
+  }
+  persistCloudSession(null);backendOnline=false;instagramIntegration=null;renderAll()
+}
+
 async function syncFromBackend(){
   if(!cloudSession)return;
   const q=await cloudFetch("?resource=queue");
@@ -1142,55 +1220,72 @@ function settings(){
   const user=cloudSession?.user;
   const ig=instagramIntegration;
   $("#settings").innerHTML=`
-  <div class="card">
-    <div class="section-head"><div><h2>Cloud Backend</h2><div class="muted">Supabase/PostgreSQL + Storage privado + Edge Functions.</div></div>
-      <span class="backend-pill ${backendOnline?"online":"offline"}">${backendOnline?"● Backend online":"● Faça login"}</span>
-    </div>
-    ${user?`
-      <div class="auth-card"><b>${esc(user.email||"Conta conectada")}</b><div class="muted">Sessão autenticada. Seus uploads e agendamentos ficam no backend.</div>
-      <div class="toolbar" style="margin-top:10px"><button class="btn" onclick="testBackend().then(renderAll)">Testar backend</button><button class="btn danger" onclick="signOutCloud()">Sair</button></div></div>
-    `:`
-      <div class="auth-grid">
-        <div class="auth-card"><b>Entrar / criar conta</b><input id="authEmail" type="email" placeholder="Seu email"><input id="authPassword" type="password" placeholder="Senha (mín. 6 caracteres)">
-          <div class="toolbar" style="margin-top:10px"><button class="btn primary" onclick="signInCloud()">Entrar</button><button class="btn" onclick="signUpCloud()">Criar conta</button></div>
-        </div>
-        <div class="auth-card"><b>O que já está online</b><div class="muted" style="margin-top:8px">Banco, Storage privado, fila, logs, API e estrutura de Instagram.</div></div>
-      </div>`}
-    <div class="cloud-note">Você não precisa entrar no painel do Supabase.</div>
-  </div>
+    <div class="section-head"><div><div class="section-label">Workspace settings</div><h2>Configurações e integrações</h2><div class="muted">Gerencie acesso, backend e conexões externas.</div></div></div>
 
-  <div class="card" style="margin-top:16px">
-    <div class="section-head">
-      <div><h2>Instagram</h2><div class="muted">Conexão segura para publicação e métricas reais.</div></div>
-      <span class="backend-pill ${ig?.enabled?"online":"offline"}">${ig?.enabled?"● Instagram conectado":"● Não conectado"}</span>
+    <div class="integration-grid" style="margin-bottom:16px">
+      <div class="integration-card">
+        <div class="integration-top"><div class="integration-icon">☁</div><span class="integration-status ${backendOnline?"ok":"pending"}">${backendOnline?"Online":"Desconectado"}</span></div>
+        <h3>Cloud Backend</h3><p>Supabase Auth + Database + Storage.</p>
+      </div>
+      <div class="integration-card">
+        <div class="integration-top"><div class="integration-icon">◎</div><span class="integration-status ${ig?.enabled?"ok":"pending"}">${ig?.enabled?"Conectado":"Pendente"}</span></div>
+        <h3>Instagram</h3><p>Insights, publicação e comentários.</p>
+      </div>
+      <div class="integration-card">
+        <div class="integration-top"><div class="integration-icon">✦</div><span class="integration-status ok">Ativo</span></div>
+        <h3>Smart Scheduler</h3><p>${100-state.smartSettings.exploration}% otimização · ${state.smartSettings.exploration}% exploração.</p>
+      </div>
     </div>
-    ${ig?.enabled?`
-      <div class="auth-card">
-        <b>@${esc(ig.account_label||"Instagram")}</b>
-        <div class="muted">Conta conectada · ID ${esc(ig.external_account_id||"—")}</div>
-        <div class="toolbar" style="margin-top:10px">
-          <button class="btn primary" id="syncTodayBtn" onclick="syncInstagramToday()">Buscar métricas de hoje</button>
-          <button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar conexão</button>
+
+    <div class="workspace-grid">
+      <div class="card">
+        <div class="section-head"><div><h2>Conta CloudentFlow</h2><div class="muted">Autenticação direta pelo Supabase, sem biblioteca externa.</div></div>
+          <span class="backend-pill ${backendOnline?"online":"offline"}">${backendOnline?"● Backend online":"● Faça login"}</span>
+        </div>
+        ${user?`
+          <div class="auth-card"><b>${esc(user.email||"Conta conectada")}</b><div class="muted" style="margin-top:4px">Sessão autenticada e sincronização habilitada.</div>
+          <div class="toolbar" style="margin-top:12px"><button class="btn" onclick="testBackend().then(renderAll)">Testar backend</button><button class="btn danger" onclick="signOutCloud()">Sair</button></div></div>
+        `:`
+          <div class="auth-grid">
+            <div class="auth-card"><b>Entrar no workspace</b><input id="authEmail" type="email" placeholder="Seu email"><input id="authPassword" type="password" placeholder="Senha (mín. 6 caracteres)">
+              <div class="toolbar" style="margin-top:10px"><button class="btn primary" onclick="signInCloud()">Entrar</button><button class="btn" onclick="signUpCloud()">Criar conta</button></div>
+            </div>
+            <div class="auth-card"><b>Por que entrar?</b><div class="muted" style="margin-top:8px">Vídeos, agenda e métricas passam a viver no backend, em vez de depender do navegador.</div></div>
+          </div>`}
+      </div>
+
+      <div class="card">
+        <h2>Preferências</h2>
+        <div class="formgrid">
+          <div class="field"><label>Posts por dia</label><input value="5" disabled></div>
+          <div class="field"><label>Intervalo mínimo</label><input type="number" min="0" value="${state.minGap}" onchange="state.minGap=Math.max(0,+this.value);save();renderAll()"></div>
+          <div class="field"><label>Fuso</label><input value="America/Recife" disabled></div>
+          <div class="field"><label>Scheduler</label><input value="${state.smartSettings.enabled?'Ativo':'Pausado'}" disabled></div>
         </div>
       </div>
-    `:`
-      <div class="auth-card">
-        <b>Conectar sua API do Instagram</b>
-        <div class="muted" style="margin-top:6px">Cole seu token aqui uma única vez. Ele é enviado direto ao backend e salvo no Vault do Supabase; o HTML não guarda o token.</div>
-        <input id="instagramToken" type="password" placeholder="Cole seu access token do Instagram">
-        <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>
-      </div>`}
-  </div>
+    </div>
 
-  <div class="card" style="margin-top:16px"><h2>Configuração atual</h2><div class="formgrid">
-    <div class="field"><label>Posts por dia</label><input value="5" disabled></div>
-    <div class="field"><label>Intervalo mínimo entre posts (min)</label><input type="number" min="0" value="${state.minGap}" onchange="state.minGap=Math.max(0,+this.value);save();renderAll()"></div>
-    <div class="field"><label>Fuso</label><input value="America/Recife" disabled></div>
-    <div class="field"><label>Smart Scheduler</label><input value="${state.smartSettings.enabled?'Ativo':'Pausado'}" disabled></div>
-  </div></div>
+    <div class="card" style="margin-top:16px">
+      <div class="section-head"><div><h2>Instagram API</h2><div class="muted">Seu token nunca fica salvo no frontend.</div></div><span class="backend-pill ${ig?.enabled?"online":"offline"}">${ig?.enabled?"● Conectado":"● Não conectado"}</span></div>
+      ${ig?.enabled?`
+        <div class="auth-card">
+          <b>@${esc(ig.account_label||"Instagram")}</b>
+          <div class="muted">Conta conectada · ID ${esc(ig.external_account_id||"—")}</div>
+          <div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="syncInstagramToday()">Buscar métricas de hoje</button><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar conexão</button></div>
+        </div>
+      `:`
+        <div class="auth-card">
+          <b>Conectar conta profissional</b>
+          <div class="muted" style="margin:6px 0 10px">Cole o access token uma única vez. Ele é enviado ao backend e guardado no Vault criptografado do Supabase.</div>
+          <input id="instagramToken" type="password" placeholder="Access token do Instagram">
+          <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>
+        </div>`}
+    </div>
 
-  <div class="card" style="margin-top:16px"><h2>Atividade local</h2><div class="log">${state.logs.map(x=>`<div class="${x.type}">[${fmtDateTime(x.t)}] ${esc(x.m)}</div>`).join("")}</div></div>`;
+    <div class="card" style="margin-top:16px"><div class="section-head"><div><h2>Atividade</h2><div class="muted">Eventos recentes do frontend.</div></div></div><div class="log">${state.logs.map(x=>`<div class="${x.type}">[${fmtDateTime(x.t)}] ${esc(x.m)}</div>`).join("")}</div></div>
+  `;
 }
+
 function renderAll(){overview();aiComments();queue();calendarPage();metrics();settings()}
 
 $("#videoPicker").onchange=async e=>{
