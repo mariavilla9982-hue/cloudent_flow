@@ -1486,13 +1486,7 @@ function overview(){
         </div>`:`<div class="ui3-empty"><span>Sem métricas carregadas.</span></div>`}
       </div>
     </div>
-
-    <div class="card live-activity-card">
-      <div class="ui3-panel-head"><div><span>Live activity</span><h3>O que o CloudentFlow está fazendo</h3></div><button class="btn btn-sm" onclick="toggleActivityPanel(true)">Ver tudo</button></div>
-      <div class="activity-timeline">
-        ${activityFeedItems(5).map(a=>`<div class="activity-event ${a.type}"><span class="activity-event-dot"></span><div><b>${esc(a.title)}</b><small>${esc(a.detail)} · ${relativeTime(a.time)}</small></div></div>`).join("")||`<div class="ui3-empty"><span>A atividade do servidor aparecerá aqui.</span></div>`}
-      </div>
-    </div>`;
+`;
 }
 function weekScheduledCount(){
   const dates=new Set(weekDates().map(localISO));
