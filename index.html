@@ -692,7 +692,7 @@ function nav(){
         return `<button class="${id===currentPage?"active":""}" data-page="${id}"><span class="nav-icon">${x[1]}</span><b>${x[2]}</b></button>`;
       }).join("")}
     </div>`).join("");
-  $("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page))
+  document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page))
 }
 function showPage(id){
   const page=$("#"+id),meta=navItems.find(x=>x[0]===id);
@@ -700,7 +700,7 @@ function showPage(id){
   currentPage=id;
   $(".page").forEach(x=>x.classList.add("hidden"));
   page.classList.remove("hidden");
-  $("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   $("#pageTitle").textContent=meta[2];
   renderAll();
   if(id==="testReel" && cloudSession)loadTestReelHistory().then(testReelPage).catch(()=>{});
