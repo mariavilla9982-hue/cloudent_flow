@@ -500,6 +500,10 @@ button:disabled,.btn:disabled{
 @media(max-width:1100px){.reels-instagram-grid{grid-template-columns:repeat(3,1fr)}.ui31-automation-layout{grid-template-columns:1fr}.ui31-status-grid{grid-template-columns:1fr 1fr}.ui31-best-times{grid-template-columns:repeat(5,minmax(85px,1fr))}}
 @media(max-width:650px){.reels-instagram-grid{grid-template-columns:repeat(2,1fr)}.ui31-status-grid{grid-template-columns:1fr}.ui31-best-times{grid-template-columns:1fr 1fr}.ui31-rule-grid{grid-template-columns:1fr}.reel-close{right:10px;top:10px}.reel-topbar{padding-right:60px}}
 
+
+#toastHost{position:fixed;right:20px;bottom:20px;z-index:9999;display:grid;gap:8px;pointer-events:none}
+.ctf-toast{min-width:220px;max-width:380px;padding:10px 12px;border-radius:9px;background:#11151b;border:1px solid #2a303a;color:#e9ebef;font-size:10px;font-weight:800;opacity:0;transform:translateY(8px);transition:.2s;box-shadow:0 18px 45px rgba(0,0,0,.35)}
+.ctf-toast.show{opacity:1;transform:translateY(0)}.ctf-toast.ok{border-color:#23432e;color:#79dfa3}.ctf-toast.err{border-color:#51282e;color:#ff8990}
 </style>
 </head>
 <body>
@@ -875,6 +879,16 @@ function log(m,type="ok"){state.logs.unshift({t:new Date().toISOString(),type,m}
 function fmtDateTime(x){return new Date(x).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
 function fmtSize(n=0){return n<1024**2?(n/1024).toFixed(1)+" KB":(n/1024/1024).toFixed(1)+" MB"}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+function toast(message,type="ok"){
+  let host=document.getElementById("toastHost");
+  if(!host){host=document.createElement("div");host.id="toastHost";document.body.appendChild(host)}
+  const el=document.createElement("div");
+  el.className="ctf-toast "+type;
+  el.textContent=message;
+  host.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add("show"));
+  setTimeout(()=>{el.classList.remove("show");setTimeout(()=>el.remove(),220)},2600);
+}
 function keyFor(date,slot){return `${date}#${slot}`}
 
 function openDB(){
@@ -975,15 +989,6 @@ function statusClass(s){
   return "gray";
 }
 
-function statusLabel(s){
-  return {agendado:"Agendado",fila:"Na fila",publicando:"Publicando",publicado:"Publicado",erro:"Erro"}[s]||"Agendado";
-}
-function statusClass(s){
-  if(s==="publicado") return "green";
-  if(s==="erro") return "red";
-  if(s==="fila"||s==="publicando") return "yellow";
-  return "gray";
-}
 function syncQueue(){
   save();
   if(cloudSession) syncAllCloudSlots();
@@ -1324,23 +1329,6 @@ function renderSlot(date,i){
   </div>`;
 }
 
-function renderSlot(date,i){
-  const x=slotData(date,i), time=x?.time||state.defaultTimes[i];
-  if(!x)return `<div class="slot empty" onclick="pickForSlot('${date}',${i})"><span>＋</span><span>Posição livre <small class="muted">· ${time}</small></span></div>`;
-  const st=getStatus(x);
-  return `<div class="slot filled" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
-    <div class="slot-line">
-      <div class="slot-title" title="${esc(x.name)}">${esc(x.name)}</div>
-      <span class="badge ${statusClass(st)}">${statusLabel(st)}</span>
-    </div>
-    <div class="slot-meta"><span>🕒 ${x.time}</span><span>${fmtSize(x.size)}</span><span>${x.caption?"legenda ✓":"sem legenda"}</span></div>
-    <div class="slot-actions">
-      <button class="btn" onclick="previewScheduled('${date}',${i})">▶</button>
-      <button class="btn" onclick="openEditScheduleModal('${date}',${i})">Editar</button>
-      <button class="btn danger" onclick="removeSlot('${date}',${i})">Excluir</button>
-    </div>
-  </div>`
-}
 function pickForSlot(date,slot){pendingTarget={date,slot};$("#videoPicker").click()}
 function firstFreeSlot(date){
   for(let i=0;i<5;i++)if(!slotData(date,i))return i;return -1
@@ -1355,7 +1343,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption=""){
   const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode","manual");
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
   const schedule=res.schedule,video=res.video;
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode:"manual"};
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode:"manual"};
   save();log(`${file.name} enviado ao Storage e agendado no backend para ${date} às ${t}.`,"ok");return true
 }
 function updateSlotTime(date,slot,time){
@@ -1458,8 +1446,14 @@ async function clearCurrentWeek(){
   if(!confirm("Remover todos os vídeos agendados desta semana?"))return;
   const dates=new Set(weekDates().map(localISO));
   const keys=Object.keys(state.slots).filter(k=>dates.has(k.split("#")[0]));
-  for(const k of keys){const x=state.slots[k];if(x?.videoId)await dbDelete(x.videoId);delete state.slots[k]}
-  syncQueue();log("Semana atual limpa.","warn")
+  for(const k of keys){
+    const x=state.slots[k];
+    if(x?.cloud&&x.scheduleId){
+      try{await cloudFetch("?action=schedule",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:x.scheduleId})})}catch(e){toast("Falha ao remover "+(x.name||"vídeo")+": "+e.message,"err");continue}
+    }else if(x?.videoId&&db){try{await dbDelete(x.videoId)}catch{}}
+    delete state.slots[k];
+  }
+  save();renderAll();toast("Semana limpa com sucesso.","ok")
 }
 
 function openScheduleModal(){
@@ -1682,7 +1676,6 @@ function openReelPreview(id){
     </div>
   </div>`;
 }
-function setMetricsPeriod(days){metricsPeriod=days;metrics()}
 function metrics(){
   const cutoff=Date.now()-metricsPeriod*86400000;
   const rows=liveInstagramMetrics.filter(m=>new Date(m.timestamp).getTime()>=cutoff);
