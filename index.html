@@ -698,7 +698,7 @@ function showPage(id){
   const page=$("#"+id),meta=navItems.find(x=>x[0]===id);
   if(!page||!meta)return;
   currentPage=id;
-  $(".page").forEach(x=>x.classList.add("hidden"));
+  document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
   page.classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   $("#pageTitle").textContent=meta[2];
