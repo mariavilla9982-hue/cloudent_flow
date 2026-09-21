@@ -590,12 +590,220 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .health-led.warn{background:#d5b458!important;box-shadow:none!important}
 .health-led.error{background:#ff6f78!important;box-shadow:none!important}
 
+
+/* ===== Collapsible navigation sidebar ===== */
+.app{
+  transition:grid-template-columns .16s ease;
+}
+.app.sidebar-collapsed{
+  grid-template-columns:78px minmax(0,1fr)!important;
+}
+.sidebar{
+  width:258px;
+  z-index:70;
+  transition:width .16s ease,box-shadow .16s ease;
+  overflow:hidden;
+}
+.brand{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  min-height:40px;
+}
+.brand-main{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.brand-name{
+  white-space:nowrap;
+}
+.sidebar-pin{
+  width:28px;
+  height:28px;
+  flex:0 0 28px;
+  display:grid;
+  place-items:center;
+  border:1px solid #252b35;
+  border-radius:8px;
+  background:#0d1016;
+  color:#687181;
+  font-size:13px;
+  cursor:pointer;
+}
+.sidebar-pin:hover,.sidebar-pin.active{
+  color:#fff;
+  border-color:#343b47;
+  background:#141821;
+}
+.sidebar.unpinned{
+  width:78px;
+  padding-left:11px;
+  padding-right:11px;
+}
+.sidebar.unpinned .brand{
+  margin-left:0;
+  margin-right:0;
+}
+.sidebar.unpinned .brand-name,
+.sidebar.unpinned .workspace-switch,
+.sidebar.unpinned .nav-label,
+.sidebar.unpinned .nav button b,
+.sidebar.unpinned .account-copy,
+.sidebar.unpinned .connection-dot{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+.sidebar.unpinned .brand-main{
+  gap:0;
+}
+.sidebar.unpinned .brand .logo{
+  width:38px;
+  flex:0 0 38px;
+}
+.sidebar.unpinned .sidebar-pin{
+  position:absolute;
+  top:64px;
+  left:25px;
+  width:28px;
+  height:24px;
+  opacity:.72;
+}
+.sidebar.unpinned .nav{
+  margin-top:54px;
+}
+.sidebar.unpinned .nav-group{
+  gap:4px;
+}
+.sidebar.unpinned .nav button{
+  width:54px;
+  min-height:46px;
+  justify-content:center;
+  padding:10px!important;
+  gap:0!important;
+  border-left-width:1px!important;
+}
+.sidebar.unpinned .nav button.active{
+  border-left:1px solid rgba(255,59,130,.18)!important;
+  box-shadow:inset 2px 0 0 var(--pink);
+}
+.sidebar.unpinned .nav-icon{
+  width:auto;
+  margin:0!important;
+  font-size:15px;
+}
+.sidebar.unpinned .sidebar-foot{
+  left:11px;
+  right:11px;
+}
+.sidebar.unpinned .account-chip{
+  width:54px;
+  padding:8px!important;
+  justify-content:center;
+}
+.sidebar.unpinned .account-avatar{
+  margin:0!important;
+}
+.sidebar.unpinned:hover{
+  width:258px;
+  box-shadow:18px 0 45px rgba(0,0,0,.30);
+}
+.sidebar.unpinned:hover .brand{
+  margin-left:7px;
+  margin-right:7px;
+}
+.sidebar.unpinned:hover .brand-main{
+  gap:10px;
+}
+.sidebar.unpinned:hover .brand-name,
+.sidebar.unpinned:hover .workspace-switch,
+.sidebar.unpinned:hover .nav-label,
+.sidebar.unpinned:hover .nav button b,
+.sidebar.unpinned:hover .account-copy,
+.sidebar.unpinned:hover .connection-dot{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+.sidebar.unpinned:hover .sidebar-pin{
+  position:static;
+  width:28px;
+  height:28px;
+  opacity:1;
+}
+.sidebar.unpinned:hover .nav{
+  margin-top:0;
+}
+.sidebar.unpinned:hover .nav button{
+  width:100%;
+  min-height:0;
+  justify-content:flex-start;
+  padding:12px 13px!important;
+  gap:12px!important;
+}
+.sidebar.unpinned:hover .nav button.active{
+  border-left:3px solid var(--pink)!important;
+  box-shadow:none;
+}
+.sidebar.unpinned:hover .nav-icon{
+  font-size:inherit;
+}
+.sidebar.unpinned:hover .sidebar-foot{
+  left:16px;
+  right:16px;
+}
+.sidebar.unpinned:hover .account-chip{
+  width:auto;
+  padding:inherit;
+  justify-content:initial;
+}
+@media(max-width:760px){
+  .app.sidebar-collapsed,.app{
+    grid-template-columns:1fr!important;
+  }
+  .sidebar,.sidebar.unpinned,.sidebar.unpinned:hover{
+    width:100%!important;
+    height:auto!important;
+    overflow:visible;
+    box-shadow:none;
+  }
+  .sidebar-pin{display:none!important}
+  .sidebar.unpinned .brand-name,
+  .sidebar.unpinned .workspace-switch,
+  .sidebar.unpinned .nav-label,
+  .sidebar.unpinned .nav button b,
+  .sidebar.unpinned .account-copy,
+  .sidebar.unpinned .connection-dot{
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+  }
+  .sidebar.unpinned .nav{margin-top:0}
+  .sidebar.unpinned .nav button{
+    width:100%;
+    min-height:0;
+    justify-content:flex-start;
+    padding:12px 13px!important;
+    gap:12px!important;
+  }
+  .sidebar.unpinned .sidebar-foot{
+    left:auto;
+    right:auto;
+  }
+}
+
 </style>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar">
-  <div class="brand"><div class="logo">C</div><span>Cloudent<span class="brand-accent">Flow</span></span></div>
+  <div class="brand">
+    <div class="brand-main"><div class="logo">C</div><span class="brand-name">Cloudent<span class="brand-accent">Flow</span></span></div>
+    <button id="sidebarPinBtn" class="sidebar-pin" onclick="toggleSidebarPin()" title="Desafixar sidebar" aria-label="Desafixar sidebar">⊣</button>
+  </div>
   <div class="workspace-switch">
     <div class="workspace-avatar">CF</div>
     <div><b>CloudentFlow</b><span>Workspace principal</span></div>
@@ -654,6 +862,8 @@ const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
 let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[], automationWorkerStatus=null, automationData=null, serverLogs=[];
 let testReelObjectUrl=null;
 const SESSION_KEY="cloudentflow-user-session";
+const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
+let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30;
 const defaultComments=[
@@ -1126,6 +1336,24 @@ function dbPut(x){return new Promise((res,rej)=>{const r=store("readwrite").put(
 function dbGet(id){return new Promise((res,rej)=>{const r=store().get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 function dbDelete(id){return new Promise((res,rej)=>{const r=store("readwrite").delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
 
+function applySidebarState(){
+  const app=document.querySelector(".app"),sidebar=document.querySelector(".sidebar"),btn=$("#sidebarPinBtn");
+  if(!app||!sidebar)return;
+  app.classList.toggle("sidebar-collapsed",!sidebarPinned);
+  sidebar.classList.toggle("unpinned",!sidebarPinned);
+  sidebar.classList.toggle("pinned",sidebarPinned);
+  if(btn){
+    btn.textContent=sidebarPinned?"⊣":"⊢";
+    btn.title=sidebarPinned?"Desafixar sidebar":"Fixar sidebar";
+    btn.setAttribute("aria-label",btn.title);
+    btn.classList.toggle("active",sidebarPinned);
+  }
+}
+function toggleSidebarPin(){
+  sidebarPinned=!sidebarPinned;
+  localStorage.setItem(SIDEBAR_PIN_KEY,String(sidebarPinned));
+  applySidebarState();
+}
 function nav(){
   const groups=[
     {label:"Workspace",pages:["overview","calendar"]},
@@ -2256,6 +2484,7 @@ function renderAll(){
 }
 
 async function init(){
+  applySidebarState();
   nav();
   renderAll();
   document.body.classList.add("booting");
