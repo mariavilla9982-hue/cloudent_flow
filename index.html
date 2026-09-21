@@ -195,23 +195,131 @@ body{background:
 .publish-history .row{display:flex;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #242b39;border-radius:10px;background:#0b0e14}
 @media(max-width:900px){.test-reel-grid{grid-template-columns:1fr}.reel-metric-card{grid-template-columns:110px minmax(0,1fr)}.reel-media{width:110px}}
 @media(max-width:560px){.reel-metric-card{grid-template-columns:1fr}.reel-media{width:100%;max-height:420px}}
+
+/* ===== CloudentFlow UI v2 ===== */
+:root{
+  --bg:#08090c;
+  --surface:#0d0f14;
+  --surface-2:#11141a;
+  --surface-3:#151922;
+  --line:#20242d;
+  --line-soft:#181b22;
+  --text:#f5f6f8;
+  --muted:#8b92a1;
+  --muted-2:#646b79;
+  --accent:#ff3f7f;
+  --accent-soft:rgba(255,63,127,.12);
+  --green:#4dd48b;
+  --yellow:#f2c45c;
+  --red:#ff6b72;
+  --radius:12px;
+  --shadow:0 16px 50px rgba(0,0,0,.22);
+}
+html{background:var(--bg)}
+body{background:var(--bg);font-size:13px;letter-spacing:-.005em}
+.app{grid-template-columns:228px minmax(0,1fr)}
+.sidebar{padding:18px 12px;background:#090a0e;border-right:1px solid var(--line-soft)}
+.brand{padding:0 9px;margin:0 0 18px;font-size:18px;letter-spacing:-.03em}
+.brand .logo{width:32px;height:32px;border-radius:9px;background:#f6f6f7;color:#0b0c0f;box-shadow:none;font-size:13px;font-weight:950}
+.brand-accent{color:var(--accent)}
+.workspace-switch{display:grid;grid-template-columns:34px 1fr auto;gap:9px;align-items:center;padding:9px;border:1px solid var(--line);border-radius:10px;background:#0d0f14;margin:0 2px 20px}
+.workspace-avatar,.account-avatar{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:#171a22;border:1px solid #262b36;font-size:10px;font-weight:900;color:#dfe2e8}
+.workspace-switch b{display:block;font-size:12px}.workspace-switch span:not(.workspace-caret){display:block;color:var(--muted);font-size:10px;margin-top:1px}.workspace-caret{color:#6f7685}
+.nav{display:grid;gap:17px}
+.nav-group{display:grid;gap:3px}
+.nav-label{padding:0 10px 5px;color:#5f6675;text-transform:uppercase;letter-spacing:.09em;font-size:9px;font-weight:900}
+.nav button{margin:0;border:0;border-radius:8px;padding:9px 10px;gap:10px;color:#8f96a5;font-size:12px;font-weight:750}
+.nav button:hover{background:#0f1218;color:#dfe2e8}
+.nav button.active{background:#15131a;color:#fff;border:0;box-shadow:inset 2px 0 var(--accent)}
+.nav-icon{width:18px;text-align:center;color:#737b8a;font-weight:400}
+.nav button.active .nav-icon{color:var(--accent)}
+.sidebar-foot{left:12px;right:12px;bottom:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.account-chip{display:grid;grid-template-columns:32px 1fr 8px;gap:9px;align-items:center;padding:7px 8px}
+.account-copy{min-width:0}.account-copy b,.account-copy span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-copy b{font-size:11px}.account-copy span{font-size:9px;color:var(--muted)}
+.connection-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(77,212,139,.08)}
+.main{padding:0 34px 60px;max-width:1580px;margin:0 auto;width:100%}
+.topbar{position:sticky;top:0;z-index:20;padding:24px 0 16px;margin-bottom:16px;background:linear-gradient(180deg,var(--bg) 78%,rgba(8,9,12,.88));backdrop-filter:blur(14px)}
+.topbar h1{font-size:25px;margin:2px 0 0;letter-spacing:-.045em}
+.kicker{font-size:9px;color:#5f6675;letter-spacing:.12em}
+.top-status{background:#0e1512;border-color:#1f3429;color:#9fbea9;padding:7px 9px}
+.btn{border-radius:8px;padding:8px 11px;background:#12151b;border-color:#272c36;font-size:11px;font-weight:800;box-shadow:none;transition:.16s ease}
+.btn:hover{background:#171b23;border-color:#343a47;transform:none}
+.btn.primary{background:var(--accent);border:1px solid var(--accent);box-shadow:none}
+.btn.primary:hover{background:#ff4f8a}
+.btn.success{background:#111a15;border-color:#24392d;color:#74daa1}
+.btn.danger{background:#1b1113;border-color:#402129;color:#ff8189}
+.btn-sm{padding:6px 9px;font-size:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:none}
+.section-head{margin-bottom:14px}
+.section-head h2,.panel-title-row h2{font-size:15px;letter-spacing:-.02em;margin:0}
+input,select,textarea{background:#0a0c10;border-color:#252a34;border-radius:8px;padding:9px 10px;font-size:12px}
+input:focus,select:focus,textarea:focus{border-color:#5d3546;box-shadow:0 0 0 3px rgba(255,63,127,.06)}
+.banner{background:#15130d;border-color:#302916;color:#d4bd7c;border-radius:10px;padding:10px 12px;font-size:11px}
+.badge{border-radius:999px;padding:4px 7px;font-size:9px;letter-spacing:.01em}
+.counter{background:#0a0c10;border-color:#212630;border-radius:8px}
+.muted{color:var(--muted)}
+.note{color:#737b8b}
+.dashboard-head{display:flex;justify-content:space-between;align-items:end;gap:22px;margin:6px 0 22px}
+.eyebrow-v2,.panel-kicker{display:block;color:#656d7c;text-transform:uppercase;letter-spacing:.095em;font-size:9px;font-weight:900}
+.dashboard-title{font-size:24px!important;letter-spacing:-.04em!important;margin:5px 0 5px!important}
+.dashboard-sub{margin:0;color:var(--muted);max-width:620px}
+.dashboard-actions{display:flex;gap:8px;flex-wrap:wrap}
+.kpi-grid-v2{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.kpi-v2{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:15px}
+.kpi-v2-top{display:flex;justify-content:space-between;color:#858c9a;font-size:10px;font-weight:800}
+.kpi-icon{color:#5c6473}.kpi-v2 strong{display:block;font-size:25px;letter-spacing:-.04em;margin:8px 0 2px}.kpi-v2 small{font-size:9px;color:#68707f}
+.dashboard-grid-main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:12px;margin-bottom:12px}
+.dashboard-grid-bottom{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.panel-v2{padding:16px}.panel-title-row{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.panel-title-row h2{margin-top:3px}
+.upcoming-list,.health-list,.quick-actions{display:grid;gap:7px}
+.upcoming-row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line-soft)}
+.upcoming-row:first-child{border-top:0}.upcoming-index{color:#535b6a;font-size:9px;font-weight:900}.upcoming-copy{min-width:0}.upcoming-copy b,.upcoming-copy span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.upcoming-copy b{font-size:11px}.upcoming-copy span{font-size:9px;color:var(--muted);margin-top:2px}
+.health-row{display:grid;grid-template-columns:32px 1fr auto;gap:9px;align-items:center;padding:9px;border:1px solid var(--line-soft);border-radius:9px;background:#0a0c10}
+.health-icon{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:#131720;color:#aeb5c2}.health-icon.ig{color:#ff7aa9}.health-icon.db{color:#8eb9ff}.health-icon.ai{color:#b69cff}
+.health-row b,.health-row span{display:block}.health-row b{font-size:10px}.health-row div>span{font-size:9px;color:var(--muted);margin-top:2px}
+.status-pill{padding:4px 6px;border-radius:999px;font-size:8px;font-weight:900}.status-pill.ok{color:#70d99c;background:#0f1a14}.status-pill.warn{color:#d7b768;background:#1a160d}
+.best-reel{display:grid;grid-template-columns:60px 1fr;gap:11px;align-items:center}.best-thumb{width:60px;aspect-ratio:9/16;max-height:82px;border-radius:8px;overflow:hidden;background:#0a0c10;display:grid;place-items:center}.best-thumb img{width:100%;height:100%;object-fit:cover}.best-copy b,.best-copy span{display:block}.best-copy b{font-size:11px;line-height:1.35}.best-copy span{font-size:9px;color:var(--muted);margin-top:5px}
+.quick-actions{grid-template-columns:1fr}.quick-actions button{display:grid;grid-template-columns:28px 1fr;gap:9px;align-items:center;text-align:left;border:1px solid var(--line-soft);border-radius:9px;background:#0a0c10;color:var(--text);padding:9px}.quick-actions button:hover{border-color:#303642;background:#0e1117}.quick-actions button>span{width:28px;height:28px;border-radius:8px;background:#151922;display:grid;place-items:center;color:#ff75a6}.quick-actions b,.quick-actions small{display:block}.quick-actions b{font-size:10px}.quick-actions small{font-size:8px;color:var(--muted);margin-top:2px}
+.empty-state-v2{display:grid;place-items:start;gap:5px;padding:25px 4px;color:var(--muted)}.empty-state-v2 b{color:#c7cbd3}.empty-state-v2 span{font-size:10px}
+.product-notice{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#0d1016;margin-bottom:14px}.notice-icon{width:32px;height:32px;border-radius:8px;background:var(--accent-soft);color:#ff6d9f;display:grid;place-items:center}.product-notice b,.product-notice span{display:block}.product-notice b{font-size:11px}.product-notice span{font-size:9px;color:var(--muted);margin-top:2px}
+.more-menu{position:relative}.more-menu summary{list-style:none}.more-menu summary::-webkit-details-marker{display:none}.more-popover{position:absolute;right:0;top:38px;z-index:40;width:190px;background:#0e1117;border:1px solid #282e39;border-radius:10px;padding:5px;box-shadow:var(--shadow)}.more-popover button{display:block;width:100%;border:0;background:transparent;color:#c5cad4;text-align:left;padding:8px 9px;border-radius:7px;font-size:10px}.more-popover button:hover{background:#151922}.more-popover .danger-link{color:#ff7f88}
+.calendar-wrap{max-width:none}.calendar-top{margin-bottom:8px}.week-summary{gap:6px;margin:10px 0 12px}.summary-chip{padding:6px 8px;border-radius:8px;background:#0a0c10;border-color:var(--line-soft);font-size:9px}.week-grid{gap:7px}.day-column{background:#0b0d12;border-color:var(--line);border-radius:10px;padding:10px;min-height:360px}.day-head{margin-bottom:9px}.day-name{font-size:11px}.slot{border-radius:8px;background:#090b0f;min-height:62px;border-color:#2a3039}.slot.empty{font-size:10px;color:#9fa6b4}.slot.filled{border-left:2px solid var(--accent);background:#0d1015}.slot-title{font-size:10px}.slot-meta{font-size:8px}.slot-actions .btn{padding:4px 6px;font-size:8px}
+.comments-layout{grid-template-columns:330px minmax(0,1fr);gap:12px}.comment-card{background:#0a0c10;border-color:var(--line-soft);border-radius:10px}.comment-text{font-size:11px}.draft{background:#121015;border-left:2px solid var(--accent)}
+.reel-metric-card{background:#0a0c10;border-color:var(--line-soft);border-radius:10px}.reel-media{border-radius:8px}.reel-title{font-size:11px}.smart-stat{background:#0a0c10!important;border-color:var(--line-soft)!important;border-radius:10px!important}.smart-stat .value{font-size:22px!important}
+.integration-card,.auth-card,.test-drop{background:#0a0c10!important;border-color:var(--line-soft)!important;border-radius:10px!important}.integration-icon{border-radius:8px!important}.integration-grid{gap:10px}
+.test-reel-grid{gap:12px}.test-preview{border-radius:10px}.test-status{border-radius:8px;background:#0a0c10}
+.card table th{color:#6f7785;font-size:9px;text-transform:uppercase;letter-spacing:.06em}.card table td{font-size:10px}.card table tr{border-color:var(--line-soft)!important}
+.log>div{background:#0a0c10!important;border:1px solid var(--line-soft);border-radius:7px}
+.api-warning{background:#17140d;border-color:#332b18;color:#cdb779}
+@media(max-width:1180px){.dashboard-grid-main,.dashboard-grid-bottom{grid-template-columns:1fr}.kpi-grid-v2{grid-template-columns:repeat(2,1fr)}.comments-layout{grid-template-columns:1fr}.week-grid{grid-template-columns:repeat(3,minmax(180px,1fr))}}
+@media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.sidebar-foot{position:relative;left:auto;right:auto;bottom:auto;margin-top:18px}.workspace-switch{display:none}.nav{grid-template-columns:1fr 1fr;gap:10px}.nav-group{gap:2px}.main{padding:0 14px 40px}.topbar{padding-top:16px}.dashboard-head{align-items:start;flex-direction:column}.kpi-grid-v2{grid-template-columns:1fr 1fr}.week-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}.calendar-bottom{max-width:none}.top-status{display:none}}
+@media(max-width:480px){.kpi-grid-v2{grid-template-columns:1fr}.dashboard-actions{width:100%}.dashboard-actions .btn{flex:1}.week-grid{grid-template-columns:1fr}.nav{grid-template-columns:1fr 1fr}.reel-metric-card{grid-template-columns:1fr}.reel-media{width:100%}}
+
 </style>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar">
-  <div class="brand"><div class="logo">✦</div><span>Cloudent<span style="color:#ff3f7f">Flow</span></span></div>
+  <div class="brand"><div class="logo">C</div><span>Cloudent<span class="brand-accent">Flow</span></span></div>
+  <div class="workspace-switch">
+    <div class="workspace-avatar">CF</div>
+    <div><b>CloudentFlow</b><span>Workspace principal</span></div>
+    <span class="workspace-caret">⌄</span>
+  </div>
   <div class="nav" id="nav"></div>
   <div class="sidebar-foot">
-    <div class="mode">● Cloud workspace</div>
-    <b>CloudentFlow</b><div class="muted">Content Operations SaaS</div>
+    <div class="account-chip">
+      <div class="account-avatar">IG</div>
+      <div class="account-copy"><b id="sidebarAccount">@Instagram</b><span id="sidebarAccountStatus">Verificando conexão…</span></div>
+      <span class="connection-dot"></span>
+    </div>
   </div>
 </aside>
 
 <main class="main">
   <div class="topbar">
-    <div><div class="kicker">SEU ESTÚDIO DE CONTEÚDO</div><h1 id="pageTitle">Visão geral</h1></div>
-    <div class="top-actions"><span class="top-status"><span class="status-dot"></span> Sistema online</span><button class="btn primary" id="newVideoBtn">＋ Novo vídeo</button></div>
+    <div><div class="kicker">CLOUDENTFLOW / WORKSPACE</div><h1 id="pageTitle">Visão geral</h1></div>
+    <div class="top-actions"><span class="top-status"><span class="status-dot"></span> Operacional</span><button class="btn primary" id="newVideoBtn">＋ Criar conteúdo</button></div>
   </div>
 
   <section id="overview" class="page"></section>
@@ -569,8 +677,22 @@ function dbGet(id){return new Promise((res,rej)=>{const r=store().get(id);r.onsu
 function dbDelete(id){return new Promise((res,rej)=>{const r=store("readwrite").delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
 
 function nav(){
-  $("#nav").innerHTML=navItems.map((x,i)=>`<button class="${i===0?"active":""}" data-page="${x[0]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("");
-  $$("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page))
+  const groups=[
+    {label:"Workspace",pages:["overview","calendar","queue"]},
+    {label:"Automação",pages:["aiComments","testReel"]},
+    {label:"Analytics",pages:["metrics"]},
+    {label:"Sistema",pages:["settings"]}
+  ];
+  const byId=Object.fromEntries(navItems.map(x=>[x[0],x]));
+  $("#nav").innerHTML=groups.map(g=>`
+    <div class="nav-group">
+      <div class="nav-label">${g.label}</div>
+      ${g.pages.map(id=>{
+        const x=byId[id];
+        return `<button class="${id===currentPage?"active":""}" data-page="${id}"><span class="nav-icon">${x[1]}</span><b>${x[2]}</b></button>`;
+      }).join("")}
+    </div>`).join("");
+  $("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page))
 }
 function showPage(id){
   currentPage=id; $$(".page").forEach(x=>x.classList.add("hidden")); $("#"+id).classList.remove("hidden");
@@ -841,37 +963,88 @@ function clearSmartSamples(){
 
 
 function overview(){
-  const total=allScheduled().length, comments=state.comments.length;
-  $("#overview").innerHTML=`
-  <div class="banner">🚀 <b>Estágio 8 em teste:</b> métricas reais já estão ativas. Agora você pode enviar um vídeo na aba “Reel teste” e publicar pela API antes de ligarmos a automação 24/7.</div>
-  <div class="grid4">
-    <div class="card metric"><div class="label">Vídeos na semana</div><div class="num">${total}</div><div class="muted">de 35 posições</div></div>
-    <div class="card metric"><div class="label">Meta diária</div><div class="num">5</div><div class="muted">vídeos por dia</div></div>
-    <div class="card metric"><div class="label">Respostas IA</div><div class="num">${state.commentSettings.replies}</div><div class="muted">por publicação</div></div>
-    <div class="card metric"><div class="label">Confiança IA</div><div class="num">${smartConfidence().pct}%</div><div class="muted">${smartConfidence().label} · dados de teste/manual</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:16px">
-    <div class="card"><h2>Fluxo principal</h2><div class="stage-board">
-      <div class="stage-row"><span>1.</span><b>Calendário</b><span class="muted">Envie cada vídeo direto no dia/posição que ele será postado.</span></div>
-      <div class="stage-row"><span>2.</span><b>Comentários IA</b><span class="muted">Defina estilo e quantidade de respostas.</span></div>
-      <div class="stage-row"><span>3.</span><b>Métricas</b><span class="muted">Depois o sistema aprende os melhores horários.</span></div>
-    </div></div>
-    <div class="card"><h2>Status dos estágios</h2><div class="stage-board">
-      <div class="stage-row"><span>✅</span><b>Estágio 1</b><span>Interface base</span></div>
-      <div class="stage-row"><span>✅</span><b>Estágio 2</b><span>Estrutura revisada</span></div>
-      <div class="stage-row"><span>✅</span><b>Estágio 3</b><span>Calendário e agendamento completos</span></div>
-      <div class="stage-row"><span>✅</span><b>Estágio 4</b><span>Smart Scheduler concluído</span></div>
-      <div class="stage-row"><span>✅</span><b>Estágio 5</b><span>Banco, Storage e backend concluídos</span></div>
-      <div class="stage-row"><span>✅</span><b>Estágio 6</b><span>Instagram conectado</span></div>
-      <div class="stage-row"><span>✅</span><b>Estágio 7</b><span>Métricas reais + aprendizado</span></div>
-      <div class="stage-row"><span>🟡</span><b>Estágio 8</b><span>Publicação de Reel teste</span></div>
-      <div class="stage-row"><span>❌</span><b>Estágio 9</b><span>Automação 24/7</span></div>
-      <div class="stage-row"><span>❌</span><b>Estágio 10</b><span>Inteligência automática completa</span></div>
-      <div class="stage-row"><span>❌</span><b>Estágio 11</b><span>RunningHub e extras</span></div>
-    </div></div>
-  </div>`;
-}
+  const scheduled=allScheduled();
+  const total=scheduled.length;
+  const now=Date.now();
+  const upcoming=scheduled.filter(x=>new Date(x.scheduledAt).getTime()>=now).slice(0,5);
+  const totals=liveInstagramMetrics.reduce((a,m)=>({
+    views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),
+    likes:a.likes+(+m.likes||0),comments:a.comments+(+m.comments||0)
+  }),{views:0,reach:0,likes:0,comments:0});
+  const best=[...liveInstagramMetrics].sort((a,b)=>(+b.views||0)-(+a.views||0))[0];
+  const conf=smartConfidence();
+  const igConnected=!!instagramIntegration?.enabled;
 
+  $("#overview").innerHTML=`
+    <div class="dashboard-head">
+      <div>
+        <div class="eyebrow-v2">Visão geral do workspace</div>
+        <h2 class="dashboard-title">Sua operação de conteúdo, em um só lugar.</h2>
+        <p class="dashboard-sub">Acompanhe agenda, Instagram, desempenho e automações sem sair do CloudentFlow.</p>
+      </div>
+      <div class="dashboard-actions">
+        <button class="btn" onclick="showPage('metrics')">Ver analytics</button>
+        <button class="btn primary" onclick="showPage('calendar')">＋ Agendar conteúdo</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid-v2">
+      <div class="kpi-v2"><div class="kpi-v2-top"><span>Visualizações</span><span class="kpi-icon">↗</span></div><strong>${totals.views.toLocaleString("pt-BR")}</strong><small>últimos dados sincronizados</small></div>
+      <div class="kpi-v2"><div class="kpi-v2-top"><span>Alcance</span><span class="kpi-icon">◎</span></div><strong>${totals.reach.toLocaleString("pt-BR")}</strong><small>conta conectada</small></div>
+      <div class="kpi-v2"><div class="kpi-v2-top"><span>Agendados</span><span class="kpi-icon">◫</span></div><strong>${total}</strong><small>conteúdos no calendário</small></div>
+      <div class="kpi-v2"><div class="kpi-v2-top"><span>Scheduler</span><span class="kpi-icon">✦</span></div><strong>${conf.pct}%</strong><small>${conf.label} confiança</small></div>
+    </div>
+
+    <div class="dashboard-grid-main">
+      <div class="card panel-v2">
+        <div class="panel-title-row">
+          <div><span class="panel-kicker">Próximas publicações</span><h2>Agenda</h2></div>
+          <button class="btn btn-sm" onclick="showPage('calendar')">Abrir calendário</button>
+        </div>
+        <div class="upcoming-list">
+          ${upcoming.length?upcoming.map((x,i)=>`
+            <div class="upcoming-row">
+              <div class="upcoming-index">${String(i+1).padStart(2,"0")}</div>
+              <div class="upcoming-copy"><b>${esc(x.name||"Vídeo")}</b><span>${fmtDateTime(x.scheduledAt)} · ${x.caption?esc(x.caption.slice(0,45)):"Sem legenda"}</span></div>
+              <span class="badge ${statusClass(getStatus(x))}">${statusLabel(getStatus(x))}</span>
+            </div>`).join(""):`<div class="empty-state-v2"><b>Nenhum conteúdo agendado</b><span>Adicione vídeos ao calendário para começar.</span><button class="btn primary btn-sm" onclick="showPage('calendar')">Agendar agora</button></div>`}
+        </div>
+      </div>
+
+      <div class="card panel-v2">
+        <div class="panel-title-row"><div><span class="panel-kicker">Integrações</span><h2>Saúde do sistema</h2></div></div>
+        <div class="health-list">
+          <div class="health-row"><div class="health-icon ig">◎</div><div><b>Instagram</b><span>${igConnected?"@"+esc(instagramIntegration.account_label||"conectado"):"Aguardando conexão"}</span></div><span class="status-pill ${igConnected?"ok":"warn"}">${igConnected?"Conectado":"Pendente"}</span></div>
+          <div class="health-row"><div class="health-icon db">◇</div><div><b>Cloud Backend</b><span>Supabase + Storage</span></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Login"}</span></div>
+          <div class="health-row"><div class="health-icon ai">✦</div><div><b>Smart Scheduler</b><span>Aprendizado de horários</span></div><span class="status-pill ok">Ativo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-grid-bottom">
+      <div class="card panel-v2">
+        <div class="panel-title-row"><div><span class="panel-kicker">Destaque</span><h2>Melhor Reel recente</h2></div><button class="btn btn-sm" onclick="showPage('metrics')">Explorar</button></div>
+        ${best?`
+          <div class="best-reel">
+            <div class="best-thumb">${best.thumbnail_url?`<img src="${esc(best.thumbnail_url)}" alt="">`:`<span>▶</span>`}</div>
+            <div class="best-copy"><b>${esc((best.caption||"Sem legenda").slice(0,75))}</b><span>${Number(best.views||0).toLocaleString("pt-BR")} views · ${Number(best.likes||0).toLocaleString("pt-BR")} curtidas</span></div>
+          </div>`:`<div class="empty-state-v2"><b>Sem métricas carregadas</b><span>Sincronize o Instagram para ver seu melhor conteúdo.</span></div>`}
+      </div>
+      <div class="card panel-v2">
+        <div class="panel-title-row"><div><span class="panel-kicker">Ações rápidas</span><h2>Atalhos</h2></div></div>
+        <div class="quick-actions">
+          <button onclick="showPage('testReel')"><span>▷</span><div><b>Testar Reel</b><small>Preparar publicação</small></div></button>
+          <button onclick="showPage('aiComments')"><span>◌</span><div><b>Comentários IA</b><small>Ajustar respostas</small></div></button>
+          <button onclick="showPage('settings')"><span>⚙</span><div><b>Integrações</b><small>Gerenciar conexões</small></div></button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const side=$("#sidebarAccount"), stat=$("#sidebarAccountStatus");
+  if(side)side.textContent=igConnected?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
+  if(stat)stat.textContent=igConnected?"Conta conectada":"Configurar integração";
+}
 function weekScheduledCount(){
   const dates=new Set(weekDates().map(localISO));
   return Object.entries(state.slots).filter(([k,v])=>v&&dates.has(k.split("#")[0])).length;
@@ -888,12 +1061,17 @@ function calendarPage(){
         <button class="btn primary" onclick="openScheduleModal()">＋ Agendar vídeo</button>
       </div>
       <div class="toolbar">
-        <button class="btn success" onclick="optimizeFutureCalendar()">🤖 Otimizar horários IA</button>
-        <button class="btn" onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button>
-        <button class="btn danger" onclick="clearCurrentWeek()">Limpar semana</button>
-        <button class="btn" onclick="shiftWeek(-7)">← Semana anterior</button>
+        <button class="btn" onclick="shiftWeek(-7)">←</button>
         <button class="btn" onclick="goCurrentWeek()">Hoje</button>
-        <button class="btn" onclick="shiftWeek(7)">Próxima semana →</button>
+        <button class="btn" onclick="shiftWeek(7)">→</button>
+        <button class="btn success" onclick="optimizeFutureCalendar()">✦ Otimizar IA</button>
+        <details class="more-menu">
+          <summary class="btn">•••</summary>
+          <div class="more-popover">
+            <button onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button>
+            <button class="danger-link" onclick="clearCurrentWeek()">Limpar semana</button>
+          </div>
+        </details>
       </div>
     </div>
     <div class="week-summary">
@@ -1116,7 +1294,7 @@ function aiComments(){
     </div>
 
     <div class="card">
-      <div class="section-head"><div><h2>Comentários recentes</h2><div class="muted">Dados simulados nesta etapa; depois serão puxados do Reel real.</div></div><button class="btn" onclick="resetCommentDemo()">Resetar teste</button></div>
+      <div class="section-head"><div><h2>Comentários recentes</h2><div class="muted">Revise, selecione e prepare respostas em um só lugar.</div></div><button class="btn btn-sm" onclick="resetCommentDemo()">Limpar seleção</button></div>
       <div class="comment-list">${state.comments.map(renderComment).join("")}</div>
     </div>
   </div>`;
@@ -1502,7 +1680,7 @@ function testReelPage(){
   const pending=testReelHistory.find(x=>x.id===state.testPublicationId);
   const ready=pending?.status==="ready";
   $("#testReel").innerHTML=`
-    <div class="banner">🧪 <b>Estágio 8 — teste de publicação:</b> primeiro o CloudentFlow envia e processa o vídeo sem publicar. Só o botão vermelho “Publicar de verdade” cria o post no Instagram.</div>
+    <div class="product-notice"><div class="notice-icon">▷</div><div><b>Teste de publicação</b><span>Prepare e processe o vídeo primeiro. A publicação só acontece depois da confirmação final.</span></div></div>
     <div class="test-reel-grid">
       <div class="card">
         <div class="section-head">
@@ -1607,7 +1785,12 @@ function settings(){
   `;
 }
 
-function renderAll(){overview();aiComments();queue();calendarPage();metrics();testReelPage();settings()}
+function renderAll(){
+  overview();aiComments();queue();calendarPage();metrics();testReelPage();settings();
+  const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
+  if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
+  if(stat)stat.textContent=instagramIntegration?.enabled?"Conta conectada":"Configurar integração";
+}
 
 $("#videoPicker").onchange=async e=>{
   const file=e.target.files[0];if(!file||!pendingTarget)return;
