@@ -1316,6 +1316,113 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   }
 }
 
+
+/* ===== Sidebar open-state hotfix ===== */
+@media(min-width:761px){
+  .sidebar.compact:hover{
+    width:240px!important;
+    min-width:240px!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+    overflow:visible!important;
+  }
+
+  .sidebar.compact:hover .brand{
+    width:100%!important;
+    justify-content:space-between!important;
+  }
+
+  .sidebar.compact:hover .brand-main{
+    min-width:0!important;
+    flex:1!important;
+  }
+
+  .sidebar.compact:hover .brand-name{
+    display:block!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+  }
+
+  .sidebar.compact:hover .workspace-switch{
+    display:grid!important;
+    width:100%!important;
+    grid-template-columns:30px minmax(0,1fr) auto!important;
+  }
+
+  .sidebar.compact:hover .workspace-switch>div:nth-child(2){
+    min-width:0!important;
+  }
+
+  .sidebar.compact:hover .workspace-switch b,
+  .sidebar.compact:hover .workspace-switch span{
+    white-space:nowrap!important;
+  }
+
+  .sidebar.compact:hover .nav{
+    display:block!important;
+    width:100%!important;
+    margin-top:0!important;
+  }
+
+  .sidebar.compact:hover .nav-group{
+    display:grid!important;
+    width:100%!important;
+    gap:2px!important;
+    margin:0 0 11px!important;
+  }
+
+  .sidebar.compact:hover .nav-label{
+    display:block!important;
+    width:100%!important;
+  }
+
+  .sidebar.compact:hover .nav button{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:7px 9px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:9px!important;
+    overflow:hidden!important;
+  }
+
+  .sidebar.compact:hover .nav button b{
+    display:block!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    text-align:left!important;
+  }
+
+  .sidebar.compact:hover .nav-icon{
+    flex:0 0 17px!important;
+    width:17px!important;
+    height:17px!important;
+  }
+
+  .sidebar.compact:hover .sidebar-foot{
+    left:12px!important;
+    right:12px!important;
+    width:auto!important;
+  }
+
+  .sidebar.compact:hover .account-chip{
+    width:100%!important;
+    min-width:0!important;
+  }
+
+  .sidebar.compact:hover .account-copy{
+    display:block!important;
+    min-width:0!important;
+  }
+}
+
 </style>
 </head>
 <body>
