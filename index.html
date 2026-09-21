@@ -363,7 +363,7 @@ async function loadInstagramStatus(){
     instagramIntegration=r.integration||null;
     if(instagramIntegration?.enabled){
       try{
-        const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"GET"});
+        const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"GET"});
         liveInstagramMetrics=stored.media||[];
         mergeInstagramIntoSmartSamples(liveInstagramMetrics);
       }catch{}
@@ -371,6 +371,7 @@ async function loadInstagramStatus(){
   }catch(e){instagramIntegration=null}
 }
 function mergeInstagramIntoSmartSamples(media=[]){
+  if(media.length)state.smartSamples=state.smartSamples.filter(s=>s.source!=="demo");
   for(const m of media){
     if(!m?.timestamp)return;
     const d=new Date(m.timestamp);
@@ -415,12 +416,12 @@ async function connectInstagram(){
       last_verified_at:new Date().toISOString()
     };
     if($("#instagramToken"))$("#instagramToken").value="";
-    const metrics=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"POST"});
+    const metrics=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
     liveInstagramMetrics=metrics.media||[];
     mergeInstagramIntoSmartSamples(liveInstagramMetrics);
     state.logs.unshift({
       t:new Date().toISOString(),type:"ok",
-      m:"Instagram conectado e "+(metrics.count||0)+" vídeo(s) de hoje sincronizado(s)."
+      m:"Instagram conectado e "+(metrics.count||0)+" vídeo(s) recentes sincronizado(s)."
     });
     state.logs=state.logs.slice(0,100);save();
     showPage("metrics");
@@ -433,12 +434,12 @@ async function connectInstagram(){
 async function syncInstagramToday(){
   if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
   try{
-    const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"POST"});
+    const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
     liveInstagramMetrics=r.media||[];
     mergeInstagramIntoSmartSamples(liveInstagramMetrics);
     state.logs.unshift({
       t:new Date().toISOString(),type:"ok",
-      m:"Métricas reais sincronizadas: "+(r.count||0)+" vídeo(s) de hoje."
+      m:"Métricas reais sincronizadas: "+(r.count||0)+" vídeo(s) dos últimos 30 dias."
     });
     state.logs=state.logs.slice(0,100);save();
   }catch(e){
@@ -1157,10 +1158,10 @@ function metrics(){
   const liveSection=`
     <div class="card" style="margin-bottom:16px">
       <div class="section-head">
-        <div><h2>Métricas reais — vídeos de hoje</h2><div class="muted">Dados reais da conta conectada. Cada atualização também alimenta o Smart Scheduler.</div></div>
+        <div><h2>Métricas reais — últimos 30 dias</h2><div class="muted">Dados reais da conta conectada. Cada atualização também alimenta o Smart Scheduler, sem duplicar amostras.</div></div>
         <div class="toolbar">
           <span class="source-pill">${instagramIntegration?.enabled?"Instagram conectado":"Conecte o Instagram"}</span>
-          <button class="btn primary" id="syncTodayBtn" onclick="syncInstagramToday()" ${instagramIntegration?.enabled?"":"disabled"}>Atualizar agora</button>
+          <button class="btn primary" id="syncTodayBtn" onclick="syncInstagramToday()" ${instagramIntegration?.enabled?"":"disabled"}>Sincronizar 30 dias</button>
         </div>
       </div>
       ${liveInstagramMetrics.length?`
@@ -1195,10 +1196,27 @@ function metrics(){
         </div>
       `:`
         <div class="empty" style="padding:35px">
-          ${instagramIntegration?.enabled?"Clique em “Atualizar agora” para buscar os vídeos que você publicou hoje.":"Vá em Configurações e conecte seu Instagram primeiro."}
+          ${instagramIntegration?.enabled?"Clique em “Atualizar agora” para sincronizar os últimos 30 dias.":"Vá em Configurações e conecte seu Instagram primeiro."}
         </div>`}
     </div>`;
   $("#metrics").innerHTML=liveSection+`
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-head">
+        <div><h2>Ranking real de conteúdo</h2><div class="muted">Ordenado pelas visualizações atuais do Instagram.</div></div>
+        <span class="source-pill">Instagram · dados reais</span>
+      </div>
+      ${liveInstagramMetrics.length?`
+        <div class="mini-list">
+          ${[...liveInstagramMetrics].sort((a,b)=>(+b.views||0)-(+a.views||0)).slice(0,10).map((m,i)=>`
+            <div class="mini-row">
+              <div style="min-width:0">
+                <strong>#${i+1} · ${esc((m.caption||"Sem legenda").slice(0,55))}</strong>
+                <div><span>${new Date(m.timestamp).toLocaleDateString("pt-BR")} · ${Number(m.reach||0).toLocaleString("pt-BR")} alcance · ${Number(m.likes||0).toLocaleString("pt-BR")} curtidas</span></div>
+              </div>
+              <span class="badge green">${Number(m.views||0).toLocaleString("pt-BR")} views</span>
+            </div>`).join("")}
+        </div>`:`<div class="empty">Sincronize as métricas para montar o ranking real.</div>`}
+    </div>
     <div class="smart-alert">🧠 <b>Motor do Smart Scheduler ativo:</b> ele usa média robusta, peso maior para dados recentes e redução de confiança para horários com poucas amostras. Assim, um único vídeo viral não decide sozinho o calendário.</div>
 
     <div class="smart-hero" style="margin-top:16px">
@@ -1297,7 +1315,7 @@ function settings(){
       </div>
       <div class="integration-card">
         <div class="integration-top"><div class="integration-icon">◎</div><span class="integration-status ${ig?.enabled?"ok":"pending"}">${ig?.enabled?"Conectado":"Pendente"}</span></div>
-        <h3>Instagram</h3><p>Insights, publicação e comentários.</p>
+        <h3>Instagram</h3><p>Insights reais, histórico e aprendizagem do scheduler.</p>
       </div>
       <div class="integration-card">
         <div class="integration-top"><div class="integration-icon">✦</div><span class="integration-status ok">Ativo</span></div>
@@ -1339,7 +1357,7 @@ function settings(){
         <div class="auth-card">
           <b>@${esc(ig.account_label||"Instagram")}</b>
           <div class="muted">Conta conectada · ID ${esc(ig.external_account_id||"—")}</div>
-          <div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="syncInstagramToday()">Buscar métricas de hoje</button><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar conexão</button></div>
+          <div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas reais</button><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar conexão</button></div>
         </div>
       `:`
         <div class="auth-card">
