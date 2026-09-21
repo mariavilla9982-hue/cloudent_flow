@@ -347,7 +347,13 @@ async function edgeFetch(fullUrl,options={},retry=true){
   const res=await fetch(fullUrl,{...options,headers});
   if(res.status===401&&retry&&await refreshCloudSession())return edgeFetch(fullUrl,options,false);
   let data=null;try{data=await res.json()}catch{}
-  if(!res.ok)throw new Error(data?.error||data?.message||("Erro "+res.status));
+  if(!res.ok){
+    const message=data?.user_message||data?.message||data?.error||("Erro "+res.status);
+    const err=new Error(message);
+    err.code=data?.error||null;
+    err.details=data?.details||null;
+    throw err;
+  }
   return data;
 }
 async function loadInstagramStatus(){
