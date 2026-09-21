@@ -2091,7 +2091,7 @@ function calendarPage(){
   const auto=automationData?.settings?.automation||{};
   $("#calendar").innerHTML=`
     <div class="ui3-page-head calendar-head">
-      <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Agende os vídeos. O Smart Scheduler pode ajustar horários futuros automaticamente.</p></div>
+      <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Agende os vídeos no dia escolhido. Agendamentos manuais permanecem nesse dia e horário.</p></div>
       <button class="btn primary" onclick="openScheduleModal()">＋ Agendar vídeo</button>
     </div>
     <div class="calendar-top ui3-calendar-toolbar">
@@ -2152,7 +2152,36 @@ function renderSlot(date,i){
   </div>`;
 }
 
-function pickForSlot(date,slot){pendingTarget={date,slot};$("#videoPicker").click()}
+function pickForSlot(date,slot){
+  pendingTarget={date,slot};
+  const input=$("#videoPicker");
+  if(!input)return;
+  input.value="";
+  input.click();
+}
+
+async function handleQuickSlotVideo(input){
+  const file=input?.files?.[0];
+  const target=pendingTarget;
+  pendingTarget=null;
+  if(!file||!target)return;
+
+  try{
+    toast("Enviando "+file.name+"…","ok");
+    const ok=await addVideoToSlot(file,target.date,target.slot,state.defaultTimes[target.slot]||"12:00","");
+    if(ok){
+      await syncFromBackend();
+      renderAll();
+      setTimeout(()=>jumpToCalendarDay(target.date),40);
+      toast(file.name+" agendado com sucesso.","ok");
+    }
+  }catch(e){
+    console.error("Quick schedule upload error:",e);
+    alert("Não consegui agendar o vídeo: "+(e?.message||"erro desconhecido"));
+  }finally{
+    input.value="";
+  }
+}
 function firstFreeSlot(date){
   for(let i=0;i<5;i++)if(!slotData(date,i))return i;return -1
 }
@@ -2297,7 +2326,24 @@ async function confirmScheduleModal(){
   if(!file){alert("Escolha um vídeo.");return}
   const free=firstFreeSlot(date);if(free<0){alert("Esse dia já está com 5 vídeos.");return}
   const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
-  const ok=await addVideoToSlot(file,date,free,time,caption);if(ok)closeModal()
+
+  const btn=document.querySelector('#modalHost .btn.primary');
+  if(btn){btn.disabled=true;btn.textContent="Enviando…"}
+  try{
+    const ok=await addVideoToSlot(file,date,free,time,caption);
+    if(ok){
+      await syncFromBackend();
+      closeModal();
+      renderAll();
+      setTimeout(()=>jumpToCalendarDay(date),40);
+      toast(file.name+" agendado para "+date+" às "+time+".","ok");
+    }
+  }catch(e){
+    console.error("Schedule upload error:",e);
+    alert("Não consegui agendar o vídeo: "+(e?.message||"erro desconhecido"));
+  }finally{
+    if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent="Salvar no calendário"}
+  }
 }
 function openEditScheduleModal(date,slot){
   const x=slotData(date,slot);if(!x)return;
@@ -3082,6 +3128,15 @@ async function init(){
   }
   document.body.classList.remove("booting");
   renderAll();
+
+  const quickPicker=$("#videoPicker");
+  if(quickPicker)quickPicker.onchange=()=>handleQuickSlotVideo(quickPicker);
+
+  const newVideoBtn=$("#newVideoBtn");
+  if(newVideoBtn)newVideoBtn.onclick=()=>{
+    showPage("calendar");
+    setTimeout(openScheduleModal,0);
+  };
 
   document.addEventListener("keydown",e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();openCommandPalette()}
