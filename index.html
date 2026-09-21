@@ -1111,6 +1111,7 @@ const EDGE_URL=SUPABASE_URL+"/functions/v1/cloudent-api";
 const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
 const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
+const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
 let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false;
 let testReelObjectUrl=null;
@@ -1267,14 +1268,16 @@ async function loadFollowerStats(days=30){
   if(!cloudSession){followerStats=null;return}
   try{
     const previous=Number(followerStats?.current?.followers_count??NaN);
-    const next=await cloudFetch("?resource=followers&days="+days);
+    const next=await edgeFetch(IG_FOLLOWERS_STATUS_URL+"?days="+days,{method:"GET"});
     const current=Number(next?.current?.followers_count??NaN);
     followerChanged=Number.isFinite(previous)&&Number.isFinite(current)&&previous!==current;
     followerStats=next;
   }catch(e){
-    if(!followerStats)followerStats={current:null,daily:[],worker:null,error:e.message};
+    followerStats={current:null,daily:[],worker:null,error:e.message};
+    console.warn("Follower status unavailable:",e);
   }
 }
+
 async function loadInstagramStatus(){
   if(!cloudSession){instagramIntegration=null;liveInstagramMetrics=[];return}
   try{
@@ -2415,16 +2418,19 @@ function followerChart(stats){
   </div>`;
 }
 function followerLiveSummary(){
-  const current=Number(followerStats?.current?.followers_count||0);
+  const currentRaw=followerStats?.current?.followers_count;
+  const hasCurrent=currentRaw!==null&&currentRaw!==undefined&&Number.isFinite(Number(currentRaw));
+  const current=hasCurrent?Number(currentRaw):null;
   const daily=followerStats?.daily||[];
   const today=daily[daily.length-1];
   const net=Number(today?.net_change||0);
   const checked=followerStats?.current?.last_checked_at;
   const workerOnline=!!followerStats?.worker?.online;
+  const error=followerStats?.error||"";
   return `<div class="follower-live-summary">
-    <div><small>SEGUIDORES AGORA</small><strong class="${followerChanged?"follower-count-bump":""}">${current?current.toLocaleString("pt-BR"):"—"}</strong><span>@${esc(followerStats?.account_label||instagramIntegration?.account_label||"Instagram")}</span></div>
+    <div><small>SEGUIDORES AGORA</small><strong class="${followerChanged?"follower-count-bump":""}">${current!==null?current.toLocaleString("pt-BR"):"—"}</strong><span>@${esc(followerStats?.account_label||instagramIntegration?.account_label||"Instagram")}</span></div>
     <div class="follower-today ${net>=0?"positive":"negative"}"><small>HOJE</small><b>${net>=0?"+":""}${net}</b><span>desde o primeiro registro do dia</span></div>
-    <div class="follower-live-state"><i class="${workerOnline?"on":""}"></i><div><b>${workerOnline?"Monitorando ao vivo":"Atualizando"}</b><span>${checked?"checado "+relativeTime(checked):"aguardando primeira leitura"}</span></div></div>
+    <div class="follower-live-state"><i class="${workerOnline?"on":""}"></i><div><b>${workerOnline?"Monitorando ao vivo":error?"Falha ao carregar":"Atualizando"}</b><span>${error?esc(error):(checked?"checado "+relativeTime(checked):"aguardando primeira leitura")}</span></div></div>
   </div>`;
 }
 
