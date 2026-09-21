@@ -380,8 +380,17 @@ function mergeInstagramIntoSmartSamples(media=[]){
   }
   save();
 }
+function focusCloudLogin(){
+  showPage("settings");
+  setTimeout(()=>{
+    const card=document.querySelector("#cloudAuthCard");
+    if(card)card.scrollIntoView({behavior:"smooth",block:"center"});
+    const email=document.querySelector("#authEmail");
+    if(email)email.focus();
+  },80);
+}
 async function connectInstagram(){
-  if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
+  if(!cloudSession){focusCloudLogin();return}
   const token=$("#instagramToken")?.value?.trim();
   if(!token){alert("Cole seu token do Instagram.");return}
   const btn=$("#connectInstagramBtn");
@@ -1291,7 +1300,7 @@ function settings(){
     </div>
 
     <div class="workspace-grid">
-      <div class="card">
+      <div class="card" id="cloudAuthCard">
         <div class="section-head"><div><h2>Conta CloudentFlow</h2><div class="muted">Autenticação direta pelo Supabase, sem biblioteca externa.</div></div>
           <span class="backend-pill ${backendOnline?"online":"offline"}">${backendOnline?"● Backend online":"● Faça login"}</span>
         </div>
