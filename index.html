@@ -351,32 +351,85 @@ async function edgeFetch(fullUrl,options={},retry=true){
   return data;
 }
 async function loadInstagramStatus(){
-  if(!cloudSession){instagramIntegration=null;return}
-  try{const r=await edgeFetch(IG_STATUS_URL);instagramIntegration=r.integration||null}
-  catch(e){instagramIntegration=null}
+  if(!cloudSession){instagramIntegration=null;liveInstagramMetrics=[];return}
+  try{
+    const r=await edgeFetch(IG_STATUS_URL);
+    instagramIntegration=r.integration||null;
+    if(instagramIntegration?.enabled){
+      try{
+        const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"GET"});
+        liveInstagramMetrics=stored.media||[];
+        mergeInstagramIntoSmartSamples(liveInstagramMetrics);
+      }catch{}
+    }
+  }catch(e){instagramIntegration=null}
+}
+function mergeInstagramIntoSmartSamples(media=[]){
+  for(const m of media){
+    if(!m?.timestamp)return;
+    const d=new Date(m.timestamp);
+    const id="instagram-"+String(m.id||m.record_id||m.timestamp);
+    const existing=state.smartSamples.findIndex(s=>s.id===id);
+    const row={
+      id,source:"instagram",
+      date:localISO(d),
+      time:String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"),
+      views:+m.views||0,reach:+m.reach||0,likes:+m.likes||0,comments:+m.comments||0,shares:+m.shares||0,saves:+m.saves||0
+    };
+    if(existing>=0)state.smartSamples[existing]=row;else state.smartSamples.push(row);
+  }
+  save();
 }
 async function connectInstagram(){
   if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
   const token=$("#instagramToken")?.value?.trim();
   if(!token){alert("Cole seu token do Instagram.");return}
-  const btn=$("#connectInstagramBtn");if(btn){btn.disabled=true;btn.textContent="Conectando..."}
+  const btn=$("#connectInstagramBtn");
+  if(btn){btn.disabled=true;btn.textContent="Conectando e testando..."}
   try{
-    const r=await edgeFetch(IG_CONNECT_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:token})});
-    instagramIntegration={provider:"instagram",enabled:true,account_label:r.profile?.username||r.profile?.name||"Instagram",external_account_id:r.profile?.id||"",config:{status:"connected",account_type:r.profile?.account_type||null},last_verified_at:new Date().toISOString()};
+    const r=await edgeFetch(IG_CONNECT_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({credential:token})
+    });
+    instagramIntegration={
+      provider:"instagram",enabled:true,
+      account_label:r.profile?.username||r.profile?.name||"Instagram",
+      external_account_id:r.profile?.id||"",
+      config:{status:"connected",account_type:r.profile?.account_type||null,api_mode:r.mode||"instagram_login"},
+      last_verified_at:new Date().toISOString()
+    };
     if($("#instagramToken"))$("#instagramToken").value="";
-    log("Instagram conectado com sucesso.","ok");
-  }catch(e){alert("Falha ao conectar Instagram: "+e.message)}
-  finally{renderAll()}
+    const metrics=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"POST"});
+    liveInstagramMetrics=metrics.media||[];
+    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
+    state.logs.unshift({
+      t:new Date().toISOString(),type:"ok",
+      m:"Instagram conectado e "+(metrics.count||0)+" vídeo(s) de hoje sincronizado(s)."
+    });
+    state.logs=state.logs.slice(0,100);save();
+    showPage("metrics");
+  }catch(e){
+    alert("Falha ao conectar/testar Instagram: "+e.message);
+    state.logs.unshift({t:new Date().toISOString(),type:"err",m:"Instagram: "+e.message});
+    state.logs=state.logs.slice(0,100);save();renderAll();
+  }
 }
 async function syncInstagramToday(){
   if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
   try{
     const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife",{method:"POST"});
     liveInstagramMetrics=r.media||[];
-    log("Métricas reais sincronizadas: "+(r.count||0)+" vídeo(s) de hoje.","ok");
+    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
+    state.logs.unshift({
+      t:new Date().toISOString(),type:"ok",
+      m:"Métricas reais sincronizadas: "+(r.count||0)+" vídeo(s) de hoje."
+    });
+    state.logs=state.logs.slice(0,100);save();
   }catch(e){
     alert("Não consegui buscar as métricas: "+e.message);
-    log("Falha ao sincronizar métricas do Instagram: "+e.message,"err");
+    state.logs.unshift({t:new Date().toISOString(),type:"err",m:"Falha ao sincronizar métricas: "+e.message});
+    state.logs=state.logs.slice(0,100);save();
   }finally{renderAll()}
 }
 function igMetricCard(label,value,sub=""){
@@ -1089,7 +1142,7 @@ function metrics(){
   const liveSection=`
     <div class="card" style="margin-bottom:16px">
       <div class="section-head">
-        <div><h2>Métricas reais — vídeos de hoje</h2><div class="muted">Puxa direto do Instagram e salva snapshots no banco.</div></div>
+        <div><h2>Métricas reais — vídeos de hoje</h2><div class="muted">Dados reais da conta conectada. Cada atualização também alimenta o Smart Scheduler.</div></div>
         <div class="toolbar">
           <span class="source-pill">${instagramIntegration?.enabled?"Instagram conectado":"Conecte o Instagram"}</span>
           <button class="btn primary" id="syncTodayBtn" onclick="syncInstagramToday()" ${instagramIntegration?.enabled?"":"disabled"}>Atualizar agora</button>
@@ -1276,9 +1329,10 @@ function settings(){
       `:`
         <div class="auth-card">
           <b>Conectar conta profissional</b>
-          <div class="muted" style="margin:6px 0 10px">Cole o access token uma única vez. Ele é enviado ao backend e guardado no Vault criptografado do Supabase.</div>
-          <input id="instagramToken" type="password" placeholder="Access token do Instagram">
-          <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>
+          <div class="muted" style="margin:6px 0 10px">Cole seu access token uma única vez. O CloudentFlow detecta automaticamente se ele veio do Instagram Login ou do fluxo Meta/Facebook, salva no Vault e já testa as métricas dos vídeos de hoje.</div>
+          <input id="instagramToken" type="password" autocomplete="off" placeholder="Cole aqui seu access token">
+          <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar + testar métricas</button></div>
+          <div class="cloud-note">O token não é gravado no navegador nem no GitHub. Depois da conexão, este campo é limpo automaticamente.</div>
         </div>`}
     </div>
 
