@@ -1194,6 +1194,36 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .smart-level.strong{color:#ff8cb4!important}
 .smart-level.test{color:#e3b76f!important}
 
+
+/* ===== Editable smart strategy badges ===== */
+.smart-strategy-btn{
+  cursor:pointer!important;
+  font-family:inherit!important;
+  line-height:1!important;
+}
+.smart-strategy-btn:hover{filter:brightness(1.14);transform:translateY(-1px)}
+.smart-strong-badge{
+  color:#ff9a78!important;
+  border-color:rgba(255,111,79,.32)!important;
+  background:rgba(160,62,38,.12)!important;
+}
+.smart-strategy-modal{max-width:430px!important}
+.smart-strategy-options{display:grid;gap:7px;margin-top:8px}
+.smart-strategy-option{
+  width:100%;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;
+  padding:11px;border:1px solid #222932;border-radius:10px;background:#0b0e13;color:#fff;text-align:left;
+}
+.smart-strategy-option:hover{border-color:#3a414d;background:#10141a}
+.smart-strategy-option.active{border-color:#4b3140;background:#151016}
+.smart-strategy-option>span{font-size:18px;text-align:center}
+.smart-strategy-option b,.smart-strategy-option small{display:block}
+.smart-strategy-option b{font-size:10px}.smart-strategy-option small{font-size:8px;color:#727c8b;margin-top:2px;line-height:1.35}
+.smart-strategy-option em{font-size:7px;font-style:normal;color:#ff7aa8;border:1px solid #4b2635;border-radius:999px;padding:3px 6px}
+.smart-auto-unlock{
+  width:100%;margin-top:10px;padding:8px;border:0;background:transparent;color:#747e8d;font-size:8px;
+}
+.smart-auto-unlock:hover{color:#fff}
+
 </style>
 </head>
 <body>
@@ -1571,7 +1601,7 @@ async function syncFromBackend(){
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
-      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual")
+      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
     };
   }
   save();
@@ -1583,7 +1613,7 @@ async function syncAllCloudSlots(){
     if(!x?.cloud||!x.scheduleId) continue;
     jobs.push(cloudFetch("?action=schedule",{
       method:"PATCH",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id:x.scheduleId,scheduled_at:x.scheduledAt,status:x.status||"scheduled",smart_mode:x.smartMode||"manual",smart_strategy:x.smartStrategy||(x.smartMode==="auto"?"tested":"manual"),caption:x.caption||""})
+      body:JSON.stringify({id:x.scheduleId,scheduled_at:x.scheduledAt,status:x.status||"scheduled",smart_mode:x.smartMode||"manual",smart_strategy:x.smartStrategy||(x.smartMode==="auto"?"tested":"manual"),smart_strategy_locked:!!x.smartStrategyLocked,caption:x.caption||""})
     }).catch(()=>null));
   }
   await Promise.all(jobs);
@@ -2205,11 +2235,16 @@ function renderSlot(date,i){
   if(!x)return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
   const st=getStatus(x),isAuto=x.smartMode==="auto";
   const strategy=x.smartStrategy||(isAuto?"tested":"manual");
-  const smartBadge=strategy==="test"
-    ? '<span class="badge smart-test-badge">🧪 Teste</span>'
-    : strategy==="tested"
-      ? '<span class="badge smart-tested-badge">✓ Testado</span>'
-      : "";
+  const badgeMeta=strategy==="test"
+    ? {label:"🧪 Teste",cls:"smart-test-badge"}
+    : strategy==="strong"
+      ? {label:"🔥 Forte",cls:"smart-strong-badge"}
+      : strategy==="tested"
+        ? {label:"✓ Testado",cls:"smart-tested-badge"}
+        : null;
+  const smartBadge=badgeMeta
+    ? `<button class="badge smart-strategy-btn ${badgeMeta.cls}" onclick="event.stopPropagation();openSmartStrategyMenu('${date}',${i})" title="Alterar tipo de horário">${badgeMeta.label}</button>`
+    : "";
   return `<div class="slot filled ui31-slot" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
       <button class="ui31-thumb" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo">▶</button>
@@ -2232,6 +2267,64 @@ function renderSlot(date,i){
       ${x.caption?'<span class="slot-caption-dot" title="Com legenda">●</span>':""}
     </div>
   </div>`;
+}
+
+function openSmartStrategyMenu(date,slot){
+  const x=slotData(date,slot);if(!x)return;
+  const current=x.smartStrategy||(x.smartMode==="auto"?"tested":"manual");
+  const option=(value,icon,title,desc)=>`
+    <button class="smart-strategy-option ${current===value?"active":""}" onclick="setSmartStrategy('${date}',${slot},'${value}')">
+      <span>${icon}</span><div><b>${title}</b><small>${desc}</small></div>${current===value?"<em>Atual</em>":""}
+    </button>`;
+  $("#modalHost").innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box smart-strategy-modal">
+    <div class="modal-head"><div><b>Tipo de horário</b><div class="muted">${esc(x.name)} · ${x.time}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="smart-strategy-options">
+      ${option("test","🧪","Teste","Quero experimentar este horário e medir o resultado.")}
+      ${option("strong","🔥","Forte","Quero marcar este horário como uma das minhas melhores janelas.")}
+      ${option("tested","✓","Testado","Horário que já considero validado pelo histórico.")}
+    </div>
+    <button class="smart-auto-unlock" onclick="setSmartStrategyAuto('${date}',${slot})">↻ Deixar o Smart Scheduler decidir novamente</button>
+  </div></div>`;
+}
+async function setSmartStrategy(date,slot,strategy){
+  const x=slotData(date,slot);if(!x)return;
+  if(!["test","strong","tested"].includes(strategy))return;
+  const oldStrategy=x.smartStrategy,oldLocked=x.smartStrategyLocked;
+  x.smartStrategy=strategy;x.smartStrategyLocked=true;x.smartMode="auto";
+  save();renderAll();
+  try{
+    if(x.cloud&&x.scheduleId){
+      await cloudFetch("?action=schedule",{
+        method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({id:x.scheduleId,smart_mode:"auto",smart_strategy:strategy,smart_strategy_locked:true})
+      });
+    }
+    closeModal();
+    const label=strategy==="test"?"🧪 Teste":strategy==="strong"?"🔥 Forte":"✓ Testado";
+    toast("Horário marcado como "+label+".","ok");
+  }catch(e){
+    x.smartStrategy=oldStrategy;x.smartStrategyLocked=oldLocked;save();renderAll();
+    alert("Não consegui salvar: "+e.message);
+  }
+}
+async function setSmartStrategyAuto(date,slot){
+  const x=slotData(date,slot);if(!x)return;
+  const choice=smartChoiceForSlot(date,slot);
+  const oldStrategy=x.smartStrategy,oldLocked=x.smartStrategyLocked;
+  x.smartStrategy=choice.strategy;x.smartStrategyLocked=false;x.smartMode="auto";
+  save();renderAll();
+  try{
+    if(x.cloud&&x.scheduleId){
+      await cloudFetch("?action=schedule",{
+        method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({id:x.scheduleId,smart_mode:"auto",smart_strategy:choice.strategy,smart_strategy_locked:false})
+      });
+    }
+    closeModal();toast("Smart Scheduler voltou a decidir esse selo.","ok");
+  }catch(e){
+    x.smartStrategy=oldStrategy;x.smartStrategyLocked=oldLocked;save();renderAll();
+    alert("Não consegui salvar: "+e.message);
+  }
 }
 
 function pickForSlot(date,slot){
@@ -2328,7 +2421,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
   const schedule=res.schedule,video=res.video;
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy};
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked};
   save();log(`${file.name} enviado ao Storage e agendado no backend para ${date} às ${t}.`,"ok");return true
 }
 function updateSlotTime(date,slot,time){
