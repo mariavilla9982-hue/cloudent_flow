@@ -175,6 +175,26 @@ body{background:
 @media(max-width:1200px){.week-grid{grid-template-columns:repeat(3,1fr)}.comments-layout{grid-template-columns:1fr}}
 @media(max-width:850px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.sidebar-foot{position:static;margin-top:20px}.main{padding:22px}.grid4{grid-template-columns:repeat(2,1fr)}.week-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.grid4,.week-grid,.formgrid{grid-template-columns:1fr}.calendar-bottom{grid-template-columns:1fr}}
+
+/* Reel previews + Stage 8 test publishing */
+.reel-metric-card{display:grid;grid-template-columns:170px minmax(0,1fr);gap:16px;border:1px solid var(--line);background:#0c0f16;border-radius:14px;padding:12px}
+.reel-media{width:170px;aspect-ratio:9/16;border-radius:11px;overflow:hidden;background:#050609;border:1px solid #252b38;position:relative}
+.reel-media video,.reel-media img{width:100%;height:100%;object-fit:cover;display:block}
+.reel-media .no-preview{height:100%;display:grid;place-items:center;color:#737b8e;font-size:12px;text-align:center;padding:14px}
+.reel-info{min-width:0;display:flex;flex-direction:column;gap:10px}
+.reel-title{font-weight:900;font-size:14px;line-height:1.35}
+.reel-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.test-reel-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px}
+.test-drop{border:1px dashed #3a4254;border-radius:14px;background:#0b0e14;padding:18px}
+.test-preview{width:100%;max-height:520px;aspect-ratio:9/16;background:#050609;border-radius:13px;object-fit:contain;border:1px solid #252b38}
+.test-status{padding:11px 12px;border-radius:10px;background:#0b0e14;border:1px solid #2a3140;margin-top:12px;font-size:12px}
+.test-status.ok{border-color:#28583b;color:#85e3ae;background:#0d1812}
+.test-status.warn{border-color:#6a5220;color:#ffd36f;background:#1c160a}
+.test-status.err{border-color:#6a272d;color:#ff8a91;background:#201013}
+.publish-history{display:grid;gap:8px}
+.publish-history .row{display:flex;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #242b39;border-radius:10px;background:#0b0e14}
+@media(max-width:900px){.test-reel-grid{grid-template-columns:1fr}.reel-metric-card{grid-template-columns:110px minmax(0,1fr)}.reel-media{width:110px}}
+@media(max-width:560px){.reel-metric-card{grid-template-columns:1fr}.reel-media{width:100%;max-height:420px}}
 </style>
 </head>
 <body>
@@ -199,6 +219,7 @@ body{background:
   <section id="queue" class="page hidden"></section>
   <section id="calendar" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
+  <section id="testReel" class="page hidden"></section>
   <section id="settings" class="page hidden"></section>
 </main>
 </div>
@@ -214,6 +235,7 @@ const navItems=[
   ["queue","ϟ","Fila de geração"],
   ["calendar","◫","Calendário"],
   ["metrics","⌁","Métricas"],
+  ["testReel","▷","Reel teste"],
   ["settings","⚙","Configurações"]
 ];
 const SUPABASE_URL="https://dxrhvudvutmgrmfkmzxo.supabase.co";
@@ -222,7 +244,9 @@ const EDGE_URL=SUPABASE_URL+"/functions/v1/cloudent-api";
 const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
 const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[];
+const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
+let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[];
+let testReelObjectUrl=null;
 const SESSION_KEY="cloudentflow-user-session";
 
 let currentPage="overview", pendingTarget=null, db=null;
@@ -295,7 +319,8 @@ const state={
     autoOptimize:false,
     daySpecificWeight:70,
     lastRun:null
-  }
+  },
+  testPublicationId:saved.testPublicationId||null
 };
 
 
@@ -544,7 +569,8 @@ function nav(){
 function showPage(id){
   currentPage=id; $$(".page").forEach(x=>x.classList.add("hidden")); $("#"+id).classList.remove("hidden");
   $$("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
-  $("#pageTitle").textContent=navItems.find(x=>x[0]===id)[2];renderAll()
+  $("#pageTitle").textContent=navItems.find(x=>x[0]===id)[2];renderAll();
+  if(id==="testReel" && cloudSession)loadTestReelHistory().then(testReelPage).catch(()=>{});
 }
 
 function weekDates(){
@@ -811,7 +837,7 @@ function clearSmartSamples(){
 function overview(){
   const total=allScheduled().length, comments=state.comments.length;
   $("#overview").innerHTML=`
-  <div class="banner">📈 <b>Estágio 6 em teste:</b> conecte seu Instagram em Configurações e abra Métricas para puxar os vídeos publicados hoje e ver dados reais.</div>
+  <div class="banner">🚀 <b>Estágio 8 em teste:</b> métricas reais já estão ativas. Agora você pode enviar um vídeo na aba “Reel teste” e publicar pela API antes de ligarmos a automação 24/7.</div>
   <div class="grid4">
     <div class="card metric"><div class="label">Vídeos na semana</div><div class="num">${total}</div><div class="muted">de 35 posições</div></div>
     <div class="card metric"><div class="label">Meta diária</div><div class="num">5</div><div class="muted">vídeos por dia</div></div>
@@ -830,8 +856,12 @@ function overview(){
       <div class="stage-row"><span>✅</span><b>Estágio 3</b><span>Calendário e agendamento completos</span></div>
       <div class="stage-row"><span>✅</span><b>Estágio 4</b><span>Smart Scheduler concluído</span></div>
       <div class="stage-row"><span>✅</span><b>Estágio 5</b><span>Banco, Storage e backend concluídos</span></div>
-      <div class="stage-row"><span>🟡</span><b>Estágio 6</b><span>Instagram + teste de métricas reais</span></div>
-      ${[7,8,9,10].map(i=>`<div class="stage-row"><span>❌</span><b>Estágio ${i}</b><span>Não concluído</span></div>`).join("")}
+      <div class="stage-row"><span>✅</span><b>Estágio 6</b><span>Instagram conectado</span></div>
+      <div class="stage-row"><span>✅</span><b>Estágio 7</b><span>Métricas reais + aprendizado</span></div>
+      <div class="stage-row"><span>🟡</span><b>Estágio 8</b><span>Publicação de Reel teste</span></div>
+      <div class="stage-row"><span>❌</span><b>Estágio 9</b><span>Automação 24/7</span></div>
+      <div class="stage-row"><span>❌</span><b>Estágio 10</b><span>Inteligência automática completa</span></div>
+      <div class="stage-row"><span>❌</span><b>Estágio 11</b><span>RunningHub e extras</span></div>
     </div></div>
   </div>`;
 }
@@ -874,7 +904,7 @@ function calendarPage(){
     <div class="calendar-bottom">
       ${weekend.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}
     </div>
-    <div class="note" style="margin-top:16px">O Smart Scheduler já pode reorganizar horários futuros. Nesta etapa ele usa dados simulados/manuais; no Estágio 7 a fonte será substituída pelas métricas reais do Instagram.</div>
+    <div class="note" style="margin-top:16px">O Smart Scheduler já recebe métricas reais do Instagram. Conforme mais Reels entram no histórico, a confiança dos horários aumenta automaticamente.</div>
   </div>`;
   $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
 }
@@ -1172,26 +1202,38 @@ function metrics(){
           ${igMetricCard("Comentários",totalLive.comments)}
           ${igMetricCard("Compartilhamentos",totalLive.shares)}
           ${igMetricCard("Salvamentos",totalLive.saves)}
-          ${igMetricCard("Vídeos hoje",liveInstagramMetrics.length)}
+          ${igMetricCard("Reels analisados",liveInstagramMetrics.length)}
           ${igMetricCard("Coleta","", "dados atuais da API")}
         </div>
-        <div style="display:grid;gap:10px;margin-top:16px">
+        <div style="display:grid;gap:12px;margin-top:16px">
           ${liveInstagramMetrics.map((m,i)=>`
-            <div class="comment-card">
-              <div class="comment-top">
-                <div><b>Vídeo ${i+1}</b> <span class="muted">· ${new Date(m.timestamp).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span></div>
-                <span class="badge green">${esc(m.media_product_type||m.media_type||"MEDIA")}</span>
+            <div class="reel-metric-card">
+              <div class="reel-media">
+                ${m.media_url
+                  ? `<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls playsinline preload="metadata"></video>`
+                  : m.thumbnail_url
+                    ? `<img src="${esc(m.thumbnail_url)}" alt="Preview do Reel ${i+1}">`
+                    : `<div class="no-preview">Preview indisponível.<br>Sincronize novamente.</div>`}
               </div>
-              <div class="comment-text">${esc((m.caption||"Sem legenda").slice(0,120))}</div>
-              <div class="counter-row">
-                <div class="counter"><b>${Number(m.views||0).toLocaleString("pt-BR")}</b><div class="muted">views</div></div>
-                <div class="counter"><b>${Number(m.reach||0).toLocaleString("pt-BR")}</b><div class="muted">alcance</div></div>
-                <div class="counter"><b>${Number(m.likes||0).toLocaleString("pt-BR")}</b><div class="muted">curtidas</div></div>
-                <div class="counter"><b>${Number(m.comments||0).toLocaleString("pt-BR")}</b><div class="muted">comentários</div></div>
-                <div class="counter"><b>${Number(m.shares||0).toLocaleString("pt-BR")}</b><div class="muted">compart.</div></div>
-                <div class="counter"><b>${Number(m.saves||0).toLocaleString("pt-BR")}</b><div class="muted">salvos</div></div>
+              <div class="reel-info">
+                <div class="comment-top">
+                  <div><b>Reel ${i+1}</b> <span class="muted">· ${new Date(m.timestamp).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span></div>
+                  <span class="badge green">${esc(m.media_product_type||m.media_type||"REEL")}</span>
+                </div>
+                <div class="reel-title">${esc((m.caption||"Sem legenda").slice(0,180))}</div>
+                <div class="counter-row">
+                  <div class="counter"><b>${Number(m.views||0).toLocaleString("pt-BR")}</b><div class="muted">views</div></div>
+                  <div class="counter"><b>${Number(m.reach||0).toLocaleString("pt-BR")}</b><div class="muted">alcance</div></div>
+                  <div class="counter"><b>${Number(m.likes||0).toLocaleString("pt-BR")}</b><div class="muted">curtidas</div></div>
+                  <div class="counter"><b>${Number(m.comments||0).toLocaleString("pt-BR")}</b><div class="muted">comentários</div></div>
+                  <div class="counter"><b>${Number(m.shares||0).toLocaleString("pt-BR")}</b><div class="muted">compart.</div></div>
+                  <div class="counter"><b>${Number(m.saves||0).toLocaleString("pt-BR")}</b><div class="muted">salvos</div></div>
+                </div>
+                <div class="reel-actions">
+                  ${m.permalink?`<button class="btn" onclick="window.open('${esc(m.permalink)}','_blank')">Abrir no Instagram ↗</button>`:""}
+                  ${!m.media_url?`<button class="btn" onclick="syncInstagramToday()">Atualizar preview</button>`:""}
+                </div>
               </div>
-              ${m.insights_error?`<div class="api-warning">Algumas métricas não foram liberadas pela API para este vídeo: ${esc(m.insights_error)}</div>`:""}
             </div>`).join("")}
         </div>
       `:`
@@ -1302,6 +1344,144 @@ function metrics(){
       <button class="btn primary" style="margin-top:13px" onclick="addSmartSample()">Adicionar resultado</button>
     </div>`;
 }
+
+async function loadTestReelHistory(){
+  if(!cloudSession){testReelHistory=[];return}
+  try{
+    const r=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"GET"});
+    testReelHistory=r.items||[];
+  }catch(e){testReelHistory=[]}
+}
+function setTestReelStatus(message,type=""){
+  const el=$("#testReelStatus");if(!el)return;
+  el.className="test-status "+type;el.textContent=message;
+}
+async function inspectTestVideo(file){
+  if(!file)return null;
+  const allowed=["video/mp4","video/quicktime"];
+  if(!allowed.includes(file.type) && !/\.(mp4|mov)$/i.test(file.name))throw new Error("Use um vídeo MP4 ou MOV.");
+  if(file.size>1024*1024*1024)throw new Error("O vídeo passa de 1 GB.");
+  const url=URL.createObjectURL(file);
+  try{
+    return await new Promise((resolve,reject)=>{
+      const v=document.createElement("video");
+      v.preload="metadata";v.src=url;
+      v.onloadedmetadata=()=>{
+        const info={duration:v.duration,width:v.videoWidth,height:v.videoHeight};
+        if(info.duration<3)reject(new Error("O Reel precisa ter pelo menos 3 segundos."));
+        else if(info.duration>900)reject(new Error("O Reel não pode passar de 15 minutos."));
+        else if(info.width>1920)reject(new Error("A largura do vídeo passa de 1920 px."));
+        else resolve(info);
+      };
+      v.onerror=()=>reject(new Error("Não consegui ler os dados desse vídeo."));
+    });
+  }finally{URL.revokeObjectURL(url)}
+}
+async function previewTestReelFile(input){
+  const file=input.files?.[0];if(!file)return;
+  try{
+    const info=await inspectTestVideo(file);
+    if(testReelObjectUrl)URL.revokeObjectURL(testReelObjectUrl);
+    testReelObjectUrl=URL.createObjectURL(file);
+    const v=$("#testReelPreview");v.src=testReelObjectUrl;v.classList.remove("hidden");
+    const ratio=info.width&&info.height?info.width/info.height:0;
+    const ratioNote=Math.abs(ratio-9/16)>.08?" · proporção diferente de 9:16":" · 9:16 adequado";
+    setTestReelStatus(`Pronto para teste: ${file.name} · ${Math.round(info.duration)}s · ${info.width}×${info.height}${ratioNote}`,"ok");
+  }catch(e){input.value="";setTestReelStatus(e.message,"err")}
+}
+async function uploadTestReelToStorage(file){
+  const uid=cloudSession?.user?.id;if(!uid)throw new Error("Faça login no Cloud Backend.");
+  const ext=(file.name.split(".").pop()||"mp4").toLowerCase();
+  const path=`${uid}/test/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const encoded=path.split("/").map(encodeURIComponent).join("/");
+  const res=await fetch(`${SUPABASE_URL}/storage/v1/object/videos/${encoded}`,{
+    method:"POST",
+    headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token,"Content-Type":file.type||"video/mp4","x-upsert":"false"},
+    body:file
+  });
+  let data=null;try{data=await res.json()}catch{}
+  if(!res.ok)throw new Error(data?.message||data?.error||"Falha ao enviar o vídeo ao Storage.");
+  return path;
+}
+async function pollTestPublication(publicationId,autoPublish=true){
+  state.testPublicationId=publicationId;save();
+  for(let i=0;i<18;i++){
+    setTestReelStatus(`Instagram processando o Reel… verificação ${i+1}/18`,"warn");
+    const st=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",publication_id:publicationId})});
+    if(st.status==="failed"){setTestReelStatus("O Instagram recusou o processamento: "+(st.detail||"erro desconhecido"),"err");await loadTestReelHistory();testReelPage();return}
+    if(st.status==="ready"){
+      if(!autoPublish){setTestReelStatus("Vídeo processado e pronto para publicar.","ok");return}
+      setTestReelStatus("Vídeo pronto. Publicando Reel teste…","warn");
+      const pub=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"publish",publication_id:publicationId})});
+      state.testPublicationId=null;save();
+      setTestReelStatus("✅ Reel teste publicado. ID: "+pub.instagram_media_id,"ok");
+      await loadTestReelHistory();testReelPage();
+      setTimeout(()=>syncInstagramToday().catch(()=>{}),12000);
+      return;
+    }
+    await new Promise(r=>setTimeout(r,5000));
+  }
+  setTestReelStatus("O vídeo ainda está processando. Use “Continuar publicação” daqui a pouco.","warn");
+  await loadTestReelHistory();testReelPage();
+}
+async function publishTestReel(){
+  if(!cloudSession){focusCloudLogin();return}
+  if(!instagramIntegration?.enabled){alert("Conecte o Instagram primeiro.");showPage("settings");return}
+  const input=$("#testReelFile"),file=input?.files?.[0];
+  if(!file){setTestReelStatus("Escolha um vídeo primeiro.","err");return}
+  const caption=$("#testReelCaption")?.value||"";
+  const isTrial=$("#testReelTrial")?.checked!==false;
+  const shareToFeed=!isTrial && !!$("#testReelFeed")?.checked;
+  try{await inspectTestVideo(file)}catch(e){setTestReelStatus(e.message,"err");return}
+  const kind=isTrial?"Reel teste (Trial Reel)":"Reel normal";
+  if(!confirm(`Publicar agora este vídeo como ${kind} em @${instagramIntegration.account_label||"Instagram"}?`))return;
+  try{
+    const btn=$("#publishTestReelBtn");if(btn){btn.disabled=true;btn.textContent="Enviando vídeo…"}
+    setTestReelStatus("Enviando vídeo para o Storage seguro…","warn");
+    const storagePath=await uploadTestReelToStorage(file);
+    setTestReelStatus("Criando container no Instagram…","warn");
+    const created=await edgeFetch(IG_PUBLISH_TEST_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"create",storage_path:storagePath,caption,is_trial:isTrial,share_to_feed:shareToFeed})});
+    state.testPublicationId=created.publication.id;save();
+    await pollTestPublication(created.publication.id,true);
+  }catch(e){setTestReelStatus("Falha: "+e.message,"err")}
+  finally{const btn=$("#publishTestReelBtn");if(btn){btn.disabled=false;btn.textContent="Publicar Reel teste"}}
+}
+async function continueTestPublication(){
+  if(!state.testPublicationId)return;
+  try{await pollTestPublication(state.testPublicationId,true)}catch(e){setTestReelStatus("Falha: "+e.message,"err")}
+}
+function testReelPage(){
+  const connected=!!instagramIntegration?.enabled;
+  $("#testReel").innerHTML=`
+    <div class="banner">🧪 <b>Estágio 8 — Reel teste:</b> envie um vídeo, confira o preview e publique pela API. Nada é publicado sem você clicar e confirmar.</div>
+    <div class="test-reel-grid">
+      <div class="card">
+        <div class="section-head"><div><h2>Publicar Reel teste</h2><div class="muted">Conta: ${connected?"@"+esc(instagramIntegration.account_label||"Instagram"):"Instagram não conectado"}</div></div><span class="backend-pill ${connected?"online":"offline"}">${connected?"● API pronta":"● Configure o Instagram"}</span></div>
+        <div class="test-drop">
+          <div class="field"><label>Vídeo</label><input id="testReelFile" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" onchange="previewTestReelFile(this)"></div>
+          <video id="testReelPreview" class="test-preview hidden" controls playsinline style="margin-top:12px"></video>
+          <div class="field" style="margin-top:12px"><label>Legenda</label><textarea id="testReelCaption" maxlength="2200" placeholder="Legenda do Reel…"></textarea></div>
+          <div class="toolbar" style="margin-top:10px">
+            <label class="switch"><input id="testReelTrial" type="checkbox" checked onchange="document.querySelector('#testReelFeedWrap').style.display=this.checked?'none':'flex'"> <b>Publicar como Reel teste / Trial Reel</b></label>
+            <label class="switch" id="testReelFeedWrap" style="display:none"><input id="testReelFeed" type="checkbox"> Também mostrar no Feed</label>
+          </div>
+          <div class="note" style="margin-top:10px">MP4/MOV · 3s a 15min · até 1GB · 9:16 recomendado. O vídeo é enviado ao Storage privado e a Meta recebe uma URL temporária.</div>
+          <div id="testReelStatus" class="test-status">${state.testPublicationId?"Existe uma publicação pendente. Você pode continuar o processamento.":"Escolha um vídeo para começar."}</div>
+          <div class="toolbar" style="margin-top:12px">
+            <button class="btn primary" id="publishTestReelBtn" onclick="publishTestReel()" ${connected?"":"disabled"}>Publicar Reel teste</button>
+            ${state.testPublicationId?`<button class="btn" onclick="continueTestPublication()">Continuar publicação</button>`:""}
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-head"><div><h2>Últimos testes</h2><div class="muted">Histórico de publicações feitas por esta etapa.</div></div><button class="btn" onclick="loadTestReelHistory().then(testReelPage)">Atualizar</button></div>
+        <div class="publish-history">
+          ${testReelHistory.length?testReelHistory.slice(0,10).map(x=>`<div class="row"><div><b>${esc(x.file_name||"Reel")}</b><div class="muted">${new Date(x.created_at).toLocaleString("pt-BR")} · ${x.is_trial?"Trial Reel":"Reel normal"}</div></div><span class="badge ${x.status==="published"?"green":x.status==="failed"?"red":"yellow"}">${esc(x.status)}</span></div>`).join(""):`<div class="empty">Nenhum Reel teste publicado por aqui ainda.</div>`}
+        </div>
+      </div>
+    </div>`;
+}
+
 function settings(){
   const user=cloudSession?.user;
   const ig=instagramIntegration;
@@ -1315,7 +1495,7 @@ function settings(){
       </div>
       <div class="integration-card">
         <div class="integration-top"><div class="integration-icon">◎</div><span class="integration-status ${ig?.enabled?"ok":"pending"}">${ig?.enabled?"Conectado":"Pendente"}</span></div>
-        <h3>Instagram</h3><p>Insights reais, histórico e aprendizagem do scheduler.</p>
+        <h3>Instagram</h3><p>Insights reais, previews, publicação e aprendizagem do scheduler.</p>
       </div>
       <div class="integration-card">
         <div class="integration-top"><div class="integration-icon">✦</div><span class="integration-status ok">Ativo</span></div>
@@ -1373,7 +1553,7 @@ function settings(){
   `;
 }
 
-function renderAll(){overview();aiComments();queue();calendarPage();metrics();settings()}
+function renderAll(){overview();aiComments();queue();calendarPage();metrics();testReelPage();settings()}
 
 $("#videoPicker").onchange=async e=>{
   const file=e.target.files[0];if(!file||!pendingTarget)return;
@@ -1386,6 +1566,7 @@ async function init(){
   try{await openDB()}catch(e){}
   renderAll();
   await initCloud();
+  if(cloudSession)await loadTestReelHistory();
   renderAll();
 }
 init();
