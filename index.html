@@ -751,6 +751,114 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   .sidebar.compact .account-chip{width:auto!important;height:auto!important;padding:8px!important;display:flex!important}
 }
 
+
+/* ===== Hover-expand behavior for compact sidebar ===== */
+@media(min-width:761px){
+  .sidebar.compact:hover{
+    width:258px!important;
+    padding-left:16px!important;
+    padding-right:16px!important;
+    box-shadow:18px 0 46px rgba(0,0,0,.28);
+  }
+
+  .sidebar.compact:hover .brand{
+    justify-content:space-between!important;
+    margin-left:7px!important;
+    margin-right:7px!important;
+  }
+
+  .sidebar.compact:hover .brand-main{
+    gap:10px!important;
+  }
+
+  .sidebar.compact:hover .brand-name{
+    display:inline!important;
+  }
+
+  .sidebar.compact:hover .workspace-switch{
+    display:flex!important;
+  }
+
+  .sidebar.compact:hover .nav{
+    margin-top:0!important;
+    display:block!important;
+  }
+
+  .sidebar.compact:hover .nav-group{
+    display:grid!important;
+    gap:2px!important;
+    margin:0 0 12px!important;
+  }
+
+  .sidebar.compact:hover .nav-label{
+    display:block!important;
+  }
+
+  .sidebar.compact:hover .nav button{
+    width:100%!important;
+    height:auto!important;
+    min-height:0!important;
+    padding:12px 13px!important;
+    margin:4px 0!important;
+    display:flex!important;
+    place-items:initial!important;
+    justify-content:flex-start!important;
+    align-items:center!important;
+    gap:12px!important;
+    border-radius:10px!important;
+    color:#9297a7!important;
+  }
+
+  .sidebar.compact:hover .nav button b{
+    display:block!important;
+  }
+
+  .sidebar.compact:hover .nav button.active{
+    color:#fff!important;
+    background:linear-gradient(90deg,rgba(255,59,130,.13),rgba(143,92,255,.07))!important;
+    border:1px solid rgba(255,59,130,.18)!important;
+    border-left:3px solid var(--pink)!important;
+    box-shadow:none!important;
+  }
+
+  .sidebar.compact:hover .nav-icon{
+    width:20px!important;
+    height:20px!important;
+  }
+
+  .sidebar.compact:hover .nav button::before{
+    display:none!important;
+  }
+
+  .sidebar.compact:hover .sidebar-pin{
+    position:static!important;
+    width:30px!important;
+    height:30px!important;
+  }
+
+  .sidebar.compact:hover .sidebar-foot{
+    left:16px!important;
+    right:16px!important;
+  }
+
+  .sidebar.compact:hover .account-chip{
+    width:auto!important;
+    height:auto!important;
+    padding:8px!important;
+    display:flex!important;
+    place-items:initial!important;
+    justify-content:flex-start!important;
+  }
+
+  .sidebar.compact:hover .account-copy{
+    display:block!important;
+  }
+
+  .sidebar.compact:hover .connection-dot{
+    display:block!important;
+  }
+}
+
 </style>
 </head>
 <body>
