@@ -295,6 +295,146 @@ input:focus,select:focus,textarea:focus{border-color:#5d3546;box-shadow:0 0 0 3p
 @media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.sidebar-foot{position:relative;left:auto;right:auto;bottom:auto;margin-top:18px}.workspace-switch{display:none}.nav{grid-template-columns:1fr 1fr;gap:10px}.nav-group{gap:2px}.main{padding:0 14px 40px}.topbar{padding-top:16px}.dashboard-head{align-items:start;flex-direction:column}.kpi-grid-v2{grid-template-columns:1fr 1fr}.week-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}.calendar-bottom{max-width:none}.top-status{display:none}}
 @media(max-width:480px){.kpi-grid-v2{grid-template-columns:1fr}.dashboard-actions{width:100%}.dashboard-actions .btn{flex:1}.week-grid{grid-template-columns:1fr}.nav{grid-template-columns:1fr 1fr}.reel-metric-card{grid-template-columns:1fr}.reel-media{width:100%}}
 
+
+/* ===== Button motion polish ===== */
+@keyframes ctfPrimarySheen{
+  0%{transform:translateX(-140%)}
+  55%,100%{transform:translateX(180%)}
+}
+@keyframes ctfPulseRing{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,63,127,.00)}
+  50%{box-shadow:0 0 0 5px rgba(255,63,127,.06)}
+}
+button,.btn,.nav button,.quick-actions button,.more-popover button{
+  -webkit-tap-highlight-color:transparent;
+  transform:translateZ(0);
+  transition:
+    transform .18s cubic-bezier(.2,.8,.2,1),
+    background-color .18s ease,
+    border-color .18s ease,
+    color .18s ease,
+    box-shadow .18s ease,
+    opacity .18s ease;
+}
+button:not(:disabled):hover,
+.btn:not(:disabled):hover{
+  transform:translateY(-1px);
+}
+button:not(:disabled):active,
+.btn:not(:disabled):active{
+  transform:translateY(0) scale(.975);
+  transition-duration:.08s;
+}
+.btn.primary{
+  position:relative;
+  overflow:hidden;
+  isolation:isolate;
+  box-shadow:0 7px 18px rgba(255,63,127,.14);
+}
+.btn.primary::after{
+  content:"";
+  position:absolute;
+  inset:-35% auto -35% -30%;
+  width:34%;
+  pointer-events:none;
+  z-index:-1;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  transform:skewX(-18deg) translateX(-140%);
+}
+.btn.primary:not(:disabled):hover{
+  box-shadow:0 10px 24px rgba(255,63,127,.22);
+}
+.btn.primary:not(:disabled):hover::after{
+  animation:ctfPrimarySheen .9s cubic-bezier(.2,.7,.2,1);
+}
+.btn.primary:not(:disabled):focus-visible{
+  outline:none;
+  animation:ctfPulseRing 1.6s ease-in-out infinite;
+}
+.btn.danger:not(:disabled):hover{
+  box-shadow:0 8px 20px rgba(255,107,114,.12);
+}
+.btn.success:not(:disabled):hover{
+  box-shadow:0 8px 20px rgba(77,212,139,.10);
+}
+.nav button{
+  position:relative;
+  overflow:hidden;
+}
+.nav button::after{
+  content:"";
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:4px;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);
+  opacity:0;
+  transform:scaleX(.45);
+  transition:opacity .18s ease,transform .18s ease;
+}
+.nav button:hover{
+  transform:translateX(2px);
+}
+.nav button:hover::after{
+  opacity:1;
+  transform:scaleX(1);
+}
+.nav button.active{
+  transform:none;
+}
+.nav button .nav-icon{
+  transition:transform .18s cubic-bezier(.2,.8,.2,1),color .18s ease;
+}
+.nav button:hover .nav-icon{
+  transform:scale(1.12) rotate(-2deg);
+}
+.quick-actions button:hover{
+  transform:translateY(-2px);
+  border-color:#343b48;
+  box-shadow:0 10px 24px rgba(0,0,0,.16);
+}
+.quick-actions button:active{
+  transform:translateY(0) scale(.985);
+}
+.quick-actions button>span{
+  transition:transform .18s cubic-bezier(.2,.8,.2,1),background-color .18s ease;
+}
+.quick-actions button:hover>span{
+  transform:scale(1.08);
+  background:#1b2029;
+}
+.more-menu[open] > summary{
+  transform:scale(.97);
+  background:#191d25;
+}
+.more-popover{
+  transform-origin:top right;
+  animation:ctfMenuIn .14s ease-out;
+}
+@keyframes ctfMenuIn{
+  from{opacity:0;transform:translateY(-4px) scale(.985)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+.more-popover button:hover{
+  transform:translateX(2px);
+}
+.top-actions .btn.primary{
+  animation:none;
+}
+button:disabled,.btn:disabled{
+  transform:none!important;
+  box-shadow:none!important;
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important;
+    animation-iteration-count:1!important;
+    scroll-behavior:auto!important;
+    transition-duration:.001ms!important;
+  }
+}
+
 </style>
 </head>
 <body>
