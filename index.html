@@ -1423,6 +1423,179 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   }
 }
 
+
+/* ===== Deterministic JS-controlled sidebar expansion ===== */
+@media(min-width:761px){
+  .sidebar.compact:not(.hover-open){
+    width:68px!important;
+    min-width:68px!important;
+    max-width:68px!important;
+    padding-left:9px!important;
+    padding-right:9px!important;
+    overflow:visible!important;
+  }
+
+  .sidebar.compact:not(.hover-open) .brand-name,
+  .sidebar.compact:not(.hover-open) .workspace-switch,
+  .sidebar.compact:not(.hover-open) .nav-label,
+  .sidebar.compact:not(.hover-open) .nav button b,
+  .sidebar.compact:not(.hover-open) .account-copy,
+  .sidebar.compact:not(.hover-open) .connection-dot{
+    display:none!important;
+  }
+
+  .sidebar.compact.hover-open{
+    width:240px!important;
+    min-width:240px!important;
+    max-width:240px!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+    box-sizing:border-box!important;
+    overflow:visible!important;
+    box-shadow:18px 0 46px rgba(0,0,0,.28)!important;
+  }
+
+  .sidebar.compact.hover-open .brand{
+    width:100%!important;
+    margin:0 0 14px!important;
+    display:flex!important;
+    justify-content:space-between!important;
+    align-items:center!important;
+  }
+
+  .sidebar.compact.hover-open .brand-main{
+    display:flex!important;
+    align-items:center!important;
+    gap:9px!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+  }
+
+  .sidebar.compact.hover-open .brand-name{
+    display:block!important;
+    width:auto!important;
+    max-width:none!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    font-size:16px!important;
+  }
+
+  .sidebar.compact.hover-open .sidebar-pin{
+    position:static!important;
+    width:27px!important;
+    height:27px!important;
+    flex:0 0 27px!important;
+  }
+
+  .sidebar.compact.hover-open .workspace-switch{
+    display:grid!important;
+    width:100%!important;
+    box-sizing:border-box!important;
+    grid-template-columns:30px minmax(0,1fr) auto!important;
+    gap:8px!important;
+    padding:7px 8px!important;
+    margin:0 0 16px!important;
+  }
+
+  .sidebar.compact.hover-open .workspace-switch>div:nth-child(2){
+    min-width:0!important;
+  }
+
+  .sidebar.compact.hover-open .workspace-switch b,
+  .sidebar.compact.hover-open .workspace-switch span{
+    white-space:nowrap!important;
+  }
+
+  .sidebar.compact.hover-open .nav{
+    display:block!important;
+    width:100%!important;
+    margin-top:0!important;
+  }
+
+  .sidebar.compact.hover-open .nav-group{
+    display:grid!important;
+    width:100%!important;
+    gap:2px!important;
+    margin:0 0 11px!important;
+  }
+
+  .sidebar.compact.hover-open .nav-label{
+    display:block!important;
+    width:100%!important;
+    padding:0 9px 4px!important;
+    font-size:7.5px!important;
+  }
+
+  .sidebar.compact.hover-open .nav button{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:7px 9px!important;
+    margin:0!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:9px!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+    border-radius:7px!important;
+    font-size:10.5px!important;
+  }
+
+  .sidebar.compact.hover-open .nav button b{
+    display:block!important;
+    flex:1 1 auto!important;
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    line-height:1.2!important;
+    text-align:left!important;
+  }
+
+  .sidebar.compact.hover-open .nav-icon{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 17px!important;
+    width:17px!important;
+    height:17px!important;
+  }
+
+  .sidebar.compact.hover-open .nav button::before{
+    display:none!important;
+  }
+
+  .sidebar.compact.hover-open .sidebar-foot{
+    left:12px!important;
+    right:12px!important;
+    width:auto!important;
+  }
+
+  .sidebar.compact.hover-open .account-chip{
+    width:100%!important;
+    height:auto!important;
+    min-width:0!important;
+    padding:6px!important;
+    display:grid!important;
+    grid-template-columns:28px minmax(0,1fr) 7px!important;
+    gap:7px!important;
+    box-sizing:border-box!important;
+  }
+
+  .sidebar.compact.hover-open .account-copy,
+  .sidebar.compact.hover-open .connection-dot{
+    display:block!important;
+  }
+
+  .sidebar.compact.hover-open .account-copy{
+    min-width:0!important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1990,6 +2163,7 @@ function applySidebarState(){
   sidebar.classList.toggle("compact",!sidebarPinned);
   sidebar.classList.toggle("pinned",sidebarPinned);
   sidebar.classList.remove("unpinned");
+  if(sidebarPinned)sidebar.classList.remove("hover-open");
   if(btn){
     btn.innerHTML=sidebarPinned
       ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 5 3 3v1h-6v7l-1 2-1-2v-7H5v-1l3-3 1-5Z"></path></svg>'
@@ -2004,6 +2178,22 @@ function toggleSidebarPin(){
   sidebarPinned=!sidebarPinned;
   localStorage.setItem(SIDEBAR_PIN_KEY,String(sidebarPinned));
   applySidebarState();
+}
+function bindSidebarHover(){
+  const sidebar=document.querySelector(".sidebar");
+  if(!sidebar||sidebar.dataset.hoverBound==="1")return;
+  sidebar.dataset.hoverBound="1";
+  sidebar.addEventListener("mouseenter",()=>{
+    if(window.innerWidth<=760||sidebarPinned)return;
+    sidebar.classList.add("hover-open");
+  });
+  sidebar.addEventListener("mouseleave",()=>{
+    if(window.innerWidth<=760||sidebarPinned)return;
+    sidebar.classList.remove("hover-open");
+  });
+  window.addEventListener("resize",()=>{
+    if(window.innerWidth<=760)sidebar.classList.remove("hover-open");
+  });
 }
 function nav(){
   const groups=[
@@ -3475,6 +3665,7 @@ function renderAll(){
 async function init(){
   applySidebarState();
   nav();
+  bindSidebarHover();
   renderAll();
   document.body.classList.add("booting");
   openDB().catch(err=>console.warn("IndexedDB unavailable:",err));
