@@ -859,6 +859,163 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   }
 }
 
+
+/* ===== Sidebar compact typography pass ===== */
+@media(min-width:761px){
+  .sidebar{
+    width:240px!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+  }
+  .brand{
+    font-size:16px!important;
+    margin-bottom:14px!important;
+    min-height:36px!important;
+  }
+  .brand .logo{
+    width:34px!important;
+    height:34px!important;
+    font-size:12px!important;
+    border-radius:9px!important;
+  }
+  .brand-main{gap:9px!important}
+  .sidebar-pin{
+    width:27px!important;
+    height:27px!important;
+    flex-basis:27px!important;
+  }
+  .sidebar-pin svg{width:13px!important;height:13px!important}
+
+  .workspace-switch{
+    grid-template-columns:30px 1fr auto!important;
+    gap:8px!important;
+    padding:7px 8px!important;
+    margin:0 0 16px!important;
+    border-radius:9px!important;
+  }
+  .workspace-avatar,.account-avatar{
+    width:28px!important;
+    height:28px!important;
+    font-size:9px!important;
+    border-radius:7px!important;
+  }
+  .workspace-switch b{font-size:10.5px!important}
+  .workspace-switch span:not(.workspace-caret){
+    font-size:8.5px!important;
+    margin-top:0!important;
+  }
+
+  .nav{gap:13px!important}
+  .nav-group{gap:2px!important}
+  .nav-label{
+    padding:0 9px 4px!important;
+    font-size:7.5px!important;
+    letter-spacing:.11em!important;
+  }
+  .nav button{
+    min-height:34px!important;
+    padding:7px 9px!important;
+    margin:0!important;
+    gap:9px!important;
+    border-radius:7px!important;
+    font-size:10.5px!important;
+    font-weight:700!important;
+  }
+  .nav-icon{
+    width:17px!important;
+    height:17px!important;
+    flex-basis:17px!important;
+  }
+  .nav-icon svg{width:16px!important;height:16px!important}
+
+  .sidebar-foot{
+    left:12px!important;
+    right:12px!important;
+    bottom:10px!important;
+    padding-top:9px!important;
+  }
+  .account-chip{
+    grid-template-columns:28px 1fr 7px!important;
+    gap:7px!important;
+    padding:6px!important;
+  }
+  .account-copy b{font-size:9.5px!important}
+  .account-copy span{font-size:8px!important}
+
+  .app.sidebar-collapsed{
+    grid-template-columns:68px minmax(0,1fr)!important;
+  }
+  .sidebar.compact{
+    width:68px!important;
+    padding-left:9px!important;
+    padding-right:9px!important;
+  }
+  .sidebar.compact .brand .logo{
+    width:36px!important;
+    height:36px!important;
+    flex-basis:36px!important;
+  }
+  .sidebar.compact .sidebar-pin{
+    top:62px!important;
+    left:20px!important;
+    width:27px!important;
+    height:27px!important;
+  }
+  .sidebar.compact .nav{
+    margin-top:51px!important;
+    gap:5px!important;
+  }
+  .sidebar.compact .nav-group{gap:5px!important}
+  .sidebar.compact .nav button{
+    width:50px!important;
+    height:42px!important;
+    min-height:42px!important;
+    border-radius:8px!important;
+  }
+  .sidebar.compact .nav-icon{
+    width:18px!important;
+    height:18px!important;
+  }
+  .sidebar.compact .nav-icon svg{
+    width:16px!important;
+    height:16px!important;
+  }
+  .sidebar.compact .sidebar-foot{
+    left:9px!important;
+    right:9px!important;
+  }
+  .sidebar.compact .account-chip{
+    width:50px!important;
+    height:42px!important;
+  }
+
+  .sidebar.compact:hover{
+    width:240px!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+  }
+  .sidebar.compact:hover .brand{
+    margin-left:0!important;
+    margin-right:0!important;
+  }
+  .sidebar.compact:hover .nav-group{
+    gap:2px!important;
+    margin:0 0 11px!important;
+  }
+  .sidebar.compact:hover .nav button{
+    min-height:34px!important;
+    padding:7px 9px!important;
+    margin:0!important;
+    gap:9px!important;
+    border-radius:7px!important;
+    font-size:10.5px!important;
+  }
+  .sidebar.compact:hover .sidebar-foot{
+    left:12px!important;
+    right:12px!important;
+  }
+}
+
 </style>
 </head>
 <body>
