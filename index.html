@@ -338,7 +338,7 @@ async function cloudFetch(path="",options={},retry=true){
   const res=await fetch(EDGE_URL+path,{...options,headers});
   if(res.status===401&&retry&&await refreshCloudSession())return cloudFetch(path,options,false);
   let data=null;try{data=await res.json()}catch{}
-  if(!res.ok)throw new Error(data?.error||data?.message||("Erro "+res.status));
+  if(!res.ok)throw new Error(data?.user_message||data?.error||data?.message||("Erro "+res.status));
   return data;
 }
 async function edgeFetch(fullUrl,options={},retry=true){
@@ -1339,9 +1339,9 @@ function settings(){
         <div class="auth-card">
           <b>Conectar conta profissional</b>
           <div class="muted" style="margin:6px 0 10px">Cole seu access token uma única vez. O CloudentFlow detecta automaticamente se ele veio do Instagram Login ou do fluxo Meta/Facebook, salva no Vault e já testa as métricas dos vídeos de hoje.</div>
-          <input id="instagramToken" type="password" autocomplete="off" placeholder="Cole aqui seu access token">
+          <input id="instagramToken" type="password" autocomplete="off" placeholder="User Access Token / Instagram User Access Token">
           <div class="toolbar" style="margin-top:10px"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar + testar métricas</button></div>
-          <div class="cloud-note">O token não é gravado no navegador nem no GitHub. Depois da conexão, este campo é limpo automaticamente.</div>
+          <div class="cloud-note"><b>Use o token certo:</b> User Access Token ou Instagram User Access Token. Não cole App ID, App Secret, Client Secret ou App Access Token. O token não é salvo no navegador nem no GitHub.</div>
         </div>`}
     </div>
 
