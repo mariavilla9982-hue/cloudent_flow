@@ -1134,6 +1134,49 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .smart-schedule-choice b{font-size:9px}
 .smart-schedule-choice small{display:block;margin:5px 0 0 21px;color:#777f8d;font-size:8px;line-height:1.4}
 
+
+/* ===== Smart Times explainability page ===== */
+.smart-learning-strip{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:12px 14px;margin-bottom:10px;border:1px solid #202630;border-radius:11px;background:#0b0e13;
+}
+.smart-learning-strip>div{min-width:90px;padding:8px 10px;border:1px solid #202630;border-radius:9px;background:#0e1218}
+.smart-learning-strip small,.smart-learning-strip b{display:block}
+.smart-learning-strip small{font-size:7px;color:#626c7a;font-weight:900;letter-spacing:.08em}
+.smart-learning-strip b{font-size:13px;margin-top:3px}
+.smart-learning-strip>span{color:#4d5664}
+.smart-learning-strip p{margin:0 0 0 auto;max-width:390px;color:#788291;font-size:8px;line-height:1.45}
+.smart-days-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.smart-day-card{padding:13px!important}
+.smart-day-card.today{border-color:#4b2635!important;box-shadow:inset 0 2px 0 rgba(255,63,127,.45)}
+.smart-day-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.smart-day-head small{font-size:7px;color:#697382;font-weight:900;letter-spacing:.08em}
+.smart-day-head h3{font-size:12px;margin:2px 0 0}
+.smart-day-head>span{font-size:8px;color:#ff74a5;border:1px solid #472532;border-radius:999px;padding:4px 7px}
+.smart-time-list{display:grid;gap:5px}
+.smart-time-row{display:grid;grid-template-columns:28px 115px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border:1px solid #1b2129;border-radius:8px;background:#090c10}
+.smart-time-rank{font-size:8px;color:#5f6977;font-weight:900}
+.smart-time-hour b{font-size:13px;display:block}
+.smart-level{display:inline-flex!important;margin-top:3px;font-size:7px;font-weight:900}
+.smart-level.strong{color:#ff8cb4}.smart-level.good{color:#71d99f}.smart-level.test{color:#d5ad64}
+.smart-time-reason b,.smart-time-reason span{display:block}
+.smart-time-reason b{font-size:8.5px;color:#cfd4dc}
+.smart-time-reason span{font-size:7.5px;color:#687280;margin-top:2px}
+.smart-times-bottom{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(260px,.6fr);gap:9px;margin-top:9px}
+.smart-viral-list{display:grid;gap:3px}
+.smart-viral-list>div{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #181e25}
+.smart-viral-list>div:first-child{border-top:0}
+.smart-viral-list>b{font-size:8px}
+.smart-viral-list span strong,.smart-viral-list span small{display:block}
+.smart-viral-list span strong{font-size:9px}.smart-viral-list span small{font-size:7.5px;color:#687281;margin-top:1px}
+.smart-viral-list em{font-size:7.5px;color:#7f8998;font-style:normal}
+.smart-weight-list{display:grid;gap:5px}
+.smart-weight-list>div{padding:9px;border:1px solid #1c222a;border-radius:8px;background:#0a0d12}
+.smart-weight-list b,.smart-weight-list span{display:block}
+.smart-weight-list b{font-size:8.5px}.smart-weight-list span{font-size:7.5px;color:#6c7583;margin-top:2px;line-height:1.35}
+@media(max-width:1000px){.smart-days-grid,.smart-times-bottom{grid-template-columns:1fr}.smart-learning-strip p{margin-left:0;max-width:none;width:100%}}
+@media(max-width:560px){.smart-time-row{grid-template-columns:24px 90px 1fr}.smart-learning-strip>div{min-width:72px}}
+
 </style>
 </head>
 <body>
@@ -1172,6 +1215,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   <section id="overview" class="page"></section>
   <section id="calendar" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
+  <section id="smartTimes" class="page hidden"></section>
   <section id="automation" class="page hidden"></section>
   <section id="cloudentAI" class="page hidden"></section>
   <section id="settings" class="page hidden"></section>
@@ -1189,6 +1233,7 @@ const navItems=[
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
+  ["smartTimes","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"></circle><path d=\"M12 7v5l3 2\"></path><path d=\"M4 4l2 2M20 4l-2 2\"></path></svg>","Horários"],
   ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Automação"],
   ["cloudentAI","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3 14.1 8.9 20 11l-5.9 2.1L12 19l-2.1-5.9L4 11l5.9-2.1L12 3Z\"></path><path d=\"m18 3 .8 2.2L21 6l-2.2.8L18 9l-.8-2.2L15 6l2.2-.8L18 3Z\"></path></svg>","Cloudent AI"],
   ["settings","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.08A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.08A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.08A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.39.28.7.63.88 1.08.17.44.21.92.12 1.39-.08.47-.29.9-.6 1.26-.11.13-.24.24-.4.34Z\"></path></svg>","Configurações"]
@@ -1627,6 +1672,7 @@ function commandItems(){
     {icon:"⌁",title:"Abrir métricas",hint:"Analytics",run:()=>{closeCommandPalette();showPage("metrics")}},
     {icon:"↻",title:"Sincronizar Instagram",hint:"Métricas",run:()=>{closeCommandPalette();syncInstagramToday()}},
     {icon:"✦",title:"Abrir automação",hint:"Workers 24/7",run:()=>{closeCommandPalette();showPage("automation")}},
+    {icon:"◷",title:"Abrir horários",hint:"Smart Scheduler",run:()=>{closeCommandPalette();showPage("smartTimes")}},
     {icon:"✧",title:"Abrir Cloudent AI",hint:"Análise inteligente",run:()=>{closeCommandPalette();showPage("cloudentAI")}},
     {icon:"⚙",title:"Configurações",hint:"Sistema",run:()=>{closeCommandPalette();showPage("settings")}}
   ];
@@ -1720,7 +1766,7 @@ function toggleSidebarPin(){
 function nav(){
   const groups=[
     {label:"Workspace",pages:["overview","calendar"]},
-    {label:"Inteligência",pages:["metrics","automation","cloudentAI"]},
+    {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
   ];
   const byId=Object.fromEntries(navItems.map(x=>[x[0],x]));
@@ -2902,6 +2948,112 @@ async function saveAutomationSettings(prefix="auto"){
     renderAll();
   }catch(e){toast(e.message,"err")}
 }
+function localMetricParts(ts){
+  const tz=automationData?.settings?.timezone||"America/Recife";
+  const parts=new Intl.DateTimeFormat("en-US",{
+    timeZone:tz,weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false
+  }).formatToParts(new Date(ts));
+  const g=t=>parts.find(x=>x.type===t)?.value||"";
+  const dowMap={Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+  return {weekday:dowMap[g("weekday")]??0,hour:Number(g("hour")||0),minute:Number(g("minute")||0)};
+}
+function recommendationSupport(rec){
+  const target=Number(String(rec.recommended_time).slice(0,2))*60+Number(String(rec.recommended_time).slice(3,5));
+  const sameDay=liveInstagramMetrics.filter(m=>{
+    if(!m.timestamp)return false;
+    const p=localMetricParts(m.timestamp);
+    const mins=p.hour*60+p.minute;
+    return p.weekday===Number(rec.weekday)&&Math.abs(mins-target)<=75;
+  });
+  const nearby=sameDay.sort((a,b)=>(+b.views||0)-(+a.views||0));
+  const best=nearby[0]||null;
+  return {count:nearby.length,best};
+}
+function smartConfidenceLabel(rec){
+  const c=Number(rec.confidence||0),n=Number(rec.sample_count||0);
+  if(c>=80&&n>=2)return {label:"Forte",cls:"strong",icon:"🔥"};
+  if(c>=55)return {label:"Bom",cls:"good",icon:"●"};
+  return {label:"Experimental",cls:"test",icon:"◌"};
+}
+function smartReason(rec){
+  const s=recommendationSupport(rec);
+  if(s.best){
+    const p=localMetricParts(s.best.timestamp);
+    const hh=String(p.hour).padStart(2,"0")+":"+String(p.minute).padStart(2,"0");
+    return {
+      main:"Reel de "+Number(s.best.views||0).toLocaleString("pt-BR")+" views às "+hh,
+      extra:(s.count===1?"1 Reel próximo desse horário":s.count+" Reels próximos desse horário")
+    };
+  }
+  return {
+    main:Number(rec.sample_count||0)+" amostra"+(Number(rec.sample_count||0)===1?"":"s")+" no modelo",
+    extra:"Horário ainda em fase de aprendizado"
+  };
+}
+function smartTimesPage(){
+  const a=automationData||{recommendations:[],settings:{}};
+  const recs=a.recommendations||[];
+  const names=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  const today=new Date().getDay();
+  const topViral=[...liveInstagramMetrics].sort((x,y)=>(+y.views||0)-(+x.views||0)).slice(0,5);
+
+  $("#smartTimes").innerHTML=`
+    <div class="ui3-page-head">
+      <div><span class="ui3-eyebrow">SMART SCHEDULER</span><h2>Horários inteligentes</h2><p>Veja exatamente por que cada horário foi escolhido.</p></div>
+      <button class="btn" onclick="refreshAutomation()">↻ Atualizar dados</button>
+    </div>
+
+    <div class="smart-learning-strip">
+      <div><small>COMO ELE APRENDE</small><b>30 min</b></div>
+      <span>→</span><div><small>NOVA LEITURA</small><b>2 h</b></div>
+      <span>→</span><div><small>CONFIRMAÇÃO</small><b>6 h</b></div>
+      <span>→</span><div><small>RESULTADO</small><b>24 h</b></div>
+      <span>→</span><div><small>FECHAMENTO</small><b>48 h</b></div>
+      <p>Quando um Reel fica muito acima da média, o horário usado ganha mais peso nos próximos agendamentos.</p>
+    </div>
+
+    <div class="smart-days-grid">
+      ${names.map((name,dow)=>{
+        const rows=recs.filter(r=>Number(r.weekday)===dow).sort((x,y)=>Number(x.rank)-Number(y.rank)).slice(0,5);
+        return `<section class="card smart-day-card ${dow===today?"today":""}">
+          <div class="smart-day-head"><div><small>${dow===today?"HOJE":"DIA DA SEMANA"}</small><h3>${name}</h3></div><span>${rows.length}/5</span></div>
+          <div class="smart-time-list">
+            ${rows.length?rows.map((r,i)=>{
+              const level=smartConfidenceLabel(r),reason=smartReason(r);
+              return `<div class="smart-time-row">
+                <div class="smart-time-rank">#${i+1}</div>
+                <div class="smart-time-hour"><b>${String(r.recommended_time).slice(0,5)}</b><span class="smart-level ${level.cls}">${level.icon} ${level.label}</span></div>
+                <div class="smart-time-reason"><b>${esc(reason.main)}</b><span>${esc(reason.extra)} · ${Number(r.confidence||0)}% confiança</span></div>
+              </div>`;
+            }).join(""):'<div class="ui3-empty">Ainda sem dados suficientes.</div>'}
+          </div>
+        </section>`;
+      }).join("")}
+    </div>
+
+    <div class="smart-times-bottom">
+      <div class="card ui3-panel">
+        <div class="ui3-panel-head"><div><span>Referências</span><h3>Reels que mais pesam no aprendizado</h3></div><span class="status-pill ok">Dados reais</span></div>
+        <div class="smart-viral-list">
+          ${topViral.length?topViral.map((m,i)=>{
+            const p=localMetricParts(m.timestamp);
+            const t=String(p.hour).padStart(2,"0")+":"+String(p.minute).padStart(2,"0");
+            return `<div><b>#${i+1}</b><span><strong>${Number(m.views||0).toLocaleString("pt-BR")} views</strong><small>${names[p.weekday]} · ${t}</small></span><em>${Number(m.shares||0).toLocaleString("pt-BR")} compartilhamentos</em></div>`;
+          }).join(""):'<div class="ui3-empty">Sincronize as métricas para carregar referências.</div>'}
+        </div>
+      </div>
+      <div class="card ui3-panel smart-how-card">
+        <div class="ui3-panel-head"><div><span>Critério</span><h3>O que aumenta o peso</h3></div></div>
+        <div class="smart-weight-list">
+          <div><b>Views acima da média</b><span>Vídeos que estouram recebem peso extra.</span></div>
+          <div><b>Compartilhamentos e saves</b><span>Sinais fortes de conteúdo que vale repetir.</span></div>
+          <div><b>Mesmo dia da semana</b><span>Terça aprende principalmente com outras terças.</span></div>
+          <div><b>Resultado recente</b><span>Posts mais novos têm mais influência.</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function automationPage(){
   const a=automationData||{workers:[],recommendations:[],settings:{},jobs:[]};
   const pub=a.workers?.find(w=>w.worker_name==="instagram_publish");
@@ -3157,6 +3309,7 @@ function renderAll(){
   safeRenderPage("overview",overview);
   safeRenderPage("calendar",calendarPage);
   safeRenderPage("metrics",metrics);
+  safeRenderPage("smartTimes",smartTimesPage);
   safeRenderPage("automation",automationPage);
   safeRenderPage("cloudentAI",cloudentAIPage);
   safeRenderPage("settings",settings);
