@@ -1289,6 +1289,33 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   .topbar .topbar-actions .btn:not(.primary){display:none}
 }
 
+
+/* ===== Boot hotfix: never trap UI / keep desktop sidebar reachable ===== */
+@media(min-width:761px){
+  .sidebar{
+    display:flex!important;
+    flex-direction:column!important;
+    visibility:visible!important;
+    opacity:1!important;
+    transform:none!important;
+    min-width:68px!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact{
+    display:flex!important;
+    width:68px!important;
+    min-width:68px!important;
+  }
+  .sidebar.compact .brand,
+  .sidebar.compact .nav,
+  .sidebar.compact .sidebar-foot{
+    visibility:visible!important;
+    opacity:1!important;
+  }
+  .sidebar.compact:hover{
+    width:240px!important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1437,18 +1464,40 @@ async function refreshCloudSession(){
     persistCloudSession(r);return true;
   }catch(e){persistCloudSession(null);return false}
 }
+function withTimeout(promise,ms,label="operação"){
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+" demorou demais")),ms))
+  ]);
+}
 async function initCloud(){
   try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
-  if(cloudSession?.expires_at && cloudSession.expires_at*1000<Date.now()+60000)await refreshCloudSession();
-  if(cloudSession){
-    await testBackend();
-    if(backendOnline){
-      await syncFromBackend();
-      await loadInstagramStatus();
-      await loadAutomationStatus();
-      await loadFollowerStats(30);
-    }
+  if(!cloudSession)return;
+
+  if(cloudSession?.expires_at && cloudSession.expires_at*1000<Date.now()+60000){
+    await withTimeout(refreshCloudSession(),4000,"renovação da sessão").catch(()=>false);
   }
+  if(!cloudSession)return;
+
+  await withTimeout(testBackend(),4000,"conexão com servidor").catch(()=>{backendOnline=false});
+  if(!backendOnline)return;
+
+  await Promise.allSettled([
+    withTimeout(syncFromBackend(),4500,"calendário"),
+    withTimeout(loadInstagramStatus(false),4500,"status do Instagram"),
+    withTimeout(loadAutomationStatus(),4500,"automação"),
+    withTimeout(loadFollowerStats(30),4500,"seguidores")
+  ]);
+}
+async function loadDeferredCloudData(){
+  if(!cloudSession||!backendOnline)return;
+  try{
+    await Promise.allSettled([
+      withTimeout(loadInstagramMetricsStored(),12000,"métricas"),
+      withTimeout(loadServerLogs(),7000,"atividade")
+    ]);
+    renderAll();
+  }catch{}
 }
 async function cloudFetch(path="",options={},retry=true){
   if(!cloudSession) throw new Error("Faça login no CloudentFlow primeiro.");
@@ -1499,25 +1548,25 @@ async function loadFollowerStats(days=30){
   }
 }
 
-async function loadInstagramStatus(){
+async function loadInstagramStatus(loadMetrics=true){
   if(!cloudSession){instagramIntegration=null;liveInstagramMetrics=[];return}
   try{
     const r=await edgeFetch(IG_STATUS_URL);
     instagramIntegration=r.integration||null;
-    if(instagramIntegration?.enabled){
-      try{
-        let stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"GET"});
-        liveInstagramMetrics=stored.media||[];
-        if(liveInstagramMetrics.length && !liveInstagramMetrics.some(m=>m.media_url)){
-          try{
-            stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
-            liveInstagramMetrics=stored.media||[];
-          }catch{}
-        }
-        mergeInstagramIntoSmartSamples(liveInstagramMetrics);
-      }catch{}
-    }
-  }catch(e){instagramIntegration=null}
+    if(loadMetrics&&instagramIntegration?.enabled)await loadInstagramMetricsStored();
+  }catch(e){
+    console.warn("Instagram status unavailable:",e);
+  }
+}
+async function loadInstagramMetricsStored(){
+  if(!cloudSession||!instagramIntegration?.enabled)return;
+  try{
+    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"GET"});
+    liveInstagramMetrics=stored.media||[];
+    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
+  }catch(e){
+    console.warn("Stored Instagram metrics unavailable:",e);
+  }
 }
 function mergeInstagramIntoSmartSamples(media=[]){
   if(media.length)state.smartSamples=state.smartSamples.filter(s=>s.source!=="demo");
@@ -1619,7 +1668,7 @@ async function signInCloud(){
   if(!email||!password){alert("Informe email e senha.");return}
   try{
     const r=await authRequest("/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
-    persistCloudSession(r);await testBackend();await syncFromBackend();await loadInstagramStatus();await loadAutomationStatus();await loadFollowerStats(30);renderAll();
+    persistCloudSession(r);cloudLoading=true;renderAll();await initCloud();cloudLoading=false;renderAll();loadDeferredCloudData();
   }catch(e){alert(e.message)}
 }
 async function signOutCloud(){
@@ -3322,15 +3371,26 @@ async function init(){
   renderAll();
   document.body.classList.add("booting");
   openDB().catch(err=>console.warn("IndexedDB unavailable:",err));
+
+  const bootFailsafe=setTimeout(()=>{
+    if(!cloudLoading)return;
+    cloudLoading=false;
+    document.body.classList.remove("booting");
+    renderAll();
+  },5500);
+
   try{
-    await initCloud();
-    if(cloudSession)await loadServerLogs();
+    await withTimeout(initCloud(),6000,"inicialização");
   }catch(err){
-    console.error("Cloud init error:",err);
+    console.warn("Cloud boot continued in background:",err);
+  }finally{
+    clearTimeout(bootFailsafe);
+    cloudLoading=false;
+    document.body.classList.remove("booting");
+    renderAll();
   }
-  cloudLoading=false;
-  document.body.classList.remove("booting");
-  renderAll();
+
+  loadDeferredCloudData();
 
   const quickPicker=$("#videoPicker");
   if(quickPicker)quickPicker.onchange=()=>handleQuickSlotVideo(quickPicker);
