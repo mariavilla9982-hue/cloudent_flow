@@ -1016,6 +1016,38 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   }
 }
 
+
+/* ===== Live follower analytics ===== */
+.follower-analytics-card{padding:17px;margin-bottom:12px}
+.follower-card-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:12px}
+.follower-card-head>div>span{font-size:8px;color:#626b79;font-weight:900;letter-spacing:.1em}
+.follower-card-head h3{font-size:14px;margin:2px 0 0}
+.follower-source{display:inline-flex;align-items:center;gap:6px}
+.follower-source i{width:6px;height:6px;border-radius:50%;background:#4dd48b;box-shadow:0 0 0 3px rgba(77,212,139,.06)}
+.follower-live-summary{display:grid;grid-template-columns:1.2fr .8fr 1fr;gap:8px;margin-bottom:10px}
+.follower-live-summary>div{padding:11px 12px;border:1px solid #1d222b;border-radius:9px;background:#0a0c10}
+.follower-live-summary small,.follower-live-summary strong,.follower-live-summary b,.follower-live-summary span{display:block}
+.follower-live-summary small{font-size:7.5px;color:#626b79;font-weight:900;letter-spacing:.08em}
+.follower-live-summary strong{font-size:25px;line-height:1;margin:5px 0 3px;letter-spacing:-.04em}
+.follower-live-summary span{font-size:8px;color:#707988}
+.follower-today b{font-size:20px;line-height:1;margin:5px 0 4px}
+.follower-today.positive b{color:#65da99}.follower-today.negative b{color:#ff7c83}
+.follower-live-state{display:flex!important;align-items:center;gap:9px}
+.follower-live-state>i{width:8px;height:8px;border-radius:50%;background:#6a727f;flex:0 0 8px}
+.follower-live-state>i.on{background:#4dd48b}
+.follower-live-state b{font-size:9px}.follower-live-state span{font-size:8px;margin-top:2px}
+.follower-chart{height:330px;border-radius:11px;background:#090b0f;border:1px solid #191d24;padding:14px 14px 8px}
+.follower-chart svg{width:100%;height:282px;overflow:visible}
+.follower-dot{fill:#090b0f;stroke:#ff4c88;stroke-width:3;vector-effect:non-scaling-stroke}
+.follower-dot.latest{fill:#ff4c88;stroke:#ff8bb4}
+.follower-chart-labels{display:flex;justify-content:space-between;color:#606978;font-size:8px}
+.follower-chart-empty{height:300px;display:grid;place-items:center;text-align:center;color:#6a7382}
+.follower-chart-empty b,.follower-chart-empty span{display:block}.follower-chart-empty b{color:#c8ccd4;font-size:11px}.follower-chart-empty span{font-size:9px;margin-top:4px}
+@keyframes followerBump{0%{transform:scale(1);color:#fff}45%{transform:scale(1.06);color:#65da99}100%{transform:scale(1);color:#fff}}
+.follower-count-bump{animation:followerBump .45s ease-out}
+@media(max-width:800px){.follower-live-summary{grid-template-columns:1fr 1fr}.follower-live-state{grid-column:1/-1}}
+@media(max-width:520px){.follower-live-summary{grid-template-columns:1fr}.follower-live-state{grid-column:auto}.follower-chart{height:285px}.follower-chart svg{height:238px}}
+
 </style>
 </head>
 <body>
@@ -1080,7 +1112,7 @@ const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
 const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[], automationWorkerStatus=null, automationData=null, serverLogs=[];
+let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], testReelHistory=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false;
 let testReelObjectUrl=null;
 const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
@@ -1192,6 +1224,7 @@ async function initCloud(){
       await syncFromBackend();
       await loadInstagramStatus();
       await loadAutomationStatus();
+      await loadFollowerStats(30);
     }
   }
 }
@@ -1228,6 +1261,18 @@ async function loadAutomationStatus(){
   }catch(e){
     automationData={workers:[],recommendations:[],settings:{},jobs:[],error:e.message};
     automationWorkerStatus={online:false,worker:null,error:e.message};
+  }
+}
+async function loadFollowerStats(days=30){
+  if(!cloudSession){followerStats=null;return}
+  try{
+    const previous=Number(followerStats?.current?.followers_count??NaN);
+    const next=await cloudFetch("?resource=followers&days="+days);
+    const current=Number(next?.current?.followers_count??NaN);
+    followerChanged=Number.isFinite(previous)&&Number.isFinite(current)&&previous!==current;
+    followerStats=next;
+  }catch(e){
+    if(!followerStats)followerStats={current:null,daily:[],worker:null,error:e.message};
   }
 }
 async function loadInstagramStatus(){
@@ -1350,7 +1395,7 @@ async function signInCloud(){
   if(!email||!password){alert("Informe email e senha.");return}
   try{
     const r=await authRequest("/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
-    persistCloudSession(r);await testBackend();await syncFromBackend();await loadInstagramStatus();renderAll();
+    persistCloudSession(r);await testBackend();await syncFromBackend();await loadInstagramStatus();await loadAutomationStatus();await loadFollowerStats(30);renderAll();
   }catch(e){alert(e.message)}
 }
 async function signOutCloud(){
@@ -1536,7 +1581,7 @@ function updateLiveChrome(){
 async function refreshLiveData(showFeedback=false){
   if(!cloudSession)return;
   try{
-    await Promise.all([loadAutomationStatus(),loadServerLogs(),syncFromBackend()]);
+    await Promise.all([loadAutomationStatus(),loadServerLogs(),loadFollowerStats(30),syncFromBackend()]);
     updateLiveChrome();renderAll();
     if($("#activityPanelHost")?.classList.contains("open"))toggleActivityPanel(true);
     if(showFeedback)toast("Dados atualizados.","ok");
@@ -2334,6 +2379,55 @@ function analyticsChart(rows,metric="views"){
   </div>`;
 }
 
+function followerChart(stats){
+  const data=(stats?.daily||[]).map(x=>({...x,value:Number(x.current_count||0)}));
+  if(!data.length)return '<div class="follower-chart-empty"><b>Monitoramento iniciado.</b><span>O histórico diário começa a ser formado a partir de agora.</span></div>';
+
+  const W=1000,H=280,P=36;
+  const vals=data.map(x=>x.value);
+  const min=Math.min(...vals),max=Math.max(...vals),spread=Math.max(4,max-min);
+  const low=min-Math.max(2,spread*.18),high=max+Math.max(2,spread*.18);
+  const pts=data.map((m,i)=>{
+    const x=data.length===1?W/2:P+i*(W-P*2)/(data.length-1);
+    const y=H-P-((m.value-low)/(high-low))*(H-P*2);
+    return {x,y,m};
+  });
+
+  let line="";
+  pts.forEach((p,i)=>{
+    if(i===0)line+=`M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    else{
+      const prev=pts[i-1],mx=((prev.x+p.x)/2).toFixed(1);
+      line+=` C ${mx} ${prev.y.toFixed(1)}, ${mx} ${p.y.toFixed(1)}, ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    }
+  });
+  const area=data.length>1?line+` L ${pts[pts.length-1].x.toFixed(1)} ${H-P} L ${pts[0].x.toFixed(1)} ${H-P} Z`:"";
+
+  return `<div class="follower-chart">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <defs><linearGradient id="followersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3f7f" stop-opacity=".24"/><stop offset="100%" stop-color="#ff3f7f" stop-opacity="0"/></linearGradient></defs>
+      <g class="chart-grid"><line x1="36" y1="65" x2="964" y2="65"/><line x1="36" y1="140" x2="964" y2="140"/><line x1="36" y1="215" x2="964" y2="215"/></g>
+      ${area?`<path d="${area}" fill="url(#followersFill)"/>`:""}
+      ${data.length>1?`<path d="${line}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`:""}
+      ${pts.map((p,i)=>`<circle class="follower-dot ${i===pts.length-1?"latest":""}" cx="${p.x}" cy="${p.y}" r="${i===pts.length-1?7:5}"><title>${new Date(p.m.day+"T12:00:00").toLocaleDateString("pt-BR")} · ${p.m.value.toLocaleString("pt-BR")} seguidores · ${Number(p.m.net_change||0)>=0?"+":""}${Number(p.m.net_change||0)} no dia</title></circle>`).join("")}
+    </svg>
+    <div class="follower-chart-labels"><span>${new Date(data[0].day+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span><span>Histórico diário</span><span>${new Date(data[data.length-1].day+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span></div>
+  </div>`;
+}
+function followerLiveSummary(){
+  const current=Number(followerStats?.current?.followers_count||0);
+  const daily=followerStats?.daily||[];
+  const today=daily[daily.length-1];
+  const net=Number(today?.net_change||0);
+  const checked=followerStats?.current?.last_checked_at;
+  const workerOnline=!!followerStats?.worker?.online;
+  return `<div class="follower-live-summary">
+    <div><small>SEGUIDORES AGORA</small><strong class="${followerChanged?"follower-count-bump":""}">${current?current.toLocaleString("pt-BR"):"—"}</strong><span>@${esc(followerStats?.account_label||instagramIntegration?.account_label||"Instagram")}</span></div>
+    <div class="follower-today ${net>=0?"positive":"negative"}"><small>HOJE</small><b>${net>=0?"+":""}${net}</b><span>desde o primeiro registro do dia</span></div>
+    <div class="follower-live-state"><i class="${workerOnline?"on":""}"></i><div><b>${workerOnline?"Monitorando ao vivo":"Atualizando"}</b><span>${checked?"checado "+relativeTime(checked):"aguardando primeira leitura"}</span></div></div>
+  </div>`;
+}
+
 function openReelPreview(id){
   const m=liveInstagramMetrics.find(x=>String(x.id||x.record_id)===String(id));if(!m)return;
   const media=m.media_url
@@ -2362,7 +2456,7 @@ function metrics(){
 
   $("#metrics").innerHTML=`
     <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance dos seus Reels</h2><p>Dados reais, agrupados por dia para ficar fácil enxergar tendência.</p></div>
+      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance do Instagram</h2><p>Seguidores ao vivo e desempenho real dos seus Reels.</p></div>
       <div class="toolbar metric-filter"><button class="btn ${metricsPeriod===7?"active-filter":""}" onclick="setMetricsPeriod(7)">7 dias</button><button class="btn ${metricsPeriod===30?"active-filter":""}" onclick="setMetricsPeriod(30)">30 dias</button><button class="btn primary" onclick="syncInstagramToday()">↻ Sincronizar</button></div>
     </div>
     <div class="ui3-kpis">
@@ -2371,9 +2465,13 @@ function metrics(){
       <div class="ui3-kpi"><span>Média por Reel</span><strong>${avg.toLocaleString("pt-BR")}</strong><small>${rows.length} Reels</small></div>
       <div class="ui3-kpi"><span>Curtidas</span><strong>${total.likes.toLocaleString("pt-BR")}</strong><small>engajamento</small></div>
     </div>
-    <div class="card ui3-analytics-card">
-      <div class="ui3-panel-head"><div><span>Visualizações</span><h3>Evolução diária</h3></div><span class="source-pill">Instagram · dados reais</span></div>
-      ${analyticsChart(rows,"views")}
+    <div class="card follower-analytics-card">
+      <div class="follower-card-head">
+        <div><span>CRESCIMENTO</span><h3>Seguidores por dia</h3></div>
+        <span class="source-pill follower-source"><i></i> Instagram · atualização automática</span>
+      </div>
+      ${followerLiveSummary()}
+      ${followerChart(followerStats)}
     </div>
     <div class="ui3-analytics-grid">
       <div class="card ui3-panel">
@@ -2393,6 +2491,7 @@ function metrics(){
           </button>`).join("")||'<div class="ui3-empty">Sincronize para carregar os previews.</div>'}</div>
       </div>
     </div>`;
+  followerChanged=false;
 }
 
 function setTestReelStatus(message,type=""){
