@@ -671,7 +671,7 @@ function openDB(){
     r.onsuccess=()=>{db=r.result;resolve(db)};r.onerror=()=>reject(r.error)
   })
 }
-function store(mode="readonly"){return db.transaction("videos",mode).objectStore("videos")}
+function store(mode="readonly"){if(!db)throw new Error("Banco local ainda não está pronto.");return db.transaction("videos",mode).objectStore("videos")}
 function dbPut(x){return new Promise((res,rej)=>{const r=store("readwrite").put(x);r.onsuccess=()=>res(x);r.onerror=()=>rej(r.error)})}
 function dbGet(id){return new Promise((res,rej)=>{const r=store().get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 function dbDelete(id){return new Promise((res,rej)=>{const r=store("readwrite").delete(id);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
@@ -695,9 +695,14 @@ function nav(){
   $("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page))
 }
 function showPage(id){
-  currentPage=id; $$(".page").forEach(x=>x.classList.add("hidden")); $("#"+id).classList.remove("hidden");
-  $$("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
-  $("#pageTitle").textContent=navItems.find(x=>x[0]===id)[2];renderAll();
+  const page=$("#"+id),meta=navItems.find(x=>x[0]===id);
+  if(!page||!meta)return;
+  currentPage=id;
+  $(".page").forEach(x=>x.classList.add("hidden"));
+  page.classList.remove("hidden");
+  $("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
+  $("#pageTitle").textContent=meta[2];
+  renderAll();
   if(id==="testReel" && cloudSession)loadTestReelHistory().then(testReelPage).catch(()=>{});
 }
 
@@ -1815,10 +1820,21 @@ $("#newVideoBtn").onclick=()=>showPage("calendar");
 
 async function init(){
   nav();
-  try{await openDB()}catch(e){}
   renderAll();
-  await initCloud();
-  if(cloudSession)await loadTestReelHistory();
+
+  // Local DB opens in the background so it can never block the SaaS shell.
+  openDB().catch(err=>console.warn("IndexedDB unavailable:",err));
+
+  try{
+    await initCloud();
+  }catch(err){
+    console.error("Cloud init error:",err);
+  }
+
+  if(cloudSession){
+    try{await loadTestReelHistory()}catch(err){console.warn("Reel history unavailable:",err)}
+  }
+
   renderAll();
 }
 init();
