@@ -2571,6 +2571,21 @@ function withTimeout(promise,ms,label="operação"){
     new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+" demorou demais")),ms))
   ]);
 }
+function responseErrorMessage(data,status){
+  const values=[data?.user_message,data?.message,data?.error,data?.details];
+  for(const value of values){
+    if(typeof value==="string"&&value.trim())return value;
+    if(value&&typeof value==="object"){
+      const nested=value.message||value.error_description||value.error||value.details||value.hint||value.code;
+      if(typeof nested==="string"&&nested.trim())return nested;
+      try{
+        const serialized=JSON.stringify(value);
+        if(serialized&&serialized!=="{}")return serialized;
+      }catch{}
+    }
+  }
+  return "Erro "+status;
+}
 async function initCloud(){
   try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
   if(!cloudSession)return;
@@ -2608,7 +2623,7 @@ async function cloudFetch(path="",options={},retry=true){
   const res=await fetch(EDGE_URL+path,{...options,headers});
   if(res.status===401&&retry&&await refreshCloudSession())return cloudFetch(path,options,false);
   let data=null;try{data=await res.json()}catch{}
-  if(!res.ok)throw new Error(data?.user_message||data?.error||data?.message||("Erro "+res.status));
+  if(!res.ok)throw new Error(responseErrorMessage(data,res.status));
   return data;
 }
 async function edgeFetch(fullUrl,options={},retry=true){
@@ -2618,10 +2633,10 @@ async function edgeFetch(fullUrl,options={},retry=true){
   if(res.status===401&&retry&&await refreshCloudSession())return edgeFetch(fullUrl,options,false);
   let data=null;try{data=await res.json()}catch{}
   if(!res.ok){
-    const message=data?.user_message||data?.message||data?.error||("Erro "+res.status);
+    const message=responseErrorMessage(data,res.status);
     const err=new Error(message);
-    err.code=data?.error||null;
-    err.details=data?.details||null;
+    err.code=typeof data?.error==="string"?data.error:(data?.error?.code||data?.code||null);
+    err.details=data?.details||data?.error?.details||null;
     throw err;
   }
   return data;
