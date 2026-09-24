@@ -2887,6 +2887,9 @@ function calendarPage(){
   const smart=automationData?.settings?.smart_scheduler||{};
   const gap=automationData?.settings?.min_gap_minutes||state.minGap;
   const filled=weekScheduledCount();
+  const dayCounts=dates.map(d=>filledCount(localISO(d)));
+  const baseFilled=dayCounts.reduce((a,n)=>a+Math.min(n,5),0);
+  const extraFilled=dayCounts.reduce((a,n)=>a+Math.max(0,n-5),0);
   const start=dates[0],end=dates[6];
   const startLabel=start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
   const endLabel=end.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
@@ -2903,7 +2906,7 @@ function calendarPage(){
         <div class="calendar-week-identity">
           <span>SEMANA ATUAL</span>
           <b>${startLabel} — ${endLabel}</b>
-          <small>${filled<=35?filled+" de 35 posições base":("35 posições base + "+(filled-35)+" extras")}</small>
+          <small>${baseFilled} de 35 posições base${extraFilled?" + "+extraFilled+" extras":""}</small>
         </div>
 
         <label class="calendar-date-control">
@@ -2921,8 +2924,8 @@ function calendarPage(){
       </div>
 
       <div class="calendar-health-row">
-        <div><span>Ocupação base</span><b>${Math.min(filled,35)}/35</b></div>
-        <div><span>Extras manuais</span><b>${Math.max(0,filled-35)}</b></div>
+        <div><span>Ocupação base</span><b>${baseFilled}/35</b></div>
+        <div><span>Extras manuais</span><b>${extraFilled}</b></div>
         <div><span>Posts/dia</span><b>${automationData?.settings?.posts_per_day||5}</b></div>
         <div><span>Intervalo mínimo</span><b>${gap} min</b></div>
         <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · sem testes automáticos":"Smart Scheduler"}</b></div>
