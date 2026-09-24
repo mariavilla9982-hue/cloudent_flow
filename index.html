@@ -4286,6 +4286,30 @@ function productionJobRow(j,i,total){
     '</div>';
 }
 
+function productionCostSummary(){
+  const jobs=productionData?.jobs||[];
+  const completed=jobs.filter(j=>Number(j.credits_used)>0&&j.completed_at);
+  const avg=completed.length?completed.reduce((a,j)=>a+Number(j.credits_used||0),0)/completed.length:0;
+  const now=Date.now();
+  const sumSince=ms=>completed.filter(j=>new Date(j.completed_at).getTime()>=now-ms).reduce((a,j)=>a+Number(j.credits_used||0),0);
+  const waiting=jobs.filter(j=>["waiting","uploading","queued","running"].includes(j.status)).length;
+  const forecast=avg>0?Math.round(avg*waiting):null;
+  return {avg,waiting,forecast,today:sumSince(86400000),week:sumSince(7*86400000),month:sumSince(30*86400000)};
+}
+function productionCreditDashboard(){
+  const s=productionCostSummary();
+  const credits=Number(productionData?.runninghubStatus?.credits);
+  const after=Number.isFinite(credits)&&s.forecast!==null?Math.max(0,credits-s.forecast):null;
+  const fmt=n=>Math.round(Number(n||0)).toLocaleString("pt-BR");
+  return '<div class="production-cost-dashboard">' +
+    '<div><small>HOJE</small><b>'+fmt(s.today)+'</b><span>créditos usados</span></div>' +
+    '<div><small>7 DIAS</small><b>'+fmt(s.week)+'</b><span>créditos usados</span></div>' +
+    '<div><small>30 DIAS</small><b>'+fmt(s.month)+'</b><span>créditos usados</span></div>' +
+    '<div><small>MÉDIA / JOB</small><b>'+(s.avg?fmt(s.avg):"—")+'</b><span>'+(s.avg?"histórico real":"aguardando histórico")+'</span></div>' +
+    '<div class="forecast"><small>PREVISÃO DA FILA</small><b>'+(s.forecast===null?"—":fmt(s.forecast))+'</b><span>'+s.waiting+' job(s) · saldo após fila '+(after===null?"—":fmt(after))+'</span></div>' +
+  '</div>';
+}
+
 function productionPage(){
   const root=$("#production");
   if(!root)return;
@@ -4322,6 +4346,7 @@ function productionPage(){
       '<div><small>PRONTOS HOJE</small><b>'+c.ready+'</b><span>salvos no CloudentFlow</span></div>'+
       '<div><small>ERROS</small><b>'+c.failed+'</b><span>com retry disponível</span></div>'+
     '</div>'+
+    productionCreditDashboard()+
     '<div class="production-main-grid production-only-upload">'+
       '<div class="card production-upload-card">'+
         '<div class="ui3-panel-head"><div><span>Novo job</span><h3>Vídeo + frame</h3></div><button class="btn btn-sm" onclick="setSettingsTab(\'integrations\');showPage(\'settings\')">⚙ Integração</button></div>'+
