@@ -2320,6 +2320,167 @@ body.auth-checking .auth-boot{display:grid}
 .login-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid #1d2027;color:#59616d;font-size:6.8px}.login-meta span{display:flex;align-items:center;gap:6px}.login-meta i{width:5px;height:5px;border-radius:50%;background:#59c98c;box-shadow:0 0 10px rgba(89,201,140,.55)}
 .login-mini{margin-top:18px;padding:11px 12px;border:1px solid #232730;border-radius:9px;background:#0c0e12;color:#6a727e;font-size:7px;line-height:1.55}.login-mini b{color:#aeb5c0}
 @media(max-width:820px){.login-gate{padding:0}.login-shell{min-height:100vh;border:0;border-radius:0;grid-template-columns:1fr}.login-visual{display:none}.login-panel{min-height:100vh;padding:28px 20px}.login-card{max-width:420px}.login-card-top h2{font-size:27px}}
+
+/* CloudentFlow multi-channel studios */
+.nav-beta{
+  margin-left:auto;
+  font-size:8px;
+  line-height:1;
+  padding:4px 5px;
+  border:1px solid rgba(168,85,247,.35);
+  color:#c9a7ff;
+  border-radius:999px;
+  font-style:normal;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  opacity:.9;
+}
+.sidebar.compact .nav-beta{display:none}
+.channel-page{display:flex;flex-direction:column;gap:16px}
+.channel-hero{
+  position:relative;
+  overflow:hidden;
+  min-height:176px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+  padding:26px 28px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:
+    radial-gradient(circle at 78% 5%,rgba(139,92,246,.16),transparent 32%),
+    linear-gradient(135deg,rgba(255,255,255,.025),rgba(255,255,255,.008));
+}
+.channel-hero:after{
+  content:"";
+  position:absolute;
+  width:260px;height:260px;
+  right:-90px;bottom:-180px;
+  border:1px solid rgba(139,92,246,.16);
+  border-radius:50%;
+}
+.channel-tiktok .channel-hero{
+  background:
+    radial-gradient(circle at 78% 5%,rgba(34,211,238,.09),transparent 27%),
+    radial-gradient(circle at 88% 35%,rgba(244,63,94,.08),transparent 30%),
+    linear-gradient(135deg,rgba(255,255,255,.025),rgba(255,255,255,.008));
+}
+.channel-hero-main{display:flex;align-items:center;gap:18px;min-width:0;position:relative;z-index:1}
+.channel-brand-mark{
+  width:62px;height:62px;
+  flex:0 0 62px;
+  border-radius:17px;
+  display:grid;place-items:center;
+  font-size:28px;font-weight:900;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.14);
+  background:linear-gradient(145deg,#171a21,#07080b);
+  box-shadow:0 16px 40px rgba(0,0,0,.28);
+}
+.channel-tiktok .channel-brand-mark{font-size:30px;text-shadow:2px 1px 0 rgba(34,211,238,.8),-2px -1px 0 rgba(244,63,94,.7)}
+.channel-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.channel-title-row h2{margin:4px 0 6px;font-size:28px;letter-spacing:-.045em}
+.channel-hero-main p{margin:0;max-width:660px;color:var(--muted);line-height:1.55}
+.channel-stage-pill{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:6px 9px;border-radius:999px;
+  border:1px solid rgba(245,158,11,.24);
+  color:#f3be68;background:rgba(245,158,11,.07);
+  font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+}
+.channel-stage-pill i{width:6px;height:6px;border-radius:50%;background:#f59e0b;box-shadow:0 0 14px rgba(245,158,11,.65)}
+.channel-stage-pill.ready{color:#6ee7a2;border-color:rgba(34,197,94,.24);background:rgba(34,197,94,.07)}
+.channel-stage-pill.ready i{background:#22c55e;box-shadow:0 0 14px rgba(34,197,94,.65)}
+.channel-hero-actions{display:flex;gap:8px;position:relative;z-index:1;flex-wrap:wrap;justify-content:flex-end}
+.channel-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.channel-stat-card{
+  padding:15px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card);
+  min-width:0;
+}
+.channel-stat-card small{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em}
+.channel-stat-card b{display:block;margin:8px 0 3px;font-size:22px;letter-spacing:-.04em}
+.channel-stat-card span{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-main-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.85fr);gap:12px}
+.channel-bottom-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr);gap:12px}
+.channel-panel{min-width:0}
+.channel-progress-number{font-size:18px}
+.channel-progress{height:5px;border-radius:99px;background:rgba(255,255,255,.055);overflow:hidden;margin:4px 0 18px}
+.channel-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8b5cf6,#c084fc);box-shadow:0 0 18px rgba(139,92,246,.35)}
+.channel-tiktok .channel-progress i{background:linear-gradient(90deg,#22d3ee,#f43f5e)}
+.channel-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.channel-pipeline>div{
+  position:relative;padding:12px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.015);min-height:102px
+}
+.channel-pipeline>div>span{
+  width:24px;height:24px;display:grid;place-items:center;border-radius:8px;
+  background:rgba(255,255,255,.055);color:var(--muted);font-size:10px;font-weight:900;margin-bottom:10px
+}
+.channel-pipeline>div.done{border-color:rgba(34,197,94,.19);background:rgba(34,197,94,.025)}
+.channel-pipeline>div.done>span{color:#63e695;background:rgba(34,197,94,.11)}
+.channel-pipeline b,.channel-pipeline small{display:block}
+.channel-pipeline b{font-size:11px;margin-bottom:4px}
+.channel-pipeline small{font-size:9px;line-height:1.45;color:var(--muted)}
+.channel-foundation-note{
+  display:flex;gap:12px;align-items:flex-start;margin-top:12px;padding:12px 13px;border-radius:12px;
+  border:1px solid rgba(139,92,246,.17);background:rgba(139,92,246,.035)
+}
+.channel-foundation-note>span{font-size:9px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:#c7a8ff;white-space:nowrap}
+.channel-foundation-note p{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
+.channel-foundation-note code{color:#d8c5ff}
+.channel-panel-copy{font-size:12px;color:var(--muted);line-height:1.55;margin:-2px 0 14px}
+.channel-rule-list{display:flex;flex-direction:column;gap:8px}
+.channel-rule-list>div{display:flex;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.055)}
+.channel-rule-list>div:first-child{border-top:0}
+.channel-rule-list>div>span{width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:rgba(139,92,246,.09);color:#bd9bff;font-size:10px}
+.channel-rule-list b,.channel-rule-list small{display:block}
+.channel-rule-list b{font-size:11px;margin-bottom:3px}
+.channel-rule-list small{font-size:10px;color:var(--muted);line-height:1.45}
+.channel-count{font-size:10px;color:var(--muted)}
+.channel-queue-list{display:flex;flex-direction:column;gap:7px}
+.channel-queue-row{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.012)}
+.channel-queue-thumb{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:#11141a;color:#8b5cf6}
+.channel-queue-copy{min-width:0;flex:1}
+.channel-queue-copy b,.channel-queue-copy span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-queue-copy b{font-size:11px}
+.channel-queue-copy span{font-size:9px;color:var(--muted);margin-top:3px}
+.channel-empty{min-height:176px;display:grid;place-items:center;align-content:center;text-align:center;padding:28px}
+.channel-empty>span{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(139,92,246,.07);color:#b18afc;font-size:18px}
+.channel-empty b{font-size:12px;margin-top:10px}
+.channel-empty p{max-width:390px;margin:5px 0 0;color:var(--muted);font-size:10px;line-height:1.5}
+.channel-next-steps{display:flex;flex-direction:column;gap:8px}
+.channel-next-steps>div{display:flex;gap:10px;padding:11px;border:1px solid var(--line);border-radius:12px}
+.channel-next-steps>div>span{font-size:9px;font-weight:900;color:#9b72f0}
+.channel-next-steps b,.channel-next-steps small{display:block}
+.channel-next-steps b{font-size:11px;margin-bottom:3px}
+.channel-next-steps small{font-size:10px;color:var(--muted);line-height:1.45}
+.channel-next-steps>div.done{border-color:rgba(34,197,94,.18)}
+.channel-next-action{width:100%;margin-top:12px}
+.platform-foundation-card{grid-column:1/-1}
+.platform-foundation-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.platform-foundation-grid button{
+  border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.012);color:inherit;
+  display:flex;align-items:center;gap:11px;padding:12px;text-align:left;cursor:pointer;transition:.18s ease
+}
+.platform-foundation-grid button:hover{border-color:rgba(139,92,246,.35);transform:translateY(-1px);background:rgba(139,92,246,.035)}
+.platform-mini-mark{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:#0c0e13;border:1px solid rgba(255,255,255,.08);font-weight:900}
+.platform-foundation-grid button div{flex:1}
+.platform-foundation-grid b,.platform-foundation-grid small{display:block}
+.platform-foundation-grid b{font-size:11px}
+.platform-foundation-grid small{font-size:9px;color:var(--muted);margin-top:3px}
+.platform-foundation-grid em{font-size:9px;color:#b18afc;font-style:normal;font-weight:800}
+@media(max-width:1050px){
+  .channel-main-grid,.channel-bottom-grid{grid-template-columns:1fr}
+  .channel-pipeline{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:760px){
+  .channel-hero{align-items:flex-start;flex-direction:column;padding:20px}
+  .channel-hero-actions{width:100%;justify-content:flex-start}
+  .channel-stat-grid{grid-template-columns:1fr 1fr}
+  .channel-pipeline{grid-template-columns:1fr}
+  .platform-foundation-grid{grid-template-columns:1fr}
+}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2415,6 +2576,8 @@ body.auth-checking .auth-boot{display:grid}
   <section id="trialReels" class="page hidden"></section>
   <section id="production" class="page hidden"></section>
   <section id="frameExtractor" class="page hidden"></section>
+  <section id="xStudio" class="page hidden"></section>
+  <section id="tiktokStudio" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
   <section id="reelDetail" class="page hidden"></section>
   <section id="smartTimes" class="page hidden"></section>
@@ -2438,6 +2601,8 @@ const navItems=[
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels teste"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
   ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrair frame"],
+  ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X"],
+  ["tiktokStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14 4v10.4a4.6 4.6 0 1 1-3.3-4.4\"></path><path d=\"M14 4c1.2 2.6 3 4 5.5 4.4\"></path></svg>","TikTok"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
   ["smartTimes","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"></circle><path d=\"M12 7v5l3 2\"></path><path d=\"M4 4l2 2M20 4l-2 2\"></path></svg>","Horários"],
   ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Automação"],
@@ -3125,6 +3290,7 @@ function nav(){
   const groups=[
     {label:"Workspace",pages:["overview","calendar","trialReels"]},
     {label:"Produção",pages:["production","frameExtractor"]},
+    {label:"Canais",pages:["xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
   ];
@@ -3134,7 +3300,8 @@ function nav(){
       <div class="nav-label">${g.label}</div>
       ${g.pages.map(id=>{
         const x=byId[id];
-        return `<button class="${id===currentPage?"active":""}" data-page="${id}" data-label="${x[2]}" title="${x[2]}"><span class="nav-icon">${x[1]}</span><b>${x[2]}</b></button>`;
+        const beta=["xStudio","tiktokStudio"].includes(id);
+        return `<button class="${id===currentPage?"active":""}" data-page="${id}" data-label="${x[2]}" title="${x[2]}"><span class="nav-icon">${x[1]}</span><b>${x[2]}</b>${beta?'<em class="nav-beta">Beta</em>':""}</button>`;
       }).join("")}
     </div>`).join("");
   document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
@@ -3151,6 +3318,9 @@ function showPage(id){
   renderAll();
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
+  if((id==="xStudio"||id==="tiktokStudio")&&cloudSession){
+    Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus()]).then(()=>renderAll());
+  }
 }
 
 function currentCalendarStartISO(){return localISO(new Date())}
@@ -6026,6 +6196,191 @@ function frameExtractorPage(){
     </div>`;
 }
 
+
+function platformStudioConfig(platform){
+  if(platform==="x")return {
+    id:"xStudio",
+    platform:"x",
+    name:"X",
+    title:"X Studio",
+    mark:"X",
+    eyebrow:"DISTRIBUIÇÃO · X",
+    intro:"Prepare vídeos, texto e distribuição para contas do X em um fluxo separado do Instagram.",
+    accent:"x",
+    formatTitle:"Vídeo + copy + CTA",
+    formatText:"Estrutura pensada para enviar um vídeo diferente por conta, com texto e link/CTA próprios.",
+    rules:[
+      ["Conteúdo por conta","Cada conta poderá receber vídeo, texto e link independentes."],
+      ["Fila isolada","Publicação no X não vai disputar o worker do Instagram."],
+      ["Retry próprio","Falhas da API do X ficam contidas no canal."],
+      ["Aprendizado separado","Métricas e horários do X não contaminam o Smart Scheduler do Instagram."]
+    ]
+  };
+  return {
+    id:"tiktokStudio",
+    platform:"tiktok",
+    name:"TikTok",
+    title:"TikTok Studio",
+    mark:"♪",
+    eyebrow:"DISTRIBUIÇÃO · TIKTOK",
+    intro:"Uma área própria para preparar publicação vertical, agenda, contas e aprendizado do TikTok.",
+    accent:"tiktok",
+    formatTitle:"Vídeo vertical + legenda",
+    formatText:"A base fica pronta para vídeo, legenda, configurações do post e métricas específicas do TikTok.",
+    rules:[
+      ["Canal independente","TikTok terá conta, fila e worker próprios."],
+      ["Reuso de produção","Resultados da Produção IA poderão entrar no TikTok sem duplicar o fluxo de criação."],
+      ["Agenda própria","Horários futuros serão aprendidos com métricas do próprio TikTok."],
+      ["Dados isolados","Performance do TikTok não altera o aprendizado do Instagram ou Trial."]
+    ]
+  };
+}
+function platformStudioAccount(platform){
+  return platformAccounts.find(x=>String(x.platform||"").toLowerCase()===platform)||null;
+}
+function platformStudioSetting(platform){
+  return automationData?.settings?.platforms?.[platform]||{};
+}
+function platformStudioSchedules(platform){
+  return allScheduled().filter(x=>String(x.platform||"instagram").toLowerCase()===platform);
+}
+function platformStudioStats(platform){
+  const rows=platformStudioSchedules(platform);
+  const now=Date.now();
+  return {
+    total:rows.length,
+    future:rows.filter(x=>new Date(x.scheduledAt).getTime()>=now&&!["publicado","erro","cancelado"].includes(getStatus(x))).length,
+    published:rows.filter(x=>getStatus(x)==="publicado").length,
+    failed:rows.filter(x=>getStatus(x)==="erro").length
+  };
+}
+function openPlatformIntegrations(platform){
+  settingsTab="integrations";
+  showPage("settings");
+  setTimeout(()=>{
+    const el=$("#platformFoundationCard");
+    if(el)el.scrollIntoView({behavior:"smooth",block:"center"});
+    toast((platform==="x"?"X":"TikTok")+" está com a base pronta. A próxima etapa é conectar a API oficial.","ok");
+  },80);
+}
+function platformStudioQueue(platform,rows){
+  if(!rows.length)return `
+    <div class="channel-empty">
+      <span>＋</span>
+      <b>Nenhum conteúdo neste canal ainda</b>
+      <p>A fila será ativada quando a conta e o worker oficial de ${platform==="x"?"X":"TikTok"} forem conectados.</p>
+    </div>`;
+  return rows.slice(0,8).map(row=>`
+    <div class="channel-queue-row">
+      <div class="channel-queue-thumb"><span>▶</span></div>
+      <div class="channel-queue-copy">
+        <b>${esc(row.name||"Vídeo")}</b>
+        <span>${row.scheduledAt?fmtDateTime(row.scheduledAt):"Sem horário"}</span>
+      </div>
+      <span class="status-pill ${statusClass(getStatus(row))}">${statusLabel(getStatus(row))}</span>
+    </div>`).join("");
+}
+function platformStudioPage(platform){
+  const cfg=platformStudioConfig(platform);
+  const root=$("#"+cfg.id);if(!root)return;
+  const account=platformStudioAccount(platform);
+  const setting=platformStudioSetting(platform);
+  const stats=platformStudioStats(platform);
+  const rows=platformStudioSchedules(platform);
+  const connected=!!account?.enabled;
+  const prepared=setting?.status==="prepared"||platform==="x"||platform==="tiktok";
+  const foundation=prepared?1:0;
+  const accountStep=connected?1:0;
+  const worker=(automationData?.workers||[]).find(w=>w.worker_name===platform+"_publish");
+  const workerStep=worker?.online?1:0;
+  const metricsStep=rows.some(x=>getStatus(x)==="publicado")?1:0;
+  const learningStep=0;
+  const steps=[foundation,accountStep,workerStep,metricsStep,learningStep];
+  const progress=Math.round(steps.reduce((a,b)=>a+b,0)/steps.length*100);
+  const status=connected?"Conta conectada":prepared?"Base pronta":"Planejado";
+
+  root.innerHTML=`
+    <div class="channel-page channel-${cfg.accent}">
+      <div class="channel-hero">
+        <div class="channel-hero-main">
+          <div class="channel-brand-mark">${cfg.mark}</div>
+          <div>
+            <span class="ui3-eyebrow">${cfg.eyebrow}</span>
+            <div class="channel-title-row">
+              <h2>${cfg.title}</h2>
+              <span class="channel-stage-pill ${connected?"ready":""}"><i></i>${status}</span>
+            </div>
+            <p>${cfg.intro}</p>
+          </div>
+        </div>
+        <div class="channel-hero-actions">
+          <button class="btn primary" onclick="openPlatformIntegrations('${platform}')">${connected?"Gerenciar conta":"Preparar integração"}</button>
+          <button class="btn" onclick="showPage('production')">Abrir Produção IA</button>
+        </div>
+      </div>
+
+      <div class="channel-stat-grid">
+        <div class="channel-stat-card"><small>CONTAS ATIVAS</small><b>${connected?1:0}</b><span>${connected?esc(account.account_label||cfg.name):"aguardando conexão"}</span></div>
+        <div class="channel-stat-card"><small>AGENDADOS</small><b>${stats.future}</b><span>conteúdos futuros</span></div>
+        <div class="channel-stat-card"><small>PUBLICADOS</small><b>${stats.published}</b><span>histórico do canal</span></div>
+        <div class="channel-stat-card"><small>WORKER</small><b>${worker?.online?"ONLINE":"—"}</b><span>${worker?.online?"publicação ativa":"será criado na integração"}</span></div>
+      </div>
+
+      <div class="channel-main-grid">
+        <div class="card channel-panel channel-launch-card">
+          <div class="ui3-panel-head">
+            <div><span>ATIVAÇÃO</span><h3>Pipeline do ${cfg.name}</h3></div>
+            <strong class="channel-progress-number">${progress}%</strong>
+          </div>
+          <div class="channel-progress"><i style="width:${progress}%"></i></div>
+          <div class="channel-pipeline">
+            ${[
+              ["Base de dados","Schema e plataforma preparados",foundation],
+              ["Conta + API","Autorizar conta oficial",accountStep],
+              ["Worker 24/7","Fila, retry e publicação",workerStep],
+              ["Métricas","Coleta por conteúdo",metricsStep],
+              ["Aprendizado","Horários próprios do canal",learningStep]
+            ].map((s,i)=>`<div class="${s[2]?"done":""}"><span>${s[2]?"✓":i+1}</span><b>${s[0]}</b><small>${s[1]}</small></div>`).join("")}
+          </div>
+          <div class="channel-foundation-note">
+            <span>Base real</span>
+            <p>O banco já aceita <code>platform="${platform}"</code>. Publicação continua desligada até a API oficial e o worker desse canal serem configurados.</p>
+          </div>
+        </div>
+
+        <div class="card channel-panel">
+          <div class="ui3-panel-head"><div><span>FORMATO</span><h3>${cfg.formatTitle}</h3></div><span class="status-pill warn">Preparado</span></div>
+          <p class="channel-panel-copy">${cfg.formatText}</p>
+          <div class="channel-rule-list">
+            ${cfg.rules.map(r=>`<div><span>✓</span><div><b>${r[0]}</b><small>${r[1]}</small></div></div>`).join("")}
+          </div>
+        </div>
+      </div>
+
+      <div class="channel-bottom-grid">
+        <div class="card channel-panel">
+          <div class="ui3-panel-head">
+            <div><span>CONTEÚDO</span><h3>Fila do ${cfg.name}</h3></div>
+            <span class="channel-count">${stats.total} item(ns)</span>
+          </div>
+          <div class="channel-queue-list">${platformStudioQueue(platform,rows)}</div>
+        </div>
+
+        <div class="card channel-panel channel-next-card">
+          <div class="ui3-panel-head"><div><span>PRÓXIMA ETAPA</span><h3>O que falta para publicar</h3></div></div>
+          <div class="channel-next-steps">
+            <div class="${connected?"done":""}"><span>01</span><div><b>Conectar API oficial</b><small>OAuth/token server-side e conta real.</small></div></div>
+            <div><span>02</span><div><b>Criar worker dedicado</b><small>Publicação, retry, locks e rate limits sem misturar Instagram.</small></div></div>
+            <div><span>03</span><div><b>Ativar métricas + scheduler</b><small>Aprendizado e melhores horários exclusivos do ${cfg.name}.</small></div></div>
+          </div>
+          <button class="btn primary channel-next-action" onclick="openPlatformIntegrations('${platform}')">Abrir preparação da integração</button>
+        </div>
+      </div>
+    </div>`;
+}
+function xStudioPage(){platformStudioPage("x")}
+function tiktokStudioPage(){platformStudioPage("tiktok")}
+
 function setSettingsTab(tab){
   settingsTab=tab;
   if(tab==="health"){
@@ -6345,6 +6700,15 @@ function settings(){
         <p class="muted">A estrutura já separa conteúdo por conta. A publicação continua usando a conta ativa enquanto a conexão de uma segunda conta está em Beta.</p>
       </div>
 
+      <div class="card ui3-panel platform-foundation-card" id="platformFoundationCard">
+        <div class="ui3-panel-head"><div><span>Novos canais</span><h3>X + TikTok</h3></div><span class="status-pill warn">Fundação pronta</span></div>
+        <p class="muted">Os dois canais já têm áreas próprias e o banco aceita conteúdo separado por plataforma. As APIs de publicação continuam desligadas até a conexão oficial.</p>
+        <div class="platform-foundation-grid">
+          <button onclick="showPage('xStudio')"><span class="platform-mini-mark">X</span><div><b>X Studio</b><small>Vídeo · copy · CTA · multi-conta</small></div><em>Abrir →</em></button>
+          <button onclick="showPage('tiktokStudio')"><span class="platform-mini-mark">♪</span><div><b>TikTok Studio</b><small>Vertical · agenda · métricas próprias</small></div><em>Abrir →</em></button>
+        </div>
+      </div>
+
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Backend</span><h3>Supabase</h3></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Desconectado"}</span></div><p class="muted">Banco, Storage, workers e automações 24/7.</p></div>
 
       <div class="card ui3-panel runninghub-settings-card">
@@ -6447,6 +6811,8 @@ function renderAll(){
   safeRenderPage("trialReels",trialReelsPage);
   safeRenderPage("production",productionPage);
   safeRenderPage("frameExtractor",frameExtractorPage);
+  safeRenderPage("xStudio",xStudioPage);
+  safeRenderPage("tiktokStudio",tiktokStudioPage);
   safeRenderPage("metrics",metrics);
   if(currentReelDetail)safeRenderPage("reelDetail",reelDetailPage);
   safeRenderPage("smartTimes",smartTimesPage);
