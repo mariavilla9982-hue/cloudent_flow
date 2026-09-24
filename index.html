@@ -1844,6 +1844,36 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   .production-ready-actions button span{display:none}
 }
 
+
+/* ===== Patch: clean names, ready actions, extras, extractor ===== */
+.production-ready-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;min-width:170px}
+.production-ready-actions button{white-space:nowrap}
+.production-ready-actions button.danger{color:#ff858c;border-color:#49252a}
+.production-ready-actions button:disabled{opacity:.55;cursor:default}
+.production-job-actions{min-width:180px}
+.calendar-day-add-more{width:100%;margin-top:8px;padding:8px;border:1px dashed #2a313d;border-radius:8px;background:#0a0d11;color:#808998;font-size:8px;font-weight:800;cursor:pointer}
+.calendar-day-add-more:hover{color:#ff77a7;border-color:#5b3044;background:#100d12}
+.ui31-day .count.extra{color:#f2c96a;border-color:#4c3c1d;background:#161208}
+.extra-slot{border-left-color:#d49d45!important}.extra-post-badge{background:#21190b!important;color:#efc76e!important;border-color:#493719!important}
+.analytics-useful-card{padding:16px;margin-bottom:12px}
+.analytics-useful-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.analytics-useful-head span{font-size:8px;color:#697281;font-weight:900;letter-spacing:.08em}.analytics-useful-head h3{margin:2px 0 0;font-size:13px}
+.metric-series-tabs{display:flex;gap:5px;background:#090b0f;border:1px solid #1e232b;padding:4px;border-radius:9px}
+.metric-series-tabs button{border:0;background:transparent;color:#737c8a;font-size:8px;font-weight:800;padding:6px 9px;border-radius:6px;cursor:pointer}.metric-series-tabs button.active{background:#21131a;color:#ff78a8}
+.analytics-useful-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:8px}
+.analytics-useful-summary>div{background:#090b0f;border:1px solid #1d222a;border-radius:8px;padding:8px 10px}.analytics-useful-summary span,.analytics-useful-summary b{display:block}.analytics-useful-summary span{font-size:7.5px;color:#66707d}.analytics-useful-summary b{font-size:12px;margin-top:2px}.analytics-useful-summary .positive{color:#65da98}.analytics-useful-summary .negative{color:#ff8088}.analytics-useful-summary .neutral{color:#8d95a1}
+.frame-head-actions{display:flex;gap:7px}.frame-extractor-layout{display:grid;grid-template-columns:minmax(320px,.8fr) minmax(0,1.4fr);gap:12px}.frame-links-card,.frame-results-card{padding:16px}
+.frame-link-count{font-size:8px;color:#8b94a1;background:#10141a;border:1px solid #232933;padding:5px 8px;border-radius:999px}
+.frame-links-input{width:100%;min-height:250px;resize:vertical;background:#090b0f;border:1px solid #252b35;border-radius:10px;color:#e7e9ed;padding:12px;font:9px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;box-sizing:border-box}
+.frame-links-input:focus{outline:none;border-color:#65344a}.frame-extractor-tip{font-size:8px;color:#68717f;line-height:1.45;margin:8px 0 10px}.frame-process-btn{width:100%;height:40px}
+.frame-results-list{display:grid}.frame-result-row{display:grid;grid-template-columns:32px 60px minmax(0,1fr) 120px 110px;gap:9px;align-items:center;padding:9px 3px;border-top:1px solid #191e25}.frame-result-row:first-child{border-top:0}
+.frame-result-number{font-size:8px;color:#555e6b;text-align:center;font-weight:900}.frame-result-preview{width:60px;height:76px;border-radius:8px;background:#0a0d12;border:1px solid #232933;overflow:hidden;display:grid;place-items:center;color:#677181}.frame-result-preview img{width:100%;height:100%;object-fit:cover}
+.frame-result-copy{min-width:0}.frame-result-copy b,.frame-result-copy span,.frame-result-copy em{display:block}.frame-result-copy b{font-size:9px}.frame-result-copy span{font-size:7.5px;color:#68717f;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.frame-result-copy em{font-size:7.5px;color:#ff8188;margin-top:3px;font-style:normal}
+.frame-result-status{justify-self:start;font-size:8px;font-weight:900;padding:5px 7px;border-radius:999px}.frame-result-status.waiting{background:#151920;color:#8d96a3}.frame-result-status.working{background:#241420;color:#ff77a7}.frame-result-status.ready{background:#102319;color:#65d99a}.frame-result-status.error{background:#281215;color:#ff7e86}.frame-result-status i{display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:5px;animation:productionPulse 1s infinite}
+.frame-result-actions button{border:1px solid #2a3039;background:#11151b;color:#cdd1d8;border-radius:7px;padding:7px 8px;font-size:8px;cursor:pointer}.frame-result-actions button:hover{border-color:#563146;color:#ff83ad}
+@media(max-width:1000px){.frame-extractor-layout{grid-template-columns:1fr}.analytics-useful-summary{grid-template-columns:1fr 1fr}.frame-result-row{grid-template-columns:28px 54px minmax(0,1fr) 100px}.frame-result-actions{grid-column:3/5}}
+@media(max-width:650px){.production-ready-actions{grid-template-columns:1fr}.analytics-useful-head{align-items:flex-start;flex-direction:column}.analytics-useful-summary{grid-template-columns:1fr 1fr}.frame-result-row{grid-template-columns:28px 54px 1fr}.frame-result-status{grid-column:3}.frame-result-actions{grid-column:3}.frame-head-actions{flex-direction:column}}
+
 </style>
 </head>
 <body>
@@ -1882,6 +1912,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   <section id="overview" class="page"></section>
   <section id="calendar" class="page hidden"></section>
   <section id="production" class="page hidden"></section>
+  <section id="frameExtractor" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
   <section id="reelDetail" class="page hidden"></section>
   <section id="smartTimes" class="page hidden"></section>
@@ -1902,6 +1933,7 @@ const navItems=[
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
+  ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrair frame"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
   ["smartTimes","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"></circle><path d=\"M12 7v5l3 2\"></path><path d=\"M4 4l2 2M20 4l-2 2\"></path></svg>","Horários"],
   ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Automação"],
@@ -1922,7 +1954,8 @@ const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
 let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
-let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30;
+let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30, metricSeries="views";
+let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
 let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
 function defaultSmartSamples(){
   const rows=[], times=["09:00","12:00","15:00","18:00","21:00"];
@@ -2091,7 +2124,7 @@ async function loadInstagramStatus(loadMetrics=true){
 async function loadInstagramMetricsStored(){
   if(!cloudSession||!instagramIntegration?.enabled)return;
   try{
-    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"GET"});
+    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=120",{method:"GET"});
     liveInstagramMetrics=stored.media||[];
     mergeInstagramIntoSmartSamples(liveInstagramMetrics);
   }catch(e){
@@ -2450,7 +2483,7 @@ function bindSidebarHover(){
 function nav(){
   const groups=[
     {label:"Workspace",pages:["overview","calendar"]},
-    {label:"Produção",pages:["production"]},
+    {label:"Produção",pages:["production","frameExtractor"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
   ];
@@ -2482,7 +2515,9 @@ function weekDates(){
   const start=new Date(state.weekStart+"T00:00:00");return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})
 }
 function slotData(date,slot){return state.slots[keyFor(date,slot)]||null}
-function filledCount(date){return Array.from({length:5},(_,i)=>slotData(date,i)).filter(Boolean).length}
+function filledCount(date){return dateSlots(date).length}
+function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
+
 function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
 
 function minutesOf(time){
@@ -2500,7 +2535,7 @@ function validateSchedule(date,time,ignoreKey=null){
   const mins=minutesOf(time);
   if(!Number.isFinite(mins)) return {ok:false,msg:"Horário inválido."};
   const items=dateSlots(date,ignoreKey);
-  if(items.length>=5) return {ok:false,msg:"Esse dia já possui 5 vídeos."};
+  if(items.length>=12) return {ok:false,msg:"Limite de 12 vídeos manuais por dia atingido."};
   for(const item of items){
     const other=minutesOf(item.time);
     if(other===mins) return {ok:false,msg:`Já existe um vídeo às ${time}.`};
@@ -2508,6 +2543,7 @@ function validateSchedule(date,time,ignoreKey=null){
   }
   return {ok:true};
 }
+
 function firstValidDefaultSlot(date,ignoreKey=null){
   for(let i=0;i<5;i++){
     const k=keyFor(date,i);
@@ -2869,7 +2905,7 @@ function calendarPage(){
         <div class="calendar-week-identity">
           <span>SEMANA ATUAL</span>
           <b>${startLabel} — ${endLabel}</b>
-          <small>${filled} de 35 posições preenchidas</small>
+          <small>${filled<=35?filled+" de 35 posições base":("35 posições base + "+(filled-35)+" extras")}</small>
         </div>
 
         <label class="calendar-date-control">
@@ -2887,8 +2923,8 @@ function calendarPage(){
       </div>
 
       <div class="calendar-health-row">
-        <div><span>Ocupação</span><b>${filled}/35</b></div>
-        <div><span>Livres</span><b>${35-filled}</b></div>
+        <div><span>Ocupação base</span><b>${Math.min(filled,35)}/35</b></div>
+        <div><span>Extras manuais</span><b>${Math.max(0,filled-35)}</b></div>
         <div><span>Posts/dia</span><b>${automationData?.settings?.posts_per_day||5}</b></div>
         <div><span>Intervalo mínimo</span><b>${gap} min</b></div>
         <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · sem testes automáticos":"Smart Scheduler"}</b></div>
@@ -2909,32 +2945,46 @@ function calendarPage(){
 }
 
 function dayColumn(d,label){
-  const iso=localISO(d), count=filledCount(iso);
+  const iso=localISO(d),count=filledCount(iso);
+  const extras=dateSlots(iso)
+    .map(x=>Number(String(x.key).split("#")[1]))
+    .filter(i=>Number.isFinite(i)&&i>=5)
+    .sort((a,b)=>a-b);
+  const countLabel=count<=5?count+"/5":count+" posts";
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
-    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count">${count}/5</div></div>
-    <div class="day-slots">${Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("")}</div>
+    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>5?"extra":""}">${countLabel}</div></div>
+    <div class="day-slots">
+      ${Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("")}
+      ${extras.map(i=>renderSlot(iso,i)).join("")}
+    </div>
+    <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)">＋ Adicionar outro vídeo</button>
   </div>`;
 }
+
 function renderSlot(date,i){
-  const x=slotData(date,i), time=x?.time||state.defaultTimes[i];
-  if(!x)return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
+  const x=slotData(date,i),time=x?.time||state.defaultTimes[i]||"";
+  if(!x){
+    if(i>=5)return "";
+    return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
+  }
   const st=getStatus(x),isAuto=x.smartMode==="auto";
   const strategy=x.smartStrategy||(isAuto?"tested":"manual");
   const badgeMeta=strategy==="test"
     ? {label:"🧪 Teste",cls:"smart-test-badge"}
     : strategy==="strong"
       ? {label:"🔥 Forte",cls:"smart-strong-badge"}
-      : strategy==="tested"
-        ? {label:"✓ Testado",cls:"smart-tested-badge"}
+      : strategy==="tested"||strategy==="stable"
+        ? {label:"✓ Estável",cls:"smart-tested-badge"}
         : null;
   const smartBadge=badgeMeta
     ? `<button class="badge smart-strategy-btn ${badgeMeta.cls}" onclick="event.stopPropagation();openSmartStrategyMenu('${date}',${i})" title="Alterar tipo de horário">${badgeMeta.label}</button>`
-    : "";
-  return `<div class="slot filled ui31-slot" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
+    : i>=5?'<span class="badge extra-post-badge">Extra manual</span>':"";
+  const displayName="Vídeo "+(i+1);
+  return `<div class="slot filled ui31-slot ${i>=5?"extra-slot":""}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
       <button class="ui31-thumb" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo">▶</button>
       <div class="ui31-slot-copy">
-        <b title="${esc(x.name)}">${esc(x.name)}</b>
+        <b title="${esc(x.name)}">${displayName}</b>
         <span>${x.time} · ${fmtSize(x.size)}</span>
       </div>
       <details class="slot-menu" onclick="event.stopPropagation()">
@@ -3092,8 +3142,10 @@ async function handleQuickSlotVideo(input){
   }
 }
 function firstFreeSlot(date){
-  for(let i=0;i<5;i++)if(!slotData(date,i))return i;return -1
+  for(let i=0;i<12;i++)if(!slotData(date,i))return i;
+  return -1;
 }
+
 async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto",smartStrategy=null){
   const choice=smartMode==="auto"?smartChoiceForSlot(date,slot):null;
   const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
@@ -3219,17 +3271,18 @@ async function clearCurrentWeek(){
   save();renderAll();toast("Semana limpa com sucesso.","ok")
 }
 
-function openScheduleModal(){
+function openScheduleModal(presetDate=null,extraManual=false){
   const dates=weekDates();
-  const auto=smartSchedulerEnabled();
+  const auto=smartSchedulerEnabled()&&!extraManual;
   $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
-    <div class="modal-head"><div><b>Agendar vídeo</b><div class="muted">O Smart Scheduler usa o histórico dos seus Reels para escolher o horário.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="modal-head"><div><b>${extraManual?"Adicionar vídeo extra":"Agendar vídeo"}</b><div class="muted">${extraManual?"Post extra manual: o Smart Scheduler não altera esse horário.":"O Smart Scheduler usa o histórico real para escolher um horário estável."}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <input id="modalExtra" type="hidden" value="${extraManual?"1":"0"}">
     <div class="formgrid">
-      <div class="field"><label>Dia</label><select id="modalDay" onchange="updateScheduleModalSmartTime()">${dates.map(d=>`<option value="${localISO(d)}">${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`).join("")}</select></div>
+      <div class="field"><label>Dia</label><select id="modalDay" onchange="updateScheduleModalSmartTime()">${dates.map(d=>{const iso=localISO(d);return `<option value="${iso}" ${presetDate===iso?"selected":""}>${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`}).join("")}</select></div>
       <div class="field"><label>Horário</label><input id="modalTime" type="time" value="12:00"></div>
-      <div class="field full smart-schedule-choice">
+      <div class="field full smart-schedule-choice ${extraManual?"hidden":""}">
         <label><input id="modalSmart" type="checkbox" ${auto?"checked":""} onchange="updateScheduleModalSmartTime()"> <b>Usar melhor horário automaticamente</b></label>
-        <small id="modalSmartHint">Selecionando automaticamente 4 horários testados + 1 horário de teste.</small>
+        <small id="modalSmartHint">Usando os horários estáveis aprendidos pelo histórico.</small>
       </div>
       <div class="field full"><label>Legenda</label><textarea id="modalCaption" placeholder="Legenda do Reel..."></textarea></div>
       <div class="field full"><label>Arquivo</label><input id="modalFile" type="file" accept="video/*"></div>
@@ -3238,25 +3291,27 @@ function openScheduleModal(){
   </div></div>`;
   setTimeout(updateScheduleModalSmartTime,0);
 }
+
 async function confirmScheduleModal(){
   const date=$("#modalDay").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
   if(!file){alert("Escolha um vídeo.");return}
-  const free=firstFreeSlot(date);if(free<0){alert("Esse dia já está com 5 vídeos.");return}
-  const auto=$("#modalSmart")?.checked??false;
-  const choice=auto?smartChoiceForSlot(date,free):{time:$("#modalTime").value,strategy:"manual"};
+  const free=firstFreeSlot(date);if(free<0){alert("Esse dia atingiu o limite manual de vídeos.");return}
+  const extra=$("#modalExtra")?.value==="1";
+  const auto=!extra&&($("#modalSmart")?.checked??false);
+  const choice=auto?smartChoiceForSlot(date,Math.min(free,4)):{time:$("#modalTime").value,strategy:"manual"};
   const time=choice.time;
   const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
 
   const btn=document.querySelector('#modalHost .btn.primary');
   if(btn){btn.disabled=true;btn.textContent="Enviando…"}
   try{
-    const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual",choice.strategy);
+    const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual",auto?choice.strategy:"manual");
     if(ok){
       await syncFromBackend();
       closeModal();
       renderAll();
       setTimeout(()=>jumpToCalendarDay(date),40);
-      toast(file.name+" agendado para "+date+" às "+time+(auto?(choice.strategy==="test"?" como horário de teste.":" em horário testado."):"."),"ok");
+      toast((extra?"Vídeo extra":"Vídeo")+" agendado para "+date+" às "+time+".","ok");
     }
   }catch(e){
     console.error("Schedule upload error:",e);
@@ -3265,6 +3320,7 @@ async function confirmScheduleModal(){
     if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent="Salvar no calendário"}
   }
 }
+
 function openEditScheduleModal(date,slot){
   const x=slotData(date,slot);if(!x)return;
   const dates=weekDates();
@@ -3308,6 +3364,8 @@ async function confirmEditSchedule(oldDate,oldSlot){
   syncQueue();closeModal();log(`${x.name} atualizado e fila sincronizada.`,"ok")
 }
 function setMetricsPeriod(days){metricsPeriod=days;metrics()}
+function setMetricSeries(metric){metricSeries=metric;metrics()}
+
 function aggregateMetricsByDay(rows){
   const map=new Map();
   for(const m of rows){
@@ -3322,6 +3380,7 @@ function aggregateMetricsByDay(rows){
 function analyticsChart(rows,metric="views"){
   const data=aggregateMetricsByDay(rows);
   if(!data.length)return '<div class="ui3-chart-empty">Sem dados para este período.</div>';
+  const label={views:"views",reach:"alcance",likes:"curtidas"}[metric]||metric;
   const W=1000,H=300,P=34,max=Math.max(1,...data.map(x=>+x[metric]||0));
   const pts=data.map((m,i)=>{
     const x=data.length===1?W/2:P+i*(W-P*2)/(data.length-1);
@@ -3337,13 +3396,13 @@ function analyticsChart(rows,metric="views"){
     }
   });
   const area=line+` L ${pts[pts.length-1].x.toFixed(1)} ${H-P} L ${pts[0].x.toFixed(1)} ${H-P} Z`;
-  return `<div class="ui31-chart">
+  return `<div class="ui31-chart useful-chart">
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
       <defs><linearGradient id="chartFill31" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3f7f" stop-opacity=".25"/><stop offset="100%" stop-color="#ff3f7f" stop-opacity="0"/></linearGradient></defs>
       <g class="chart-grid"><line x1="34" y1="65" x2="966" y2="65"/><line x1="34" y1="150" x2="966" y2="150"/><line x1="34" y1="235" x2="966" y2="235"/></g>
       <path d="${area}" fill="url(#chartFill31)"/>
       <path d="${line}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
-      ${pts.map(p=>`<circle class="chart-hover-dot" cx="${p.x}" cy="${p.y}" r="7"><title>${new Date(p.m.date+"T12:00:00").toLocaleDateString("pt-BR")} · ${Number(p.m[metric]||0).toLocaleString("pt-BR")} ${metric==="reach"?"alcance":"views"} · ${p.m.count} Reels</title></circle>`).join("")}
+      ${pts.map(p=>`<circle class="chart-hover-dot" cx="${p.x}" cy="${p.y}" r="7"><title>${new Date(p.m.date+"T12:00:00").toLocaleDateString("pt-BR")} · ${Number(p.m[metric]||0).toLocaleString("pt-BR")} ${label} · ${p.m.count} Reels</title></circle>`).join("")}
     </svg>
     <div class="ui3-chart-labels"><span>${new Date(data[0].date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span><span>${data.length} dias · ${rows.length} Reels</span><span>${new Date(data[data.length-1].date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span></div>
   </div>`;
@@ -3494,16 +3553,28 @@ function openReelPreview(id){
 }
 function metrics(){
   if(cloudLoading){$("#metrics").innerHTML=loadingShell("Carregando métricas");return}
-  const cutoff=Date.now()-metricsPeriod*86400000;
+  const now=Date.now(),cutoff=now-metricsPeriod*86400000,prevCutoff=now-metricsPeriod*2*86400000;
   const rows=liveInstagramMetrics.filter(m=>new Date(m.timestamp).getTime()>=cutoff);
+  const previous=liveInstagramMetrics.filter(m=>{const t=new Date(m.timestamp).getTime();return t>=prevCutoff&&t<cutoff});
   const total=rows.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0),saves:a.saves+(+m.saves||0)}),{views:0,reach:0,likes:0,saves:0});
+  const prevTotal=previous.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0)}),{views:0,reach:0,likes:0});
   const avg=rows.length?Math.round(total.views/rows.length):0;
   const ranking=[...rows].sort((a,b)=>(+b.views||0)-(+a.views||0));
+  const daily=aggregateMetricsByDay(rows);
+  const bestDay=[...daily].sort((a,b)=>(+b[metricSeries]||0)-(+a[metricSeries]||0))[0]||null;
+  const currentMetric=Number(total[metricSeries]||0),previousMetric=Number(prevTotal[metricSeries]||0);
+  const delta=previousMetric?((currentMetric-previousMetric)/previousMetric*100):null;
+  const metricLabel={views:"Visualizações",reach:"Alcance",likes:"Curtidas"}[metricSeries]||metricSeries;
 
   $("#metrics").innerHTML=`
     <div class="ui3-page-head">
       <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance do Instagram</h2><p>Seguidores ao vivo e desempenho real dos seus Reels.</p></div>
-      <div class="toolbar metric-filter"><button class="btn ${metricsPeriod===7?"active-filter":""}" onclick="setMetricsPeriod(7)">7 dias</button><button class="btn ${metricsPeriod===30?"active-filter":""}" onclick="setMetricsPeriod(30)">30 dias</button><button class="btn primary" onclick="syncInstagramToday()">↻ Sincronizar</button></div>
+      <div class="toolbar metric-filter">
+        <button class="btn ${metricsPeriod===7?"active-filter":""}" onclick="setMetricsPeriod(7)">7d</button>
+        <button class="btn ${metricsPeriod===30?"active-filter":""}" onclick="setMetricsPeriod(30)">30d</button>
+        <button class="btn ${metricsPeriod===60?"active-filter":""}" onclick="setMetricsPeriod(60)">60d</button>
+        <button class="btn primary" onclick="syncInstagramToday()">↻ Sincronizar</button>
+      </div>
     </div>
     <div class="ui3-kpis">
       <div class="ui3-kpi"><span>Visualizações</span><strong>${total.views.toLocaleString("pt-BR")}</strong><small>${metricsPeriod} dias</small></div>
@@ -3511,6 +3582,25 @@ function metrics(){
       <div class="ui3-kpi"><span>Média por Reel</span><strong>${avg.toLocaleString("pt-BR")}</strong><small>${rows.length} Reels</small></div>
       <div class="ui3-kpi"><span>Curtidas</span><strong>${total.likes.toLocaleString("pt-BR")}</strong><small>engajamento</small></div>
     </div>
+
+    <div class="card analytics-useful-card">
+      <div class="analytics-useful-head">
+        <div><span>DESEMPENHO</span><h3>${metricLabel} por dia</h3></div>
+        <div class="metric-series-tabs">
+          <button class="${metricSeries==="views"?"active":""}" onclick="setMetricSeries('views')">Views</button>
+          <button class="${metricSeries==="reach"?"active":""}" onclick="setMetricSeries('reach')">Alcance</button>
+          <button class="${metricSeries==="likes"?"active":""}" onclick="setMetricSeries('likes')">Curtidas</button>
+        </div>
+      </div>
+      <div class="analytics-useful-summary">
+        <div><span>Total</span><b>${currentMetric.toLocaleString("pt-BR")}</b></div>
+        <div><span>Média/dia</span><b>${daily.length?Math.round(currentMetric/daily.length).toLocaleString("pt-BR"):"0"}</b></div>
+        <div><span>Melhor dia</span><b>${bestDay?new Date(bestDay.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—"}</b></div>
+        <div><span>vs. período anterior</span><b class="${delta===null?"neutral":delta>=0?"positive":"negative"}">${delta===null?"—":(delta>=0?"+":"")+delta.toFixed(1).replace(".",",")+"%"}</b></div>
+      </div>
+      ${analyticsChart(rows,metricSeries)}
+    </div>
+
     <div class="card follower-analytics-card">
       <div class="follower-card-head">
         <div><span>CRESCIMENTO</span><h3>Seguidores por dia</h3></div>
@@ -3771,24 +3861,12 @@ function productionFileChangedFromInput(input){
   const box=$("#production"+(kind==="video"?"VideoBox":"FrameBox"));
   const file=input?.files?.[0];
   if(!box||!file)return;
-
-  const old=box.dataset.previewUrl;
-  if(old){try{URL.revokeObjectURL(old)}catch{}}
-  const url=URL.createObjectURL(file);
-  box.dataset.previewUrl=url;
-  box.classList.add("selected","has-preview");
-
-  const mediaHost=box.querySelector(".production-upload-preview");
-  if(mediaHost){
-    mediaHost.innerHTML=kind==="video"
-      ? '<video src="'+url+'" muted playsinline preload="metadata"></video><span class="production-preview-play">▶</span>'
-      : '<img src="'+url+'" alt="Frame da modelo">';
-  }
-
-  const title=box.querySelector(".production-upload-title");
-  const meta=box.querySelector(".production-upload-meta");
-  if(title)title.textContent=file.name;
-  if(meta)meta.textContent=fmtSize(file.size)+" · "+(file.type||"arquivo");
+  const title=box.querySelector("b"),meta=box.querySelector("small");
+  const next=(productionData?.jobs?.length||0)+1;
+  if(title)title.textContent=(kind==="video"?"Vídeo ":"Frame ")+next;
+  if(meta)meta.textContent=fmtSize(file.size)+" · "+(kind==="video"?"vídeo original":"frame da modelo");
+  box.title=file.name;
+  box.classList.add("selected");
 }
 
 async function addProductionJob(){
@@ -4055,20 +4133,80 @@ function productionPreviewMarkup(url,kind){
   return '<video class="production-inline-preview" src="'+esc(url)+'#t=0.05" muted playsinline preload="metadata"></video>';
 }
 
+async function downloadProductionResult(id,number){
+  try{
+    const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind=result");
+    const res=await fetch(r.url);
+    if(!res.ok)throw new Error("Não consegui baixar o vídeo.");
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="Video final "+number+".mp4";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(e){toast(e.message,"err")}
+}
+function openProductionScheduleModal(id,number){
+  if(!cloudSession)return;
+  const today=new Date(),tomorrow=new Date(today);tomorrow.setDate(today.getDate()+1);
+  const day=localISO(tomorrow);
+  $("#modalHost").innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box production-schedule-modal">
+    <div class="modal-head"><div><b>Adicionar Vídeo final ${number} ao calendário</b><div class="muted">Escolha dia e horário. Esse agendamento fica manual e protegido do Smart Scheduler.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="formgrid">
+      <div class="field"><label>Dia</label><input id="productionScheduleDay" type="date" value="${day}"></div>
+      <div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="12:00"></div>
+      <div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>
+    </div>
+    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="scheduleProductionResult('${id}')">Adicionar ao calendário</button></div>
+  </div></div>`;
+}
+async function scheduleProductionResult(id){
+  const day=$("#productionScheduleDay")?.value,time=$("#productionScheduleTime")?.value,caption=$("#productionScheduleCaption")?.value||"";
+  if(!day||!time){toast("Escolha dia e horário.","err");return}
+  const check=validateSchedule(day,time);
+  if(!check.ok){toast(check.msg,"err");return}
+  const [h,m]=time.split(":").map(Number),at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
+  try{
+    await cloudFetch("?action=production-schedule",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual"})
+    });
+    await Promise.all([loadProductionData(true),syncFromBackend()]);
+    closeModal();renderAll();toast("Vídeo adicionado ao calendário.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function deleteProductionJob(id){
+  if(!confirm("Excluir este job e seus arquivos de produção? Se o resultado já estiver no calendário, o vídeo agendado será preservado."))return;
+  try{
+    await cloudFetch("?action=production-job",{
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id})
+    });
+    await loadProductionData(true);productionPage();toast("Job excluído.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+
 function productionJobRow(j,i,total){
   const st=productionStatusMeta(j.status);
   const live=["uploading","queued","running"].includes(j.status);
   const pv=productionData?.previews?.[j.id]||{};
+  const n=total-i;
   let action="";
-  if(j.status==="ready") action=
-    '<div class="production-ready-actions">'+
-      '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ <span>Ver resultado</span></button>'+
-      '<button data-id="'+esc(j.id)+'" onclick="downloadProductionResult(this.dataset.id)">↓ <span>Baixar</span></button>'+
-      '<button data-id="'+esc(j.id)+'" onclick="openProductionScheduleModal(this.dataset.id)">＋ <span>Calendário</span></button>'+
-      '<button class="danger" data-id="'+esc(j.id)+'" onclick="deleteProductionJob(this.dataset.id)">× <span>Excluir</span></button>'+
+  if(j.status==="ready"){
+    const scheduled=!!j.meta?.scheduled;
+    action='<div class="production-ready-actions">'+
+      '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver</button>'+
+      '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
+      (scheduled?'<button disabled>✓ No calendário</button>':'<button onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">📅 Calendário</button>')+
+      '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
     '</div>';
-  else if(["failed","cancelled"].includes(j.status)) action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
-  else action='<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>';
+  }else if(["failed","cancelled"].includes(j.status)){
+    action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
+  }else{
+    action='<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>';
+  }
 
   const err=j.last_error?'<em title="'+esc(j.last_error)+'">'+esc(String(j.last_error).slice(0,90))+'</em>':"";
   const task=j.runninghub_task_id?"Task "+esc(String(j.runninghub_task_id).slice(-8)):"Tentativa "+j.attempt_count+"/"+j.max_attempts;
@@ -4080,15 +4218,15 @@ function productionJobRow(j,i,total){
     : "";
 
   return '<div class="production-job '+(live?"is-live":"")+'">'+
-    '<div class="production-job-num">'+String(total-i).padStart(2,"0")+'</div>'+
-    '<button class="production-media-cell" data-id="'+esc(j.id)+'" data-kind="original" onclick="productionPreviewFromButton(this)">'+
+    '<div class="production-job-num">'+String(n).padStart(2,"0")+'</div>'+
+    '<button class="production-media-cell" title="'+esc(j.original_file_name)+'" data-id="'+esc(j.id)+'" data-kind="original" onclick="productionPreviewFromButton(this)">'+
       productionPreviewMarkup(pv.original,"video")+
-      '<div><b>'+esc(j.original_file_name)+'</b><small>'+fmtSize(j.original_size_bytes)+' · vídeo original</small></div>'+
+      '<div><b>Vídeo '+n+'</b><small>'+fmtSize(j.original_size_bytes)+' · vídeo original</small></div>'+
     '</button>'+
     '<div class="production-arrow">＋</div>'+
-    '<button class="production-media-cell frame" data-id="'+esc(j.id)+'" data-kind="frame" onclick="productionPreviewFromButton(this)">'+
+    '<button class="production-media-cell frame" title="'+esc(j.frame_file_name)+'" data-id="'+esc(j.id)+'" data-kind="frame" onclick="productionPreviewFromButton(this)">'+
       productionPreviewMarkup(pv.frame,"frame")+
-      '<div><b>'+esc(j.frame_file_name)+'</b><small>'+fmtSize(j.frame_size_bytes)+' · frame da modelo</small></div>'+
+      '<div><b>Frame '+n+'</b><small>'+fmtSize(j.frame_size_bytes)+' · frame da modelo</small></div>'+
     '</button>'+
     '<div class="production-job-state">'+
       '<span class="production-status '+st.cls+'">'+(live?'<i></i>':"")+st.label+'</span>'+
@@ -4096,7 +4234,7 @@ function productionJobRow(j,i,total){
       '<div class="production-job-meta"><small>'+task+'</small>'+elapsed+credits+'</div>'+
       err+
     '</div>'+
-    '<div class="production-job-actions '+(j.status==="ready"?"ready":"")+'">'+action+'</div>'+
+    '<div class="production-job-actions">'+action+'</div>'+
     '</div>';
 }
 
@@ -4159,6 +4297,158 @@ function productionPage(){
     '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><small class="muted">Acompanhamento automático</small></div><div class="production-queue">'+rows+'</div></div>';
   ensureProductionTicker();
   setTimeout(syncProductionElapsed,0);
+}
+
+
+function updateFrameExtractorText(value){frameExtractorLinksText=value}
+function frameLinks(){
+  return [...new Set(String(frameExtractorLinksText||"").split(/\s+/).map(x=>x.trim()).filter(Boolean))];
+}
+async function extractFirstFrameBlob(videoUrl){
+  return new Promise((resolve,reject)=>{
+    const video=document.createElement("video");
+    video.crossOrigin="anonymous";
+    video.muted=true;video.playsInline=true;video.preload="auto";
+    let done=false;
+    const fail=msg=>{if(done)return;done=true;video.remove();reject(new Error(msg))};
+    const capture=()=>{
+      if(done)return;
+      try{
+        const w=video.videoWidth,h=video.videoHeight;
+        if(!w||!h)return fail("Não consegui ler o frame do vídeo.");
+        const canvas=document.createElement("canvas");
+        canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(video,0,0,w,h);
+        canvas.toBlob(blob=>{
+          if(!blob)return fail("Falha ao gerar o primeiro frame.");
+          done=true;video.remove();resolve(blob);
+        },"image/jpeg",0.96);
+      }catch(e){fail(e.message||"Falha ao capturar frame.")}
+    };
+    video.onerror=()=>fail("Não consegui carregar o vídeo desse link.");
+    video.onloadedmetadata=()=>{
+      try{
+        const target=Math.min(0.01,Math.max(0,(video.duration||0)/1000));
+        if(video.seekable?.length&&target>0){video.currentTime=target}
+      }catch{}
+    };
+    video.onseeked=capture;
+    video.onloadeddata=()=>setTimeout(()=>{if(!done)capture()},120);
+    video.src=videoUrl;
+    video.load();
+    setTimeout(()=>fail("Tempo esgotado ao extrair o frame."),30000);
+  });
+}
+async function cleanupFrameSource(path){
+  if(!path)return;
+  try{
+    await cloudFetch("?action=frame-source",{
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({path})
+    });
+  }catch{}
+}
+async function processFrameLinks(){
+  if(frameExtractorBusy)return;
+  const links=frameLinks();
+  if(!links.length){toast("Cole pelo menos um link do Instagram.","err");return}
+  frameExtractorBusy=true;
+  frameExtractorResults.forEach(x=>{if(x.blobUrl)URL.revokeObjectURL(x.blobUrl)});
+  frameExtractorResults=links.map((link,i)=>({link,index:i+1,status:"waiting",blobUrl:null,error:null}));
+  frameExtractorPage();
+
+  for(let i=0;i<frameExtractorResults.length;i++){
+    const row=frameExtractorResults[i];
+    let cleanupPath=null;
+    try{
+      row.status="resolving";frameExtractorPage();
+      const source=await cloudFetch("?action=frame-source",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({url:row.link})
+      });
+      cleanupPath=source.cleanup_path;
+      row.status="extracting";frameExtractorPage();
+      const blob=await extractFirstFrameBlob(source.video_url);
+      row.blob=blob;
+      row.blobUrl=URL.createObjectURL(blob);
+      row.status="ready";
+      row.fileName="Frame "+row.index+".jpg";
+    }catch(e){
+      row.status="error";
+      row.error=e.message||"Falha ao extrair frame.";
+    }finally{
+      await cleanupFrameSource(cleanupPath);
+      frameExtractorPage();
+    }
+  }
+  frameExtractorBusy=false;frameExtractorPage();
+  toast("Extração concluída.","ok");
+}
+function downloadExtractedFrame(index){
+  const row=frameExtractorResults[index];
+  if(!row?.blobUrl)return;
+  const a=document.createElement("a");
+  a.href=row.blobUrl;a.download=row.fileName||("Frame "+(index+1)+".jpg");
+  document.body.appendChild(a);a.click();a.remove();
+}
+function downloadAllExtractedFrames(){
+  const ready=frameExtractorResults.filter(x=>x.status==="ready"&&x.blobUrl);
+  if(!ready.length){toast("Nenhum frame pronto ainda.","err");return}
+  ready.forEach((row,i)=>setTimeout(()=>{
+    const a=document.createElement("a");
+    a.href=row.blobUrl;a.download=row.fileName;
+    document.body.appendChild(a);a.click();a.remove();
+  },i*350));
+}
+function clearFrameExtractor(){
+  frameExtractorResults.forEach(x=>{if(x.blobUrl)URL.revokeObjectURL(x.blobUrl)});
+  frameExtractorResults=[];frameExtractorLinksText="";frameExtractorBusy=false;frameExtractorPage();
+}
+function frameExtractorStatus(row){
+  return {
+    waiting:["Aguardando","waiting"],
+    resolving:["Abrindo link","working"],
+    extracting:["Extraindo 1º frame","working"],
+    ready:["Pronto","ready"],
+    error:["Erro","error"]
+  }[row.status]||["Aguardando","waiting"];
+}
+function frameExtractorPage(){
+  const root=$("#frameExtractor");if(!root)return;
+  const links=frameLinks(),ready=frameExtractorResults.filter(x=>x.status==="ready").length;
+  root.innerHTML=`
+    <div class="ui3-page-head">
+      <div><span class="ui3-eyebrow">FERRAMENTAS</span><h2>Extrair primeiro frame</h2><p>Cole vários links de Reels. O CloudentFlow extrai somente o primeiro frame de cada vídeo.</p></div>
+      <div class="frame-head-actions">${ready?'<button class="btn success" onclick="downloadAllExtractedFrames()">↓ Baixar todos os frames</button>':""}<button class="btn" onclick="clearFrameExtractor()">Limpar</button></div>
+    </div>
+
+    <div class="frame-extractor-layout">
+      <div class="card frame-links-card">
+        <div class="ui3-panel-head"><div><span>Links</span><h3>Reels do Instagram</h3></div><span class="frame-link-count">${links.length} link${links.length===1?"":"s"}</span></div>
+        <textarea id="frameLinksInput" class="frame-links-input" placeholder="Cole um link por linha&#10;&#10;https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..." oninput="updateFrameExtractorText(this.value)">${esc(frameExtractorLinksText)}</textarea>
+        <div class="frame-extractor-tip">Somente Reels públicos. O vídeo é usado temporariamente para capturar o primeiro frame e depois é removido.</div>
+        <button class="btn primary frame-process-btn" ${frameExtractorBusy?"disabled":""} onclick="processFrameLinks()">${frameExtractorBusy?"Processando…":"✦ Extrair primeiros frames"}</button>
+      </div>
+
+      <div class="card frame-results-card">
+        <div class="ui3-panel-head"><div><span>Resultados</span><h3>${frameExtractorResults.length?frameExtractorResults.length+" vídeos":"Aguardando links"}</h3></div><small class="muted">${ready} prontos</small></div>
+        <div class="frame-results-list">
+          ${frameExtractorResults.length?frameExtractorResults.map((row,i)=>{
+            const st=frameExtractorStatus(row);
+            return `<div class="frame-result-row ${st[1]}">
+              <div class="frame-result-number">${String(row.index).padStart(2,"0")}</div>
+              <div class="frame-result-preview">${row.blobUrl?`<img src="${esc(row.blobUrl)}" alt="Frame ${row.index}">`:'<span>▧</span>'}</div>
+              <div class="frame-result-copy"><b>Frame ${row.index}</b><span title="${esc(row.link)}">${esc(row.link.replace(/^https?:\/\//,"").slice(0,54))}</span>${row.error?`<em>${esc(row.error)}</em>`:""}</div>
+              <span class="frame-result-status ${st[1]}">${st[1]==="working"?'<i></i>':""}${st[0]}</span>
+              <div class="frame-result-actions">${row.status==="ready"?`<button onclick="downloadExtractedFrame(${i})">↓ Baixar frame</button>`:""}</div>
+            </div>`;
+          }).join(""):'<div class="production-empty"><span>▧</span><b>Nenhum frame ainda</b><small>Cole os links ao lado e inicie a extração.</small></div>'}
+        </div>
+      </div>
+    </div>`;
 }
 
 function setSettingsTab(tab){
@@ -4448,6 +4738,7 @@ function renderAll(){
   safeRenderPage("overview",overview);
   safeRenderPage("calendar",calendarPage);
   safeRenderPage("production",productionPage);
+  safeRenderPage("frameExtractor",frameExtractorPage);
   safeRenderPage("metrics",metrics);
   if(currentReelDetail)safeRenderPage("reelDetail",reelDetailPage);
   safeRenderPage("smartTimes",smartTimesPage);
