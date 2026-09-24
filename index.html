@@ -1874,6 +1874,33 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:1000px){.frame-extractor-layout{grid-template-columns:1fr}.analytics-useful-summary{grid-template-columns:1fr 1fr}.frame-result-row{grid-template-columns:28px 54px minmax(0,1fr) 100px}.frame-result-actions{grid-column:3/5}}
 @media(max-width:650px){.production-ready-actions{grid-template-columns:1fr}.analytics-useful-head{align-items:flex-start;flex-direction:column}.analytics-useful-summary{grid-template-columns:1fr 1fr}.frame-result-row{grid-template-columns:28px 54px 1fr}.frame-result-status{grid-column:3}.frame-result-actions{grid-column:3}.frame-head-actions{flex-direction:column}}
 
+
+/* ===== Frame Extractor v2 · media downloader cards ===== */
+.frame-extractor-v2{grid-template-columns:minmax(300px,360px) minmax(0,1fr);align-items:start}
+.frame-results-v2{min-height:440px}
+.frame-download-grid{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;align-items:start}
+.frame-media-card{min-width:0;background:linear-gradient(180deg,#0d0f15 0%,#090a0f 100%);border:1px solid #242936;border-radius:14px;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.18);transition:.18s ease}
+.frame-media-card:hover{transform:translateY(-2px);border-color:#393044;box-shadow:0 18px 40px rgba(0,0,0,.28)}
+.frame-media-card.ready{border-color:#32243b}.frame-media-card.error{border-color:#402126}
+.frame-media-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 9px}
+.frame-media-top>span{font-size:7px;letter-spacing:.12em;font-weight:900;color:#697384}
+.frame-media-status{font-style:normal;font-size:7px;font-weight:900;padding:5px 7px;border-radius:999px;background:#151922;color:#7d8796}
+.frame-media-status.ready{background:#12231c;color:#69d69c}.frame-media-status.error{background:#2a1216;color:#ff7c87}.frame-media-status.working{background:#211321;color:#db72ff}
+.frame-media-preview{position:relative;width:100%;aspect-ratio:9/12;max-height:300px;border:1px solid #252b36;border-radius:11px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#191225 0%,#0a0b10 58%,#07080c 100%);display:grid;place-items:center}
+.frame-media-preview.has-media{cursor:pointer;padding:0}.frame-media-preview.has-media img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .22s ease}
+.frame-media-preview.has-media:hover img{transform:scale(1.025)}
+.frame-media-play{position:absolute;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;padding-left:3px;background:rgba(5,5,10,.7);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:13px;backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.frame-media-placeholder{display:flex;flex-direction:column;align-items:center;gap:8px;color:#6d7684;font-size:8px;text-align:center}.frame-media-placeholder>span{font-size:18px;color:#8d5db6}.frame-media-placeholder>i{width:20px;height:20px;border:2px solid #32223d;border-top-color:#c560ff;border-radius:50%;animation:spin .8s linear infinite}
+.frame-media-info{padding:10px 2px 9px;min-width:0}.frame-media-info b,.frame-media-info span,.frame-media-info small{display:block}.frame-media-info b{font-size:10px;color:#eef0f4}.frame-media-info span{font-size:7.5px;color:#697383;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.frame-media-info small{font-size:7.5px;color:#7c8592;margin-top:5px}.frame-media-info small.error{color:#ff747f;white-space:normal;line-height:1.35}
+.frame-media-actions{display:grid;gap:7px}.frame-download-btn{width:100%;height:34px;border-radius:8px;border:1px solid #2a303a;background:#12151c;color:#d8dbe1;font-size:8px;font-weight:900;cursor:pointer;transition:.16s ease}.frame-download-btn:hover{transform:translateY(-1px)}
+.frame-download-btn span{font-size:11px;margin-right:5px}.frame-download-btn.frame{border-color:#40304e;background:#17101f;color:#d8a7ff}.frame-download-btn.frame:hover{background:#21132c;border-color:#694483}
+.frame-download-btn.video{border-color:#6e2345;background:linear-gradient(135deg,#5d1738,#351229);color:#ffafd0;box-shadow:0 8px 20px rgba(255,55,127,.08)}.frame-download-btn.video:hover{border-color:#a73467;background:linear-gradient(135deg,#751b45,#451431)}
+.frame-download-btn.retry{border-color:#563035;color:#ff9299;background:#1c1013}.frame-download-btn.waiting{opacity:.55;cursor:default}
+.frame-empty-v2{grid-column:1/-1;min-height:330px;display:grid;place-items:center;align-content:center;gap:7px;text-align:center;color:#67717f}.frame-empty-v2>span{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:#15111b;border:1px solid #302238;color:#a56aca;font-size:16px}.frame-empty-v2 b{font-size:10px;color:#b7bdc7}.frame-empty-v2 small{font-size:8px;max-width:260px;line-height:1.45}
+.frame-video-modal{max-width:480px}.frame-video-modal video{display:block;width:100%;max-height:70vh;border-radius:12px;background:#000;margin-top:12px}
+@media(max-width:1100px){.frame-extractor-v2{grid-template-columns:1fr}.frame-download-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}}
+@media(max-width:620px){.frame-download-grid{grid-template-columns:1fr 1fr}.frame-media-preview{max-height:none}}
+@media(max-width:430px){.frame-download-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -4200,7 +4227,6 @@ function frameLinks(){
 async function extractFirstFrameBlob(videoUrl){
   return new Promise((resolve,reject)=>{
     const video=document.createElement("video");
-    video.crossOrigin="anonymous";
     video.muted=true;video.playsInline=true;video.preload="auto";
     let done=false;
     const fail=msg=>{if(done)return;done=true;video.remove();reject(new Error(msg))};
@@ -4208,7 +4234,7 @@ async function extractFirstFrameBlob(videoUrl){
       if(done)return;
       try{
         const w=video.videoWidth,h=video.videoHeight;
-        if(!w||!h)return fail("Não consegui ler o frame do vídeo.");
+        if(!w||!h)return fail("Não consegui ler o primeiro frame.");
         const canvas=document.createElement("canvas");
         canvas.width=w;canvas.height=h;
         const ctx=canvas.getContext("2d");
@@ -4219,18 +4245,18 @@ async function extractFirstFrameBlob(videoUrl){
         },"image/jpeg",0.96);
       }catch(e){fail(e.message||"Falha ao capturar frame.")}
     };
-    video.onerror=()=>fail("Não consegui carregar o vídeo desse link.");
+    video.onerror=()=>fail("Não consegui abrir o arquivo de vídeo.");
     video.onloadedmetadata=()=>{
       try{
         const target=Math.min(0.01,Math.max(0,(video.duration||0)/1000));
-        if(video.seekable?.length&&target>0){video.currentTime=target}
+        if(video.seekable?.length&&target>0)video.currentTime=target;
       }catch{}
     };
     video.onseeked=capture;
-    video.onloadeddata=()=>setTimeout(()=>{if(!done)capture()},120);
+    video.onloadeddata=()=>setTimeout(()=>{if(!done)capture()},100);
     video.src=videoUrl;
     video.load();
-    setTimeout(()=>fail("Tempo esgotado ao extrair o frame."),30000);
+    setTimeout(()=>fail("Tempo esgotado ao extrair o primeiro frame."),30000);
   });
 }
 async function cleanupFrameSource(path){
@@ -4243,102 +4269,204 @@ async function cleanupFrameSource(path){
     });
   }catch{}
 }
+function releaseFrameResult(row){
+  if(row?.blobUrl)URL.revokeObjectURL(row.blobUrl);
+  if(row?.videoBlobUrl)URL.revokeObjectURL(row.videoBlobUrl);
+}
+function frameVideoExtension(blob,source){
+  if(source?.extension)return source.extension;
+  const type=String(blob?.type||"").toLowerCase();
+  if(type.includes("webm"))return "webm";
+  if(type.includes("quicktime"))return "mov";
+  return "mp4";
+}
+function friendlyFrameError(message){
+  const m=String(message||"");
+  if(m.includes("instagram_video_not_resolved"))return "Não consegui acessar o vídeo. Confirme se o Reel está público ou pertence à conta conectada.";
+  if(m.includes("instagram_video_fetch_failed"))return "O Instagram bloqueou o download desse vídeo. Tente novamente.";
+  if(m.includes("video_too_large"))return "Esse vídeo é grande demais para o extrator.";
+  return m||"Falha ao processar esse Reel.";
+}
+async function processFrameRow(row){
+  let cleanupPath=null;
+  try{
+    row.status="resolving";row.error=null;frameExtractorPage();
+    const source=await cloudFetch("?action=frame-source",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({url:row.link})
+    });
+    cleanupPath=source.cleanup_path;
+    row.resolver=source.resolver||null;
+    row.status="downloading";frameExtractorPage();
+
+    const response=await fetch(source.video_url);
+    if(!response.ok)throw new Error("Falha ao carregar o vídeo resolvido.");
+    const videoBlob=await response.blob();
+    if(!videoBlob.size)throw new Error("O arquivo de vídeo veio vazio.");
+
+    row.videoBlob=videoBlob;
+    row.videoBlobUrl=URL.createObjectURL(videoBlob);
+    row.videoFileName="Vídeo "+row.index+"."+frameVideoExtension(videoBlob,source);
+
+    row.status="extracting";frameExtractorPage();
+    const frameBlob=await extractFirstFrameBlob(row.videoBlobUrl);
+    row.blob=frameBlob;
+    row.blobUrl=URL.createObjectURL(frameBlob);
+    row.fileName="Frame "+row.index+".jpg";
+    row.status="ready";
+  }catch(e){
+    row.status="error";
+    row.error=friendlyFrameError(e.message);
+  }finally{
+    await cleanupFrameSource(cleanupPath);
+    frameExtractorPage();
+  }
+}
 async function processFrameLinks(){
   if(frameExtractorBusy)return;
   const links=frameLinks();
   if(!links.length){toast("Cole pelo menos um link do Instagram.","err");return}
   frameExtractorBusy=true;
-  frameExtractorResults.forEach(x=>{if(x.blobUrl)URL.revokeObjectURL(x.blobUrl)});
-  frameExtractorResults=links.map((link,i)=>({link,index:i+1,status:"waiting",blobUrl:null,error:null}));
+  frameExtractorResults.forEach(releaseFrameResult);
+  frameExtractorResults=links.map((link,i)=>({
+    link,index:i+1,status:"waiting",blobUrl:null,videoBlobUrl:null,error:null
+  }));
   frameExtractorPage();
 
-  for(let i=0;i<frameExtractorResults.length;i++){
-    const row=frameExtractorResults[i];
-    let cleanupPath=null;
-    try{
-      row.status="resolving";frameExtractorPage();
-      const source=await cloudFetch("?action=frame-source",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({url:row.link})
-      });
-      cleanupPath=source.cleanup_path;
-      row.status="extracting";frameExtractorPage();
-      const blob=await extractFirstFrameBlob(source.video_url);
-      row.blob=blob;
-      row.blobUrl=URL.createObjectURL(blob);
-      row.status="ready";
-      row.fileName="Frame "+row.index+".jpg";
-    }catch(e){
-      row.status="error";
-      row.error=e.message||"Falha ao extrair frame.";
-    }finally{
-      await cleanupFrameSource(cleanupPath);
-      frameExtractorPage();
-    }
-  }
+  for(const row of frameExtractorResults)await processFrameRow(row);
+
   frameExtractorBusy=false;frameExtractorPage();
-  toast("Extração concluída.","ok");
+  const ready=frameExtractorResults.filter(x=>x.status==="ready").length;
+  if(ready)toast(ready+" Reel"+(ready===1?" processado.":"s processados."),"ok");
+  else toast("Nenhum Reel pôde ser processado.","err");
+}
+async function retryFrameResult(index){
+  if(frameExtractorBusy)return;
+  const row=frameExtractorResults[index];
+  if(!row)return;
+  releaseFrameResult(row);
+  row.blobUrl=null;row.videoBlobUrl=null;row.error=null;
+  frameExtractorBusy=true;frameExtractorPage();
+  await processFrameRow(row);
+  frameExtractorBusy=false;frameExtractorPage();
+}
+function triggerFrameDownload(url,name){
+  if(!url)return;
+  const a=document.createElement("a");
+  a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
 }
 function downloadExtractedFrame(index){
   const row=frameExtractorResults[index];
-  if(!row?.blobUrl)return;
-  const a=document.createElement("a");
-  a.href=row.blobUrl;a.download=row.fileName||("Frame "+(index+1)+".jpg");
-  document.body.appendChild(a);a.click();a.remove();
+  triggerFrameDownload(row?.blobUrl,row?.fileName||("Frame "+(index+1)+".jpg"));
+}
+function downloadExtractedVideo(index){
+  const row=frameExtractorResults[index];
+  triggerFrameDownload(row?.videoBlobUrl,row?.videoFileName||("Vídeo "+(index+1)+".mp4"));
 }
 function downloadAllExtractedFrames(){
   const ready=frameExtractorResults.filter(x=>x.status==="ready"&&x.blobUrl);
   if(!ready.length){toast("Nenhum frame pronto ainda.","err");return}
-  ready.forEach((row,i)=>setTimeout(()=>{
-    const a=document.createElement("a");
-    a.href=row.blobUrl;a.download=row.fileName;
-    document.body.appendChild(a);a.click();a.remove();
-  },i*350));
+  ready.forEach((row,i)=>setTimeout(()=>triggerFrameDownload(row.blobUrl,row.fileName),i*300));
+}
+function previewExtractedVideo(index){
+  const row=frameExtractorResults[index];
+  if(!row?.videoBlobUrl)return;
+  $("#modalHost").innerHTML=`
+    <div class="modal" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box frame-video-modal">
+        <div class="modal-head">
+          <div><b>Vídeo ${row.index}</b><div class="muted">Preview do Reel processado</div></div>
+          <button class="btn" onclick="closeModal()">Fechar</button>
+        </div>
+        <video src="${esc(row.videoBlobUrl)}" controls autoplay playsinline></video>
+      </div>
+    </div>`;
 }
 function clearFrameExtractor(){
-  frameExtractorResults.forEach(x=>{if(x.blobUrl)URL.revokeObjectURL(x.blobUrl)});
+  frameExtractorResults.forEach(releaseFrameResult);
   frameExtractorResults=[];frameExtractorLinksText="";frameExtractorBusy=false;frameExtractorPage();
 }
 function frameExtractorStatus(row){
   return {
     waiting:["Aguardando","waiting"],
-    resolving:["Abrindo link","working"],
+    resolving:["Abrindo Reel","working"],
+    downloading:["Baixando vídeo","working"],
     extracting:["Extraindo 1º frame","working"],
     ready:["Pronto","ready"],
     error:["Erro","error"]
   }[row.status]||["Aguardando","waiting"];
+}
+function frameMediaCard(row,i){
+  const st=frameExtractorStatus(row);
+  const ready=row.status==="ready";
+  const preview=ready&&row.blobUrl
+    ? `<button class="frame-media-preview has-media" onclick="previewExtractedVideo(${i})" title="Reproduzir vídeo">
+        <img src="${esc(row.blobUrl)}" alt="Primeiro frame do Vídeo ${row.index}">
+        <span class="frame-media-play">▶</span>
+      </button>`
+    : `<div class="frame-media-preview ${st[1]}">
+        <div class="frame-media-placeholder">${st[1]==="working"?'<i></i><b>'+st[0]+'</b>':st[1]==="error"?'<span>!</span><b>Falhou</b>':'<span>▧</span><b>'+st[0]+'</b>'}</div>
+      </div>`;
+
+  return `<article class="frame-media-card ${st[1]}">
+    <div class="frame-media-top">
+      <span>REEL ${String(row.index).padStart(2,"0")}</span>
+      <em class="frame-media-status ${st[1]}">${st[0]}</em>
+    </div>
+    ${preview}
+    <div class="frame-media-info">
+      <b>Vídeo ${row.index}</b>
+      <span title="${esc(row.link)}">${esc(row.link.replace(/^https?:\/\//,"").slice(0,48))}</span>
+      ${ready?'<small>1º frame extraído · vídeo pronto para download</small>':row.error?`<small class="error">${esc(row.error)}</small>`:'<small>Preparando mídia…</small>'}
+    </div>
+    <div class="frame-media-actions">
+      ${ready?`
+        <button class="frame-download-btn frame" onclick="downloadExtractedFrame(${i})"><span>↓</span> Baixar 1º frame</button>
+        <button class="frame-download-btn video" onclick="downloadExtractedVideo(${i})"><span>↓</span> Baixar vídeo</button>
+      `:row.status==="error"?`
+        <button class="frame-download-btn retry" onclick="retryFrameResult(${i})">↻ Tentar novamente</button>
+      `:`<button class="frame-download-btn waiting" disabled>${st[0]}…</button>`}
+    </div>
+  </article>`;
 }
 function frameExtractorPage(){
   const root=$("#frameExtractor");if(!root)return;
   const links=frameLinks(),ready=frameExtractorResults.filter(x=>x.status==="ready").length;
   root.innerHTML=`
     <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">FERRAMENTAS</span><h2>Extrair primeiro frame</h2><p>Cole vários links de Reels. O CloudentFlow extrai somente o primeiro frame de cada vídeo.</p></div>
-      <div class="frame-head-actions">${ready?'<button class="btn success" onclick="downloadAllExtractedFrames()">↓ Baixar todos os frames</button>':""}<button class="btn" onclick="clearFrameExtractor()">Limpar</button></div>
+      <div>
+        <span class="ui3-eyebrow">FERRAMENTAS</span>
+        <h2>Reel Downloader + primeiro frame</h2>
+        <p>Cole links de Reels e receba um card com preview, primeiro frame e vídeo.</p>
+      </div>
+      <div class="frame-head-actions">
+        ${ready?'<button class="btn success" onclick="downloadAllExtractedFrames()">↓ Baixar frames prontos</button>':""}
+        <button class="btn" onclick="clearFrameExtractor()">Limpar</button>
+      </div>
     </div>
 
-    <div class="frame-extractor-layout">
+    <div class="frame-extractor-layout frame-extractor-v2">
       <div class="card frame-links-card">
-        <div class="ui3-panel-head"><div><span>Links</span><h3>Reels do Instagram</h3></div><span class="frame-link-count">${links.length} link${links.length===1?"":"s"}</span></div>
+        <div class="ui3-panel-head">
+          <div><span>Links</span><h3>Reels do Instagram</h3></div>
+          <span class="frame-link-count">${links.length} link${links.length===1?"":"s"}</span>
+        </div>
         <textarea id="frameLinksInput" class="frame-links-input" placeholder="Cole um link por linha&#10;&#10;https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..." oninput="updateFrameExtractorText(this.value)">${esc(frameExtractorLinksText)}</textarea>
-        <div class="frame-extractor-tip">Somente Reels públicos. O vídeo é usado temporariamente para capturar o primeiro frame e depois é removido.</div>
-        <button class="btn primary frame-process-btn" ${frameExtractorBusy?"disabled":""} onclick="processFrameLinks()">${frameExtractorBusy?"Processando…":"✦ Extrair primeiros frames"}</button>
+        <div class="frame-extractor-tip">Cada link vira um card. O CloudentFlow baixa o vídeo temporariamente, captura somente o primeiro frame e remove o arquivo temporário do servidor.</div>
+        <button class="btn primary frame-process-btn" ${frameExtractorBusy?"disabled":""} onclick="processFrameLinks()">${frameExtractorBusy?"Processando Reels…":"✦ Processar links"}</button>
       </div>
 
-      <div class="card frame-results-card">
-        <div class="ui3-panel-head"><div><span>Resultados</span><h3>${frameExtractorResults.length?frameExtractorResults.length+" vídeos":"Aguardando links"}</h3></div><small class="muted">${ready} prontos</small></div>
-        <div class="frame-results-list">
-          ${frameExtractorResults.length?frameExtractorResults.map((row,i)=>{
-            const st=frameExtractorStatus(row);
-            return `<div class="frame-result-row ${st[1]}">
-              <div class="frame-result-number">${String(row.index).padStart(2,"0")}</div>
-              <div class="frame-result-preview">${row.blobUrl?`<img src="${esc(row.blobUrl)}" alt="Frame ${row.index}">`:'<span>▧</span>'}</div>
-              <div class="frame-result-copy"><b>Vídeo ${row.index} + Frame ${row.index}</b><span title="${esc(row.link)}">${esc(row.link.replace(/^https?:\/\//,"").slice(0,54))}</span>${row.error?`<em>${esc(row.error)}</em>`:""}</div>
-              <span class="frame-result-status ${st[1]}">${st[1]==="working"?'<i></i>':""}${st[0]}</span>
-              <div class="frame-result-actions">${row.status==="ready"?`<button onclick="downloadExtractedFrame(${i})">↓ Baixar frame</button>`:""}</div>
-            </div>`;
-          }).join(""):'<div class="production-empty"><span>▧</span><b>Nenhum frame ainda</b><small>Cole os links ao lado e inicie a extração.</small></div>'}
+      <div class="card frame-results-card frame-results-v2">
+        <div class="ui3-panel-head">
+          <div><span>Resultados</span><h3>${frameExtractorResults.length?frameExtractorResults.length+" mídia"+(frameExtractorResults.length===1?"":"s"):"Seus downloads aparecem aqui"}</h3></div>
+          <small class="muted">${ready} pronto${ready===1?"":"s"}</small>
+        </div>
+        <div class="frame-results-list frame-download-grid">
+          ${frameExtractorResults.length
+            ? frameExtractorResults.map(frameMediaCard).join("")
+            : '<div class="frame-empty-v2"><span>▶</span><b>Cole seus Reels</b><small>O preview e os dois botões de download vão aparecer aqui.</small></div>'}
         </div>
       </div>
     </div>`;
