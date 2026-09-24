@@ -2518,8 +2518,6 @@ function slotData(date,slot){return state.slots[keyFor(date,slot)]||null}
 function filledCount(date){return dateSlots(date).length}
 function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
 
-function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
-
 function minutesOf(time){
   if(!/^\d{2}:\d{2}$/.test(time||"")) return NaN;
   const [h,m]=time.split(":").map(Number);
@@ -3908,114 +3906,6 @@ async function productionAction(id,operation){
   }catch(e){toast(e.message,"err")}
 }
 function productionPreviewFromButton(el){previewProductionJob(el.dataset.id,el.dataset.kind||"result")}
-
-async function downloadProductionResult(id){
-  try{
-    const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind=result");
-    const response=await fetch(r.url);
-    if(!response.ok)throw new Error("Falha ao baixar o vídeo.");
-    const blob=await response.blob();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url;
-    a.download="cloudentflow-"+String(id).slice(0,8)+".mp4";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1500);
-  }catch(e){toast(e.message,"err")}
-}
-function productionScheduleSuggested(){
-  const d=new Date();
-  d.setDate(d.getDate()+1);
-  return localISO(d);
-}
-function updateProductionScheduleTime(){
-  const date=$("#productionScheduleDate")?.value;
-  const time=$("#productionScheduleTime");
-  const auto=$("#productionScheduleAuto")?.checked;
-  const hint=$("#productionScheduleHint");
-  if(!date||!time)return;
-  const free=firstFreeSlot(date);
-  if(free<0){
-    if(hint)hint.textContent="Esse dia já está com 5 vídeos.";
-    return;
-  }
-  if(auto){
-    const choice=smartChoiceForSlot(date,free);
-    time.value=choice.time;
-    time.disabled=true;
-    if(hint)hint.textContent="Horário escolhido pelo Smart Scheduler em modo estável.";
-  }else{
-    time.disabled=false;
-    if(hint)hint.textContent="Você escolhe manualmente o horário.";
-  }
-}
-function openProductionScheduleModal(id){
-  const date=productionScheduleSuggested();
-  $("#modalHost").innerHTML=
-    '<div class="modal" onclick="if(event.target===this)closeModal()">'+
-      '<div class="modal-box production-schedule-modal">'+
-        '<div class="modal-head"><div><b>Adicionar ao calendário</b><div class="muted">Use o vídeo pronto do RunningHub sem reenviar o arquivo.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
-        '<div class="formgrid">'+
-          '<div class="field"><label>Dia</label><input id="productionScheduleDate" type="date" min="'+localISO(new Date())+'" value="'+date+'" onchange="updateProductionScheduleTime()"></div>'+
-          '<div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="12:00"></div>'+
-          '<div class="field full smart-schedule-choice"><label><input id="productionScheduleAuto" type="checkbox" checked onchange="updateProductionScheduleTime()"> <b>Usar melhor horário automaticamente</b></label><small id="productionScheduleHint">Smart Scheduler está escolhendo o horário.</small></div>'+
-          '<div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>'+
-        '</div>'+
-        '<div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" data-id="'+esc(id)+'" onclick="confirmProductionSchedule(this.dataset.id)">Adicionar ao calendário</button></div>'+
-      '</div>'+
-    '</div>';
-  setTimeout(updateProductionScheduleTime,0);
-}
-async function confirmProductionSchedule(id){
-  const date=$("#productionScheduleDate")?.value;
-  const auto=$("#productionScheduleAuto")?.checked;
-  const time=$("#productionScheduleTime")?.value;
-  const caption=$("#productionScheduleCaption")?.value||"";
-  if(!date||!time){toast("Escolha dia e horário.","err");return}
-  const valid=validateSchedule(date,time);
-  if(!valid.ok){toast(valid.msg,"err");return}
-  const at=new Date(date+"T00:00:00");
-  const [h,m]=time.split(":").map(Number);
-  at.setHours(h,m,0,0);
-  const btn=document.querySelector("#modalHost .btn.primary");
-  if(btn){btn.disabled=true;btn.textContent="Adicionando…"}
-  try{
-    await cloudFetch("?action=production-schedule",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        id,
-        scheduled_at:at.toISOString(),
-        caption,
-        smart_mode:auto?"auto":"manual",
-        smart_strategy:auto?"stable":"manual"
-      })
-    });
-    await syncFromBackend();
-    await loadProductionData(true);
-    closeModal();
-    productionPage();
-    toast("Vídeo adicionado ao calendário para "+date+" às "+time+".","ok");
-  }catch(e){
-    toast(e.message==="production_already_scheduled"?"Esse vídeo já está no calendário.":e.message,"err");
-    if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent="Adicionar ao calendário"}
-  }
-}
-async function deleteProductionJob(id){
-  if(!confirm("Excluir este job da Produção IA? Se ele já estiver no calendário, o vídeo agendado será preservado."))return;
-  try{
-    await cloudFetch("?action=production-job",{
-      method:"DELETE",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id})
-    });
-    await loadProductionData(true);
-    productionPage();
-    toast("Job excluído.","ok");
-  }catch(e){toast(e.message,"err")}
-}
 
 function productionActionFromButton(el){productionAction(el.dataset.id,el.dataset.op)}
 async function previewProductionJob(id,kind="result"){
