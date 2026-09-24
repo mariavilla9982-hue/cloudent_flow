@@ -2225,6 +2225,8 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .trial-day-list{display:grid;gap:6px;min-height:48px}.trial-empty{display:grid;place-items:center;min-height:48px;border:1px dashed #242830;border-radius:7px;color:#555d69;font-size:7px}.trial-add{width:100%;border:1px dashed #3d3150;border-radius:7px;background:#0e0b14;color:#b69be4;font-size:7.5px;font-weight:900;padding:7px;margin-top:7px}.trial-add:hover{border-color:#8064ac;background:#15101e;color:#d6c3f5}
 .trial-reel-card{padding:8px;border:1px solid #262b34;border-left:2px solid #9272c5;border-radius:8px;background:#0c0e13;min-width:0}.trial-reel-card.processing{border-left-color:#e7b957}.trial-reel-card.published{border-left-color:#55d995}.trial-reel-card.failed{border-left-color:#ff7078}.trial-reel-top{display:flex;align-items:center;gap:5px}.trial-status-dot{width:5px;height:5px;border-radius:50%;background:#9272c5}.trial-reel-card.processing .trial-status-dot{background:#e7b957;animation:calendarStatusPulse 1.1s ease-in-out infinite}.trial-reel-card.published .trial-status-dot{background:#55d995}.trial-reel-card.failed .trial-status-dot{background:#ff7078}.trial-reel-top b{font-size:9px}.trial-reel-top em{margin-left:auto;font-size:6px;color:#7d8795;font-style:normal;text-transform:uppercase;font-weight:900}.trial-reel-card>strong{display:block;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px}.trial-reel-card>small{display:block;font-size:6.5px;color:#626b78;margin-top:2px}.trial-reel-metrics{color:#7fdba4!important}.trial-error{font-size:6.5px;color:#ff8b91;line-height:1.3;margin:5px 0 0}.trial-reel-actions{display:flex;gap:4px;margin-top:7px}.trial-reel-actions button{border:0;background:#151821;color:#aab1bd;border-radius:5px;padding:4px 5px;font-size:6.5px}.trial-reel-actions button:hover{color:#fff;background:#1b2029}.trial-reel-actions .danger-link{color:#ff7f87}
 .trial-schedule-modal{width:min(520px,94vw)}.trial-modal-file{display:grid;grid-template-columns:55px 1fr auto;gap:8px;align-items:center;padding:9px 10px;border:1px solid #242a33;border-radius:9px;background:#0a0c10;margin:10px 0}.trial-modal-file span{font-size:7px;color:#76638e;font-weight:950}.trial-modal-file b{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trial-modal-file small{font-size:7px;color:#6e7784}.trial-modal-rule{padding:9px;border:1px solid #30263e;border-radius:8px;background:#100c16;margin:10px 0}.trial-modal-rule b,.trial-modal-rule span{display:block}.trial-modal-rule b{font-size:8px;color:#bea4e8}.trial-modal-rule span{font-size:7px;color:#766e80;margin-top:2px}
+
+.trial-limit{margin-top:7px;padding:7px;border:1px solid #2b2535;border-radius:7px;background:#0b0a0f;color:#756d80;font-size:7px;font-weight:900;text-align:center}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -3340,8 +3342,8 @@ function trialStatusMeta(status){
   })[s]||{label:s,cls:"scheduled"};
 }
 function trialDefaultTime(date){
-  const times=["00:30","02:30","04:30"];
-  return times[trialRowsForDate(date).length%times.length];
+  const times=["00:30","02:00","03:30","05:00"];
+  return times[Math.min(trialRowsForDate(date).length,times.length-1)];
 }
 function trialMetricText(row){
   const m=row?.trial_metrics?.latest;
@@ -3369,16 +3371,18 @@ function trialReelCard(row){
 function trialReelsBlock(dates=weekDates()){
   const total=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).length,0);
   return '<section class="trial-reels-zone">'+
-    '<div class="trial-reels-head"><div><span>TRIAL REELS · MADRUGADA</span><h3>Bloco separado de testes</h3><p>Publica como Trial Reel para testar distribuição sem misturar com os 7 Reels normais do dia.</p></div>'+
-    '<div class="trial-head-right"><span class="trial-count">'+total+' nesta semana</span><small>00:00–05:59 sugerido</small></div></div>'+
+    '<div class="trial-reels-head"><div><span>TRIAL REELS · MADRUGADA</span><h3>4 testes por madrugada</h3><p>Até 4 Trial Reels por dia, separados dos 7 Reels normais.</p></div>'+
+    '<div class="trial-head-right"><span class="trial-count">'+total+' nesta semana</span><small>00:30 · 02:00 · 03:30 · 05:00</small></div></div>'+
     '<div class="trial-reels-note">◈ Trial real solicitado via API. Se a Meta não aceitar Trial para esta conta/API, o CloudentFlow marca erro e <b>não publica como Reel normal</b>.</div>'+
     '<div class="trial-reels-scroll"><div class="trial-week-grid">'+
       dates.map(d=>{
         const date=localISO(d),rows=trialRowsForDate(date);
         const label=d.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit"}).replace(".","");
-        return '<div class="trial-day"><div class="trial-day-head"><b>'+label+'</b><span>'+rows.length+'</span></div>'+
+        return '<div class="trial-day"><div class="trial-day-head"><b>'+label+'</b><span>'+rows.length+'/4</span></div>'+
           '<div class="trial-day-list">'+(rows.length?rows.map(trialReelCard).join(""):'<div class="trial-empty">Sem Trial</div>')+'</div>'+
-          '<button class="trial-add" onclick="pickTrialForDay(\''+date+'\')">＋ Agendar Trial</button></div>';
+          (rows.length<4
+            ? '<button class="trial-add" onclick="pickTrialForDay(\''+date+'\')">＋ Agendar Trial</button>'
+            : '<div class="trial-limit">4/4 testes agendados</div>')+'</div>';
       }).join("")+
     '</div></div>'+
   '</section>';
@@ -3389,6 +3393,7 @@ function updateTrialReelsBlock(){
 }
 function pickTrialForDay(date){
   if(!cloudSession){toast("Entre no CloudentFlow primeiro.","err");showPage("settings");return}
+  if(trialRowsForDate(date).length>=4){toast("Esse dia já tem 4 Trial Reels.","err");return}
   trialPendingDate=date;
   const input=$("#trialVideoPicker");
   if(!input)return;
