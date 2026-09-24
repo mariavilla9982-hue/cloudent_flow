@@ -2091,7 +2091,8 @@ async function initCloud(){
     withTimeout(syncFromBackend(),4500,"calendário"),
     withTimeout(loadInstagramStatus(false),4500,"status do Instagram"),
     withTimeout(loadAutomationStatus(),4500,"automação"),
-    withTimeout(loadFollowerStats(30),4500,"seguidores")
+    withTimeout(loadFollowerStats(30),4500,"seguidores"),
+    withTimeout(loadPlatformAccounts(),4500,"contas")
   ]);
 }
 async function loadDeferredCloudData(){
@@ -2139,6 +2140,11 @@ async function loadAutomationStatus(){
     automationWorkerStatus={online:false,worker:null,error:e.message};
   }
 }
+async function loadPlatformAccounts(){
+  if(!cloudSession){platformAccounts=[];return}
+  try{platformAccounts=await cloudFetch("?resource=platform-accounts")}catch(e){platformAccounts=[]}
+}
+
 async function loadFollowerStats(days=30){
   if(!cloudSession){followerStats=null;return}
   try{
@@ -2190,6 +2196,18 @@ function mergeInstagramIntoSmartSamples(media=[]){
   }
   save();
 }
+let pwaInstallPrompt=null;
+window.addEventListener("beforeinstallprompt",e=>{
+  e.preventDefault();pwaInstallPrompt=e;
+  if(currentPage==="settings")settings();
+});
+window.addEventListener("appinstalled",()=>{pwaInstallPrompt=null;toast("CloudentFlow instalado como app.","ok")});
+async function installCloudentApp(){
+  if(!pwaInstallPrompt){toast("Use Instalar aplicativo / Adicionar à tela inicial no navegador.","ok");return}
+  pwaInstallPrompt.prompt();await pwaInstallPrompt.userChoice.catch(()=>null);pwaInstallPrompt=null;settings();
+}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}
+
 function focusCloudLogin(){
   showPage("settings");
   setTimeout(()=>{
