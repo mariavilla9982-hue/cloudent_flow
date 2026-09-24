@@ -1992,6 +1992,153 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .calendar-live-performance:hover .calendar-live-hover{display:block}
 @media(max-width:1250px){.calendar-live-performance{grid-template-columns:auto auto 42px auto auto!important}.calendar-spark{width:42px}.calendar-rank,.calendar-score{display:none}}
 @media(max-width:1000px){.calendar-live-performance{grid-template-columns:auto 1fr auto!important}.calendar-spark,.calendar-performance-badge,.calendar-rank,.calendar-score{display:none}.calendar-day-live{grid-template-columns:1fr 1fr!important}.calendar-day-live span:last-child{grid-column:1/-1;text-align:left}}
+
+/* ===== Calendar spacing cleanup v3 ===== */
+.ui3-calendar-scroll{
+  overflow-x:auto!important;
+  overflow-y:visible!important;
+  padding:4px 4px 18px!important;
+  scroll-padding-inline:4px;
+}
+.week-grid.ui3-seven-days{
+  grid-template-columns:repeat(7,minmax(218px,1fr))!important;
+  min-width:1580px!important;
+  gap:14px!important;
+  align-items:start!important;
+}
+.ui31-day{
+  min-width:218px!important;
+  width:100%!important;
+  padding:11px!important;
+  border-radius:13px!important;
+  box-sizing:border-box!important;
+}
+.ui31-day .day-head{margin-bottom:10px!important}
+.ui31-day .day-slots{
+  gap:12px!important;
+}
+.ui31-slot,
+.ui31-empty-slot{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+}
+.ui31-slot{
+  min-height:102px!important;
+  padding:10px!important;
+}
+.ui31-empty-slot{
+  min-height:86px!important;
+  padding:10px!important;
+}
+.ui31-slot-top{
+  grid-template-columns:36px minmax(0,1fr) 24px!important;
+  gap:9px!important;
+}
+.ui31-thumb{
+  width:36px!important;
+  height:48px!important;
+}
+.ui31-slot-copy,
+.ui31-slot-copy>*,
+.ui31-slot-bottom,
+.calendar-schedule-live,
+.calendar-performance-host,
+.calendar-live-performance{
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+.ui31-slot-bottom{
+  margin-top:9px!important;
+  gap:6px!important;
+  flex-wrap:wrap!important;
+}
+.calendar-day-live{
+  margin:0 0 10px!important;
+  padding:7px 8px!important;
+  gap:7px!important;
+  grid-template-columns:1fr 1fr!important;
+}
+.calendar-day-live span{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.calendar-day-live span:last-child{
+  grid-column:1/-1!important;
+  text-align:left!important;
+}
+.calendar-now-line{margin:0 0 10px!important}
+.calendar-schedule-live{
+  margin-top:7px!important;
+  padding:6px 8px!important;
+}
+.calendar-live-performance{
+  margin-top:8px!important;
+  width:100%!important;
+  padding:7px 8px!important;
+  gap:6px!important;
+  grid-template-columns:auto minmax(0,1fr) 52px!important;
+  grid-template-areas:
+    "views trend spark"
+    "score badge rank"
+    "updated updated updated"!important;
+  overflow:visible!important;
+}
+.calendar-live-performance>*{min-width:0!important}
+.calendar-views{grid-area:views!important}
+.calendar-trend{
+  grid-area:trend!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.calendar-spark{
+  grid-area:spark!important;
+  width:52px!important;
+  max-width:52px!important;
+  justify-self:end!important;
+}
+.calendar-score{grid-area:score!important}
+.calendar-performance-badge{
+  grid-area:badge!important;
+  width:max-content!important;
+  max-width:100%!important;
+}
+.calendar-rank{
+  grid-area:rank!important;
+  justify-self:end!important;
+}
+.calendar-best-reel{
+  position:absolute!important;
+  top:7px!important;
+  right:7px!important;
+}
+.calendar-updated{
+  grid-area:updated!important;
+  margin-top:0!important;
+  padding-top:2px!important;
+  border-top:1px solid #171d25!important;
+}
+.calendar-live-hover{
+  left:4px!important;
+  right:4px!important;
+  width:auto!important;
+}
+.calendar-next-badge{
+  right:8px!important;
+}
+.calendar-day-add-more{
+  margin-top:12px!important;
+}
+@media(max-width:1350px){
+  .week-grid.ui3-seven-days{
+    grid-template-columns:repeat(7,214px)!important;
+    min-width:max-content!important;
+  }
+  .ui31-day{min-width:214px!important}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
