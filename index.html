@@ -1766,6 +1766,16 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .runninghub-test-result.success>div{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px solid #193022}.runninghub-test-result.success>div:first-of-type{margin-top:7px}
 .runninghub-test-result.success>div span{color:#8b948f}.runninghub-test-result.success>div strong{color:#70dda2;font-size:9px}
 
+
+/* ===== RunningHub strategic controls ===== */
+.runninghub-credit-pill{display:inline-flex;align-items:center;gap:5px;padding:7px 10px;border-radius:999px;border:1px solid #46391a;background:#17130a;color:#f4ce67;font-size:9px;font-weight:800}
+.runninghub-credit-pill b{font-size:11px;color:#ffe08a}
+.runninghub-commandbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;margin-bottom:12px;border:1px solid #202631;border-radius:11px;background:#0b0e13}
+.runninghub-command-info span,.runninghub-command-info b,.runninghub-command-info small{display:block}.runninghub-command-info span{font-size:8px;color:#666f7d;text-transform:uppercase;letter-spacing:.08em;font-weight:900}.runninghub-command-info b{font-size:11px;margin-top:2px}.runninghub-command-info small{font-size:8px;color:#727b89;margin-top:2px}.runninghub-command-actions{display:flex;gap:7px;flex-wrap:wrap}
+.runninghub-settings-intro-4{grid-template-columns:repeat(4,1fr)}.rh-credit-number{font-size:16px!important;color:#f2cc68!important;font-weight:900!important;margin-top:2px!important}
+@media(max-width:900px){.runninghub-settings-intro-4{grid-template-columns:1fr 1fr}.runninghub-commandbar{align-items:flex-start;flex-direction:column}}
+@media(max-width:560px){.runninghub-settings-intro-4{grid-template-columns:1fr}.runninghub-command-actions{width:100%}.runninghub-command-actions .btn{flex:1}}
+
 </style>
 </head>
 <body>
@@ -3620,8 +3630,13 @@ function automationPage(){
 
 async function loadProductionData(){
   if(!cloudSession){productionData=null;return}
-  productionData=await cloudFetch("?resource=production");
+  const [queue,status]=await Promise.all([
+    cloudFetch("?resource=production"),
+    cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
+  ]);
+  productionData={...queue,runninghubStatus:status};
 }
+
 function productionStatusMeta(status){
   const map={waiting:["Aguardando","waiting"],uploading:["Enviando","uploading"],queued:["Na fila","queued"],running:["Gerando","running"],ready:["Pronto","ready"],failed:["Erro","failed"],cancelled:["Cancelado","cancelled"]};
   const x=map[status]||[status||"Aguardando","waiting"];
@@ -3663,6 +3678,20 @@ async function addProductionJob(){
   }catch(e){toast(e.message,"err")}
   finally{productionUploading=false;productionPage()}
 }
+async function controlRunningHub(operation){
+  try{
+    await cloudFetch("?action=runninghub-control",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({operation})
+    });
+    await loadProductionData();
+    renderAll();
+    const msg=operation==="pause"?"Fila pausada.":operation==="run"?"Fila executada agora.":"Produção retomada.";
+    toast(msg,"ok");
+  }catch(e){toast(e.message,"err")}
+}
+
 async function productionAction(id,operation){
   try{
     await cloudFetch("?action=production-job",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,operation})});
@@ -3775,15 +3804,31 @@ function productionPage(){
   if(!root)return;
   const jobs=productionData?.jobs||[];
   const worker=productionData?.worker;
+  const rh=productionData?.runninghubStatus||{};
   const c=productionCounts();
   const workerOnline=!!worker?.online;
+  const credits=Number.isFinite(Number(rh.credits))?Number(rh.credits):null;
+  const activeTasks=Number.isFinite(Number(rh.activeTasks))?Number(rh.activeTasks):null;
   const rows=jobs.length
     ? jobs.map((j,i)=>productionJobRow(j,i,jobs.length)).join("")
     : '<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
 
   root.innerHTML=
-    '<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>Fila de produção</h2><p>Vídeo original + frame da modelo. Configuração do RunningHub fica em Configurações → Integrações.</p></div>'+
-    '<div class="production-head-actions"><span class="status-pill '+(workerOnline?"ok":"warn")+'">'+(workerOnline?"Worker online":"Worker aguardando")+'</span><button class="btn" onclick="loadProductionData().then(productionPage)">↻ Atualizar</button></div></div>'+
+    '<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>Fila de produção</h2><p>Vídeo original + frame da modelo. O processamento continua no servidor.</p></div>'+
+    '<div class="production-head-actions">'+
+      '<span class="runninghub-credit-pill">◉ <b>'+(credits===null?"—":credits.toLocaleString("pt-BR"))+'</b> créditos</span>'+
+      '<span class="status-pill '+(workerOnline?"ok":"warn")+'">'+(workerOnline?"Worker online":"Worker aguardando")+'</span>'+
+    '</div></div>'+
+
+    '<div class="runninghub-commandbar">'+
+      '<div class="runninghub-command-info"><span>RunningHub</span><b>'+(rh.enabled?"Produção ativa":"Produção pausada")+'</b><small>'+(activeTasks===null?"Status de tarefas indisponível":activeTasks+" tarefa(s) ativa(s)")+'</small></div>'+
+      '<div class="runninghub-command-actions">'+
+        '<button class="btn success" onclick="controlRunningHub(\'run\')">▶ Executar fila</button>'+
+        '<button class="btn" onclick="controlRunningHub(\'pause\')">Ⅱ Pausar</button>'+
+        '<button class="btn" onclick="loadProductionData().then(productionPage)">↻ Atualizar</button>'+
+      '</div>'+
+    '</div>'+
+
     '<div class="production-stats">'+
       '<div><small>NA FILA</small><b>'+c.total+'</b><span>aguardando produção</span></div>'+
       '<div><small>PROCESSANDO</small><b>'+c.running+'</b><span>RunningHub</span></div>'+
@@ -3794,12 +3839,12 @@ function productionPage(){
       '<div class="card production-upload-card">'+
         '<div class="ui3-panel-head"><div><span>Novo job</span><h3>Vídeo + frame</h3></div><button class="btn btn-sm" onclick="setSettingsTab(\'integrations\');showPage(\'settings\')">⚙ Integração</button></div>'+
         '<div class="production-input-grid">'+
-          '<label class="production-drop" id="productionVideoBox"><input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon">▶</span><b>Vídeo original</b><small>Vai para Load Video · node #336</small></label>'+
+          '<label class="production-drop" id="productionVideoBox"><input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon">▶</span><b>Vídeo original</b><small>Load Video · node #336</small></label>'+
           '<div class="production-plus">＋</div>'+
-          '<label class="production-drop" id="productionFrameBox"><input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon frame">▧</span><b>Frame da modelo</b><small>Vai para Load Reference Image · node #338</small></label>'+
+          '<label class="production-drop" id="productionFrameBox"><input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon frame">▧</span><b>Frame da modelo</b><small>Load Reference Image · node #338</small></label>'+
         '</div>'+
         '<button class="btn primary production-add-btn" '+(productionUploading?"disabled":"")+' onclick="addProductionJob()">'+(productionUploading?"Enviando arquivos…":"＋ Adicionar à fila")+'</button>'+
-        '<div class="production-note">Pode adicionar vários pares. A fila continua no servidor mesmo com o PC desligado.</div>'+
+        '<div class="production-note">Adicione quantos pares quiser. Depois use “Executar fila” para disparar na hora.</div>'+
       '</div>'+
     '</div>'+
     '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><small class="muted">Acompanhamento automático</small></div><div class="production-queue">'+rows+'</div></div>';
@@ -3969,7 +4014,7 @@ function cloudentAIPage(){
 
 function settings(){
   const user=cloudSession?.user,ig=instagramIntegration;
-  const rh=productionData?.integration||{},rhCfg=rh.config||{},rhWorker=productionData?.worker;
+  const rh=productionData?.integration||{},rhCfg=rh.config||{},rhWorker=productionData?.worker,rhStatus=productionData?.runninghubStatus||{};
   const rhMapped=!!(rhCfg.workflowId&&rhCfg.videoNodeId&&rhCfg.frameNodeId);
   const rhReady=!!(rh.enabled&&rhMapped&&rhCfg.apiKeyConfigured);
   const a=automationData||{settings:{},workers:[]};
@@ -4000,10 +4045,11 @@ function settings(){
           <span class="status-pill ${rhReady?"ok":"warn"}">${rhReady?"Configurado":"Configurar"}</span>
         </div>
 
-        <div class="runninghub-settings-intro">
-          <div><b>Load Video</b><span>Node #336 · recebe o vídeo original</span></div>
-          <div><b>Load Reference Image</b><span>Node #338 · recebe o frame da modelo</span></div>
-          <div><b>Worker</b><span>${rhWorker?.online?"Online 24/7":"Aguardando configuração"}</span></div>
+        <div class="runninghub-settings-intro runninghub-settings-intro-4">
+          <div><b>Créditos</b><span class="rh-credit-number">${Number.isFinite(Number(rhStatus.credits))?Number(rhStatus.credits).toLocaleString("pt-BR"):"—"}</span></div>
+          <div><b>Load Video</b><span>Node #336 · vídeo original</span></div>
+          <div><b>Reference Image</b><span>Node #338 · frame da modelo</span></div>
+          <div><b>Worker</b><span>${rhWorker?.online?"Online 24/7":"Aguardando"}</span></div>
         </div>
 
         <div class="ui31-toggle-row compact">
@@ -4053,7 +4099,9 @@ function settings(){
 
         <div class="runninghub-settings-actions">
           <button class="btn primary" onclick="saveRunningHubConfig()">Salvar integração</button>
-          <button class="btn success" onclick="testRunningHubConfig()">✓ Testar RunningHub</button>
+          <button class="btn success" onclick="testRunningHubConfig()">✓ Testar</button>
+          <button class="btn success" onclick="controlRunningHub('run')">▶ Executar fila</button>
+          <button class="btn" onclick="controlRunningHub('pause')">Ⅱ Pausar</button>
           <button class="btn" onclick="showPage('production')">Abrir Produção IA</button>
         </div>
         <div id="rhTestResult" class="runninghub-test-result">
