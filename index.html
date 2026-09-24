@@ -3655,6 +3655,20 @@ function openReelPreview(id){
     </div>
   </div>`;
 }
+function metricDaypart(hour){return hour>=6&&hour<12?"morning":hour>=12&&hour<18?"afternoon":"night"}
+function metricsComparisonPanel(rows,ranking){
+  const groups={morning:{label:"Manhã",items:[]},afternoon:{label:"Tarde",items:[]},night:{label:"Noite",items:[]}};
+  rows.forEach(m=>{if(!m.timestamp)return;const p=localMetricParts(m.timestamp);groups[metricDaypart(p.hour)].items.push(m)});
+  const dayparts=Object.values(groups).map(g=>{const total=g.items.reduce((a,m)=>a+(+m.views||0),0);return {...g,avg:g.items.length?Math.round(total/g.items.length):0,total}});
+  const a=ranking[0],b=ranking[1];
+  const reelCompare=a&&b
+    ? '<div class="reel-vs-card"><div><small>REEL #1</small><b>'+Number(a.views||0).toLocaleString("pt-BR")+' views</b><span>'+Number(a.reach||0).toLocaleString("pt-BR")+' alcance · '+Number(a.likes||0).toLocaleString("pt-BR")+' curtidas</span></div><strong>VS</strong><div><small>REEL #2</small><b>'+Number(b.views||0).toLocaleString("pt-BR")+' views</b><span>'+Number(b.reach||0).toLocaleString("pt-BR")+' alcance · '+Number(b.likes||0).toLocaleString("pt-BR")+' curtidas</span></div></div>'
+    : '<div class="ui3-empty">Precisamos de pelo menos 2 Reels para comparar.</div>';
+  return '<div class="card analytics-compare-card"><div class="ui3-panel-head"><div><span>COMPARATIVO</span><h3>Horários e conteúdos</h3></div><small class="muted">média real do período</small></div>' +
+    '<div class="daypart-compare">'+dayparts.map(g=>'<div><small>'+g.label.toUpperCase()+'</small><b>'+g.avg.toLocaleString("pt-BR")+'</b><span>views/Reel · '+g.items.length+' Reel(s)</span></div>').join("")+'</div>' +
+    reelCompare+'</div>';
+}
+
 function metrics(){
   if(cloudLoading){$("#metrics").innerHTML=loadingShell("Carregando métricas");return}
   const now=Date.now(),cutoff=now-metricsPeriod*86400000,prevCutoff=now-metricsPeriod*2*86400000;
@@ -3704,6 +3718,8 @@ function metrics(){
       </div>
       ${analyticsChart(rows,metricSeries)}
     </div>
+
+    ${metricsComparisonPanel(rows,ranking)}
 
     <div class="card follower-analytics-card">
       <div class="follower-card-head">
