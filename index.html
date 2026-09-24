@@ -4282,26 +4282,56 @@ function frameVideoExtension(blob,source){
 }
 function friendlyFrameError(message){
   const m=String(message||"");
-  if(m.includes("instagram_video_not_resolved"))return "Não consegui acessar o vídeo. Confirme se o Reel está público ou pertence à conta conectada.";
+  if(m.includes("instagram_login_required"))return "Esse Reel exige login, é privado ou não está acessível publicamente.";
+  if(m.includes("instagram_public_extract_failed"))return "Não consegui resolver esse Reel público agora. Tente novamente.";
+  if(m.includes("instagram_video_not_resolved"))return "Não consegui acessar o vídeo.";
   if(m.includes("instagram_video_fetch_failed"))return "O Instagram bloqueou o download desse vídeo. Tente novamente.";
   if(m.includes("video_too_large"))return "Esse vídeo é grande demais para o extrator.";
   return m||"Falha ao processar esse Reel.";
+}
+async function resolvePublicInstagramFallback(url){
+  const res=await fetch("/api/instagram",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({url})
+  });
+  let data=null;try{data=await res.json()}catch{}
+  if(!res.ok)throw new Error(data?.error||data?.message||("instagram_fallback_"+res.status));
+  return data;
 }
 async function processFrameRow(row){
   let cleanupPath=null;
   try{
     row.status="resolving";row.error=null;frameExtractorPage();
-    const source=await cloudFetch("?action=frame-source",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({url:row.link})
-    });
-    cleanupPath=source.cleanup_path;
+    let source=null;
+    try{
+      source=await cloudFetch("?action=frame-source",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({url:row.link})
+      });
+      cleanupPath=source.cleanup_path;
+      source.fetch_url=source.video_url;
+      source.resolver=source.resolver||"instagram-official";
+    }catch(primaryError){
+      const fallback=await resolvePublicInstagramFallback(row.link);
+      source={
+        fetch_url:fallback.proxy_url,
+        extension:fallback.extension||"mp4",
+        resolver:fallback.resolver||"yt-dlp",
+        thumbnail_url:fallback.thumbnail_url||null
+      };
+    }
+
     row.resolver=source.resolver||null;
     row.status="downloading";frameExtractorPage();
 
-    const response=await fetch(source.video_url);
-    if(!response.ok)throw new Error("Falha ao carregar o vídeo resolvido.");
+    const response=await fetch(source.fetch_url);
+    if(!response.ok){
+      let problem="Falha ao carregar o vídeo resolvido.";
+      try{const d=await response.json();problem=d?.error||d?.message||problem}catch{}
+      throw new Error(problem);
+    }
     const videoBlob=await response.blob();
     if(!videoBlob.size)throw new Error("O arquivo de vídeo veio vazio.");
 
