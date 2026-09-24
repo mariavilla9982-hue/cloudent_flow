@@ -1945,6 +1945,23 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-drop-live.has-preview .production-draft-clear{display:grid;place-items:center}
 .production-draft-clear:hover{background:#32131f;border-color:#7d2946;color:#ff6d9e}
 .production-add-btn:disabled{opacity:.7;cursor:wait}
+
+/* ===== Live metrics inside Calendar ===== */
+.calendar-day-live{display:flex;align-items:center;justify-content:space-between;gap:5px;margin:-2px 0 7px;padding:6px 7px;border:1px solid #1d242d;border-radius:8px;background:#090c10;color:#737d8b;font-size:7px}
+.calendar-day-live span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calendar-day-live b{color:#e9edf2;font-size:8px}
+.calendar-live-performance{width:100%;margin-top:6px;padding:6px 7px;border:1px solid #1d252e;border-radius:8px;background:#090c10;display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:5px;text-align:left;color:#818b98;cursor:pointer}
+.calendar-live-performance:hover{border-color:#343d49;background:#0d1117}
+.calendar-live-performance.static{cursor:default}
+.calendar-views{font-size:8px;color:#e9edf3;white-space:nowrap}.calendar-views b{font-size:9px}
+.calendar-trend{font-size:7px;white-space:nowrap}.calendar-trend.up{color:#6ed99b}.calendar-trend.neutral{color:#75808d}
+.calendar-score{font-size:7px;color:#6f7986;white-space:nowrap}.calendar-score b{color:#d6dce4}
+.calendar-performance-badge{font-size:6.5px;font-weight:900;text-transform:uppercase;letter-spacing:.03em;padding:3px 5px;border-radius:999px;white-space:nowrap}
+.calendar-performance-badge.strong{color:#ffcb68;background:#21180b;border:1px solid #5b4420}
+.calendar-performance-badge.normal{color:#73d69c;background:#0c1a13;border:1px solid #244a35}
+.calendar-performance-badge.low{color:#9aa3b1;background:#12151a;border:1px solid #303641}
+.calendar-best-reel{color:#ffc85b;font-size:10px;line-height:1}
+@media(max-width:1100px){.calendar-live-performance{grid-template-columns:auto 1fr auto}.calendar-score,.calendar-performance-badge{display:none}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2353,7 +2370,9 @@ async function syncFromBackend(){
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
-      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,platform:row.platform||"instagram",smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
+      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
+      instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,
+      platform:row.platform||"instagram",smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
     };
   }
   save();
@@ -3075,6 +3094,106 @@ function calendarPage(){
     <div class="ui3-calendar-scroll"><div class="week-grid ui3-seven-days">${dates.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}</div></div>
   `;
   $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
+  ensureCalendarMetricsTicker();
+}
+
+function calendarCompactNumber(n){
+  const v=Number(n||0);
+  if(v>=1000000)return (v/1000000).toFixed(v>=10000000?0:1).replace(".",",")+"M";
+  if(v>=1000)return (v/1000).toFixed(v>=10000?0:1).replace(".",",")+"k";
+  return v.toLocaleString("pt-BR");
+}
+function calendarMedian(values){
+  const a=values.filter(Number.isFinite).sort((x,y)=>x-y);
+  if(!a.length)return 0;
+  const m=Math.floor(a.length/2);
+  return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+function calendarMetricRows(date=null){
+  return Object.entries(state.slots)
+    .map(([key,x])=>({key,date:key.split("#")[0],slot:Number(key.split("#")[1]),x}))
+    .filter(r=>(!date||r.date===date)&&r.x?.calendarMetrics?.latest);
+}
+function calendarEngagementValue(m){
+  const reach=Math.max(1,Number(m?.reach||0));
+  return (Number(m?.likes||0)+Number(m?.comments||0)*2+Number(m?.shares||0)*3+Number(m?.saves||0)*3)/reach;
+}
+function calendarMetricScore(x){
+  const m=x?.calendarMetrics?.latest;
+  if(!m)return null;
+  const peers=calendarMetricRows().map(r=>r.x.calendarMetrics.latest);
+  const views=Number(m.views||0);
+  const viewMedian=Math.max(1,calendarMedian(peers.map(p=>Number(p.views||0))));
+  const eng=calendarEngagementValue(m);
+  const engMedian=Math.max(.0001,calendarMedian(peers.map(calendarEngagementValue)));
+  const viewRatio=Math.max(.1,views/viewMedian);
+  const engRatio=Math.max(.1,eng/engMedian);
+  const raw=50+(Math.log2(viewRatio)*18)+(Math.log2(engRatio)*10);
+  return Math.max(0,Math.min(100,Math.round(raw)));
+}
+function calendarMetricSummary(x,date){
+  const latest=x?.calendarMetrics?.latest;
+  if(!latest)return null;
+  const previous=x?.calendarMetrics?.previous;
+  const views=Number(latest.views||0);
+  const prevViews=previous?Number(previous.views||0):null;
+  const delta=prevViews===null?null:Math.max(0,views-prevViews);
+  const score=calendarMetricScore(x);
+  const badge=score>=80
+    ? {label:"Forte",cls:"strong"}
+    : score>=50
+      ? {label:"Normal",cls:"normal"}
+      : {label:"Abaixo",cls:"low"};
+  const dayRows=calendarMetricRows(date);
+  const best=dayRows.length
+    ? [...dayRows].sort((a,b)=>Number(b.x.calendarMetrics.latest.views||0)-Number(a.x.calendarMetrics.latest.views||0))[0]
+    : null;
+  return {
+    views,delta,score,badge,
+    best:best?.x?.scheduleId===x.scheduleId,
+    collectedAt:latest.collected_at||null
+  };
+}
+function calendarDayMetricSummary(date){
+  const rows=calendarMetricRows(date);
+  if(!rows.length)return "";
+  const total=rows.reduce((a,r)=>a+Number(r.x.calendarMetrics.latest.views||0),0);
+  const best=[...rows].sort((a,b)=>Number(b.x.calendarMetrics.latest.views||0)-Number(a.x.calendarMetrics.latest.views||0))[0];
+  return `<div class="calendar-day-live">
+    <span>▶ <b>${calendarCompactNumber(total)}</b> views</span>
+    <span>★ Vídeo ${best.slot+1} · ${calendarCompactNumber(best.x.calendarMetrics.latest.views||0)}</span>
+  </div>`;
+}
+function calendarSlotPerformance(x,date){
+  const p=calendarMetricSummary(x,date);
+  if(!p)return "";
+  const trend=p.delta===null
+    ? '<span class="calendar-trend neutral">→ 1ª leitura</span>'
+    : p.delta>0
+      ? '<span class="calendar-trend up">↗ +'+calendarCompactNumber(p.delta)+'</span>'
+      : '<span class="calendar-trend neutral">→ estável</span>';
+  const star=p.best?'<span class="calendar-best-reel" title="Melhor Reel do dia">★</span>':"";
+  const body='<span class="calendar-views">▶ <b>'+calendarCompactNumber(p.views)+'</b></span>'+trend+
+    '<span class="calendar-score">Score <b>'+p.score+'</b></span>'+
+    '<span class="calendar-performance-badge '+p.badge.cls+'">'+p.badge.label+'</span>'+star;
+  const title='Última coleta'+(p.collectedAt?' · '+new Date(p.collectedAt).toLocaleString("pt-BR"):'');
+  return x.instagramMediaId
+    ? '<button class="calendar-live-performance" title="'+esc(title)+'" onclick="event.stopPropagation();openReelAnalytics(\''+esc(String(x.instagramMediaId))+'\')">'+body+'</button>'
+    : '<div class="calendar-live-performance static" title="'+esc(title)+'">'+body+'</div>';
+}
+function ensureCalendarMetricsTicker(){
+  if(window.__cloudentCalendarMetricsTicker)return;
+  window.__cloudentCalendarMetricsTicker=setInterval(async()=>{
+    if(currentPage!=="calendar"||!cloudSession||document.hidden||window.__cloudentCalendarRefreshing)return;
+    if($("#modalHost")?.children?.length)return;
+    window.__cloudentCalendarRefreshing=true;
+    try{
+      await syncFromBackend();
+      if(currentPage==="calendar")calendarPage();
+    }catch{}finally{
+      window.__cloudentCalendarRefreshing=false;
+    }
+  },60000);
 }
 
 function dayColumn(d,label){
@@ -3085,7 +3204,8 @@ function dayColumn(d,label){
     .sort((a,b)=>a-b);
   const countLabel=count<=7?count+"/7":count+" posts";
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
-    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>5?"extra":""}">${countLabel}</div></div>
+    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>7?"extra":""}">${countLabel}</div></div>
+    ${calendarDayMetricSummary(iso)}
     <div class="day-slots">
       ${Array.from({length:7},(_,i)=>renderSlot(iso,i)).join("")}
       ${extras.map(i=>renderSlot(iso,i)).join("")}
@@ -3135,6 +3255,7 @@ function renderSlot(date,i){
       ${smartBadge}
       ${x.caption?'<span class="slot-caption-dot" title="Com legenda">●</span>':""}
     </div>
+    ${calendarSlotPerformance(x,date)}
   </div>`;
 }
 
