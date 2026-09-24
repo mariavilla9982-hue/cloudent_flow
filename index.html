@@ -2259,6 +2259,14 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .trial-inline-status.failed{color:#ff8189!important;border-color:#54282d!important;background:#170b0d!important}
 .trial-inline-metric{margin-top:6px;padding:5px 7px;border:1px solid #20372b;border-radius:7px;background:#0a120e;color:#79dba4;font-size:7px}
 .trial-inline-error{margin-top:5px;padding:5px 7px;border:1px solid #45272b;border-radius:7px;background:#130b0d;color:#ff8b92;font-size:6.5px;line-height:1.35}
+
+/* ===== Dedicated Reels teste page ===== */
+.trial-page-head{margin-bottom:12px}.trial-page-control{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(520px,2fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid #272230;border-radius:12px;background:#0b0d12;margin-bottom:10px}
+.trial-page-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.trial-page-kpis>div{padding:9px 10px;border:1px solid #20252e;border-radius:8px;background:#090b0f}.trial-page-kpis span,.trial-page-kpis b{display:block}.trial-page-kpis span{font-size:6.5px;color:#656f7c;font-weight:900;text-transform:uppercase;letter-spacing:.06em}.trial-page-kpis b{font-size:9px;margin-top:3px;color:#dce1e7}.trial-page-kpis b.bad{color:#ff7a82}
+.trial-page-info{padding:8px 10px;border:1px solid #30263e;border-radius:8px;background:#100c16;color:#88779a;font-size:7.5px;margin-bottom:10px}.trial-page-scroll{overflow-x:auto;padding-bottom:10px}.trial-page-week{display:grid;grid-template-columns:repeat(7,minmax(185px,1fr));gap:8px;min-width:1350px}
+.trial-page-day{padding:9px;border:1px solid #20252d;border-radius:11px;background:#090b0f;min-width:0}.trial-page-day-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px}.trial-page-day-head b,.trial-page-day-head span{display:block}.trial-page-day-head b{font-size:9px;text-transform:capitalize}.trial-page-day-head span{font-size:7px;color:#606a78;margin-top:2px}.trial-page-day-head strong{font-size:7px;color:#b89ce4;border:1px solid #3c2e4d;background:#100c16;border-radius:999px;padding:2px 6px}
+.trial-page-slots{display:grid;gap:7px}.trial-page-slots .ui31-empty-slot{min-height:78px!important}.trial-page-slots .trial-inline-slot{min-height:78px}.trial-page-slots .trial-inline-section{border-top:0;padding-top:0}.trial-page-slots .trial-inline-empty{background:#0d0a12!important}
+@media(max-width:1050px){.trial-page-control{grid-template-columns:1fr}.trial-page-kpis{grid-template-columns:repeat(2,1fr)}.trial-page-control .calendar-nav-controls{justify-content:flex-start}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2301,6 +2309,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 
   <section id="overview" class="page"></section>
   <section id="calendar" class="page hidden"></section>
+  <section id="trialReels" class="page hidden"></section>
   <section id="production" class="page hidden"></section>
   <section id="frameExtractor" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
@@ -2323,6 +2332,7 @@ const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const navItems=[
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
+  ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels teste"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
   ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrair frame"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
@@ -2886,7 +2896,7 @@ async function refreshLiveData(showFeedback=false){
   try{
     const tasks=[loadAutomationStatus(),loadServerLogs(),loadFollowerStats(30),syncFromBackend()];
     if(currentPage==="production")tasks.push(loadProductionData());
-    if(currentPage==="calendar")tasks.push(loadTrialReels());
+    if(currentPage==="trialReels")tasks.push(loadTrialReels());
     if(currentPage==="settings"&&settingsTab==="health")tasks.push(loadSystemHealth());
     await Promise.all(tasks);
     updateLiveChrome();renderAll();
@@ -2950,7 +2960,7 @@ function bindSidebarHover(){
 }
 function nav(){
   const groups=[
-    {label:"Workspace",pages:["overview","calendar"]},
+    {label:"Workspace",pages:["overview","calendar","trialReels"]},
     {label:"Produção",pages:["production","frameExtractor"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
@@ -2977,6 +2987,7 @@ function showPage(id){
   $("#pageTitle").textContent=meta[2];
   renderAll();
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
+  if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
 }
 
 function weekDates(){
@@ -3373,8 +3384,8 @@ function trialStatusMeta(status){
     failed:{label:"Erro",cls:"failed"}
   })[s]||{label:s,cls:"scheduled"};
 }
-const TRIALS_PER_NIGHT=3;
-const TRIAL_NIGHT_TIMES=["00:30","02:30","04:30"];
+const TRIALS_PER_NIGHT=4;
+const TRIAL_NIGHT_TIMES=["00:30","02:00","03:30","05:00"];
 function trialDefaultTime(date){
   return TRIAL_NIGHT_TIMES[Math.min(trialRowsForDate(date).length,TRIAL_NIGHT_TIMES.length-1)];
 }
@@ -3437,16 +3448,73 @@ function trialDayInline(date){
     '<div class="trial-inline-list">'+Array.from({length:TRIALS_PER_NIGHT},(_,i)=>trialInlineSlot(date,i,rows[i]||null)).join("")+'</div>'+
   '</div>';
 }
+
+function trialTestDayColumn(d){
+  const date=localISO(d),rows=trialRowsForDate(date);
+  const label=d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".","");
+  const fullDate=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+  return '<div class="trial-page-day">'+
+    '<div class="trial-page-day-head"><div><b>'+label+'</b><span>'+fullDate+'</span></div><strong>'+rows.length+'/'+TRIALS_PER_NIGHT+'</strong></div>'+
+    '<div class="trial-page-slots">'+Array.from({length:TRIALS_PER_NIGHT},(_,i)=>trialInlineSlot(date,i,rows[i]||null)).join("")+'</div>'+
+  '</div>';
+}
+function trialReelsPage(){
+  const host=$("#trialReels");if(!host)return;
+  const dates=weekDates(),start=dates[0],end=dates[6];
+  const total=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).length,0);
+  const published=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).filter(x=>x.status==="published").length,0);
+  const failed=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).filter(x=>x.status==="failed").length,0);
+  const startLabel=start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
+  const endLabel=end.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
+
+  host.innerHTML=`
+    <div class="ui3-page-head trial-page-head">
+      <div><span class="ui3-eyebrow">TESTES DE DISTRIBUIÇÃO</span><h2>Reels teste</h2><p>Uma área separada só para testar tráfego na madrugada, sem misturar com o calendário normal.</p></div>
+      <button class="btn" onclick="loadTrialReels().then(trialReelsPage)">↻ Atualizar</button>
+    </div>
+
+    <div class="trial-page-control">
+      <div class="calendar-week-identity">
+        <span>SEMANA</span>
+        <b>${startLabel} — ${endLabel}</b>
+        <small>${total} de ${TRIALS_PER_NIGHT*7} testes preenchidos</small>
+      </div>
+      <div class="trial-page-kpis">
+        <div><span>Por madrugada</span><b>${TRIALS_PER_NIGHT}</b></div>
+        <div><span>Publicados</span><b>${published}</b></div>
+        <div><span>Falhas</span><b class="${failed?"bad":""}">${failed}</b></div>
+        <div><span>Horários</span><b>00:30 · 02:00 · 03:30 · 05:00</b></div>
+      </div>
+      <div class="calendar-nav-controls">
+        <button class="btn" onclick="shiftTrialWeek(-7)">←</button>
+        <button class="btn" onclick="goCurrentTrialWeek()">Hoje</button>
+        <button class="btn" onclick="shiftTrialWeek(7)">→</button>
+      </div>
+    </div>
+
+    <div class="trial-page-info">◈ Cada coluna é um dia. Clique em um dos 4 blocos vazios para subir o vídeo e agendar o Reel teste.</div>
+
+    <div class="trial-page-scroll">
+      <div class="trial-page-week">
+        ${dates.map(trialTestDayColumn).join("")}
+      </div>
+    </div>
+  `;
+}
+function shiftTrialWeek(days){
+  const d=new Date(state.weekStart+"T00:00:00");d.setDate(d.getDate()+days);
+  state.weekStart=localISO(d);save();trialReelsPage();
+}
+function goCurrentTrialWeek(){
+  state.weekStart=mondayISO(new Date());save();trialReelsPage();
+}
 function updateTrialReelsBlock(){
-  document.querySelectorAll(".trial-inline-host[data-trial-day]").forEach(host=>{
-    const date=host.dataset.trialDay;
-    if(date)host.innerHTML=trialDayInline(date);
-  });
+  if(currentPage==="trialReels")trialReelsPage();
 }
 
 function pickTrialForDay(date){
   if(!cloudSession){toast("Entre no CloudentFlow primeiro.","err");showPage("settings");return}
-  if(trialRowsForDate(date).length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem 3 Trial Reels.","err");return}
+  if(trialRowsForDate(date).length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem "+TRIALS_PER_NIGHT+" Reels teste.","err");return}
   trialPendingDate=date;
   const input=$("#trialVideoPicker");
   if(!input)return;
@@ -3472,7 +3540,7 @@ function handleTrialVideoPicker(input){
 async function scheduleTrialDraft(){
   const file=trialDraftFile,day=$("#trialDay")?.value,time=$("#trialTime")?.value,caption=$("#trialCaption")?.value||"";
   if(!file||!day||!time){toast("Preencha dia e horário.","err");return}
-  if(trialRowsForDate(day).length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem 3 Trial Reels.","err");return}
+  if(trialRowsForDate(day).length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem "+TRIALS_PER_NIGHT+" Reels teste.","err");return}
   const [h,m]=time.split(":").map(Number);
   if(h<0||h>5){toast("Use um horário entre 00:00 e 05:59.","err");return}
   const at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
@@ -3878,7 +3946,6 @@ function dayColumn(d,label){
       ${Array.from({length:7},(_,i)=>renderSlot(iso,i)).join("")}
       ${extras.map(i=>renderSlot(iso,i)).join("")}
     </div>
-    <div class="trial-inline-host" data-trial-day="${iso}">${trialDayInline(iso)}</div>
     <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)">＋ Adicionar outro vídeo</button>
   </div>`;
 }
@@ -6100,6 +6167,7 @@ function safeRenderPage(id,fn){
 function renderAll(){
   safeRenderPage("overview",overview);
   safeRenderPage("calendar",calendarPage);
+  safeRenderPage("trialReels",trialReelsPage);
   safeRenderPage("production",productionPage);
   safeRenderPage("frameExtractor",frameExtractorPage);
   safeRenderPage("metrics",metrics);
