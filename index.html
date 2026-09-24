@@ -2497,7 +2497,7 @@ const savedTimes=Array.isArray(saved.defaultTimes)?saved.defaultTimes:[];
 const normalizedDefaultTimes=savedTimes.length>=7?savedTimes.slice(0,7):defaultSevenTimes;
 
 const state={
-  weekStart:saved.weekStart||mondayISO(new Date()),
+  weekStart:(saved.weekStart&&saved.weekStart>=localISO(new Date()))?saved.weekStart:localISO(new Date()),
   slots:saved.slots||{},
   postsPerDay:7,
   defaultTimes:normalizedDefaultTimes,
@@ -3153,8 +3153,20 @@ function showPage(id){
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
 }
 
+function currentCalendarStartISO(){return localISO(new Date())}
+function clampCalendarWindowStart(value){
+  const today=currentCalendarStartISO();
+  const candidate=/^\d{4}-\d{2}-\d{2}$/.test(String(value||""))?String(value):today;
+  return candidate<today?today:candidate;
+}
+function ensureCalendarWindowStart(){
+  const next=clampCalendarWindowStart(state.weekStart);
+  if(state.weekStart!==next){state.weekStart=next;save()}
+  return next;
+}
 function weekDates(){
-  const start=new Date(state.weekStart+"T00:00:00");return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})
+  const start=new Date(ensureCalendarWindowStart()+"T00:00:00");
+  return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})
 }
 function slotData(date,slot){return state.slots[keyFor(date,slot)]||null}
 function filledCount(date){return dateSlots(date).length}
@@ -3681,6 +3693,7 @@ function trialTestDayColumn(d){
 function trialReelsPage(){
   const host=$("#trialReels");if(!host)return;
   const dates=weekDates(),start=dates[0],end=dates[6],history=trialHistoryForWeek();
+  const atToday=state.weekStart===currentCalendarStartISO();
   const total=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).length,0);
   const published=history.filter(x=>x.status==="published").length;
   const failed=history.filter(x=>x.status==="failed"&&!x.hidden_at).length;
@@ -3697,7 +3710,7 @@ function trialReelsPage(){
 
     <div class="trial-page-control">
       <div class="calendar-week-identity">
-        <span>SEMANA</span>
+        <span>${atToday?"HOJE + PRÓXIMOS 6 DIAS":"JANELA FUTURA"}</span>
         <b>${startLabel} — ${endLabel}</b>
         <small>${total} de ${TRIALS_PER_NIGHT*7} posições ocupadas</small>
       </div>
@@ -3708,9 +3721,9 @@ function trialReelsPage(){
         <div><span>Autoajuste</span><b>${trialReelsMeta?.settings?.auto_apply===false?"Pausado":"Ativo"}</b></div>
       </div>
       <div class="calendar-nav-controls">
-        <button class="btn" onclick="shiftTrialWeek(-7)">←</button>
+        <button class="btn" onclick="shiftTrialWeek(-7)" ${atToday?"disabled":""} title="${atToday?"Já está começando em hoje":"Voltar 7 dias"}">←</button>
         <button class="btn" onclick="goCurrentTrialWeek()">Hoje</button>
-        <button class="btn" onclick="shiftTrialWeek(7)">→</button>
+        <button class="btn" onclick="shiftTrialWeek(7)" title="Avançar 7 dias">→</button>
       </div>
     </div>
 
@@ -3728,7 +3741,7 @@ function trialReelsPage(){
 
     <div class="trial-bottom-grid">
       <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>DESEMPENHO</span><h3>Ranking da madrugada</h3></div><small>${published} publicados na semana</small></div>
+        <div class="ui3-panel-head"><div><span>DESEMPENHO</span><h3>Ranking da madrugada</h3></div><small>${published} publicados na janela</small></div>
         ${trialRankingPanel()}
       </div>
       <div class="card ui3-panel trial-learning-card">
@@ -3745,11 +3758,11 @@ function trialReelsPage(){
 }
 
 function shiftTrialWeek(days){
-  const d=new Date(state.weekStart+"T00:00:00");d.setDate(d.getDate()+days);
-  state.weekStart=localISO(d);save();trialReelsPage();
+  const d=new Date(ensureCalendarWindowStart()+"T00:00:00");d.setDate(d.getDate()+days);
+  state.weekStart=clampCalendarWindowStart(localISO(d));save();trialReelsPage();
 }
 function goCurrentTrialWeek(){
-  state.weekStart=mondayISO(new Date());save();trialReelsPage();
+  state.weekStart=currentCalendarStartISO();save();trialReelsPage();
 }
 function updateTrialReelsBlock(){
   if(currentPage==="trialReels")trialReelsPage();
@@ -3860,6 +3873,7 @@ async function previewTrialReel(id){
 
 function calendarPage(){
   const dates=weekDates(),weekdays=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
+  const atToday=state.weekStart===currentCalendarStartISO();
   const auto=automationData?.settings?.automation||{};
   const smart=automationData?.settings?.smart_scheduler||{};
   const gap=automationData?.settings?.min_gap_minutes||state.minGap;
@@ -3874,28 +3888,28 @@ function calendarPage(){
 
   $("#calendar").innerHTML=`
     <div class="ui3-page-head calendar-head calendar-head-v2">
-      <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Organize a semana e deixe o CloudentFlow cuidar dos horários e publicações.</p></div>
+      <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Organize hoje e os próximos dias; datas passadas ficam só no histórico e nas métricas.</p></div>
       <button class="btn primary" onclick="openScheduleModal()">＋ Agendar vídeo</button>
     </div>
 
     <div class="calendar-control-card">
       <div class="calendar-control-main">
         <div class="calendar-week-identity">
-          <span>SEMANA ATUAL</span>
+          <span>${atToday?"HOJE + PRÓXIMOS 6 DIAS":"JANELA FUTURA"}</span>
           <b>${startLabel} — ${endLabel}</b>
           <small>${baseFilled} de 49 posições base${extraFilled?" + "+extraFilled+" extras":""}</small>
         </div>
 
         <label class="calendar-date-control">
-          <span>Início da semana</span>
-          <input id="weekStart" type="date" value="${state.weekStart}">
+          <span>Início da janela</span>
+          <input id="weekStart" type="date" min="${currentCalendarStartISO()}" value="${state.weekStart}">
         </label>
 
         <div class="calendar-nav-controls">
           <span class="ui3-auto-pill ${auto.autoOptimizeCalendar!==false?"on":""}">✦ Scheduler ${auto.autoOptimizeCalendar!==false?"ativo":"pausado"}</span>
-          <button class="btn" onclick="shiftWeek(-7)" title="Semana anterior">←</button>
+          <button class="btn" onclick="shiftWeek(-7)" ${atToday?"disabled":""} title="${atToday?"Já está começando em hoje":"Voltar 7 dias"}">←</button>
           <button class="btn" onclick="goCurrentWeek()">Hoje</button>
-          <button class="btn" onclick="shiftWeek(7)" title="Próxima semana">→</button>
+          <button class="btn" onclick="shiftWeek(7)" title="Avançar 7 dias">→</button>
           <details class="more-menu"><summary class="btn">•••</summary><div class="more-popover"><button onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button><button class="danger-link" onclick="clearCurrentWeek()">Limpar semana</button></div></details>
         </div>
       </div>
@@ -3915,11 +3929,11 @@ function calendarPage(){
       <span>Com vídeos:</span>
       ${calendarDaysWithPosts().length
         ? calendarDaysWithPosts().map(x=>`<button onclick="jumpToCalendarDay('${x.date}')"><b>${x.label}</b><small>${x.count} vídeo${x.count===1?"":"s"}</small></button>`).join("")
-        : '<small>Nenhum vídeo nesta semana.</small>'}
+        : '<small>Nenhum vídeo nesta janela.</small>'}
     </div>
     <div class="ui3-calendar-scroll"><div class="week-grid ui3-seven-days">${dates.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}</div></div>
   `;
-  $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
+  $("#weekStart").onchange=e=>{state.weekStart=clampCalendarWindowStart(e.target.value);save();calendarPage()}
   ensureCalendarMetricsTicker();
   requestAnimationFrame(()=>{updateCalendarLiveDom();setupCalendarVideoThumbs()});
 }
@@ -4551,8 +4565,11 @@ function dropOnDay(e,date){
   state.slots[keyFor(date,target.slot)]=x;
   dragInfo=null;syncQueue();log(`${x.name} reagendado para ${date} às ${x.time}.`,"ok")
 }
-function shiftWeek(days){const d=new Date(state.weekStart+"T00:00:00");d.setDate(d.getDate()+days);state.weekStart=localISO(d);save();calendarPage()}
-function goCurrentWeek(){state.weekStart=mondayISO(new Date());save();calendarPage()}
+function shiftWeek(days){
+  const d=new Date(ensureCalendarWindowStart()+"T00:00:00");d.setDate(d.getDate()+days);
+  state.weekStart=clampCalendarWindowStart(localISO(d));save();calendarPage()
+}
+function goCurrentWeek(){state.weekStart=currentCalendarStartISO();save();calendarPage()}
 
 function applyDefaultTimesToWeek(){
   const dates=weekDates().map(localISO);
@@ -4575,7 +4592,7 @@ function applyDefaultTimesToWeek(){
   syncQueue();log("Horários padrão aplicados à semana sem criar conflitos.","ok")
 }
 async function clearCurrentWeek(){
-  if(!confirm("Remover todos os vídeos agendados desta semana?"))return;
+  if(!confirm("Remover todos os vídeos agendados nesta janela de 7 dias?"))return;
   const dates=new Set(weekDates().map(localISO));
   const keys=Object.keys(state.slots).filter(k=>dates.has(k.split("#")[0]));
   for(const k of keys){
@@ -4585,7 +4602,7 @@ async function clearCurrentWeek(){
     }else if(x?.videoId&&db){try{await dbDelete(x.videoId)}catch{}}
     delete state.slots[k];
   }
-  save();renderAll();toast("Semana limpa com sucesso.","ok")
+  save();renderAll();toast("Janela limpa com sucesso.","ok")
 }
 
 function openScheduleModal(presetDate=null,extraManual=false){
