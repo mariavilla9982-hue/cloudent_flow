@@ -1738,6 +1738,25 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   }
 }
 
+
+/* ===== Integrations organization ===== */
+.production-only-upload{grid-template-columns:1fr!important}
+.runninghub-settings-card{grid-column:1/-1}
+.runninghub-settings-intro{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 14px}
+.runninghub-settings-intro>div{padding:10px 11px;border:1px solid #20252e;border-radius:9px;background:#0a0c10}
+.runninghub-settings-intro b,.runninghub-settings-intro span{display:block}
+.runninghub-settings-intro b{font-size:10px}.runninghub-settings-intro span{font-size:8px;color:#707887;margin-top:3px}
+.runninghub-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.runninghub-settings-grid .full{grid-column:1/-1}
+.runninghub-settings-grid .field small{display:block;color:#697180;font-size:8px;margin-top:5px}
+.runninghub-settings-grid input[readonly]{color:#aeb4bf;background:#0d1015}
+.runninghub-settings-actions{display:flex;gap:8px;margin-top:12px}
+@media(max-width:760px){
+  .runninghub-settings-intro,.runninghub-settings-grid{grid-template-columns:1fr}
+  .runninghub-settings-grid .full{grid-column:auto}
+  .runninghub-settings-actions{flex-direction:column}
+}
+
 </style>
 </head>
 <body>
@@ -3662,21 +3681,27 @@ async function previewProductionJob(id,kind="result"){
 }
 async function saveRunningHubConfig(){
   const body={
-    enabled:$("#rhEnabled")?.checked!==false,
-    workflowId:$("#rhWorkflow")?.value||"",
-    videoNodeId:$("#rhVideoNode")?.value||"",
-    videoFieldName:$("#rhVideoField")?.value||"video",
-    frameNodeId:$("#rhFrameNode")?.value||"",
-    frameFieldName:$("#rhFrameField")?.value||"image",
-    concurrency:Number($("#rhConcurrency")?.value||1)
+    enabled:$("#settingsRhEnabled")?.checked!==false,
+    apiKey:$("#settingsRhApiKey")?.value||"",
+    workflowId:$("#settingsRhWorkflow")?.value||"",
+    videoNodeId:$("#settingsRhVideoNode")?.value||"336",
+    videoFieldName:$("#settingsRhVideoField")?.value||"video",
+    frameNodeId:$("#settingsRhFrameNode")?.value||"338",
+    frameFieldName:$("#settingsRhFrameField")?.value||"image",
+    concurrency:Number($("#settingsRhConcurrency")?.value||1)
   };
   try{
-    await cloudFetch("?action=runninghub-config",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    await cloudFetch("?action=runninghub-config",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body)
+    });
     await loadProductionData();
-    productionPage();
-    toast("Configuração do workflow salva.","ok");
+    settings();
+    toast("Integração do RunningHub salva.","ok");
   }catch(e){toast(e.message,"err")}
 }
+
 function productionJobRow(j,i,total){
   const st=productionStatusMeta(j.status);
   let action="";
@@ -3698,18 +3723,15 @@ function productionPage(){
   const root=$("#production");
   if(!root)return;
   const jobs=productionData?.jobs||[];
-  const integ=productionData?.integration||{};
-  const cfg=integ.config||{};
   const worker=productionData?.worker;
   const c=productionCounts();
-  const mapped=!!(cfg.workflowId&&cfg.videoNodeId&&cfg.frameNodeId);
   const workerOnline=!!worker?.online;
-  const options=[1,2,3,4,5].map(n=>'<option value="'+n+'" '+(Number(cfg.concurrency||1)===n?"selected":"")+'>'+n+' por vez</option>').join("");
-  const rows=jobs.length?jobs.map((j,i)=>productionJobRow(j,i,jobs.length)).join(""):'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
-  const note=worker?.last_error?'<div class="production-worker-note">'+esc(worker.last_error)+'</div>':"";
+  const rows=jobs.length
+    ? jobs.map((j,i)=>productionJobRow(j,i,jobs.length)).join("")
+    : '<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
 
   root.innerHTML=
-    '<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>Fila de produção</h2><p>Envie o vídeo original + o frame com o rosto da modelo. O restante roda no servidor.</p></div>'+
+    '<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>Fila de produção</h2><p>Vídeo original + frame da modelo. Configuração do RunningHub fica em Configurações → Integrações.</p></div>'+
     '<div class="production-head-actions"><span class="status-pill '+(workerOnline?"ok":"warn")+'">'+(workerOnline?"Worker online":"Worker aguardando")+'</span><button class="btn" onclick="loadProductionData().then(productionPage)">↻ Atualizar</button></div></div>'+
     '<div class="production-stats">'+
       '<div><small>NA FILA</small><b>'+c.total+'</b><span>aguardando produção</span></div>'+
@@ -3717,30 +3739,16 @@ function productionPage(){
       '<div><small>PRONTOS HOJE</small><b>'+c.ready+'</b><span>salvos no CloudentFlow</span></div>'+
       '<div><small>ERROS</small><b>'+c.failed+'</b><span>com retry disponível</span></div>'+
     '</div>'+
-    '<div class="production-main-grid">'+
+    '<div class="production-main-grid production-only-upload">'+
       '<div class="card production-upload-card">'+
-        '<div class="ui3-panel-head"><div><span>Novo job</span><h3>Vídeo + frame</h3></div><span class="production-step">01</span></div>'+
+        '<div class="ui3-panel-head"><div><span>Novo job</span><h3>Vídeo + frame</h3></div><button class="btn btn-sm" onclick="setSettingsTab(\'integrations\');showPage(\'settings\')">⚙ Integração</button></div>'+
         '<div class="production-input-grid">'+
-          '<label class="production-drop" id="productionVideoBox"><input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon">▶</span><b>Selecionar vídeo original</b><small>MP4, MOV ou WEBM</small></label>'+
+          '<label class="production-drop" id="productionVideoBox"><input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon">▶</span><b>Vídeo original</b><small>Vai para Load Video · node #336</small></label>'+
           '<div class="production-plus">＋</div>'+
-          '<label class="production-drop" id="productionFrameBox"><input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon frame">▧</span><b>Selecionar frame da modelo</b><small>JPG, PNG ou WEBP</small></label>'+
+          '<label class="production-drop" id="productionFrameBox"><input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon frame">▧</span><b>Frame da modelo</b><small>Vai para Load Reference Image · node #338</small></label>'+
         '</div>'+
         '<button class="btn primary production-add-btn" '+(productionUploading?"disabled":"")+' onclick="addProductionJob()">'+(productionUploading?"Enviando arquivos…":"＋ Adicionar à fila")+'</button>'+
-        '<div class="production-note">Pode adicionar vários pares. Eles continuam processando mesmo com o PC desligado.</div>'+
-      '</div>'+
-      '<div class="card production-config-card">'+
-        '<div class="ui3-panel-head"><div><span>RunningHub</span><h3>Workflow</h3></div><span class="status-pill '+(mapped&&integ.enabled?"ok":"warn")+'">'+(mapped&&integ.enabled?"Mapeado":"Configurar")+'</span></div>'+
-        '<div class="ui31-toggle-row compact"><div><b>Produção automática</b><span>Worker pega o próximo job sozinho.</span></div><label class="modern-toggle"><input id="rhEnabled" type="checkbox" '+(integ.enabled?"checked":"")+'><span></span></label></div>'+
-        '<div class="production-config-grid">'+
-          '<div class="field full"><label>Workflow ID</label><input id="rhWorkflow" value="'+esc(cfg.workflowId||"")+'" placeholder="ID do workflow"></div>'+
-          '<div class="field"><label>Node do vídeo</label><input id="rhVideoNode" value="'+esc(cfg.videoNodeId||"")+'" placeholder="ex. 7"></div>'+
-          '<div class="field"><label>Campo do vídeo</label><input id="rhVideoField" value="'+esc(cfg.videoFieldName||"video")+'" placeholder="video"></div>'+
-          '<div class="field"><label>Node do frame</label><input id="rhFrameNode" value="'+esc(cfg.frameNodeId||"")+'" placeholder="ex. 10"></div>'+
-          '<div class="field"><label>Campo do frame</label><input id="rhFrameField" value="'+esc(cfg.frameFieldName||"image")+'" placeholder="image"></div>'+
-          '<div class="field full"><label>Concorrência</label><select id="rhConcurrency">'+options+'</select></div>'+
-        '</div>'+
-        '<button class="btn production-save-btn" onclick="saveRunningHubConfig()">Salvar workflow</button>'+
-        note+
+        '<div class="production-note">Pode adicionar vários pares. A fila continua no servidor mesmo com o PC desligado.</div>'+
       '</div>'+
     '</div>'+
     '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><small class="muted">Acompanhamento automático</small></div><div class="production-queue">'+rows+'</div></div>';
@@ -3749,8 +3757,10 @@ function productionPage(){
 function setSettingsTab(tab){
   settingsTab=tab;
   if(tab==="logs"&&cloudSession)loadServerLogs().then(settings);
+  else if(tab==="integrations"&&cloudSession)loadProductionData().then(settings).catch(()=>settings());
   else settings();
 }
+
 function cloudentAISnapshot(){
   const metrics=[...liveInstagramMetrics];
   const totals=metrics.reduce((a,m)=>({
@@ -3908,6 +3918,9 @@ function cloudentAIPage(){
 
 function settings(){
   const user=cloudSession?.user,ig=instagramIntegration;
+  const rh=productionData?.integration||{},rhCfg=rh.config||{},rhWorker=productionData?.worker;
+  const rhMapped=!!(rhCfg.workflowId&&rhCfg.videoNodeId&&rhCfg.frameNodeId);
+  const rhReady=!!(rh.enabled&&rhMapped&&rhCfg.apiKeyConfigured);
   const a=automationData||{settings:{},workers:[]};
   const cfg=a.settings?.automation||{},smart=a.settings?.smart_scheduler||{};
   const tabs=[["general","Geral"],["integrations","Integrações"],["automation","Automação"],["logs","Logs"]];
@@ -3925,9 +3938,73 @@ function settings(){
   }else if(settingsTab==="integrations"){
     body=`<div class="ui3-settings-grid">
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Instagram</span><h3>${ig?.enabled?"@"+esc(ig.account_label||"Instagram"):"Conectar conta"}</h3></div><span class="status-pill ${ig?.enabled?"ok":"warn"}">${ig?.enabled?"Conectado":"Pendente"}</span></div>
-        ${ig?.enabled?`<p class="muted">Publicação e métricas estão autorizadas.</p><div class="toolbar"><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas</button></div>`:`<div class="auth-card"><p class="muted">Cole seu Instagram User Access Token.</p><input id="instagramToken" type="password" autocomplete="off" placeholder="Access Token"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>`}
+        ${ig?.enabled?`<p class="muted">Publicação e métricas autorizadas.</p><div class="toolbar"><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas</button></div>`:`<div class="auth-card"><p class="muted">Cole seu Instagram User Access Token.</p><input id="instagramToken" type="password" autocomplete="off" placeholder="Access Token"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>`}
       </div>
-      <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Backend</span><h3>Supabase</h3></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Desconectado"}</span></div><p class="muted">Banco, Storage, workers e cron 24/7.</p></div>
+
+      <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Backend</span><h3>Supabase</h3></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Desconectado"}</span></div><p class="muted">Banco, Storage, workers e automações 24/7.</p></div>
+
+      <div class="card ui3-panel runninghub-settings-card">
+        <div class="ui3-panel-head">
+          <div><span>Produção IA</span><h3>RunningHub</h3></div>
+          <span class="status-pill ${rhReady?"ok":"warn"}">${rhReady?"Configurado":"Configurar"}</span>
+        </div>
+
+        <div class="runninghub-settings-intro">
+          <div><b>Load Video</b><span>Node #336 · recebe o vídeo original</span></div>
+          <div><b>Load Reference Image</b><span>Node #338 · recebe o frame da modelo</span></div>
+          <div><b>Worker</b><span>${rhWorker?.online?"Online 24/7":"Aguardando configuração"}</span></div>
+        </div>
+
+        <div class="ui31-toggle-row compact">
+          <div><b>Produção automática</b><span>Quando ativa, o worker pega os jobs da fila sozinho.</span></div>
+          <label class="modern-toggle"><input id="settingsRhEnabled" type="checkbox" ${rh.enabled?"checked":""}><span></span></label>
+        </div>
+
+        <div class="runninghub-settings-grid">
+          <div class="field full">
+            <label>API Key do RunningHub</label>
+            <input id="settingsRhApiKey" type="password" autocomplete="off" placeholder="${rhCfg.apiKeyConfigured?"API Key já salva — cole outra somente para trocar":"Cole sua API Key"}">
+            <small>${rhCfg.apiKeyConfigured?"✓ Chave salva de forma criptografada no backend.":"A chave nunca fica exposta no frontend."}</small>
+          </div>
+
+          <div class="field full">
+            <label>Workflow ID</label>
+            <input id="settingsRhWorkflow" value="${esc(rhCfg.workflowId||"")}" placeholder="ID/API do seu workflow">
+          </div>
+
+          <div class="field">
+            <label>Node do vídeo</label>
+            <input id="settingsRhVideoNode" value="${esc(rhCfg.videoNodeId||"336")}" readonly>
+            <small>Load Video</small>
+          </div>
+          <div class="field">
+            <label>Campo do vídeo</label>
+            <input id="settingsRhVideoField" value="${esc(rhCfg.videoFieldName||"video")}">
+          </div>
+
+          <div class="field">
+            <label>Node do frame</label>
+            <input id="settingsRhFrameNode" value="${esc(rhCfg.frameNodeId||"338")}" readonly>
+            <small>Load Reference Image</small>
+          </div>
+          <div class="field">
+            <label>Campo do frame</label>
+            <input id="settingsRhFrameField" value="${esc(rhCfg.frameFieldName||"image")}">
+          </div>
+
+          <div class="field full">
+            <label>Vídeos processando ao mesmo tempo</label>
+            <select id="settingsRhConcurrency">
+              ${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(rhCfg.concurrency||1)===n?"selected":""}>${n} por vez</option>`).join("")}
+            </select>
+          </div>
+        </div>
+
+        <div class="runninghub-settings-actions">
+          <button class="btn primary" onclick="saveRunningHubConfig()">Salvar integração RunningHub</button>
+          <button class="btn" onclick="showPage('production')">Abrir Produção IA</button>
+        </div>
+      </div>
     </div>`;
   }else if(settingsTab==="automation"){
     body=`<div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Automação</span><h3>Resumo</h3></div><button class="btn" onclick="showPage('automation')">Abrir painel completo</button></div>
