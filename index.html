@@ -4851,11 +4851,22 @@ function settings(){
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Workspace</span><h3>Preferências principais</h3></div></div>
         <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||7} · 3/2/2</b></div><div><span>Intervalo mínimo</span><b>${a.settings?.min_gap_minutes||60} min</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
       </div>
+      <div class="card ui3-panel app-install-card">
+        <div class="ui3-panel-head"><div><span>Celular</span><h3>CloudentFlow App</h3></div><span class="status-pill ok">PWA</span></div>
+        <p class="muted">Instale no celular ou PC e abra em tela cheia, como aplicativo.</p>
+        <button class="btn primary" onclick="installCloudentApp()">⬇ Instalar aplicativo</button>
+      </div>
     </div>`;
   }else if(settingsTab==="integrations"){
     body=`<div class="ui3-settings-grid">
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Instagram</span><h3>${ig?.enabled?"@"+esc(ig.account_label||"Instagram"):"Conectar conta"}</h3></div><span class="status-pill ${ig?.enabled?"ok":"warn"}">${ig?.enabled?"Conectado":"Pendente"}</span></div>
         ${ig?.enabled?`<p class="muted">Publicação e métricas autorizadas.</p><div class="toolbar"><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas</button></div>`:`<div class="auth-card"><p class="muted">Cole seu Instagram User Access Token.</p><input id="instagramToken" type="password" autocomplete="off" placeholder="Access Token"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>`}
+      </div>
+
+      <div class="card ui3-panel multi-account-card">
+        <div class="ui3-panel-head"><div><span>Multi-conta · Beta</span><h3>Contas Instagram</h3></div><span class="status-pill ${platformAccounts.filter(x=>x.platform==="instagram"&&x.enabled).length?"ok":"warn"}">${platformAccounts.filter(x=>x.platform==="instagram"&&x.enabled).length} ativa(s)</span></div>
+        <div class="multi-account-list">${platformAccounts.filter(x=>x.platform==="instagram").map(x=>`<div><b>@${esc(x.account_label||"Instagram")}</b><span>${x.enabled?"Ativa":"Pausada"} · ${esc(x.config?.account_type||"conta profissional")}</span></div>`).join("")||'<div class="ui3-empty">Nenhuma conta registrada.</div>'}</div>
+        <p class="muted">A estrutura já separa conteúdo por conta. A publicação continua usando a conta ativa enquanto a conexão de uma segunda conta está em Beta.</p>
       </div>
 
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Backend</span><h3>Supabase</h3></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Desconectado"}</span></div><p class="muted">Banco, Storage, workers e automações 24/7.</p></div>
