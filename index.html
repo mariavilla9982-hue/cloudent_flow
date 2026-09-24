@@ -1757,6 +1757,15 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   .runninghub-settings-actions{flex-direction:column}
 }
 
+
+.runninghub-test-result{margin-top:10px;padding:10px 11px;border:1px solid #252b35;border-radius:9px;background:#0a0c10;color:#7c8492;font-size:9px}
+.runninghub-test-result b,.runninghub-test-result>span{display:block}.runninghub-test-result b{color:#cbd0d8;font-size:10px;margin-bottom:3px}
+.runninghub-test-result.testing{border-color:#504526;background:#15130c}.runninghub-test-result.testing b{color:#f1ce73}
+.runninghub-test-result.success{border-color:#275039;background:#0c1711}.runninghub-test-result.success>b{color:#66dfa0}
+.runninghub-test-result.error{border-color:#53262c;background:#180d10}.runninghub-test-result.error>b{color:#ff8088}
+.runninghub-test-result.success>div{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px solid #193022}.runninghub-test-result.success>div:first-of-type{margin-top:7px}
+.runninghub-test-result.success>div span{color:#8b948f}.runninghub-test-result.success>div strong{color:#70dda2;font-size:9px}
+
 </style>
 </head>
 <body>
@@ -3679,8 +3688,8 @@ async function previewProductionJob(id,kind="result"){
       '</div></div>';
   }catch(e){toast(e.message,"err")}
 }
-async function saveRunningHubConfig(){
-  const body={
+function runningHubFormPayload(){
+  return {
     enabled:$("#settingsRhEnabled")?.checked!==false,
     apiKey:$("#settingsRhApiKey")?.value||"",
     workflowId:$("#settingsRhWorkflow")?.value||"",
@@ -3690,16 +3699,58 @@ async function saveRunningHubConfig(){
     frameFieldName:$("#settingsRhFrameField")?.value||"image",
     concurrency:Number($("#settingsRhConcurrency")?.value||1)
   };
+}
+async function saveRunningHubConfig(){
   try{
     await cloudFetch("?action=runninghub-config",{
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(body)
+      body:JSON.stringify(runningHubFormPayload())
     });
     await loadProductionData();
     settings();
     toast("Integração do RunningHub salva.","ok");
   }catch(e){toast(e.message,"err")}
+}
+async function testRunningHubConfig(){
+  const resultBox=$("#rhTestResult");
+  if(resultBox){
+    resultBox.className="runninghub-test-result testing";
+    resultBox.innerHTML="<b>Testando RunningHub…</b><span>Verificando API Key, workflow e nodes.</span>";
+  }
+  try{
+    await cloudFetch("?action=runninghub-config",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(runningHubFormPayload())
+    });
+    const r=await cloudFetch("?action=runninghub-test",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:"{}"
+    });
+    await loadProductionData();
+    settings();
+    const box=$("#rhTestResult");
+    if(box){
+      const v=r.nodes?.video||{},fr=r.nodes?.frame||{};
+      box.className="runninghub-test-result success";
+      box.innerHTML=
+        '<b>✓ RunningHub conectado</b>'+
+        '<div><span>API Key</span><strong>✓ válida</strong></div>'+
+        '<div><span>Workflow '+esc(r.workflowId||"")+'</span><strong>✓ acessível</strong></div>'+
+        '<div><span>Load Video · node #'+esc(v.id||"336")+'</span><strong>'+(v.found?"✓ encontrado":"✕ não encontrado")+'</strong></div>'+
+        '<div><span>Load Reference Image · node #'+esc(fr.id||"338")+'</span><strong>'+(fr.found?"✓ encontrado":"✕ não encontrado")+'</strong></div>';
+    }
+    toast("Teste do RunningHub concluído.","ok");
+  }catch(e){
+    const box=$("#rhTestResult");
+    if(box){
+      box.className="runninghub-test-result error";
+      box.innerHTML="<b>✕ Teste falhou</b><span>"+esc(e.message)+"</span>";
+    }
+    toast("Falha no teste: "+e.message,"err");
+  }
 }
 
 function productionJobRow(j,i,total){
@@ -4001,8 +4052,13 @@ function settings(){
         </div>
 
         <div class="runninghub-settings-actions">
-          <button class="btn primary" onclick="saveRunningHubConfig()">Salvar integração RunningHub</button>
+          <button class="btn primary" onclick="saveRunningHubConfig()">Salvar integração</button>
+          <button class="btn success" onclick="testRunningHubConfig()">✓ Testar RunningHub</button>
           <button class="btn" onclick="showPage('production')">Abrir Produção IA</button>
+        </div>
+        <div id="rhTestResult" class="runninghub-test-result">
+          <b>Teste de conexão</b>
+          <span>Clique em “Testar RunningHub” para validar API Key, Workflow e os nodes 336/338 sem gerar vídeo.</span>
         </div>
       </div>
     </div>`;
