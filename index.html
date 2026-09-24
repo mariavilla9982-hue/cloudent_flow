@@ -3913,8 +3913,8 @@ function productionJobRow(j,i,total){
   const elapsed=j.started_at
     ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
     : '<span class="production-wait-detail">'+(j.status==="waiting"?"Aguardando o worker enviar ao RunningHub":"")+'</span>';
-  const credits=j.status==="ready"&&j.credits_used!==null&&j.credits_used!==undefined
-    ? '<span class="production-job-cost">◉ '+Number(j.credits_used).toLocaleString("pt-BR")+" créditos usados</span>"
+  const credits=j.status==="ready"
+    ? '<span class="production-job-cost">◉ '+(j.credits_used!==null&&j.credits_used!==undefined?Number(j.credits_used).toLocaleString("pt-BR")+" créditos usados":"créditos usados: —")+'</span>'
     : "";
 
   return '<div class="production-job '+(live?"is-live":"")+'">'+
