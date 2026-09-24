@@ -4115,10 +4115,14 @@ async function controlRunningHub(operation){
 
 async function productionAction(id,operation){
   try{
-    await cloudFetch("?action=production-job",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,operation})});
+    const result=await cloudFetch("?action=production-job",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,operation})});
     await loadProductionData(true);
     productionPage();
-    const msg=operation==="retry"?"Job reenviado para a fila.":operation==="run"?"Execução solicitada para este job.":"Job cancelado.";
+    const msg=operation==="retry"
+      ?"Job reenviado para a fila."
+      :operation==="run"
+        ?(result?.queued?"Job priorizado. Vai iniciar assim que a vaga atual liberar.":"Execução iniciada para este job.")
+        :"Job cancelado.";
     toast(msg,"ok");
   }catch(e){toast(e.message,"err")}
 }
@@ -4341,8 +4345,18 @@ function formatRhMoney(value){
   return Number(value||0).toLocaleString("pt-BR",{minimumFractionDigits:3,maximumFractionDigits:4});
 }
 
+function productionFriendlyError(message){
+  const raw=String(message||"");
+  if(!raw)return "";
+  if(raw.includes("工作流运行失败"))return "Tentativa anterior falhou; retry automático.";
+  if(/workflow.*failed|runninghub falhou/i.test(raw))return "Tentativa anterior falhou; retry automático.";
+  return raw;
+}
 function productionJobRow(j,i,total){
-  const st=productionStatusMeta(j.status);
+  const otherActive=(productionData?.jobs||[]).some(x=>x.id!==j.id&&["uploading","queued","running"].includes(x.status));
+  const st=j.status==="waiting"&&otherActive
+    ? {label:"Aguardando vaga",cls:"waiting"}
+    : productionStatusMeta(j.status);
   const live=["uploading","queued","running"].includes(j.status);
   const pv=productionData?.previews?.[j.id]||{};
   const n=total-i;
@@ -4359,18 +4373,21 @@ function productionJobRow(j,i,total){
     action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
   }else if(j.status==="waiting"){
     action='<div class="production-wait-actions">'+
-      '<button class="run-now" data-id="'+esc(j.id)+'" data-op="run" onclick="productionActionFromButton(this)">▶ Executar</button>'+
+      '<button class="run-now" data-id="'+esc(j.id)+'" data-op="run" onclick="productionActionFromButton(this)">'+(otherActive?"★ Priorizar na fila":"▶ Executar")+'</button>'+
       '<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>'+
     '</div>';
   }else{
     action='<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>';
   }
 
-  const err=j.last_error?'<em title="'+esc(j.last_error)+'">'+esc(String(j.last_error).slice(0,90))+'</em>':"";
+  const friendlyError=productionFriendlyError(j.last_error);
+  const err=friendlyError?'<em title="'+esc(j.last_error||friendlyError)+'">'+esc(friendlyError.slice(0,90))+'</em>':"";
   const task=j.runninghub_task_id?"Task "+esc(String(j.runninghub_task_id).slice(-8)):"Tentativa "+j.attempt_count+"/"+j.max_attempts;
-  const elapsed=j.started_at
-    ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
-    : '<span class="production-wait-detail">'+(j.status==="waiting"?"Aguardando o worker enviar ao RunningHub":"")+'</span>';
+  const elapsed=j.status==="waiting"
+    ? '<span class="production-wait-detail">'+(otherActive?"Vai iniciar quando a vaga atual liberar":"Pronto para nova tentativa")+'</span>'
+    : j.started_at
+      ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
+      : '<span class="production-wait-detail"></span>';
   const creditUsage=productionCreditUsage(j);
   const moneyUsage=productionMoneyUsage(j);
   let credits="";
