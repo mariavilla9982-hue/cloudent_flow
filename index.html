@@ -1607,6 +1607,137 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:1050px){.production-main-grid{grid-template-columns:1fr}.production-stats{grid-template-columns:1fr 1fr}.production-job{grid-template-columns:28px minmax(130px,1fr) 18px minmax(130px,1fr) minmax(150px,.8fr) 80px}}
 @media(max-width:760px){.production-stats{grid-template-columns:1fr 1fr}.production-input-grid{grid-template-columns:1fr}.production-plus{height:16px}.production-job{grid-template-columns:28px 1fr 70px}.production-job .production-arrow,.production-job .production-media-cell.frame{display:none}.production-job-state{grid-column:2}.production-job-actions{grid-column:3;grid-row:1/3}.production-config-grid{grid-template-columns:1fr}.production-config-grid .full{grid-column:auto}}
 
+
+/* ===== FINAL SIDEBAR WIDTH FIX ===== */
+@media(min-width:761px){
+  .app.sidebar-collapsed .sidebar.compact.hover-open,
+  .app.sidebar-collapsed .sidebar.compact:hover{
+    width:258px!important;
+    min-width:258px!important;
+    max-width:258px!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+    overflow:visible!important;
+    background:#090a0e!important;
+    box-shadow:18px 0 46px rgba(0,0,0,.34)!important;
+    z-index:200!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .brand,
+  .app.sidebar-collapsed .sidebar.compact:hover .brand{
+    width:100%!important;
+    justify-content:space-between!important;
+    margin:0 0 14px!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .brand-main,
+  .app.sidebar-collapsed .sidebar.compact:hover .brand-main{
+    display:flex!important;
+    gap:9px!important;
+    min-width:0!important;
+    flex:1 1 auto!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .brand-name,
+  .app.sidebar-collapsed .sidebar.compact:hover .brand-name{
+    display:block!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .workspace-switch,
+  .app.sidebar-collapsed .sidebar.compact:hover .workspace-switch{
+    display:grid!important;
+    width:100%!important;
+    grid-template-columns:34px minmax(0,1fr) auto!important;
+    margin:0 2px 18px!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .nav,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav{
+    display:grid!important;
+    width:100%!important;
+    margin-top:0!important;
+    gap:13px!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .nav-group,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav-group{
+    display:grid!important;
+    width:100%!important;
+    gap:3px!important;
+    margin:0!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .nav-label,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav-label{
+    display:block!important;
+    width:100%!important;
+    padding:0 10px 5px!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .nav button,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav button{
+    width:100%!important;
+    height:auto!important;
+    min-height:38px!important;
+    padding:9px 10px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:10px!important;
+    overflow:visible!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .nav button b,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav button b{
+    display:block!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    text-overflow:clip!important;
+    text-align:left!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .nav button::before,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav button::before{
+    display:none!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .sidebar-pin,
+  .app.sidebar-collapsed .sidebar.compact:hover .sidebar-pin{
+    position:static!important;
+    width:30px!important;
+    height:30px!important;
+    flex:0 0 30px!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .sidebar-foot,
+  .app.sidebar-collapsed .sidebar.compact:hover .sidebar-foot{
+    left:12px!important;
+    right:12px!important;
+    width:auto!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .account-chip,
+  .app.sidebar-collapsed .sidebar.compact:hover .account-chip{
+    width:100%!important;
+    height:auto!important;
+    display:grid!important;
+    grid-template-columns:32px minmax(0,1fr) 8px!important;
+    padding:7px 8px!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact.hover-open .account-copy,
+  .app.sidebar-collapsed .sidebar.compact:hover .account-copy,
+  .app.sidebar-collapsed .sidebar.compact.hover-open .connection-dot,
+  .app.sidebar-collapsed .sidebar.compact:hover .connection-dot{
+    display:block!important;
+  }
+}
+
 </style>
 </head>
 <body>
