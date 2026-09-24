@@ -485,7 +485,7 @@ button:disabled,.btn:disabled{
 .ui31-empty-slot{width:100%;min-height:72px!important;display:flex!important;align-items:center!important;gap:8px!important;text-align:left!important;border:1px dashed #262c36!important;background:#090b0f!important;color:#8790a0!important;padding:9px!important}
 .ui31-empty-slot:hover{border-color:#4a3140!important;background:#0e0c11!important;color:#fff!important}.ui31-empty-slot b,.ui31-empty-slot small{display:block}.ui31-empty-slot b{font-size:9px}.ui31-empty-slot small{font-size:8px;color:#687180;margin-top:2px}.slot-plus{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:#11151c;color:#ff6399}
 .ui31-slot{min-height:84px!important;padding:9px!important;overflow:visible!important;border-left:2px solid #ff3f7f!important}
-.ui31-slot-top{display:grid;grid-template-columns:32px minmax(0,1fr) 24px;gap:7px;align-items:center}.ui31-thumb{width:32px;height:44px;border:0;border-radius:7px;background:#15121a;color:#ff6399;font-size:10px;display:grid;place-items:center}.ui31-thumb:hover{background:#211722}
+.ui31-slot-top{display:grid;grid-template-columns:32px minmax(0,1fr) 24px;gap:7px;align-items:center}.ui31-thumb{position:relative;width:32px;height:44px;border:0;border-radius:7px;background:#15121a;color:#ff6399;font-size:10px;display:grid;place-items:center;overflow:hidden;padding:0}.ui31-thumb:hover{background:#211722}.ui31-thumb video,.ui31-thumb img{width:100%;height:100%;object-fit:cover;display:block}.ui31-thumb .calendar-thumb-play{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:9px;text-shadow:0 1px 5px #000;background:linear-gradient(transparent,rgba(0,0,0,.22))}.ui31-thumb.is-loaded .calendar-thumb-play{opacity:.8}.ui31-thumb.is-unavailable{color:#667080}.production-queue-head-actions{display:flex;align-items:center;gap:8px}.production-queue-head-actions .btn{padding:6px 9px;font-size:8px}
 .ui31-slot-copy{min-width:0}.ui31-slot-copy b,.ui31-slot-copy span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ui31-slot-copy b{font-size:9px}.ui31-slot-copy span{font-size:8px;color:#6f7787;margin-top:3px}
 .ui31-slot-bottom{display:flex;align-items:center;gap:5px;margin-top:7px;min-height:18px}.smart-badge{color:#bca1ff!important;background:#171226!important}.slot-caption-dot{font-size:6px;color:#63d898;margin-left:auto}
 .slot-menu{position:relative}.slot-menu summary{list-style:none;width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:#7e8796;cursor:pointer}.slot-menu summary::-webkit-details-marker{display:none}.slot-menu summary:hover{background:#171b22;color:#fff}.slot-menu-pop{position:absolute;right:0;top:27px;z-index:60;width:145px;background:#0e1117;border:1px solid #282e39;border-radius:9px;padding:4px;box-shadow:0 14px 38px rgba(0,0,0,.36)}.slot-menu-pop button{width:100%;border:0;background:transparent;color:#c9ced7;text-align:left;padding:7px 8px;border-radius:6px;font-size:9px}.slot-menu-pop button:hover{background:#181c24}.slot-menu-pop .danger-link{color:#ff7a83}
@@ -2220,6 +2220,8 @@ const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-st
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
 let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false;
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
+const calendarPreviewCache=new Map();
+let calendarPreviewObserver=null;
 let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
@@ -3272,7 +3274,7 @@ function calendarPage(){
   `;
   $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
   ensureCalendarMetricsTicker();
-  requestAnimationFrame(updateCalendarLiveDom);
+  requestAnimationFrame(()=>{updateCalendarLiveDom();setupCalendarVideoThumbs()});
 }
 
 function calendarCompactNumber(n){
@@ -3586,7 +3588,7 @@ function renderSlot(date,i){
   const justPublished=calendarIsJustPublished(x)?"just-published":"";
   return `<div class="slot filled ui31-slot ${i>=7?"extra-slot":""} ${perfClass} ${justPublished}" data-schedule-id="${esc(x.scheduleId||"")}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
-      <button class="ui31-thumb" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo">▶</button>
+      <button class="ui31-thumb calendar-video-thumb" data-date="${date}" data-slot="${i}" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo"><span class="calendar-thumb-play">▶</span></button>
       <div class="ui31-slot-copy">
         <b title="${esc(x.name)}">${displayName}</b>
         <span>${x.time} · ${fmtSize(x.size)}</span>
@@ -3804,6 +3806,57 @@ async function getScheduledPreviewUrl(x){
   if(!signed)throw new Error("URL temporária indisponível.");
   return signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
 }
+function setupCalendarVideoThumbs(){
+  if(calendarPreviewObserver){try{calendarPreviewObserver.disconnect()}catch{}}
+  const thumbs=[...document.querySelectorAll(".calendar-video-thumb")];
+  if(!thumbs.length)return;
+  const load=el=>loadCalendarVideoThumb(el);
+  if(!("IntersectionObserver" in window)){thumbs.forEach(load);return}
+  calendarPreviewObserver=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting)return;
+      calendarPreviewObserver.unobserve(entry.target);
+      load(entry.target);
+    });
+  },{root:document.querySelector(".ui3-calendar-scroll"),rootMargin:"180px"});
+  thumbs.forEach(el=>calendarPreviewObserver.observe(el));
+}
+async function loadCalendarVideoThumb(el){
+  if(!el||el.dataset.loading==="1"||el.dataset.loaded==="1")return;
+  const date=el.dataset.date,slot=Number(el.dataset.slot);
+  const x=slotData(date,slot);
+  if(!x)return;
+  el.dataset.loading="1";
+  try{
+    let url=null;
+    const key=x.storagePath||x.scheduleId||x.videoId||date+"#"+slot;
+    const cached=calendarPreviewCache.get(key);
+    if(cached&&cached.expires>Date.now()+60000)url=cached.url;
+    else if(x.cloud){
+      url=await getScheduledPreviewUrl(x);
+      if(url)calendarPreviewCache.set(key,{url,expires:Date.now()+50*60*1000});
+    }else{
+      const rec=await dbGet(x.videoId);
+      if(rec?.blob)url=URL.createObjectURL(rec.blob);
+    }
+    if(!url)throw new Error("preview_unavailable");
+    const video=document.createElement("video");
+    video.src=url+"#t=0.05";
+    video.muted=true;
+    video.playsInline=true;
+    video.preload="metadata";
+    video.setAttribute("aria-hidden","true");
+    video.onloadeddata=()=>{el.classList.add("is-loaded")};
+    video.onerror=()=>{el.classList.add("is-unavailable")};
+    el.prepend(video);
+    el.dataset.loaded="1";
+  }catch{
+    el.classList.add("is-unavailable");
+  }finally{
+    delete el.dataset.loading;
+  }
+}
+
 async function previewScheduled(date,slot){
   const x=slotData(date,slot);if(!x)return;
   let url=null,objectUrl=false;
@@ -4786,6 +4839,22 @@ async function deleteProductionJob(id){
   }catch(e){toast(e.message,"err")}
 }
 
+async function clearCompletedProductionJobs(){
+  const ready=(productionData?.jobs||[]).filter(j=>j.status==="ready");
+  if(!ready.length){toast("Não há concluídos para limpar.","ok");return}
+  if(!confirm("Limpar "+ready.length+" job(s) concluído(s) desta fila?\n\nIsso só remove os cards da fila. Os vídeos finais, agendamentos, métricas e dados de aprendizado continuam preservados."))return;
+  try{
+    const r=await cloudFetch("?action=production-clear-completed",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({})
+    });
+    await loadProductionData(true);
+    productionPage();
+    toast((r.cleared||0)+" concluído(s) removido(s) da fila.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+
 function productionCreditUsage(j){
   const raw=j?.credits_used;
   if(raw!==null&&raw!==undefined&&raw!==""){
@@ -4982,7 +5051,7 @@ function productionPage(){
         '<div class="production-note">Adicione quantos pares quiser. Depois use “Executar fila” para disparar na hora.</div>'+
       '</div>'+
     '</div>'+
-    '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><small class="muted">Acompanhamento automático</small></div><div class="production-queue">'+rows+'</div></div>';
+    '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><div class="production-queue-head-actions"><small class="muted">Acompanhamento automático</small>'+(jobs.some(j=>j.status==="ready")?'<button class="btn btn-sm" onclick="clearCompletedProductionJobs()">🧹 Limpar concluídos</button>':'')+'</div></div><div class="production-queue">'+rows+'</div></div>';
   ensureProductionTicker();
   setTimeout(()=>{
     syncProductionElapsed();
