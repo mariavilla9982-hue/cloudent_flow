@@ -2526,6 +2526,16 @@ body.auth-checking .auth-boot{display:grid}
 @media(max-width:980px){.xw-grid{grid-template-columns:1fr}.xw-add{grid-template-columns:1fr 1fr}.xw-add>div{grid-column:1/-1}}
 @media(max-width:650px){.xw-kpis{grid-template-columns:1fr 1fr}.xw-add{grid-template-columns:1fr}.xw-head{align-items:flex-start;flex-direction:column}.xw-form-grid{grid-template-columns:1fr}.xw-form-grid .wide{grid-column:auto}.xw-composer-foot{align-items:flex-start;flex-direction:column}}
 
+.xw-head-status{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.xw-connect{display:grid;grid-template-columns:minmax(120px,.7fr) 1fr 1.25fr auto;gap:7px;align-items:center;margin-top:10px;padding:9px;border:1px solid rgba(245,158,11,.18);border-radius:10px;background:rgba(245,158,11,.025)}
+.xw-connect-title span,.xw-connect-title b,.xw-connect-title small{display:block}.xw-connect-title span{font-size:7px;color:#e8b45d;font-weight:900;letter-spacing:.08em}.xw-connect-title b{font-size:9px;margin-top:2px}.xw-connect-title small{font-size:7px;color:var(--muted);margin-top:2px}
+.xw-connect input{width:100%;border:1px solid var(--line);border-radius:8px;background:#0a0c10;color:var(--text);padding:9px;font:inherit;outline:none}
+.xw-connect input:focus{border-color:rgba(139,92,246,.5)}
+.xw-connected{display:flex;align-items:center;gap:9px;margin-top:10px;padding:9px 10px;border:1px solid rgba(34,197,94,.18);border-radius:10px;background:rgba(34,197,94,.025)}
+.xw-connected>span{width:24px;height:24px;display:grid;place-items:center;border-radius:8px;background:rgba(34,197,94,.1);color:#61df94;font-weight:900}.xw-connected b,.xw-connected small{display:block}.xw-connected b{font-size:9px}.xw-connected small{font-size:8px;color:var(--muted);margin-top:2px}
+@media(max-width:900px){.xw-connect{grid-template-columns:1fr 1fr}.xw-connect-title{grid-column:1/-1}}
+@media(max-width:600px){.xw-connect{grid-template-columns:1fr}.xw-head-status{justify-content:flex-start}}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -6388,6 +6398,34 @@ async function createXWarmupAccount(){
     await loadXWarmup();xStudioPage();toast("Conta adicionada à esteira.","ok");
   }catch(e){toast(e.message,"err")}
 }
+async function connectXWarmupAccount(id){
+  const account=(xWarmupData.accounts||[]).find(a=>a.id===id);
+  if(!account)return;
+  const userId=$("#xWarmupUserId_"+id)?.value?.trim();
+  const token=$("#xWarmupToken_"+id)?.value?.trim();
+  if(!userId||!token){toast("Informe User ID e User Access Token.","err");return}
+  const btn=$("#xWarmupConnectBtn_"+id);
+  if(btn){btn.disabled=true;btn.textContent="Conectando…"}
+  try{
+    await cloudFetch("?action=x-warmup-connect-account",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        id,
+        external_user_id:userId,
+        access_token:token,
+        account_label:account.label||account.username||"Conta X",
+        username:account.username||""
+      })
+    });
+    await Promise.all([loadXWarmup(),loadPlatformAccounts(),loadAutomationStatus()]);
+    xStudioPage();
+    toast("Conta X conectada. A fila automática foi liberada.","ok");
+  }catch(e){
+    toast(e.message,"err");
+    if(btn){btn.disabled=false;btn.textContent="Conectar conta"}
+  }
+}
 async function xWarmupControl(id,operation){
   try{
     await cloudFetch("?action=x-warmup-account",{
@@ -6493,6 +6531,14 @@ function xWarmupAccountCard(account){
         <b>${esc(xWarmupSummaryText(plan))}</b>
         <small>${(plan.summary?.notes||[]).map(esc).join(" · ")}</small>
       </div>
+      ${!account.platform_account_id?`
+        <div class="xw-connect">
+          <div class="xw-connect-title"><span>API X</span><b>Conectar esta conta</b><small>Token fica criptografado no backend.</small></div>
+          <input id="xWarmupUserId_${account.id}" inputmode="numeric" placeholder="User ID numérico">
+          <input id="xWarmupToken_${account.id}" type="password" autocomplete="off" placeholder="User Access Token">
+          <button class="btn primary" id="xWarmupConnectBtn_${account.id}" onclick="connectXWarmupAccount('${account.id}')">Conectar conta</button>
+        </div>`
+        :`<div class="xw-connected"><span>✓</span><div><b>Conta conectada à API X</b><small>User ID ${esc(account.external_user_id||"confirmado")} · fila automática liberada</small></div></div>`}
       <div class="xw-action-summary">
         <div><b>${actions.length}</b><span>programadas</span></div>
         <div><b>${completed}</b><span>concluídas</span></div>
@@ -6518,6 +6564,7 @@ function xWarmupSection(){
   const warming=accounts.filter(x=>x.status==="warming").length;
   const review=accounts.filter(x=>x.status==="review").length;
   const connected=!!xWarmupData.connection?.enabled;
+  const warmWorker=(automationData?.workers||[]).find(w=>w.worker_name==="x_warmup");
   return `
     <div class="xw-section">
       <div class="xw-head">
@@ -6526,7 +6573,10 @@ function xWarmupSection(){
           <h3>Esteira de contas X</h3>
           <p>Até 5 contas com fila de curtidas, follows, respostas e posts programados, avanço diário e aprovação final.</p>
         </div>
-        <span class="channel-stage-pill ${connected?"ready":""}"><i></i>${connected?"API X conectada":"Aguardando conexão X"}</span>
+        <div class="xw-head-status">
+          <span class="channel-stage-pill ${connected?"ready":""}"><i></i>${connected?"API X conectada":"Aguardando conexão X"}</span>
+          <span class="channel-stage-pill ${warmWorker?.online?"ready":""}"><i></i>${warmWorker?.online?"Worker online":"Worker iniciando"}</span>
+        </div>
       </div>
       <div class="xw-kpis">
         <div><small>CONTAS</small><b>${accounts.length}/5</b></div>
