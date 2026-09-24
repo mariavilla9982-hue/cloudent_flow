@@ -1846,11 +1846,11 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 
 
 /* ===== Patch: clean names, ready actions, extras, extractor ===== */
-.production-ready-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;min-width:170px}
+.production-ready-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;min-width:240px}
 .production-ready-actions button{white-space:nowrap}
 .production-ready-actions button.danger{color:#ff858c;border-color:#49252a}
 .production-ready-actions button:disabled{opacity:.55;cursor:default}
-.production-job-actions{min-width:180px}
+.production-job-actions{min-width:240px}
 .calendar-day-add-more{width:100%;margin-top:8px;padding:8px;border:1px dashed #2a313d;border-radius:8px;background:#0a0d11;color:#808998;font-size:8px;font-weight:800;cursor:pointer}
 .calendar-day-add-more:hover{color:#ff77a7;border-color:#5b3044;background:#100d12}
 .ui31-day .count.extra{color:#f2c96a;border-color:#4c3c1d;background:#161208}
@@ -4090,9 +4090,9 @@ function productionJobRow(j,i,total){
   if(j.status==="ready"){
     const scheduled=!!j.meta?.scheduled;
     action='<div class="production-ready-actions">'+
-      '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver</button>'+
+      '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
-      (scheduled?'<button disabled>✓ No calendário</button>':'<button onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">📅 Calendário</button>')+
+      (scheduled?'<button disabled>✓ No calendário</button>':'<button onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">📅 Adicionar ao calendário</button>')+
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
     '</div>';
   }else if(["failed","cancelled"].includes(j.status)){
@@ -4334,7 +4334,7 @@ function frameExtractorPage(){
             return `<div class="frame-result-row ${st[1]}">
               <div class="frame-result-number">${String(row.index).padStart(2,"0")}</div>
               <div class="frame-result-preview">${row.blobUrl?`<img src="${esc(row.blobUrl)}" alt="Frame ${row.index}">`:'<span>▧</span>'}</div>
-              <div class="frame-result-copy"><b>Frame ${row.index}</b><span title="${esc(row.link)}">${esc(row.link.replace(/^https?:\/\//,"").slice(0,54))}</span>${row.error?`<em>${esc(row.error)}</em>`:""}</div>
+              <div class="frame-result-copy"><b>Vídeo ${row.index} + Frame ${row.index}</b><span title="${esc(row.link)}">${esc(row.link.replace(/^https?:\/\//,"").slice(0,54))}</span>${row.error?`<em>${esc(row.error)}</em>`:""}</div>
               <span class="frame-result-status ${st[1]}">${st[1]==="working"?'<i></i>':""}${st[0]}</span>
               <div class="frame-result-actions">${row.status==="ready"?`<button onclick="downloadExtractedFrame(${i})">↓ Baixar frame</button>`:""}</div>
             </div>`;
