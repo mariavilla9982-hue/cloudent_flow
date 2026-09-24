@@ -1908,6 +1908,11 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-wait-actions .run-now:hover{background:#153022;border-color:#4c8062}
 .production-job-cost.live{color:#ffd36b;text-shadow:0 0 14px rgba(255,205,88,.15)}
 </style>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#09090d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="/cloudent-icon.svg" type="image/svg+xml">
 </head>
 <body>
 <div class="app">
@@ -1981,7 +1986,7 @@ const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false;
+let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false;
 let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
@@ -2017,11 +2022,15 @@ function defaultSmartSamples(){
 
 const saved=JSON.parse(localStorage.getItem("cloudentflow-stage4")||localStorage.getItem("cloudentflow-stage3")||"null")||{};
 
+const defaultSevenTimes=["07:30","09:30","11:30","14:00","16:30","19:00","21:30"];
+const savedTimes=Array.isArray(saved.defaultTimes)?saved.defaultTimes:[];
+const normalizedDefaultTimes=defaultSevenTimes.map((t,i)=>savedTimes[i]||t);
+
 const state={
   weekStart:saved.weekStart||mondayISO(new Date()),
   slots:saved.slots||{},
-  postsPerDay:5,
-  defaultTimes:saved.defaultTimes||["09:00","12:00","15:00","18:00","21:00"],
+  postsPerDay:7,
+  defaultTimes:normalizedDefaultTimes,
   minGap:saved.minGap||60,
   logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"CloudentFlow carregado."}],
   performance:saved.performance||{"09:00":67,"12:00":81,"15:00":72,"18:00":96,"21:00":120},
@@ -2601,7 +2610,7 @@ function validateSchedule(date,time,ignoreKey=null){
 }
 
 function firstValidDefaultSlot(date,ignoreKey=null){
-  for(let i=0;i<5;i++){
+  for(let i=0;i<7;i++){
     const k=keyFor(date,i);
     if(!state.slots[k] || k===ignoreKey){
       const time=state.defaultTimes[i]||"12:00";
@@ -2953,12 +2962,12 @@ function calendarPage(){
   const gap=automationData?.settings?.min_gap_minutes||state.minGap;
   const filled=weekScheduledCount();
   const dayCounts=dates.map(d=>filledCount(localISO(d)));
-  const baseFilled=dayCounts.reduce((a,n)=>a+Math.min(n,5),0);
-  const extraFilled=dayCounts.reduce((a,n)=>a+Math.max(0,n-5),0);
+  const baseFilled=dayCounts.reduce((a,n)=>a+Math.min(n,7),0);
+  const extraFilled=dayCounts.reduce((a,n)=>a+Math.max(0,n-7),0);
   const start=dates[0],end=dates[6];
   const startLabel=start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
   const endLabel=end.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
-  const stable=smart.mode==="stable"||Number(smart.exploration||0)===0;
+  const stable=Number(smart.exploration||0)===0;
 
   $("#calendar").innerHTML=`
     <div class="ui3-page-head calendar-head calendar-head-v2">
@@ -2971,7 +2980,7 @@ function calendarPage(){
         <div class="calendar-week-identity">
           <span>SEMANA ATUAL</span>
           <b>${startLabel} — ${endLabel}</b>
-          <small>${baseFilled} de 35 posições base${extraFilled?" + "+extraFilled+" extras":""}</small>
+          <small>${baseFilled} de 49 posições base${extraFilled?" + "+extraFilled+" extras":""}</small>
         </div>
 
         <label class="calendar-date-control">
@@ -2989,11 +2998,11 @@ function calendarPage(){
       </div>
 
       <div class="calendar-health-row">
-        <div><span>Ocupação base</span><b>${baseFilled}/35</b></div>
+        <div><span>Ocupação base</span><b>${baseFilled}/49</b></div>
         <div><span>Extras manuais</span><b>${extraFilled}</b></div>
-        <div><span>Posts/dia</span><b>${automationData?.settings?.posts_per_day||5}</b></div>
+        <div><span>Posts/dia</span><b>${automationData?.settings?.posts_per_day||7}</b></div>
         <div><span>Intervalo mínimo</span><b>${gap} min</b></div>
-        <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · sem testes automáticos":"Smart Scheduler"}</b></div>
+        <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · sem testes automáticos":"A/B ativo · 3 manhã · 2 tarde · 2 noite"}</b></div>
       </div>
 
       <div class="calendar-protection-note">🔒 Posts próximos do horário ficam protegidos contra alterações de última hora.</div>
@@ -3014,13 +3023,13 @@ function dayColumn(d,label){
   const iso=localISO(d),count=filledCount(iso);
   const extras=dateSlots(iso)
     .map(x=>Number(String(x.key).split("#")[1]))
-    .filter(i=>Number.isFinite(i)&&i>=5)
+    .filter(i=>Number.isFinite(i)&&i>=7)
     .sort((a,b)=>a-b);
-  const countLabel=count<=5?count+"/5":count+" posts";
+  const countLabel=count<=7?count+"/7":count+" posts";
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
     <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>5?"extra":""}">${countLabel}</div></div>
     <div class="day-slots">
-      ${Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("")}
+      ${Array.from({length:7},(_,i)=>renderSlot(iso,i)).join("")}
       ${extras.map(i=>renderSlot(iso,i)).join("")}
     </div>
     <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)">＋ Adicionar outro vídeo</button>
@@ -3030,7 +3039,7 @@ function dayColumn(d,label){
 function renderSlot(date,i){
   const x=slotData(date,i),time=x?.time||state.defaultTimes[i]||"";
   if(!x){
-    if(i>=5)return "";
+    if(i>=7)return "";
     return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
   }
   const st=getStatus(x),isAuto=x.smartMode==="auto";
@@ -3044,9 +3053,9 @@ function renderSlot(date,i){
         : null;
   const smartBadge=badgeMeta
     ? `<button class="badge smart-strategy-btn ${badgeMeta.cls}" onclick="event.stopPropagation();openSmartStrategyMenu('${date}',${i})" title="Alterar tipo de horário">${badgeMeta.label}</button>`
-    : i>=5?'<span class="badge extra-post-badge">Extra manual</span>':"";
+    : i>=7?'<span class="badge extra-post-badge">Extra manual</span>':"";
   const displayName="Vídeo "+(i+1);
-  return `<div class="slot filled ui31-slot ${i>=5?"extra-slot":""}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
+  return `<div class="slot filled ui31-slot ${i>=7?"extra-slot":""}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
       <button class="ui31-thumb" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo">▶</button>
       <div class="ui31-slot-copy">
@@ -3364,7 +3373,7 @@ async function confirmScheduleModal(){
   const free=firstFreeSlot(date);if(free<0){alert("Esse dia atingiu o limite manual de vídeos.");return}
   const extra=$("#modalExtra")?.value==="1";
   const auto=!extra&&($("#modalSmart")?.checked??false);
-  const choice=auto?smartChoiceForSlot(date,Math.min(free,4)):{time:$("#modalTime").value,strategy:"manual"};
+  const choice=auto?smartChoiceForSlot(date,Math.min(free,6)):{time:$("#modalTime").value,strategy:"manual"};
   const time=choice.time;
   const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
 
@@ -3411,7 +3420,7 @@ async function confirmEditSchedule(oldDate,oldSlot){
   let targetSlot=oldSlot;
   if(movingDay){
     const free=firstFreeSlot(newDate);
-    if(free<0){alert("O novo dia já está com 5 vídeos.");return}
+    if(free<0){alert("O novo dia atingiu o limite de vídeos.");return}
     targetSlot=free;
   }
   const valid=validateSchedule(newDate,newTime,movingDay?null:oldKey);
