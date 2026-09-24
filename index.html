@@ -1827,6 +1827,23 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-drop-live:hover .production-upload-preview video,.production-drop-live:hover .production-upload-preview img{transform:scale(1.015)}
 .production-upload-preview video,.production-upload-preview img{transition:transform .2s ease}
 
+
+/* ===== Ready Job Actions ===== */
+.production-job-actions.ready{min-width:210px}
+.production-ready-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.production-ready-actions button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:30px;white-space:nowrap}
+.production-ready-actions button.danger{color:#ff8a91;border-color:#4a252a;background:#170d0f}
+.production-ready-actions button.danger:hover{background:#211013;border-color:#6b3038}
+.production-schedule-modal{max-width:610px}
+@media(min-width:1051px){
+  .production-job{grid-template-columns:35px minmax(150px,1fr) 24px minmax(150px,1fr) minmax(180px,.9fr) minmax(210px,.8fr)!important}
+}
+@media(max-width:760px){
+  .production-job-actions.ready{min-width:0}
+  .production-ready-actions{grid-template-columns:1fr 1fr}
+  .production-ready-actions button span{display:none}
+}
+
 </style>
 </head>
 <body>
@@ -3813,6 +3830,115 @@ async function productionAction(id,operation){
   }catch(e){toast(e.message,"err")}
 }
 function productionPreviewFromButton(el){previewProductionJob(el.dataset.id,el.dataset.kind||"result")}
+
+async function downloadProductionResult(id){
+  try{
+    const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind=result");
+    const response=await fetch(r.url);
+    if(!response.ok)throw new Error("Falha ao baixar o vídeo.");
+    const blob=await response.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="cloudentflow-"+String(id).slice(0,8)+".mp4";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(e){toast(e.message,"err")}
+}
+function productionScheduleSuggested(){
+  const d=new Date();
+  d.setDate(d.getDate()+1);
+  return localISO(d);
+}
+function updateProductionScheduleTime(){
+  const date=$("#productionScheduleDate")?.value;
+  const time=$("#productionScheduleTime");
+  const auto=$("#productionScheduleAuto")?.checked;
+  const hint=$("#productionScheduleHint");
+  if(!date||!time)return;
+  const free=firstFreeSlot(date);
+  if(free<0){
+    if(hint)hint.textContent="Esse dia já está com 5 vídeos.";
+    return;
+  }
+  if(auto){
+    const choice=smartChoiceForSlot(date,free);
+    time.value=choice.time;
+    time.disabled=true;
+    if(hint)hint.textContent="Horário escolhido pelo Smart Scheduler em modo estável.";
+  }else{
+    time.disabled=false;
+    if(hint)hint.textContent="Você escolhe manualmente o horário.";
+  }
+}
+function openProductionScheduleModal(id){
+  const date=productionScheduleSuggested();
+  $("#modalHost").innerHTML=
+    '<div class="modal" onclick="if(event.target===this)closeModal()">'+
+      '<div class="modal-box production-schedule-modal">'+
+        '<div class="modal-head"><div><b>Adicionar ao calendário</b><div class="muted">Use o vídeo pronto do RunningHub sem reenviar o arquivo.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
+        '<div class="formgrid">'+
+          '<div class="field"><label>Dia</label><input id="productionScheduleDate" type="date" min="'+localISO(new Date())+'" value="'+date+'" onchange="updateProductionScheduleTime()"></div>'+
+          '<div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="12:00"></div>'+
+          '<div class="field full smart-schedule-choice"><label><input id="productionScheduleAuto" type="checkbox" checked onchange="updateProductionScheduleTime()"> <b>Usar melhor horário automaticamente</b></label><small id="productionScheduleHint">Smart Scheduler está escolhendo o horário.</small></div>'+
+          '<div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>'+
+        '</div>'+
+        '<div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" data-id="'+esc(id)+'" onclick="confirmProductionSchedule(this.dataset.id)">Adicionar ao calendário</button></div>'+
+      '</div>'+
+    '</div>';
+  setTimeout(updateProductionScheduleTime,0);
+}
+async function confirmProductionSchedule(id){
+  const date=$("#productionScheduleDate")?.value;
+  const auto=$("#productionScheduleAuto")?.checked;
+  const time=$("#productionScheduleTime")?.value;
+  const caption=$("#productionScheduleCaption")?.value||"";
+  if(!date||!time){toast("Escolha dia e horário.","err");return}
+  const valid=validateSchedule(date,time);
+  if(!valid.ok){toast(valid.msg,"err");return}
+  const at=new Date(date+"T00:00:00");
+  const [h,m]=time.split(":").map(Number);
+  at.setHours(h,m,0,0);
+  const btn=document.querySelector("#modalHost .btn.primary");
+  if(btn){btn.disabled=true;btn.textContent="Adicionando…"}
+  try{
+    await cloudFetch("?action=production-schedule",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        id,
+        scheduled_at:at.toISOString(),
+        caption,
+        smart_mode:auto?"auto":"manual",
+        smart_strategy:auto?"stable":"manual"
+      })
+    });
+    await syncFromBackend();
+    await loadProductionData(true);
+    closeModal();
+    productionPage();
+    toast("Vídeo adicionado ao calendário para "+date+" às "+time+".","ok");
+  }catch(e){
+    toast(e.message==="production_already_scheduled"?"Esse vídeo já está no calendário.":e.message,"err");
+    if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent="Adicionar ao calendário"}
+  }
+}
+async function deleteProductionJob(id){
+  if(!confirm("Excluir este job da Produção IA? Se ele já estiver no calendário, o vídeo agendado será preservado."))return;
+  try{
+    await cloudFetch("?action=production-job",{
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id})
+    });
+    await loadProductionData(true);
+    productionPage();
+    toast("Job excluído.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+
 function productionActionFromButton(el){productionAction(el.dataset.id,el.dataset.op)}
 async function previewProductionJob(id,kind="result"){
   try{
@@ -3934,7 +4060,13 @@ function productionJobRow(j,i,total){
   const live=["uploading","queued","running"].includes(j.status);
   const pv=productionData?.previews?.[j.id]||{};
   let action="";
-  if(j.status==="ready") action='<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>';
+  if(j.status==="ready") action=
+    '<div class="production-ready-actions">'+
+      '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ <span>Ver resultado</span></button>'+
+      '<button data-id="'+esc(j.id)+'" onclick="downloadProductionResult(this.dataset.id)">↓ <span>Baixar</span></button>'+
+      '<button data-id="'+esc(j.id)+'" onclick="openProductionScheduleModal(this.dataset.id)">＋ <span>Calendário</span></button>'+
+      '<button class="danger" data-id="'+esc(j.id)+'" onclick="deleteProductionJob(this.dataset.id)">× <span>Excluir</span></button>'+
+    '</div>';
   else if(["failed","cancelled"].includes(j.status)) action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
   else action='<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>';
 
@@ -3964,7 +4096,7 @@ function productionJobRow(j,i,total){
       '<div class="production-job-meta"><small>'+task+'</small>'+elapsed+credits+'</div>'+
       err+
     '</div>'+
-    '<div class="production-job-actions">'+action+'</div>'+
+    '<div class="production-job-actions '+(j.status==="ready"?"ready":"")+'">'+action+'</div>'+
     '</div>';
 }
 
