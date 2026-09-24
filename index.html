@@ -2267,6 +2267,16 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .trial-page-day{padding:9px;border:1px solid #20252d;border-radius:11px;background:#090b0f;min-width:0}.trial-page-day-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px}.trial-page-day-head b,.trial-page-day-head span{display:block}.trial-page-day-head b{font-size:9px;text-transform:capitalize}.trial-page-day-head span{font-size:7px;color:#606a78;margin-top:2px}.trial-page-day-head strong{font-size:7px;color:#b89ce4;border:1px solid #3c2e4d;background:#100c16;border-radius:999px;padding:2px 6px}
 .trial-page-slots{display:grid;gap:7px}.trial-page-slots .ui31-empty-slot{min-height:78px!important}.trial-page-slots .trial-inline-slot{min-height:78px}.trial-page-slots .trial-inline-section{border-top:0;padding-top:0}.trial-page-slots .trial-inline-empty{background:#0d0a12!important}
 @media(max-width:1050px){.trial-page-control{grid-template-columns:1fr}.trial-page-kpis{grid-template-columns:repeat(2,1fr)}.trial-page-control .calendar-nav-controls{justify-content:flex-start}}
+
+/* ===== Reels teste intelligence v2 ===== */
+.trial-smart-strip{display:grid;grid-template-columns:1.2fr .8fr 1fr;gap:8px;margin-bottom:10px}
+.trial-smart-strip>div{padding:10px 11px;border:1px solid #272230;border-radius:9px;background:#0b0d12}
+.trial-smart-strip span,.trial-smart-strip b,.trial-smart-strip small{display:block}
+.trial-smart-strip span{font-size:6.5px;color:#7b668f;font-weight:950;letter-spacing:.08em}.trial-smart-strip b{font-size:10px;margin:4px 0 2px}.trial-smart-strip small{font-size:7px;color:#68717f;line-height:1.4}
+.trial-auto-mini,.trial-rank-mini{font-size:6px;font-weight:950;padding:2px 5px;border-radius:999px;margin-left:auto}.trial-auto-mini{color:#72d99e;border:1px solid #28503b;background:#0b1711}.trial-auto-mini.manual{color:#c6a4ef;border-color:#4a3562;background:#140e1d}.trial-rank-mini{margin-left:3px;color:#ffca68;border:1px solid #55421d;background:#181207}
+.trial-bottom-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:10px;margin-top:10px}.trial-ranking-list{display:grid;gap:6px}.trial-ranking-row{display:grid;grid-template-columns:32px 1fr auto;gap:9px;align-items:center;padding:9px 10px;border:1px solid #1e242d;border-radius:8px;background:#090c10}.trial-ranking-row>strong{font-size:12px;color:#a98ad4}.trial-ranking-row.top-1>strong{color:#ffca68}.trial-ranking-row b,.trial-ranking-row span{display:block}.trial-ranking-row b{font-size:9px}.trial-ranking-row span{font-size:7px;color:#6f7987;margin-top:2px}.trial-ranking-row em{font-size:7px;color:#747e8d;font-style:normal}.trial-rank-empty{padding:22px;text-align:center;color:#68717f;font-size:8px}
+.trial-learning-rules{display:grid;gap:7px}.trial-learning-rules>div{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;padding:8px;border:1px solid #1f252d;border-radius:8px;background:#090c10}.trial-learning-rules>div>b{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;background:#171020;color:#b99be8;font-size:8px}.trial-learning-rules span{font-size:8px;color:#788290;line-height:1.4}.trial-learning-rules strong{color:#bda6df}.trial-auto-hint{display:block;margin-top:4px;font-size:7px;color:#7b6b8e;line-height:1.35}
+@media(max-width:900px){.trial-smart-strip,.trial-bottom-grid{grid-template-columns:1fr}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2349,7 +2359,7 @@ const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[];
+let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 let calendarPreviewObserver=null;
@@ -2360,7 +2370,7 @@ let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30, metricSeries="views";
 let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
-let trialPendingDate=null,trialDraftFile=null;
+let trialPendingDate=null,trialPendingSlot=null,trialDraftFile=null,trialDraftSlot=null,trialDraftSuggestedTime=null;
 let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
 function defaultSmartSamples(){
   const rows=[], times=["07:30","09:30","11:30","14:00","16:30","19:00","21:30"];
@@ -2514,13 +2524,15 @@ async function loadPlatformAccounts(){
 }
 
 async function loadTrialReels(){
-  if(!cloudSession){trialReelsData=[];return}
+  if(!cloudSession){trialReelsData=[];trialReelsMeta={settings:{},recommendations:[]};return}
   try{
     const r=await cloudFetch("?resource=trial-reels");
     trialReelsData=r.items||[];
+    trialReelsMeta={settings:r.settings||{},recommendations:r.recommendations||[]};
   }catch(e){
     console.warn("Trial Reels unavailable:",e);
     trialReelsData=[];
+    trialReelsMeta={settings:{},recommendations:[]};
   }
 }
 
@@ -3370,24 +3382,83 @@ function jumpToCalendarDay(date){
 
 function trialRowsForDate(date){
   return (trialReelsData||[]).filter(x=>{
-    if(!x?.scheduled_at)return false;
+    if(!x?.scheduled_at||x.hidden_at)return false;
     return localISO(new Date(x.scheduled_at))===date;
-  }).sort((a,b)=>new Date(a.scheduled_at)-new Date(b.scheduled_at));
+  }).sort((a,b)=>{
+    const ai=Number.isFinite(Number(a.slot_index))?Number(a.slot_index):99;
+    const bi=Number.isFinite(Number(b.slot_index))?Number(b.slot_index):99;
+    return ai-bi||new Date(a.scheduled_at)-new Date(b.scheduled_at);
+  });
 }
 function trialStatusMeta(status){
   const s=String(status||"scheduled");
   return ({
     scheduled:{label:"Agendado",cls:"scheduled"},
-    processing:{label:"Preparando",cls:"processing"},
-    container_created:{label:"Preparando",cls:"processing"},
-    published:{label:"Trial publicado",cls:"published"},
+    processing:{label:"Publicando",cls:"processing"},
+    container_created:{label:"Publicando",cls:"processing"},
+    published:{label:"Publicado",cls:"published"},
     failed:{label:"Erro",cls:"failed"}
   })[s]||{label:s,cls:"scheduled"};
 }
 const TRIALS_PER_NIGHT=4;
 const TRIAL_NIGHT_TIMES=["00:30","02:00","03:30","05:00"];
-function trialDefaultTime(date){
-  return TRIAL_NIGHT_TIMES[Math.min(trialRowsForDate(date).length,TRIAL_NIGHT_TIMES.length-1)];
+function trialDefaultTime(date,slotIndex=0){
+  return trialTimesForDate(date)[Math.max(0,Math.min(TRIALS_PER_NIGHT-1,Number(slotIndex)||0))]||TRIAL_NIGHT_TIMES[0];
+}
+function trialHistoryForWeek(){
+  const days=new Set(weekDates().map(localISO));
+  return (trialReelsData||[]).filter(x=>x?.scheduled_at&&days.has(localISO(new Date(x.scheduled_at))));
+}
+function trialTimesForDate(date){
+  const weekday=new Date(date+"T12:00:00").getDay();
+  const recs=(trialReelsMeta?.recommendations||[])
+    .filter(r=>Number(r.weekday)===weekday)
+    .sort((a,b)=>Number(a.rank)-Number(b.rank))
+    .map(r=>String(r.recommended_time||"").slice(0,5))
+    .filter(Boolean)
+    .slice(0,TRIALS_PER_NIGHT);
+  const fallback=Array.isArray(trialReelsMeta?.settings?.fallback_times)
+    ? trialReelsMeta.settings.fallback_times.map(x=>String(x).slice(0,5))
+    : TRIAL_NIGHT_TIMES;
+  return Array.from({length:TRIALS_PER_NIGHT},(_,i)=>recs[i]||fallback[i]||TRIAL_NIGHT_TIMES[i]);
+}
+function trialRowForSlot(date,index){
+  const rows=trialRowsForDate(date);
+  const exact=rows.find(x=>Number(x.slot_index)===index);
+  if(exact)return exact;
+  const unassigned=rows.filter(x=>x.slot_index===null||x.slot_index===undefined);
+  return unassigned[index]||null;
+}
+function trialRankForRow(row){
+  const day=row?.scheduled_at?localISO(new Date(row.scheduled_at)):null;
+  if(!day)return null;
+  const ranked=(trialReelsData||[])
+    .filter(x=>x.status==="published"&&x.scheduled_at&&localISO(new Date(x.scheduled_at))===day&&x?.trial_metrics?.latest)
+    .sort((a,b)=>Number(b.trial_metrics.latest.views||0)-Number(a.trial_metrics.latest.views||0));
+  const idx=ranked.findIndex(x=>String(x.id)===String(row.id));
+  return idx>=0?idx+1:null;
+}
+function trialRankingRows(){
+  return trialHistoryForWeek()
+    .filter(x=>x.status==="published"&&x?.trial_metrics?.latest)
+    .sort((a,b)=>Number(b.trial_metrics.latest.views||0)-Number(a.trial_metrics.latest.views||0))
+    .slice(0,6);
+}
+function trialRecommendationSummary(){
+  const recs=trialReelsMeta?.recommendations||[];
+  const samples=Math.max(0,...recs.map(r=>Number(r.sample_count||0)));
+  const confidence=Math.max(0,...recs.map(r=>Number(r.confidence||0)));
+  return {samples,confidence};
+}
+function trialRankingPanel(){
+  const rows=trialRankingRows();
+  if(!rows.length)return '<div class="trial-rank-empty">O ranking aparece depois das primeiras métricas dos Reels teste.</div>';
+  return '<div class="trial-ranking-list">'+rows.map((row,i)=>{
+    const m=row.trial_metrics.latest||{},when=new Date(row.scheduled_at);
+    const time=String(when.getHours()).padStart(2,"0")+":"+String(when.getMinutes()).padStart(2,"0");
+    const day=when.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit"}).replace(".","");
+    return '<div class="trial-ranking-row top-'+(i+1)+'"><strong>#'+(i+1)+'</strong><div><b>'+day+' · '+time+'</b><span>'+calendarCompactNumber(m.views||0)+' views · '+calendarCompactNumber(m.reach||0)+' alcance</span></div><em>Reel '+(Number(row.slot_index||0)+1)+'</em></div>';
+  }).join("")+'</div>';
 }
 function trialMetricText(row){
   const m=row?.trial_metrics?.latest;
@@ -3414,19 +3485,21 @@ function trialReelCard(row){
 }
 
 function trialInlineSlot(date,index,row=null){
+  const autoTime=trialTimesForDate(date)[index]||TRIAL_NIGHT_TIMES[index];
   if(!row){
-    return '<button class="slot empty ui31-empty-slot trial-inline-empty" onclick="pickTrialForDay(\''+date+'\')">'+
-      '<span class="slot-plus">＋</span><span><b>Reel teste '+(index+1)+'</b><small>'+TRIAL_NIGHT_TIMES[index]+'</small></span></button>';
+    return '<button class="slot empty ui31-empty-slot trial-inline-empty" onclick="pickTrialForDay(\''+date+'\','+index+')">'+
+      '<span class="slot-plus">＋</span><span><b>Reel teste '+(index+1)+'</b><small>'+autoTime+'</small></span></button>';
   }
   const st=trialStatusMeta(row.status);
   const when=row.scheduled_at?new Date(row.scheduled_at):null;
   const time=when?String(when.getHours()).padStart(2,"0")+":"+String(when.getMinutes()).padStart(2,"0"):"—";
   const metric=trialMetricText(row);
   const canDelete=row.status==="scheduled"||row.status==="failed";
+  const rank=trialRankForRow(row);
   return '<div class="slot filled ui31-slot trial-inline-slot '+esc(st.cls)+'">'+
     '<div class="ui31-slot-top">'+
       '<button class="ui31-thumb trial-inline-thumb" onclick="event.stopPropagation();previewTrialReel(\''+esc(row.id)+'\')" title="Ver Reel teste"><span>◈</span></button>'+
-      '<div class="ui31-slot-copy"><b>Reel teste '+(index+1)+'</b><span>'+time+' · '+esc(st.label)+'</span></div>'+
+      '<div class="ui31-slot-copy"><b>Reel teste '+(index+1)+'</b><span>'+time+'</span></div>'+
       '<details class="slot-menu" onclick="event.stopPropagation()"><summary title="Ações">•••</summary><div class="slot-menu-pop">'+
         '<button onclick="previewTrialReel(\''+esc(row.id)+'\')">▶ Ver preview</button>'+
         (row.status==="failed"?'<button onclick="retryTrialReel(\''+esc(row.id)+'\')">↻ Tentar novamente</button>':"")+
@@ -3434,20 +3507,15 @@ function trialInlineSlot(date,index,row=null){
       '</div></details>'+
     '</div>'+
     '<div class="ui31-slot-bottom">'+
-      '<span class="badge trial-inline-badge">TESTE</span>'+
       '<span class="badge trial-inline-status '+esc(st.cls)+'">'+esc(st.label)+'</span>'+
+      (row.auto_time!==false?'<span class="trial-auto-mini">AUTO</span>':'<span class="trial-auto-mini manual">MANUAL</span>')+
+      (rank?'<span class="trial-rank-mini">#'+rank+'</span>':"")+
     '</div>'+
     (metric?'<div class="trial-inline-metric">'+metric+'</div>':"")+
     (row.last_error?'<div class="trial-inline-error">'+esc(row.last_error)+'</div>':"")+
   '</div>';
 }
-function trialDayInline(date){
-  const rows=trialRowsForDate(date);
-  return '<div class="trial-inline-section">'+
-    '<div class="trial-inline-head"><div><span>REELS TESTE</span><small>Madrugada · separado dos Reels normais</small></div><b>'+rows.length+'/'+TRIALS_PER_NIGHT+'</b></div>'+
-    '<div class="trial-inline-list">'+Array.from({length:TRIALS_PER_NIGHT},(_,i)=>trialInlineSlot(date,i,rows[i]||null)).join("")+'</div>'+
-  '</div>';
-}
+
 
 function trialTestDayColumn(d){
   const date=localISO(d),rows=trialRowsForDate(date);
@@ -3455,21 +3523,24 @@ function trialTestDayColumn(d){
   const fullDate=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
   return '<div class="trial-page-day">'+
     '<div class="trial-page-day-head"><div><b>'+label+'</b><span>'+fullDate+'</span></div><strong>'+rows.length+'/'+TRIALS_PER_NIGHT+'</strong></div>'+
-    '<div class="trial-page-slots">'+Array.from({length:TRIALS_PER_NIGHT},(_,i)=>trialInlineSlot(date,i,rows[i]||null)).join("")+'</div>'+
+    '<div class="trial-page-slots">'+Array.from({length:TRIALS_PER_NIGHT},(_,i)=>trialInlineSlot(date,i,trialRowForSlot(date,i))).join("")+'</div>'+
   '</div>';
 }
+
 function trialReelsPage(){
   const host=$("#trialReels");if(!host)return;
-  const dates=weekDates(),start=dates[0],end=dates[6];
+  const dates=weekDates(),start=dates[0],end=dates[6],history=trialHistoryForWeek();
   const total=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).length,0);
-  const published=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).filter(x=>x.status==="published").length,0);
-  const failed=dates.reduce((n,d)=>n+trialRowsForDate(localISO(d)).filter(x=>x.status==="failed").length,0);
+  const published=history.filter(x=>x.status==="published").length;
+  const failed=history.filter(x=>x.status==="failed"&&!x.hidden_at).length;
+  const learning=trialRecommendationSummary();
+  const todayTimes=trialTimesForDate(localISO(new Date()));
   const startLabel=start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
   const endLabel=end.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
 
   host.innerHTML=`
     <div class="ui3-page-head trial-page-head">
-      <div><span class="ui3-eyebrow">TESTES DE DISTRIBUIÇÃO</span><h2>Reels teste</h2><p>Uma área separada só para testar tráfego na madrugada, sem misturar com o calendário normal.</p></div>
+      <div><span class="ui3-eyebrow">TESTES DE DISTRIBUIÇÃO</span><h2>Reels teste</h2><p>4 testes por madrugada com aprendizado separado e horários que se ajustam sozinhos.</p></div>
       <button class="btn" onclick="loadTrialReels().then(trialReelsPage)">↻ Atualizar</button>
     </div>
 
@@ -3477,13 +3548,13 @@ function trialReelsPage(){
       <div class="calendar-week-identity">
         <span>SEMANA</span>
         <b>${startLabel} — ${endLabel}</b>
-        <small>${total} de ${TRIALS_PER_NIGHT*7} testes preenchidos</small>
+        <small>${total} de ${TRIALS_PER_NIGHT*7} posições ocupadas</small>
       </div>
       <div class="trial-page-kpis">
         <div><span>Por madrugada</span><b>${TRIALS_PER_NIGHT}</b></div>
-        <div><span>Publicados</span><b>${published}</b></div>
-        <div><span>Falhas</span><b class="${failed?"bad":""}">${failed}</b></div>
-        <div><span>Horários</span><b>00:30 · 02:00 · 03:30 · 05:00</b></div>
+        <div><span>Status</span><b>${failed?"Verificar erro":"Operando"}</b></div>
+        <div><span>Aprendizado</span><b>Separado</b></div>
+        <div><span>Autoajuste</span><b>${trialReelsMeta?.settings?.auto_apply===false?"Pausado":"Ativo"}</b></div>
       </div>
       <div class="calendar-nav-controls">
         <button class="btn" onclick="shiftTrialWeek(-7)">←</button>
@@ -3492,15 +3563,36 @@ function trialReelsPage(){
       </div>
     </div>
 
-    <div class="trial-page-info">◈ Cada coluna é um dia. Clique em um dos 4 blocos vazios para subir o vídeo e agendar o Reel teste.</div>
+    <div class="trial-smart-strip">
+      <div><span>HORÁRIOS ATUAIS</span><b>${todayTimes.join(" · ")}</b><small>o sistema ajusta quando o histórico Trial fica forte o bastante</small></div>
+      <div><span>BASE DE APRENDIZADO</span><b>${learning.samples} amostras próximas</b><small>confiança máxima ${learning.confidence}%</small></div>
+      <div><span>LIMPEZA AUTOMÁTICA</span><b>Regra ativa</b><small>após 48h sai da agenda; métricas e histórico continuam salvos</small></div>
+    </div>
 
     <div class="trial-page-scroll">
       <div class="trial-page-week">
         ${dates.map(trialTestDayColumn).join("")}
       </div>
     </div>
+
+    <div class="trial-bottom-grid">
+      <div class="card ui3-panel">
+        <div class="ui3-panel-head"><div><span>DESEMPENHO</span><h3>Ranking da madrugada</h3></div><small>${published} publicados na semana</small></div>
+        ${trialRankingPanel()}
+      </div>
+      <div class="card ui3-panel trial-learning-card">
+        <div class="ui3-panel-head"><div><span>APRENDIZADO</span><h3>Separado dos Reels normais</h3></div><span class="status-pill ok">Ativo</span></div>
+        <div class="trial-learning-rules">
+          <div><b>1</b><span>Reels teste geram samples <strong>instagram_trial</strong>.</span></div>
+          <div><b>2</b><span>O Smart Scheduler normal continua usando só os Reels normais.</span></div>
+          <div><b>3</b><span>Quando há histórico suficiente, os 4 horários da madrugada são reajustados automaticamente.</span></div>
+          <div><b>4</b><span>Concluídos somem da agenda automaticamente sem apagar métricas.</span></div>
+        </div>
+      </div>
+    </div>
   `;
 }
+
 function shiftTrialWeek(days){
   const d=new Date(state.weekStart+"T00:00:00");d.setDate(d.getDate()+days);
   state.weekStart=localISO(d);save();trialReelsPage();
@@ -3512,31 +3604,40 @@ function updateTrialReelsBlock(){
   if(currentPage==="trialReels")trialReelsPage();
 }
 
-function pickTrialForDay(date){
+function pickTrialForDay(date,slotIndex=null){
   if(!cloudSession){toast("Entre no CloudentFlow primeiro.","err");showPage("settings");return}
-  if(trialRowsForDate(date).length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem "+TRIALS_PER_NIGHT+" Reels teste.","err");return}
-  trialPendingDate=date;
+  const used=trialRowsForDate(date);
+  if(used.length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem "+TRIALS_PER_NIGHT+" Reels teste.","err");return}
+  let slot=slotIndex===null?0:Number(slotIndex);
+  if(slotIndex===null){
+    for(let i=0;i<TRIALS_PER_NIGHT;i++){if(!trialRowForSlot(date,i)){slot=i;break}}
+  }
+  if(trialRowForSlot(date,slot)){toast("Esse bloco já está ocupado.","err");return}
+  trialPendingDate=date;trialPendingSlot=slot;
   const input=$("#trialVideoPicker");
   if(!input)return;
   input.value="";
   input.click();
 }
+
 function handleTrialVideoPicker(input){
-  const file=input?.files?.[0],date=trialPendingDate;
-  trialPendingDate=null;
-  if(!file||!date)return;
-  trialDraftFile=file;
-  const time=trialDefaultTime(date);
+  const file=input?.files?.[0],date=trialPendingDate,slot=trialPendingSlot;
+  trialPendingDate=null;trialPendingSlot=null;
+  if(!file||!date||slot===null)return;
+  trialDraftFile=file;trialDraftSlot=slot;
+  const time=trialDefaultTime(date,slot);
+  trialDraftSuggestedTime=time;
   $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box trial-schedule-modal">'+
-    '<div class="modal-head"><div><b>Agendar Trial Reel</b><div class="muted">'+esc(date)+' · bloco madrugada</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
+    '<div class="modal-head"><div><b>Agendar Reel teste '+(slot+1)+'</b><div class="muted">'+esc(date)+' · madrugada</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
     '<div class="trial-modal-file"><span>VÍDEO</span><b>'+esc(file.name)+'</b><small>'+fmtSize(file.size)+'</small></div>'+
-    '<div class="formgrid"><div class="field"><label>Dia</label><input id="trialDay" type="date" value="'+esc(date)+'"></div>'+
-    '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"></div>'+
+    '<div class="formgrid"><div class="field"><label>Dia</label><input id="trialDay" type="date" value="'+esc(date)+'" readonly></div>'+
+    '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">Autoajuste sugeriu '+time+'. Se alterar, este slot fica manual.</small></div>'+
     '<div class="field full"><label>Legenda</label><textarea id="trialCaption" placeholder="Opcional"></textarea></div></div>'+
-    '<div class="trial-modal-rule"><b>Trial Reel real</b><span>Estratégia manual. O CloudentFlow não converte silenciosamente para Reel comum se a Meta recusar o modo Trial.</span></div>'+
-    '<button class="btn primary" id="trialScheduleBtn" onclick="scheduleTrialDraft()">Agendar Trial Reel</button>'+
+    '<div class="trial-modal-rule"><b>Aprendizado separado</b><span>Este Reel alimenta apenas o aprendizado da madrugada e não altera o Smart Scheduler dos Reels normais.</span></div>'+
+    '<button class="btn primary" id="trialScheduleBtn" onclick="scheduleTrialDraft()">Agendar Reel teste</button>'+
   '</div></div>';
 }
+
 async function scheduleTrialDraft(){
   const file=trialDraftFile,day=$("#trialDay")?.value,time=$("#trialTime")?.value,caption=$("#trialCaption")?.value||"";
   if(!file||!day||!time){toast("Preencha dia e horário.","err");return}
@@ -3547,18 +3648,26 @@ async function scheduleTrialDraft(){
   if(at.getTime()<Date.now()-10*60_000){toast("Escolha um horário futuro.","err");return}
   const btn=$("#trialScheduleBtn");if(btn){btn.disabled=true;btn.textContent="Enviando…"}
   try{
-    const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("trial_day",day);fd.append("caption",caption);
+    const autoTime=time===trialDraftSuggestedTime;
+    const fd=new FormData();
+    fd.append("file",file);
+    fd.append("scheduled_at",at.toISOString());
+    fd.append("trial_day",day);
+    fd.append("slot_index",String(trialDraftSlot??0));
+    fd.append("auto_time",String(autoTime));
+    fd.append("caption",caption);
     await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
-    trialDraftFile=null;
+    trialDraftFile=null;trialDraftSlot=null;trialDraftSuggestedTime=null;
     await loadTrialReels();
     closeModal();
     updateTrialReelsBlock();
-    toast("Trial Reel agendado para "+time+".","ok");
+    toast("Reel teste agendado para "+time+(autoTime?" · Autoajuste ativo.":" · Horário manual."),"ok");
   }catch(e){
-    toast(e.message||"Falha ao agendar Trial Reel.","err");
-    if(btn){btn.disabled=false;btn.textContent="Agendar Trial Reel"}
+    toast(e.message||"Falha ao agendar Reel teste.","err");
+    if(btn){btn.disabled=false;btn.textContent="Agendar Reel teste"}
   }
 }
+
 async function deleteTrialReel(id){
   if(!confirm("Excluir este Trial Reel agendado?"))return;
   try{
