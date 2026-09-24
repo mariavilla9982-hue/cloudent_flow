@@ -1901,6 +1901,12 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:1100px){.frame-extractor-v2{grid-template-columns:1fr}.frame-download-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}}
 @media(max-width:620px){.frame-download-grid{grid-template-columns:1fr 1fr}.frame-media-preview{max-height:none}}
 @media(max-width:430px){.frame-download-grid{grid-template-columns:1fr}}
+
+/* ===== Production controls patch ===== */
+.production-wait-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.production-wait-actions .run-now{border-color:#315743;background:#102218;color:#78e7aa;font-weight:900}
+.production-wait-actions .run-now:hover{background:#153022;border-color:#4c8062}
+.production-job-cost.live{color:#ffd36b;text-shadow:0 0 14px rgba(255,205,88,.15)}
 </style>
 </head>
 <body>
@@ -2285,6 +2291,23 @@ async function syncFromBackend(){
   }
   save();
 }
+function backendScheduleStatus(status){
+  const s=String(status||"scheduled").toLowerCase();
+  return ({
+    agendado:"scheduled",
+    scheduled:"scheduled",
+    fila:"queued",
+    queued:"queued",
+    publicando:"processing",
+    processing:"processing",
+    publicado:"published",
+    published:"published",
+    erro:"failed",
+    failed:"failed",
+    cancelado:"cancelled",
+    cancelled:"cancelled"
+  })[s]||"scheduled";
+}
 async function syncAllCloudSlots(){
   if(!cloudSession)return;
   const jobs=[];
@@ -2292,8 +2315,16 @@ async function syncAllCloudSlots(){
     if(!x?.cloud||!x.scheduleId) continue;
     jobs.push(cloudFetch("?action=schedule",{
       method:"PATCH",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id:x.scheduleId,scheduled_at:x.scheduledAt,status:x.status||"scheduled",smart_mode:x.smartMode||"manual",smart_strategy:x.smartStrategy||(x.smartMode==="auto"?"tested":"manual"),smart_strategy_locked:!!x.smartStrategyLocked,caption:x.caption||""})
-    }).catch(()=>null));
+      body:JSON.stringify({
+        id:x.scheduleId,
+        scheduled_at:x.scheduledAt,
+        status:backendScheduleStatus(x.status),
+        smart_mode:x.smartMode||"manual",
+        smart_strategy:x.smartStrategy||(x.smartMode==="auto"?"tested":"manual"),
+        smart_strategy_locked:!!x.smartStrategyLocked,
+        caption:x.caption||""
+      })
+    }));
   }
   await Promise.all(jobs);
 }
@@ -2596,9 +2627,16 @@ function statusClass(s){
   return "gray";
 }
 
-function syncQueue(){
+async function syncQueue(strict=false){
   save();
-  if(cloudSession) syncAllCloudSlots();
+  if(!cloudSession)return;
+  try{
+    await syncAllCloudSlots();
+  }catch(e){
+    console.error("Falha ao sincronizar calendário:",e);
+    if(strict)throw e;
+    toast("Não consegui salvar a alteração no servidor.","err");
+  }
 }
 
 
@@ -3389,7 +3427,17 @@ async function confirmEditSchedule(oldDate,oldSlot){
   x.time=newTime;x.caption=newCaption;x.status=newStatus;
   const [h,m]=newTime.split(":").map(Number),at=new Date(newDate+"T00:00:00");at.setHours(h,m,0,0);x.scheduledAt=at.toISOString();
   if(movingDay){delete state.slots[oldKey];state.slots[keyFor(newDate,targetSlot)]=x}
-  syncQueue();closeModal();log(`${x.name} atualizado e fila sincronizada.`,"ok")
+  try{
+    await syncQueue(true);
+    await syncFromBackend();
+    closeModal();
+    renderAll();
+    toast("Agendamento salvo para "+newDate+" às "+newTime+".","ok");
+  }catch(e){
+    await syncFromBackend().catch(()=>{});
+    renderAll();
+    toast("Não consegui salvar o horário: "+(e?.message||"erro"),"err");
+  }
 }
 function setMetricsPeriod(days){metricsPeriod=days;metrics()}
 function setMetricSeries(metric){metricSeries=metric;metrics()}
@@ -3889,12 +3937,26 @@ function productionFileChangedFromInput(input){
   const box=$("#production"+(kind==="video"?"VideoBox":"FrameBox"));
   const file=input?.files?.[0];
   if(!box||!file)return;
-  const title=box.querySelector("b"),meta=box.querySelector("small");
+
+  const old=box.dataset.previewUrl;
+  if(old){try{URL.revokeObjectURL(old)}catch{}}
+  const url=URL.createObjectURL(file);
+  box.dataset.previewUrl=url;
+  box.classList.add("selected","has-preview");
+
+  const mediaHost=box.querySelector(".production-upload-preview");
+  if(mediaHost){
+    mediaHost.innerHTML=kind==="video"
+      ? '<video src="'+url+'#t=0.05" muted playsinline preload="metadata"></video><span class="production-preview-play">▶</span>'
+      : '<img src="'+url+'" alt="Frame da modelo">';
+  }
+
   const next=(productionData?.jobs?.length||0)+1;
+  const title=box.querySelector(".production-upload-title");
+  const meta=box.querySelector(".production-upload-meta");
   if(title)title.textContent=(kind==="video"?"Vídeo ":"Frame ")+next;
   if(meta)meta.textContent=fmtSize(file.size)+" · "+(kind==="video"?"vídeo original":"frame da modelo");
   box.title=file.name;
-  box.classList.add("selected");
 }
 
 async function addProductionJob(){
@@ -3932,7 +3994,8 @@ async function productionAction(id,operation){
     await cloudFetch("?action=production-job",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,operation})});
     await loadProductionData(true);
     productionPage();
-    toast(operation==="retry"?"Job reenviado para a fila.":"Job cancelado.","ok");
+    const msg=operation==="retry"?"Job reenviado para a fila.":operation==="run"?"Execução solicitada para este job.":"Job cancelado.";
+    toast(msg,"ok");
   }catch(e){toast(e.message,"err")}
 }
 function productionPreviewFromButton(el){previewProductionJob(el.dataset.id,el.dataset.kind||"result")}
@@ -4044,8 +4107,22 @@ function syncProductionElapsed(){
   });
 }
 function ensureProductionTicker(){
-  if(window.__cloudentProductionTicker)return;
-  window.__cloudentProductionTicker=setInterval(syncProductionElapsed,1000);
+  if(!window.__cloudentProductionTicker){
+    window.__cloudentProductionTicker=setInterval(syncProductionElapsed,1000);
+  }
+  if(!window.__cloudentProductionLiveTicker){
+    window.__cloudentProductionLiveTicker=setInterval(async()=>{
+      if(currentPage!=="production"||!cloudSession||document.hidden||window.__cloudentProductionRefreshing)return;
+      if($("#productionVideo")?.files?.length||$("#productionFrame")?.files?.length)return;
+      window.__cloudentProductionRefreshing=true;
+      try{
+        await loadProductionData(false);
+        if(currentPage==="production")productionPage();
+      }catch{}finally{
+        window.__cloudentProductionRefreshing=false;
+      }
+    },5000);
+  }
 }
 function productionPreviewMarkup(url,kind){
   if(!url)return '<span class="production-preview-fallback">'+(kind==="frame"?"▧":"▶")+'</span>';
@@ -4108,6 +4185,23 @@ async function deleteProductionJob(id){
   }catch(e){toast(e.message,"err")}
 }
 
+function productionCreditUsage(j){
+  const exact=Number(j?.credits_used);
+  if(Number.isFinite(exact)&&exact>0)return {value:exact,live:false};
+
+  const before=Number(j?.credits_before);
+  const current=Number(productionData?.runninghubStatus?.credits);
+  const active=["uploading","queued","running"].includes(j?.status);
+  const latestWithCredit=(productionData?.jobs||[]).find(x=>x?.credits_before!==null&&x?.credits_before!==undefined);
+  const canEstimate=active||(j?.status==="ready"&&latestWithCredit?.id===j?.id);
+
+  if(canEstimate&&Number.isFinite(before)&&Number.isFinite(current)){
+    const delta=Math.max(0,before-current);
+    if(delta>0)return {value:delta,live:true};
+  }
+  return null;
+}
+
 function productionJobRow(j,i,total){
   const st=productionStatusMeta(j.status);
   const live=["uploading","queued","running"].includes(j.status);
@@ -4124,6 +4218,11 @@ function productionJobRow(j,i,total){
     '</div>';
   }else if(["failed","cancelled"].includes(j.status)){
     action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
+  }else if(j.status==="waiting"){
+    action='<div class="production-wait-actions">'+
+      '<button class="run-now" data-id="'+esc(j.id)+'" data-op="run" onclick="productionActionFromButton(this)">▶ Executar</button>'+
+      '<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>'+
+    '</div>';
   }else{
     action='<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>';
   }
@@ -4133,8 +4232,9 @@ function productionJobRow(j,i,total){
   const elapsed=j.started_at
     ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
     : '<span class="production-wait-detail">'+(j.status==="waiting"?"Aguardando o worker enviar ao RunningHub":"")+'</span>';
-  const credits=j.status==="ready"
-    ? '<span class="production-job-cost">◉ '+(j.credits_used!==null&&j.credits_used!==undefined?Number(j.credits_used).toLocaleString("pt-BR")+" créditos usados":"créditos usados: —")+'</span>'
+  const creditUsage=productionCreditUsage(j);
+  const credits=["uploading","queued","running","ready"].includes(j.status)
+    ? '<span class="production-job-cost '+(creditUsage?.live?"live":"")+'">◉ '+(creditUsage?creditUsage.value.toLocaleString("pt-BR")+" créditos "+(creditUsage.live?"agora":"usados"):"calculando créditos…")+'</span>'
     : "";
 
   return '<div class="production-job '+(live?"is-live":"")+'">'+
