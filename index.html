@@ -1907,6 +1907,35 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-wait-actions .run-now{border-color:#315743;background:#102218;color:#78e7aa;font-weight:900}
 .production-wait-actions .run-now:hover{background:#153022;border-color:#4c8062}
 .production-job-cost.live{color:#ffd36b;text-shadow:0 0 14px rgba(255,205,88,.15)}
+
+/* ===== Patch: 7/day + costs + comparisons + PWA ===== */
+.production-cost-dashboard{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0 14px}
+.production-cost-dashboard>div{background:#0b0e12;border:1px solid #20252e;border-radius:10px;padding:11px 12px}
+.production-cost-dashboard small,.production-cost-dashboard span,.production-cost-dashboard b{display:block}
+.production-cost-dashboard small{font-size:7px;color:#697383;font-weight:900;letter-spacing:.08em}
+.production-cost-dashboard b{font-size:17px;margin:4px 0;color:#f1f4f7}
+.production-cost-dashboard span{font-size:8px;color:#77808d}
+.production-cost-dashboard .forecast{border-color:#3c304e;background:#110d18}
+.analytics-compare-card{padding:16px;margin-bottom:12px}
+.daypart-compare{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.daypart-compare>div{padding:11px;border:1px solid #20252d;border-radius:10px;background:#0a0d11}
+.daypart-compare small,.daypart-compare b,.daypart-compare span{display:block}
+.daypart-compare small{font-size:7px;color:#737d8b;font-weight:900}
+.daypart-compare b{font-size:18px;margin:4px 0}
+.daypart-compare span{font-size:8px;color:#76808d}
+.reel-vs-card{display:grid;grid-template-columns:1fr 44px 1fr;gap:10px;align-items:center;padding:12px;border:1px solid #20252d;border-radius:10px;background:#090b0f}
+.reel-vs-card>strong{text-align:center;color:#ff6ea8;font-size:9px}
+.reel-vs-card small,.reel-vs-card b,.reel-vs-card span{display:block}
+.reel-vs-card small{font-size:7px;color:#6d7684}
+.reel-vs-card b{font-size:12px;margin:3px 0}
+.reel-vs-card span{font-size:8px;color:#78818d}
+.multi-account-list{display:grid;gap:7px;margin:8px 0 10px}
+.multi-account-list>div{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid #20252d;border-radius:9px;background:#0a0d11}
+.multi-account-list b{font-size:9px}
+.multi-account-list span{font-size:8px;color:#7b8490}
+.app-install-card .btn{margin-top:10px}
+@media(max-width:900px){.production-cost-dashboard{grid-template-columns:repeat(2,1fr)}.production-cost-dashboard .forecast{grid-column:1/-1}}
+@media(max-width:650px){.daypart-compare{grid-template-columns:1fr}.reel-vs-card{grid-template-columns:1fr}.reel-vs-card>strong{padding:2px}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
