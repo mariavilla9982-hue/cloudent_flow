@@ -2143,6 +2143,79 @@ button:not(:disabled):active,.btn:not(:disabled):active{
   }
   .ui31-day{min-width:214px!important}
 }
+
+/* ===== Useful analytics: replace decorative line charts ===== */
+.analytics-bar-board,.follower-growth-board,.reel-growth-board{display:grid;gap:11px}
+.analytics-bar-summary,.follower-growth-summary,.reel-growth-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.analytics-bar-summary>div,.follower-growth-summary>div,.reel-growth-summary>div{padding:10px 11px;border:1px solid #1d232c;border-radius:9px;background:#090c10}
+.analytics-bar-summary small,.analytics-bar-summary b,.analytics-bar-summary span,.follower-growth-summary small,.follower-growth-summary b,.follower-growth-summary span,.reel-growth-summary small,.reel-growth-summary b,.reel-growth-summary span{display:block}
+.analytics-bar-summary small,.follower-growth-summary small,.reel-growth-summary small{font-size:7px;color:#616b79;font-weight:900;letter-spacing:.07em}
+.analytics-bar-summary b,.follower-growth-summary b,.reel-growth-summary b{font-size:16px;margin:4px 0 2px}
+.analytics-bar-summary span,.follower-growth-summary span,.reel-growth-summary span{font-size:7.5px;color:#6e7886}
+.analytics-bar-scroll,.follower-growth-scroll{overflow-x:auto;padding-bottom:3px;scrollbar-width:thin}
+.analytics-bar-grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(58px,1fr);gap:6px;min-width:max-content;height:245px;align-items:end;padding:8px 2px 0}
+.analytics-bar-col{height:100%;min-width:58px;display:grid;grid-template-rows:20px 1fr 15px 15px;align-items:end;text-align:center;gap:4px}
+.analytics-bar-col>b{font-size:8px;color:#dce2e9}.analytics-bar-track{height:100%;min-height:120px;display:flex;align-items:end;justify-content:center;border-radius:8px;background:linear-gradient(180deg,#0b0e13,#080a0e);border:1px solid #171d24;padding:4px}
+.analytics-bar-track i{display:block;width:min(28px,62%);min-height:7px;border-radius:5px 5px 3px 3px;background:linear-gradient(180deg,#ff5c92,#b74fff);box-shadow:0 5px 18px rgba(255,63,127,.1)}
+.analytics-bar-col>span{font-size:7px;color:#68717f}.analytics-bar-col>small{font-size:7px;font-weight:900}.analytics-bar-col>small.positive{color:#67d99b}.analytics-bar-col>small.negative{color:#ff7d83}.analytics-bar-col>small.neutral{color:#68717f}
+
+.follower-growth-grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(112px,1fr);gap:7px;min-width:max-content}
+.follower-growth-day{min-width:112px;padding:10px;border:1px solid #1c222a;border-radius:9px;background:#090c10}
+.follower-growth-day small,.follower-growth-day b,.follower-growth-day span{display:block}.follower-growth-day small{font-size:7px;color:#626c7a}.follower-growth-day b{font-size:14px;margin:4px 0 1px}.follower-growth-day span{font-size:8px;color:#76808d}
+.follower-delta-meter{height:4px;margin-top:9px;border-radius:999px;background:#171c22;overflow:hidden}.follower-delta-meter i{display:block;height:100%;border-radius:inherit;background:#68717e}.follower-growth-day.up .follower-delta-meter i{background:#55d995}.follower-growth-day.down .follower-delta-meter i{background:#ff7078}.follower-growth-day.up span,.follower-growth-summary b.positive{color:#65da99}.follower-growth-day.down span,.follower-growth-summary b.negative{color:#ff7c83}
+
+.reel-growth-stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:7px}
+.reel-growth-stage{padding:11px;border:1px solid #1c222a;border-radius:9px;background:#090c10;min-width:0}
+.reel-growth-stage-top{display:flex;justify-content:space-between;gap:6px;align-items:center}.reel-growth-stage-top b{font-size:8px;color:#ff7aa8}.reel-growth-stage-top span{font-size:6.5px;font-weight:900;text-transform:uppercase;color:#6e7885}
+.reel-growth-stage.fast{border-color:#5b4720;background:#110e08}.reel-growth-stage.fast .reel-growth-stage-top span{color:#f5c260}.reel-growth-stage.slow{border-color:#3a3032}.reel-growth-stage.slow .reel-growth-stage-top span{color:#aa9298}.reel-growth-stage.steady .reel-growth-stage-top span{color:#65d99a}
+.reel-growth-stage strong,.reel-growth-stage small,.reel-growth-stage em{display:block}.reel-growth-stage strong{font-size:13px;margin:7px 0}.reel-growth-stage small{font-size:7.5px;color:#798391;margin-top:6px}.reel-growth-stage em{font-size:7px;color:#596473;font-style:normal;margin-top:2px}
+.reel-growth-meter{height:5px;border-radius:999px;background:#171c22;overflow:hidden}.reel-growth-meter i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff4c88,#a85cff)}.reel-growth-stage.fast .reel-growth-meter i{background:#e7b957}.reel-growth-stage.steady .reel-growth-meter i{background:#55d995}
+.ui31-chart.useful-chart,.follower-chart,.reel-evolution-chart{height:auto!important;background:transparent!important;border:0!important;padding:0!important}
+
+@media(max-width:700px){
+  .analytics-bar-summary,.follower-growth-summary,.reel-growth-summary{grid-template-columns:1fr}
+  .reel-growth-stages{grid-template-columns:1fr 1fr}
+}
+@media(max-width:430px){.reel-growth-stages{grid-template-columns:1fr}}
+
+/* ===== Small open / close motion for desktop sidebar ===== */
+@media(min-width:761px){
+  .app{transition:grid-template-columns .22s cubic-bezier(.22,.8,.28,1)!important}
+  .sidebar{transition:width .22s cubic-bezier(.22,.8,.28,1),min-width .22s cubic-bezier(.22,.8,.28,1),padding .22s ease,box-shadow .22s ease!important}
+  .sidebar.compact .nav{transition:margin-top .22s cubic-bezier(.22,.8,.28,1)!important}
+
+  .sidebar.compact .brand-name,
+  .sidebar.compact .nav button b,
+  .sidebar.compact .account-copy{
+    display:block!important;opacity:0!important;max-width:0!important;overflow:hidden!important;white-space:nowrap!important;
+    transform:translateX(-6px)!important;transition:opacity .14s ease,max-width .22s ease,transform .22s ease!important;pointer-events:none!important;
+  }
+  .sidebar.compact .nav button b,.sidebar.compact .account-copy{position:absolute!important}
+  .sidebar.compact:hover .brand-name,.sidebar.compact:hover .nav button b,.sidebar.compact:hover .account-copy{
+    opacity:1!important;max-width:180px!important;transform:translateX(0)!important;pointer-events:auto!important;
+  }
+  .sidebar.compact:hover .nav button b,.sidebar.compact:hover .account-copy{position:static!important}
+
+  .sidebar.compact .nav-label{
+    display:block!important;opacity:0!important;max-height:0!important;padding-top:0!important;padding-bottom:0!important;
+    transform:translateY(-4px)!important;overflow:hidden!important;
+    transition:opacity .14s ease,max-height .2s ease,transform .2s ease,padding .2s ease!important;
+  }
+  .sidebar.compact:hover .nav-label{opacity:1!important;max-height:22px!important;padding-bottom:4px!important;transform:translateY(0)!important}
+
+  .sidebar.compact .workspace-switch{
+    display:grid!important;opacity:0!important;max-height:0!important;min-height:0!important;margin-bottom:0!important;
+    padding-top:0!important;padding-bottom:0!important;overflow:hidden!important;transform:translateY(-5px)!important;pointer-events:none!important;
+    transition:opacity .16s ease,max-height .22s ease,margin .22s ease,padding .22s ease,transform .22s ease!important;
+  }
+  .sidebar.compact:hover .workspace-switch{
+    opacity:1!important;max-height:52px!important;margin-bottom:16px!important;padding-top:7px!important;padding-bottom:7px!important;
+    transform:translateY(0)!important;pointer-events:auto!important;
+  }
+  .sidebar.compact .connection-dot{opacity:0!important;transform:scale(.7);transition:opacity .16s ease,transform .2s ease!important}
+  .sidebar.compact:hover .connection-dot{opacity:1!important;transform:scale(1)!important}
+}
+@media(prefers-reduced-motion:reduce){.app,.sidebar,.sidebar *{transition:none!important;animation-duration:.01ms!important}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -4078,71 +4151,65 @@ function aggregateMetricsByDay(rows){
   return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
 function analyticsChart(rows,metric="views"){
-  const data=aggregateMetricsByDay(rows);
-  if(!data.length)return '<div class="ui3-chart-empty">Sem dados para este período.</div>';
+  const all=aggregateMetricsByDay(rows);
+  if(!all.length)return '<div class="ui3-chart-empty">Sem dados para este período.</div>';
+  const data=all.slice(-14);
   const label={views:"views",reach:"alcance",likes:"curtidas"}[metric]||metric;
-  const W=1000,H=300,P=34,max=Math.max(1,...data.map(x=>+x[metric]||0));
-  const pts=data.map((m,i)=>{
-    const x=data.length===1?W/2:P+i*(W-P*2)/(data.length-1);
-    const y=H-P-(+m[metric]||0)/(max*1.12)*(H-P*2);
-    return {x,y,m};
-  });
-  let line="";
-  pts.forEach((p,i)=>{
-    if(i===0)line+=`M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-    else{
-      const prev=pts[i-1],mx=((prev.x+p.x)/2).toFixed(1);
-      line+=` C ${mx} ${prev.y.toFixed(1)}, ${mx} ${p.y.toFixed(1)}, ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-    }
-  });
-  const area=line+` L ${pts[pts.length-1].x.toFixed(1)} ${H-P} L ${pts[0].x.toFixed(1)} ${H-P} Z`;
-  return `<div class="ui31-chart useful-chart">
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <defs><linearGradient id="chartFill31" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3f7f" stop-opacity=".25"/><stop offset="100%" stop-color="#ff3f7f" stop-opacity="0"/></linearGradient></defs>
-      <g class="chart-grid"><line x1="34" y1="65" x2="966" y2="65"/><line x1="34" y1="150" x2="966" y2="150"/><line x1="34" y1="235" x2="966" y2="235"/></g>
-      <path d="${area}" fill="url(#chartFill31)"/>
-      <path d="${line}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
-      ${pts.map(p=>`<circle class="chart-hover-dot" cx="${p.x}" cy="${p.y}" r="7"><title>${new Date(p.m.date+"T12:00:00").toLocaleDateString("pt-BR")} · ${Number(p.m[metric]||0).toLocaleString("pt-BR")} ${label} · ${p.m.count} Reels</title></circle>`).join("")}
-    </svg>
-    <div class="ui3-chart-labels"><span>${new Date(data[0].date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span><span>${data.length} dias · ${rows.length} Reels</span><span>${new Date(data[data.length-1].date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span></div>
+  const max=Math.max(1,...data.map(x=>Number(x[metric]||0)));
+  const total=data.reduce((sum,x)=>sum+Number(x[metric]||0),0);
+  const avg=Math.round(total/Math.max(1,data.length));
+  const best=[...data].sort((a,b)=>Number(b[metric]||0)-Number(a[metric]||0))[0];
+  return `<div class="analytics-bar-board">
+    <div class="analytics-bar-summary">
+      <div><small>MÉDIA / DIA</small><b>${avg.toLocaleString("pt-BR")}</b><span>${label}</span></div>
+      <div><small>MELHOR DIA</small><b>${Number(best?.[metric]||0).toLocaleString("pt-BR")}</b><span>${best?new Date(best.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—"}</span></div>
+      <div><small>JANELA VISÍVEL</small><b>${data.length}</b><span>${all.length>14?"últimos 14 dias":"dias com dados"}</span></div>
+    </div>
+    <div class="analytics-bar-scroll"><div class="analytics-bar-grid">
+      ${data.map((m,i)=>{
+        const value=Number(m[metric]||0);
+        const prev=i?Number(data[i-1][metric]||0):null;
+        const delta=prev?Math.round((value-prev)/prev*100):null;
+        const h=Math.max(7,Math.round(value/max*100));
+        return `<div class="analytics-bar-col" title="${value.toLocaleString("pt-BR")} ${label} · ${m.count} Reel(s)">
+          <b>${calendarCompactNumber(value)}</b>
+          <div class="analytics-bar-track"><i style="height:${h}%"></i></div>
+          <span>${new Date(m.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span>
+          <small class="${delta===null?"neutral":delta>=0?"positive":"negative"}">${delta===null?"base":(delta>=0?"+":"")+delta+"%"}</small>
+        </div>`;
+      }).join("")}
+    </div></div>
   </div>`;
 }
 
 function followerChart(stats){
-  const data=(stats?.daily||[]).map(x=>({...x,value:Number(x.current_count||0)}));
-  if(!data.length)return '<div class="follower-chart-empty"><b>Monitoramento iniciado.</b><span>O histórico diário começa a ser formado a partir de agora.</span></div>';
-
-  const W=1000,H=280,P=36;
-  const vals=data.map(x=>x.value);
-  const min=Math.min(...vals),max=Math.max(...vals),spread=Math.max(4,max-min);
-  const low=min-Math.max(2,spread*.18),high=max+Math.max(2,spread*.18);
-  const pts=data.map((m,i)=>{
-    const x=data.length===1?W/2:P+i*(W-P*2)/(data.length-1);
-    const y=H-P-((m.value-low)/(high-low))*(H-P*2);
-    return {x,y,m};
-  });
-
-  let line="";
-  pts.forEach((p,i)=>{
-    if(i===0)line+=`M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-    else{
-      const prev=pts[i-1],mx=((prev.x+p.x)/2).toFixed(1);
-      line+=` C ${mx} ${prev.y.toFixed(1)}, ${mx} ${p.y.toFixed(1)}, ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
-    }
-  });
-  const area=data.length>1?line+` L ${pts[pts.length-1].x.toFixed(1)} ${H-P} L ${pts[0].x.toFixed(1)} ${H-P} Z`:"";
-
-  return `<div class="follower-chart">
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <defs><linearGradient id="followersFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3f7f" stop-opacity=".24"/><stop offset="100%" stop-color="#ff3f7f" stop-opacity="0"/></linearGradient></defs>
-      <g class="chart-grid"><line x1="36" y1="65" x2="964" y2="65"/><line x1="36" y1="140" x2="964" y2="140"/><line x1="36" y1="215" x2="964" y2="215"/></g>
-      ${area?`<path d="${area}" fill="url(#followersFill)"/>`:""}
-      ${data.length>1?`<path d="${line}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`:""}
-      ${pts.map((p,i)=>`<circle class="follower-dot ${i===pts.length-1?"latest":""}" cx="${p.x}" cy="${p.y}" r="${i===pts.length-1?7:5}"><title>${new Date(p.m.day+"T12:00:00").toLocaleDateString("pt-BR")} · ${p.m.value.toLocaleString("pt-BR")} seguidores · ${Number(p.m.net_change||0)>=0?"+":""}${Number(p.m.net_change||0)} no dia</title></circle>`).join("")}
-    </svg>
-    <div class="follower-chart-labels"><span>${new Date(data[0].day+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span><span>Histórico diário</span><span>${new Date(data[data.length-1].day+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span></div>
+  const all=(stats?.daily||[]).map(x=>({...x,value:Number(x.current_count||0),delta:Number(x.net_change||0)}));
+  if(!all.length)return '<div class="follower-chart-empty"><b>Monitoramento iniciado.</b><span>O histórico diário começa a ser formado a partir de agora.</span></div>';
+  const data=all.slice(-14);
+  const maxDelta=Math.max(1,...data.map(x=>Math.abs(x.delta)));
+  const totalDelta=data.reduce((a,x)=>a+x.delta,0);
+  const positiveDays=data.filter(x=>x.delta>0).length;
+  const best=[...data].sort((a,b)=>b.delta-a.delta)[0]||null;
+  return `<div class="follower-growth-board">
+    <div class="follower-growth-summary">
+      <div><small>SALDO DO PERÍODO</small><b class="${totalDelta>=0?"positive":"negative"}">${totalDelta>=0?"+":""}${totalDelta}</b><span>seguidores</span></div>
+      <div><small>DIAS POSITIVOS</small><b>${positiveDays}/${data.length}</b><span>últimos dias medidos</span></div>
+      <div><small>MELHOR DIA</small><b>${best&&best.delta>0?"+"+best.delta:"—"}</b><span>${best?new Date(best.day+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—"}</span></div>
+    </div>
+    <div class="follower-growth-scroll"><div class="follower-growth-grid">
+      ${data.map((m,i)=>{
+        const pct=Math.max(8,Math.round(Math.abs(m.delta)/maxDelta*100));
+        return `<div class="follower-growth-day ${m.delta>0?"up":m.delta<0?"down":"flat"}">
+          <small>${new Date(m.day+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</small>
+          <b>${m.value.toLocaleString("pt-BR")}</b>
+          <span>${m.delta>=0?"+":""}${m.delta} no dia</span>
+          <div class="follower-delta-meter"><i style="width:${pct}%"></i></div>
+        </div>`;
+      }).join("")}
+    </div></div>
   </div>`;
 }
+
 function followerLiveSummary(){
   const currentRaw=followerStats?.current?.followers_count;
   const hasCurrent=currentRaw!==null&&currentRaw!==undefined&&Number.isFinite(Number(currentRaw));
@@ -4167,21 +4234,49 @@ function reelTimelineLabel(snapshot,publishedAt){
   if(mins<1440)return Math.round(mins/60)+" h";
   return Math.round(mins/1440)+" d";
 }
-function reelEvolutionChart(snaps=[]){
+function reelEvolutionChart(snaps=[],publishedAt=null){
   if(!snaps.length)return '<div class="reel-detail-empty">Ainda não existem leituras desse Reel.</div>';
-  const W=900,H=230,P=30,max=Math.max(1,...snaps.map(x=>Number(x.views||0)));
-  const pts=snaps.map((s,i)=>{
-    const x=snaps.length===1?W/2:P+i*(W-P*2)/(snaps.length-1);
-    const y=H-P-(Number(s.views||0)/max)*(H-P*2);
-    return {x,y,s};
+  const maxViews=Math.max(1,...snaps.map(x=>Number(x.views||0)));
+  let peakVelocity=0,previousVelocity=null;
+  const stages=snaps.map((s,i)=>{
+    const views=Number(s.views||0);
+    const prev=i?snaps[i-1]:null;
+    const delta=prev?Math.max(0,views-Number(prev.views||0)):views;
+    let velocity=null;
+    if(prev){
+      const hours=(new Date(s.collected_at)-new Date(prev.collected_at))/3600000;
+      if(Number.isFinite(hours)&&hours>0)velocity=delta/hours;
+    }
+    if(Number.isFinite(velocity))peakVelocity=Math.max(peakVelocity,velocity);
+    let state="base",stateLabel=i===0?"Primeira leitura":"Crescendo";
+    if(i>0&&Number.isFinite(velocity)&&Number.isFinite(previousVelocity)){
+      if(velocity>previousVelocity*1.2){state="fast";stateLabel="Acelerou"}
+      else if(velocity<previousVelocity*.72){state="slow";stateLabel="Desacelerou"}
+      else {state="steady";stateLabel="Estável"}
+    }else if(i>0&&Number.isFinite(velocity)){state="steady";stateLabel="Ritmo inicial"}
+    if(Number.isFinite(velocity))previousVelocity=velocity;
+    return {s,views,delta,velocity,state,stateLabel,pct:Math.max(5,Math.round(views/maxViews*100))};
   });
-  const path=pts.map((p,i)=>(i?"L":"M")+" "+p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" ");
-  return `<div class="reel-evolution-chart"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <g class="chart-grid"><line x1="30" y1="55" x2="870" y2="55"/><line x1="30" y1="115" x2="870" y2="115"/><line x1="30" y1="175" x2="870" y2="175"/></g>
-    <path d="${path}" fill="none" stroke="#ff4c88" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
-    ${pts.map(p=>`<circle class="chart-hover-dot" cx="${p.x}" cy="${p.y}" r="6"><title>${Number(p.s.views||0).toLocaleString("pt-BR")} views</title></circle>`).join("")}
-  </svg></div>`;
+  const latest=stages[stages.length-1];
+  const totalGrowth=latest.views-Number(stages[0]?.views||0);
+  return `<div class="reel-growth-board">
+    <div class="reel-growth-summary">
+      <div><small>GANHO DESDE A 1ª LEITURA</small><b>+${Math.max(0,totalGrowth).toLocaleString("pt-BR")}</b><span>views</span></div>
+      <div><small>PICO DE VELOCIDADE</small><b>${peakVelocity?calendarCompactNumber(Math.round(peakVelocity))+"/h":"—"}</b><span>maior ritmo medido</span></div>
+      <div><small>RITMO MAIS RECENTE</small><b>${Number.isFinite(latest.velocity)?calendarCompactNumber(Math.round(latest.velocity))+"/h":"—"}</b><span>${latest.stateLabel}</span></div>
+    </div>
+    <div class="reel-growth-stages">
+      ${stages.map((x,i)=>`<div class="reel-growth-stage ${x.state}">
+        <div class="reel-growth-stage-top"><b>${reelTimelineLabel(x.s,publishedAt)}</b><span>${x.stateLabel}</span></div>
+        <strong>${x.views.toLocaleString("pt-BR")} views</strong>
+        <div class="reel-growth-meter"><i style="width:${x.pct}%"></i></div>
+        <small>${i===0?"base":("+"+x.delta.toLocaleString("pt-BR")+" desde a leitura anterior")}</small>
+        <em>${Number.isFinite(x.velocity)?"~"+calendarCompactNumber(Math.round(x.velocity))+" views/h":Number(x.s.reach||0).toLocaleString("pt-BR")+" alcance"}</em>
+      </div>`).join("")}
+    </div>
+  </div>`;
 }
+
 async function openReelAnalytics(id){
   previousPageBeforeReel=currentPage==="reelDetail"?"metrics":currentPage;
   showInternalPage("reelDetail","Detalhe do Reel");
@@ -4223,10 +4318,7 @@ function reelDetailPage(){
         </div>
         <div class="card ui3-panel">
           <div class="ui3-panel-head"><div><span>EVOLUÇÃO</span><h3>30min → 2h → 6h → 24h → 48h</h3></div><small class="muted">${snaps.length} leituras</small></div>
-          ${reelEvolutionChart(snaps)}
-          <div class="reel-snapshot-timeline">
-            ${snaps.map(x=>`<div><b>${reelTimelineLabel(x,published)}</b><span>${Number(x.views||0).toLocaleString("pt-BR")} views</span><small>${Number(x.reach||0).toLocaleString("pt-BR")} alcance · ${Number(x.shares||0).toLocaleString("pt-BR")} shares</small></div>`).join("")||'<div class="ui3-empty">Aguardando a primeira coleta.</div>'}
-          </div>
+          ${reelEvolutionChart(snaps,published)}
         </div>
       </div>
     </div>`;
