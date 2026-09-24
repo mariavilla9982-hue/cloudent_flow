@@ -4477,15 +4477,15 @@ function productionPage(){
           '<label class="production-drop production-drop-live" id="productionVideoBox">'+
             '<input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)">'+
             '<div class="production-upload-preview"><span class="production-drop-icon">▶</span></div>'+
-            '<button type="button" class="production-draft-clear" onclick="event.preventDefault();event.stopPropagation();releaseProductionDraft('video');productionPage()" title="Remover vídeo">×</button>
-            <div class="production-upload-overlay"><b class="production-upload-title">Vídeo original</b><small class="production-upload-meta">Load Video · node #336</small></div>'+
+            '<button type="button" class="production-draft-clear" onclick="event.preventDefault();event.stopPropagation();releaseProductionDraft(&quot;video&quot;);productionPage()" title="Remover vídeo">×</button>'+
+            '<div class="production-upload-overlay"><b class="production-upload-title">Vídeo original</b><small class="production-upload-meta">Load Video · node #336</small></div>'+
           '</label>'+
           '<div class="production-plus">＋</div>'+
           '<label class="production-drop production-drop-live" id="productionFrameBox">'+
             '<input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)">'+
             '<div class="production-upload-preview"><span class="production-drop-icon frame">▧</span></div>'+
-            '<button type="button" class="production-draft-clear" onclick="event.preventDefault();event.stopPropagation();releaseProductionDraft('frame');productionPage()" title="Remover frame">×</button>
-            <div class="production-upload-overlay"><b class="production-upload-title">Frame da modelo</b><small class="production-upload-meta">Load Reference Image · node #338</small></div>'+
+            '<button type="button" class="production-draft-clear" onclick="event.preventDefault();event.stopPropagation();releaseProductionDraft(&quot;frame&quot;);productionPage()" title="Remover frame">×</button>'+
+            '<div class="production-upload-overlay"><b class="production-upload-title">Frame da modelo</b><small class="production-upload-meta">Load Reference Image · node #338</small></div>'+
           '</label>'+
         '</div>'+
         '<button class="btn primary production-add-btn" '+(productionUploading?"disabled":"")+' onclick="addProductionJob()">'+(productionUploading?"Enviando arquivos…":"＋ Adicionar à fila")+'</button>'+
