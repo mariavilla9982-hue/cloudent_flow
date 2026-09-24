@@ -2281,6 +2281,18 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 /* ===== Professional login gate ===== */
 body.auth-locked{overflow:hidden}
 body.auth-locked .app{display:none!important}
+body.auth-checking{overflow:hidden;background:#07080c}
+body.auth-checking .app,body.auth-checking .login-gate{display:none!important}
+.auth-boot{display:none;position:fixed;inset:0;z-index:21000;place-items:center;background:
+  radial-gradient(circle at 50% 42%,rgba(124,82,170,.12),transparent 28%),
+  linear-gradient(135deg,#06070a,#090a0f)}
+body.auth-checking .auth-boot{display:grid}
+.auth-boot-inner{display:grid;justify-items:center;gap:12px;color:#dcd8e3}
+.auth-boot-mark{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(145deg,#9d74d6,#65438d);font-size:18px;font-weight:950;box-shadow:0 12px 34px rgba(126,82,177,.24)}
+.auth-boot-name{font-size:10px;font-weight:900;letter-spacing:.01em}
+.auth-boot-bar{width:92px;height:2px;overflow:hidden;border-radius:999px;background:#1b1d24}
+.auth-boot-bar i{display:block;width:38%;height:100%;background:#8c63bb;border-radius:999px;animation:authBoot 1.05s ease-in-out infinite}
+@keyframes authBoot{0%{transform:translateX(-110%)}50%{transform:translateX(165%)}100%{transform:translateX(330%)}}
 .login-gate{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:28px;background:
   radial-gradient(circle at 18% 18%,rgba(123,82,170,.18),transparent 34%),
   radial-gradient(circle at 82% 72%,rgba(87,54,128,.14),transparent 31%),
@@ -2315,7 +2327,14 @@ body.auth-locked .app{display:none!important}
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" href="/cloudent-icon.svg" type="image/svg+xml">
 </head>
-<body class="auth-locked">
+<body class="auth-checking">
+<div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
+  <div class="auth-boot-inner">
+    <div class="auth-boot-mark">C</div>
+    <div class="auth-boot-name">CloudentFlow</div>
+    <div class="auth-boot-bar"><i></i></div>
+  </div>
+</div>
 <div id="loginGate" class="login-gate">
   <div class="login-shell">
     <section class="login-visual" aria-hidden="true">
@@ -2513,6 +2532,7 @@ function setLoginBusy(busy){
 }
 function syncAuthGate(){
   const logged=!!cloudSession?.access_token;
+  document.body.classList.remove("auth-checking");
   document.body.classList.toggle("auth-locked",!logged);
   const gate=$("#loginGate"),shell=$("#appShell");
   if(gate)gate.classList.toggle("hidden",logged);
