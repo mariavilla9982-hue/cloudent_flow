@@ -2899,7 +2899,7 @@ function overview(){
   const workers=automationData?.workers||[];
   const pubWorker=workers.find(w=>w.worker_name==="instagram_publish");
   const autoWorker=workers.find(w=>w.worker_name==="automation");
-  const recs=(automationData?.recommendations||[]).filter(r=>+r.weekday===new Date().getDay()).slice(0,5);
+  const recs=(automationData?.recommendations||[]).filter(r=>+r.weekday===new Date().getDay()).slice(0,7);
   const allOnline=!!pubWorker?.online&&!!autoWorker?.online;
 
   $("#overview").innerHTML=`
@@ -3054,11 +3054,12 @@ function dayColumn(d,label){
   </div>`;
 }
 
+function slotPeriodLabel(i){return i<3?"Manhã":i<5?"Tarde":i<7?"Noite":"Extra"}
 function renderSlot(date,i){
   const x=slotData(date,i),time=x?.time||state.defaultTimes[i]||"";
   if(!x){
     if(i>=7)return "";
-    return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>Posição livre</b><small>${time}</small></span></button>`;
+    return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>${slotPeriodLabel(i)} · posição ${i+1}</b><small>${time}</small></span></button>`;
   }
   const st=getStatus(x),isAuto=x.smartMode==="auto";
   const strategy=x.smartStrategy||(isAuto?"tested":"manual");
@@ -3752,7 +3753,7 @@ async function saveAutomationSettings(prefix="auto"){
     lookbackDays:+(g("Lookback")?.value||60),
     minSamples:+(g("Samples")?.value||3),
     minGapMinutes:+(g("Gap")?.value||60),
-    postsPerDay:+(g("Posts")?.value||5)
+    postsPerDay:+(g("Posts")?.value||7)
   };
   try{
     await cloudFetch("?action=automation-settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -3832,9 +3833,9 @@ function smartTimesPage(){
 
     <div class="smart-days-grid">
       ${names.map((name,dow)=>{
-        const rows=recs.filter(r=>Number(r.weekday)===dow).sort((x,y)=>Number(x.rank)-Number(y.rank)).slice(0,5);
+        const rows=recs.filter(r=>Number(r.weekday)===dow).sort((x,y)=>Number(x.rank)-Number(y.rank)).slice(0,7);
         return `<section class="card smart-day-card ${dow===today?"today":""}">
-          <div class="smart-day-head"><div><small>${dow===today?"HOJE":"DIA DA SEMANA"}</small><h3>${name}</h3></div><span>${rows.length}/5</span></div>
+          <div class="smart-day-head"><div><small>${dow===today?"HOJE":"DIA DA SEMANA"}</small><h3>${name}</h3></div><span>${rows.length}/7</span></div>
           <div class="smart-time-list">
             ${rows.length?rows.map((r,i)=>{
               const level=smartConfidenceLabel(r),reason=smartReason(r);
@@ -3878,7 +3879,7 @@ function automationPage(){
   const aut=a.workers?.find(w=>w.worker_name==="automation");
   const cfg=a.settings?.automation||{},smart=a.settings?.smart_scheduler||{};
   const dow=new Date().getDay();
-  const today=(a.recommendations||[]).filter(r=>+r.weekday===dow).slice(0,5);
+  const today=(a.recommendations||[]).filter(r=>+r.weekday===dow).slice(0,7);
   const pending=(a.jobs||[]).filter(j=>j.status==="pending").length;
   const failed=(a.jobs||[]).filter(j=>j.status==="failed").length;
   const days=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -3898,7 +3899,7 @@ function automationPage(){
       <div class="card ui3-panel">
         <div class="ui3-panel-head"><div><span>Smart Scheduler</span><h3>Horários recomendados</h3></div><span class="status-pill ok">Dados reais</span></div>
         <div class="ui31-best-times">${today.map((r,i)=>`<div><small>#${i+1}</small><b>${String(r.recommended_time).slice(0,5)}</b><span>${r.confidence}% confiança</span><em>${r.sample_count} amostras</em></div>`).join("")||'<div class="ui3-empty">Sem recomendações ainda.</div>'}</div>
-        <div class="ui31-week-board">${days.map((day,d)=>{const rr=(a.recommendations||[]).filter(r=>+r.weekday===d).slice(0,5);return `<div class="${d===dow?"today":""}"><b>${day}</b><div>${rr.map((x,i)=>`<span class="${i===0?"top":""}">${String(x.recommended_time).slice(0,5)}</span>`).join("")||"<span>—</span>"}</div></div>`}).join("")}</div>
+        <div class="ui31-week-board">${days.map((day,d)=>{const rr=(a.recommendations||[]).filter(r=>+r.weekday===d).slice(0,7);return `<div class="${d===dow?"today":""}"><b>${day}</b><div>${rr.map((x,i)=>`<span class="${i===0?"top":""}">${String(x.recommended_time).slice(0,5)}</span>`).join("")||"<span>—</span>"}</div></div>`}).join("")}</div>
       </div>
       <div class="card ui3-panel automation-rules-card">
         <div class="ui3-panel-head"><div><span>Regras</span><h3>Configuração automática</h3></div></div>
@@ -3907,7 +3908,7 @@ function automationPage(){
         <div class="ui31-rule-grid">
           <div class="field"><label>Bloquear posts próximos</label><div class="input-suffix"><input id="autoLock" type="number" value="${cfg.lockWindowMinutes||120}"><span>min</span></div></div>
           <div class="field"><label>Intervalo mínimo</label><div class="input-suffix"><input id="autoGap" type="number" value="${a.settings?.min_gap_minutes||60}"><span>min</span></div></div>
-          <div class="field"><label>Posts por dia</label><input id="autoPosts" type="number" value="${a.settings?.posts_per_day||5}"></div>
+          <div class="field"><label>Posts por dia</label><input id="autoPosts" type="number" value="${a.settings?.posts_per_day||7}" readonly></div>
           <div class="field"><label>Janela analisada</label><div class="input-suffix"><input id="autoLookback" type="number" value="${smart.lookbackDays||60}"><span>dias</span></div></div>
           <div class="field"><label>Mínimo de amostras</label><input id="autoSamples" type="number" value="${smart.minSamples||3}"></div>
         </div>
@@ -4807,7 +4808,7 @@ function settings(){
         ${user?`<div class="ui3-account"><b>${esc(user.email||"Conta conectada")}</b><span>Sincronização com o backend ativa.</span><button class="btn danger btn-sm" onclick="signOutCloud()">Sair</button></div>`:`<div class="auth-card"><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><div class="toolbar"><button class="btn primary" onclick="signInCloud()">Entrar</button><button class="btn" onclick="signUpCloud()">Criar conta</button></div></div>`}
       </div>
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Workspace</span><h3>Preferências principais</h3></div></div>
-        <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||5}</b></div><div><span>Intervalo mínimo</span><b>${a.settings?.min_gap_minutes||60} min</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
+        <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||7} · 3/2/2</b></div><div><span>Intervalo mínimo</span><b>${a.settings?.min_gap_minutes||60} min</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
       </div>
     </div>`;
   }else if(settingsTab==="integrations"){
