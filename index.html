@@ -2481,6 +2481,51 @@ body.auth-checking .auth-boot{display:grid}
   .platform-foundation-grid{grid-template-columns:1fr}
 }
 
+
+/* X account warmup */
+.xw-section{display:flex;flex-direction:column;gap:12px;padding-top:2px}
+.xw-head{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:18px;
+  padding:18px 20px;border:1px solid var(--line);border-radius:16px;
+  background:linear-gradient(135deg,rgba(139,92,246,.06),rgba(255,255,255,.01))
+}
+.xw-head h3{margin:4px 0 5px;font-size:18px;letter-spacing:-.03em}
+.xw-head p{margin:0;max-width:720px;color:var(--muted);font-size:10px;line-height:1.55}
+.xw-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.xw-kpis>div{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.xw-kpis small,.xw-kpis b{display:block}.xw-kpis small{font-size:8px;color:var(--muted);font-weight:900;letter-spacing:.08em}.xw-kpis b{margin-top:5px;font-size:19px}
+.xw-add{display:grid;grid-template-columns:minmax(180px,1fr) minmax(160px,.7fr) minmax(190px,.9fr) auto;gap:8px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.012)}
+.xw-add>div b,.xw-add>div span{display:block}.xw-add>div b{font-size:11px}.xw-add>div span{margin-top:3px;font-size:9px;color:var(--muted)}
+.xw-add input,.xw-form-grid input,.xw-form-grid select,.xw-form-grid textarea{
+  width:100%;border:1px solid var(--line);border-radius:9px;background:#0c0e13;color:var(--text);padding:10px 11px;font:inherit;outline:none
+}
+.xw-add input:focus,.xw-form-grid input:focus,.xw-form-grid select:focus,.xw-form-grid textarea:focus{border-color:rgba(139,92,246,.55);box-shadow:0 0 0 3px rgba(139,92,246,.08)}
+.xw-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.xw-account{min-width:0;padding:15px}
+.xw-account.approved{border-color:rgba(34,197,94,.24);box-shadow:inset 0 0 0 1px rgba(34,197,94,.025)}
+.xw-account-head{display:flex;align-items:center;gap:10px}
+.xw-avatar{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:#08090c;border:1px solid rgba(255,255,255,.09);font-weight:950}
+.xw-account-name{min-width:0;flex:1}.xw-account-name b,.xw-account-name span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xw-account-name b{font-size:11px}.xw-account-name span{margin-top:2px;font-size:9px;color:var(--muted)}
+.xw-progress-row{display:flex;justify-content:space-between;margin:14px 0 6px;color:var(--muted);font-size:9px}.xw-progress-row b{color:var(--text)}
+.xw-progress{height:4px;border-radius:99px;background:rgba(255,255,255,.05);overflow:hidden}.xw-progress i{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#c084fc);border-radius:inherit}
+.xw-account.approved .xw-progress i{background:#22c55e}
+.xw-day-box{margin-top:12px;padding:11px;border:1px solid rgba(139,92,246,.14);border-radius:11px;background:rgba(139,92,246,.025)}
+.xw-day-box span,.xw-day-box b,.xw-day-box small{display:block}.xw-day-box span{font-size:8px;color:#ad8cf3;font-weight:900;letter-spacing:.07em}.xw-day-box b{margin-top:5px;font-size:10px}.xw-day-box small{margin-top:4px;font-size:9px;color:var(--muted);line-height:1.45}
+.xw-action-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}.xw-action-summary>div{padding:8px;border:1px solid var(--line);border-radius:9px;text-align:center}.xw-action-summary b,.xw-action-summary span{display:block}.xw-action-summary b{font-size:13px}.xw-action-summary span{font-size:7.5px;color:var(--muted);margin-top:2px}
+.xw-action-list{display:flex;flex-direction:column;gap:5px;margin-top:9px}
+.xw-action-list>div{display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.018);border:1px solid rgba(255,255,255,.045)}
+.xw-action-list>div>span{font-size:9px;font-weight:800;flex:1}.xw-action-list>div>small{font-size:8px;color:var(--muted)}.xw-action-list>div>button{border:0;background:transparent;color:#6b7280;cursor:pointer}.xw-action-list>div>button:hover{color:#f87171}
+.xw-no-actions{font-size:9px!important;color:var(--muted);justify-content:center!important;padding:12px!important}
+.xw-account-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.xw-composer{margin-top:12px;padding:12px;border:1px solid rgba(139,92,246,.22);border-radius:12px;background:#0b0c11}
+.xw-composer-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:11px}.xw-composer-head span,.xw-composer-head b{display:block}.xw-composer-head span{font-size:7.5px;color:#aa85ef;font-weight:900;letter-spacing:.08em}.xw-composer-head b{font-size:10px;margin-top:3px}
+.xw-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.xw-form-grid label span{display:block;margin-bottom:5px;font-size:8px;color:var(--muted);font-weight:800}.xw-form-grid .wide{grid-column:1/-1}
+.xw-form-grid textarea{resize:vertical;min-height:58px}
+.xw-composer-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}.xw-composer-foot small{color:var(--muted);font-size:8px;line-height:1.45}
+.xw-empty{grid-column:1/-1;border:1px solid var(--line);border-radius:14px}
+@media(max-width:980px){.xw-grid{grid-template-columns:1fr}.xw-add{grid-template-columns:1fr 1fr}.xw-add>div{grid-column:1/-1}}
+@media(max-width:650px){.xw-kpis{grid-template-columns:1fr 1fr}.xw-add{grid-template-columns:1fr}.xw-head{align-items:flex-start;flex-direction:column}.xw-form-grid{grid-template-columns:1fr}.xw-form-grid .wide{grid-column:auto}.xw-composer-foot{align-items:flex-start;flex-direction:column}}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2617,7 +2662,7 @@ const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]};
+let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 let calendarPreviewObserver=null;
@@ -2628,6 +2673,7 @@ let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30, metricSeries="views";
 let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
+let xWarmupSelectedAccountId=null;
 let trialPendingDate=null,trialPendingSlot=null,trialDraftFile=null,trialDraftSlot=null,trialDraftSuggestedTime=null;
 let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
 function defaultSmartSamples(){
@@ -2769,7 +2815,8 @@ async function initCloud(){
     withTimeout(loadAutomationStatus(),4500,"automação"),
     withTimeout(loadFollowerStats(30),4500,"seguidores"),
     withTimeout(loadPlatformAccounts(),4500,"contas"),
-    withTimeout(loadTrialReels(),4500,"Trial Reels")
+    withTimeout(loadTrialReels(),4500,"Trial Reels"),
+    withTimeout(loadXWarmup(),4500,"aquecimento X")
   ]);
 }
 async function loadDeferredCloudData(){
@@ -2820,6 +2867,22 @@ async function loadAutomationStatus(){
 async function loadPlatformAccounts(){
   if(!cloudSession){platformAccounts=[];return}
   try{platformAccounts=await cloudFetch("?resource=platform-accounts")}catch(e){platformAccounts=[]}
+}
+
+async function loadXWarmup(){
+  if(!cloudSession){xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}};return}
+  try{
+    const r=await cloudFetch("?resource=x-warmup");
+    xWarmupData={
+      settings:r.settings||{},
+      plan:r.plan||[],
+      accounts:r.accounts||[],
+      connection:r.connection||{enabled:false}
+    };
+  }catch(e){
+    console.warn("X warmup unavailable:",e);
+    xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false},error:e.message};
+  }
 }
 
 async function loadTrialReels(){
@@ -3318,7 +3381,9 @@ function showPage(id){
   renderAll();
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
-  if((id==="xStudio"||id==="tiktokStudio")&&cloudSession){
+  if(id==="xStudio"&&cloudSession){
+    Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus(),loadXWarmup()]).then(()=>renderAll());
+  }else if(id==="tiktokStudio"&&cloudSession){
     Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus()]).then(()=>renderAll());
   }
 }
@@ -6280,6 +6345,208 @@ function platformStudioQueue(platform,rows){
       <span class="status-pill ${statusClass(getStatus(row))}">${statusLabel(getStatus(row))}</span>
     </div>`).join("");
 }
+function xWarmupPlan(day){
+  return (xWarmupData.plan||[]).find(x=>Number(x.day)===Number(day))||{day,title:"Dia "+day,summary:{}};
+}
+function xWarmupStatusLabel(status){
+  return ({draft:"Não iniciada",warming:"Aquecendo",paused:"Pausada",review:"Em revisão",approved:"Aprovada",needs_attention:"Atenção"})[status]||status;
+}
+function xWarmupStatusClass(status){
+  if(status==="approved")return "ok";
+  if(status==="warming")return "ok";
+  if(status==="review")return "warn";
+  if(status==="paused"||status==="needs_attention")return "warn";
+  return "";
+}
+function xWarmupActionLabel(type){
+  return ({observe:"Observar feed",like:"Curtir",follow:"Seguir",reply:"Responder",post:"Publicar",active_window:"Permanecer ativo"})[type]||type;
+}
+function xWarmupActionStatus(status){
+  return ({queued:"Na fila",waiting_connection:"Aguardando X",processing:"Executando",completed:"Concluída",skipped:"Ignorada",failed:"Erro",blocked:"Bloqueada"})[status]||status;
+}
+function xWarmupSummaryText(plan){
+  const s=plan?.summary||{},bits=[];
+  if(Array.isArray(s.observe_minutes)&&s.observe_minutes[1])bits.push(s.observe_minutes[0]===s.observe_minutes[1]?s.observe_minutes[0]+" min feed":s.observe_minutes[0]+"–"+s.observe_minutes[1]+" min feed");
+  if(Array.isArray(s.likes)&&s.likes[1])bits.push("até "+s.likes[1]+" curtidas");
+  if(Array.isArray(s.follows)&&s.follows[1])bits.push((s.follows[0]?s.follows[0]+"–":"até ")+s.follows[1]+" follows");
+  if(Array.isArray(s.replies)&&s.replies[1])bits.push((s.replies[0]||0)+"–"+s.replies[1]+" respostas");
+  if(Array.isArray(s.posts)&&s.posts[1])bits.push(s.posts[0]===s.posts[1]?s.posts[1]+" post":"post opcional");
+  return bits.join(" · ")||"Somente observação";
+}
+async function createXWarmupAccount(){
+  const username=$("#xWarmupUsername")?.value?.trim();
+  const label=$("#xWarmupLabel")?.value?.trim();
+  if(!username){toast("Informe o @ da conta.","err");return}
+  try{
+    await cloudFetch("?action=x-warmup-account",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({username,label,start_immediately:true})
+    });
+    if($("#xWarmupUsername"))$("#xWarmupUsername").value="";
+    if($("#xWarmupLabel"))$("#xWarmupLabel").value="";
+    await loadXWarmup();xStudioPage();toast("Conta adicionada à esteira.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function xWarmupControl(id,operation){
+  try{
+    await cloudFetch("?action=x-warmup-account",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id,operation})
+    });
+    await loadXWarmup();xStudioPage();
+    toast(operation==="approve"?"Conta aprovada para postagem.":"Esteira atualizada.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function deleteXWarmupAccount(id){
+  if(!confirm("Remover esta conta da esteira e apagar o histórico de aquecimento dela?"))return;
+  try{
+    await cloudFetch("?action=x-warmup-account",{
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id})
+    });
+    if(xWarmupSelectedAccountId===id)xWarmupSelectedAccountId=null;
+    await loadXWarmup();xStudioPage();toast("Conta removida da esteira.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+function selectXWarmupAccount(id){
+  xWarmupSelectedAccountId=xWarmupSelectedAccountId===id?null:id;
+  xStudioPage();
+  if(xWarmupSelectedAccountId)setTimeout(()=>$("#xWarmupComposer")?.scrollIntoView({behavior:"smooth",block:"center"}),50);
+}
+async function addXWarmupAction(accountId){
+  const account=(xWarmupData.accounts||[]).find(a=>a.id===accountId);
+  if(!account)return;
+  const actionType=$("#xWarmupActionType")?.value||"like";
+  const scheduled=$("#xWarmupScheduledAt")?.value||"";
+  const body={
+    account_id:accountId,
+    day_number:Number($("#xWarmupDay")?.value||account.current_day||1),
+    action_type:actionType,
+    target_post_id:$("#xWarmupTargetPost")?.value?.trim()||null,
+    target_user_id:$("#xWarmupTargetUser")?.value?.trim()||null,
+    text_content:$("#xWarmupText")?.value?.trim()||null,
+    scheduled_at:scheduled?new Date(scheduled).toISOString():new Date().toISOString()
+  };
+  try{
+    await cloudFetch("?action=x-warmup-action",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body)
+    });
+    await loadXWarmup();xStudioPage();toast("Ação adicionada à fila.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function deleteXWarmupAction(id){
+  try{
+    await cloudFetch("?action=x-warmup-action",{
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id})
+    });
+    await loadXWarmup();xStudioPage();
+  }catch(e){toast(e.message,"err")}
+}
+function xWarmupComposer(account){
+  if(!account||xWarmupSelectedAccountId!==account.id)return "";
+  return `
+    <div class="xw-composer" id="xWarmupComposer">
+      <div class="xw-composer-head">
+        <div><span>PROGRAMAR AÇÃO</span><b>${esc(account.label||account.username||"Conta X")} · Dia ${account.current_day}/7</b></div>
+        <button class="btn btn-sm" onclick="selectXWarmupAccount('${account.id}')">Fechar</button>
+      </div>
+      <div class="xw-form-grid">
+        <label><span>Dia</span><select id="xWarmupDay">${[1,2,3,4,5,6,7].map(n=>`<option value="${n}" ${n===Number(account.current_day)?"selected":""}>Dia ${n}</option>`).join("")}</select></label>
+        <label><span>Ação</span><select id="xWarmupActionType"><option value="observe">Observar feed</option><option value="like">Curtir post</option><option value="follow">Seguir perfil</option><option value="reply">Responder post</option><option value="post">Publicar post</option><option value="active_window">Permanecer ativo</option></select></label>
+        <label><span>Post ID alvo</span><input id="xWarmupTargetPost" placeholder="Para curtida/resposta"></label>
+        <label><span>User ID alvo</span><input id="xWarmupTargetUser" placeholder="Para follow"></label>
+        <label class="wide"><span>Texto programado</span><textarea id="xWarmupText" rows="2" placeholder="Resposta ou post que será publicado"></textarea></label>
+        <label><span>Executar em</span><input id="xWarmupScheduledAt" type="datetime-local"></label>
+      </div>
+      <div class="xw-composer-foot">
+        <small>Você programa o alvo/texto; o worker executará pela API oficial quando a conta X estiver conectada.</small>
+        <button class="btn primary" onclick="addXWarmupAction('${account.id}')">Adicionar à fila</button>
+      </div>
+    </div>`;
+}
+function xWarmupAccountCard(account){
+  const plan=xWarmupPlan(account.current_day||1);
+  const actions=(account.actions||[]).filter(x=>Number(x.day_number)===Number(account.current_day));
+  const completed=actions.filter(x=>x.status==="completed"||x.status==="skipped").length;
+  const progress=account.status==="approved"?100:Math.round(((Math.max(1,Number(account.current_day))-1)/7)*100 + (account.status==="review"?100/7:0));
+  const statusClass=xWarmupStatusClass(account.status);
+  const canApprove=account.status==="review";
+  const currentDay=Number(account.current_day||1);
+  return `
+    <div class="card xw-account ${account.status==="approved"?"approved":""}">
+      <div class="xw-account-head">
+        <div class="xw-avatar">X</div>
+        <div class="xw-account-name"><b>${esc(account.label||"Conta X")}</b><span>${account.username?"@"+esc(account.username):"sem @ definido"}</span></div>
+        <span class="status-pill ${statusClass}">${xWarmupStatusLabel(account.status)}</span>
+      </div>
+      <div class="xw-progress-row"><span>Dia ${currentDay}/7</span><b>${account.status==="approved"?"100%":progress+"%"}</b></div>
+      <div class="xw-progress"><i style="width:${account.status==="approved"?100:Math.max(4,progress)}%"></i></div>
+      <div class="xw-day-box">
+        <span>DIA ${currentDay} · ${esc(plan.title||"")}</span>
+        <b>${esc(xWarmupSummaryText(plan))}</b>
+        <small>${(plan.summary?.notes||[]).map(esc).join(" · ")}</small>
+      </div>
+      <div class="xw-action-summary">
+        <div><b>${actions.length}</b><span>programadas</span></div>
+        <div><b>${completed}</b><span>concluídas</span></div>
+        <div><b>${actions.filter(x=>x.status==="waiting_connection").length}</b><span>aguardando X</span></div>
+      </div>
+      <div class="xw-action-list">
+        ${actions.slice(0,6).map(a=>`<div><span>${xWarmupActionLabel(a.action_type)}</span><small>${xWarmupActionStatus(a.status)}</small><button onclick="deleteXWarmupAction('${a.id}')" title="Excluir">×</button></div>`).join("")||'<div class="xw-no-actions">Nenhuma ação programada para este dia.</div>'}
+      </div>
+      <div class="xw-account-actions">
+        <button class="btn" onclick="selectXWarmupAccount('${account.id}')">＋ Programar</button>
+        ${account.status==="paused"?`<button class="btn" onclick="xWarmupControl('${account.id}','resume')">Retomar</button>`:account.status==="warming"?`<button class="btn" onclick="xWarmupControl('${account.id}','pause')">Pausar</button>`:""}
+        ${account.status==="draft"?`<button class="btn primary" onclick="xWarmupControl('${account.id}','start')">Iniciar</button>`:""}
+        ${account.status==="warming"?`<button class="btn success" onclick="xWarmupControl('${account.id}','complete_day')">Concluir dia</button>`:""}
+        ${canApprove?`<button class="btn success" onclick="xWarmupControl('${account.id}','approve')">✓ Aprovar conta</button>`:""}
+        <button class="btn danger btn-sm" onclick="deleteXWarmupAccount('${account.id}')">Excluir</button>
+      </div>
+      ${xWarmupComposer(account)}
+    </div>`;
+}
+function xWarmupSection(){
+  const accounts=xWarmupData.accounts||[];
+  const approved=accounts.filter(x=>x.status==="approved").length;
+  const warming=accounts.filter(x=>x.status==="warming").length;
+  const review=accounts.filter(x=>x.status==="review").length;
+  const connected=!!xWarmupData.connection?.enabled;
+  return `
+    <div class="xw-section">
+      <div class="xw-head">
+        <div>
+          <span class="ui3-eyebrow">AQUECIMENTO · 7 DIAS</span>
+          <h3>Esteira de contas X</h3>
+          <p>Até 5 contas com fila de curtidas, follows, respostas e posts programados, avanço diário e aprovação final.</p>
+        </div>
+        <span class="channel-stage-pill ${connected?"ready":""}"><i></i>${connected?"API X conectada":"Aguardando conexão X"}</span>
+      </div>
+      <div class="xw-kpis">
+        <div><small>CONTAS</small><b>${accounts.length}/5</b></div>
+        <div><small>AQUECENDO</small><b>${warming}</b></div>
+        <div><small>REVISÃO</small><b>${review}</b></div>
+        <div><small>APROVADAS</small><b>${approved}</b></div>
+      </div>
+      ${accounts.length<5?`
+      <div class="xw-add">
+        <div><b>Adicionar conta à esteira</b><span>Ela começa no Dia 1 imediatamente.</span></div>
+        <input id="xWarmupUsername" placeholder="@usuario">
+        <input id="xWarmupLabel" placeholder="Nome interno (opcional)">
+        <button class="btn primary" onclick="createXWarmupAccount()">＋ Adicionar conta</button>
+      </div>`:""}
+      <div class="xw-grid">
+        ${accounts.map(xWarmupAccountCard).join("")||'<div class="channel-empty xw-empty"><span>X</span><b>Nenhuma conta em aquecimento</b><p>Adicione a primeira conta para criar a esteira Dia 1 → Dia 7.</p></div>'}
+      </div>
+    </div>`;
+}
+
 function platformStudioPage(platform){
   const cfg=platformStudioConfig(platform);
   const root=$("#"+cfg.id);if(!root)return;
@@ -6325,6 +6592,8 @@ function platformStudioPage(platform){
         <div class="channel-stat-card"><small>PUBLICADOS</small><b>${stats.published}</b><span>histórico do canal</span></div>
         <div class="channel-stat-card"><small>WORKER</small><b>${worker?.online?"ONLINE":"—"}</b><span>${worker?.online?"publicação ativa":"será criado na integração"}</span></div>
       </div>
+
+      ${platform==="x"?xWarmupSection():""}
 
       <div class="channel-main-grid">
         <div class="card channel-panel channel-launch-card">
