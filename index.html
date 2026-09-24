@@ -1812,6 +1812,21 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:980px){.calendar-control-main{grid-template-columns:1fr 165px}.calendar-nav-controls{grid-column:1/-1;justify-content:flex-start}.calendar-health-row{grid-template-columns:repeat(2,1fr)}.calendar-mode-chip{grid-column:1/-1}}
 @media(max-width:600px){.calendar-control-main{grid-template-columns:1fr}.calendar-health-row{grid-template-columns:1fr 1fr}.calendar-date-control{max-width:180px}}
 
+
+/* ===== Upload previews in Production IA ===== */
+.production-drop-live{position:relative;overflow:hidden;padding:0!important;min-height:210px!important;isolation:isolate}
+.production-upload-preview{position:absolute;inset:0;display:grid;place-items:center;background:#090b0f}
+.production-upload-preview video,.production-upload-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.production-upload-preview video{pointer-events:none}
+.production-upload-overlay{position:absolute;z-index:3;left:0;right:0;bottom:0;padding:42px 14px 13px;background:linear-gradient(transparent,rgba(5,6,9,.88));text-align:center}
+.production-upload-overlay b,.production-upload-overlay small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.production-upload-overlay b{font-size:10px;color:#fff}.production-upload-overlay small{font-size:8px;color:#9aa3b1;margin-top:4px}
+.production-drop-live.has-preview{border-style:solid!important}
+.production-drop-live.has-preview .production-drop-icon{display:none}
+.production-preview-play{position:absolute;z-index:2;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.56);color:#fff;font-size:13px;backdrop-filter:blur(4px);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.production-drop-live:hover .production-upload-preview video,.production-drop-live:hover .production-upload-preview img{transform:scale(1.015)}
+.production-upload-preview video,.production-upload-preview img{transition:transform .2s ease}
+
 </style>
 </head>
 <body>
@@ -3739,11 +3754,26 @@ function productionFileChangedFromInput(input){
   const box=$("#production"+(kind==="video"?"VideoBox":"FrameBox"));
   const file=input?.files?.[0];
   if(!box||!file)return;
-  const title=box.querySelector("b"),meta=box.querySelector("small");
+
+  const old=box.dataset.previewUrl;
+  if(old){try{URL.revokeObjectURL(old)}catch{}}
+  const url=URL.createObjectURL(file);
+  box.dataset.previewUrl=url;
+  box.classList.add("selected","has-preview");
+
+  const mediaHost=box.querySelector(".production-upload-preview");
+  if(mediaHost){
+    mediaHost.innerHTML=kind==="video"
+      ? '<video src="'+url+'" muted playsinline preload="metadata"></video><span class="production-preview-play">▶</span>'
+      : '<img src="'+url+'" alt="Frame da modelo">';
+  }
+
+  const title=box.querySelector(".production-upload-title");
+  const meta=box.querySelector(".production-upload-meta");
   if(title)title.textContent=file.name;
   if(meta)meta.textContent=fmtSize(file.size)+" · "+(file.type||"arquivo");
-  box.classList.add("selected");
 }
+
 async function addProductionJob(){
   if(productionUploading)return;
   const video=$("#productionVideo")?.files?.[0];
@@ -3978,9 +4008,17 @@ function productionPage(){
       '<div class="card production-upload-card">'+
         '<div class="ui3-panel-head"><div><span>Novo job</span><h3>Vídeo + frame</h3></div><button class="btn btn-sm" onclick="setSettingsTab(\'integrations\');showPage(\'settings\')">⚙ Integração</button></div>'+
         '<div class="production-input-grid">'+
-          '<label class="production-drop" id="productionVideoBox"><input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon">▶</span><b>Vídeo original</b><small>Load Video · node #336</small></label>'+
+          '<label class="production-drop production-drop-live" id="productionVideoBox">'+
+            '<input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)">'+
+            '<div class="production-upload-preview"><span class="production-drop-icon">▶</span></div>'+
+            '<div class="production-upload-overlay"><b class="production-upload-title">Vídeo original</b><small class="production-upload-meta">Load Video · node #336</small></div>'+
+          '</label>'+
           '<div class="production-plus">＋</div>'+
-          '<label class="production-drop" id="productionFrameBox"><input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)"><span class="production-drop-icon frame">▧</span><b>Frame da modelo</b><small>Load Reference Image · node #338</small></label>'+
+          '<label class="production-drop production-drop-live" id="productionFrameBox">'+
+            '<input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)">'+
+            '<div class="production-upload-preview"><span class="production-drop-icon frame">▧</span></div>'+
+            '<div class="production-upload-overlay"><b class="production-upload-title">Frame da modelo</b><small class="production-upload-meta">Load Reference Image · node #338</small></div>'+
+          '</label>'+
         '</div>'+
         '<button class="btn primary production-add-btn" '+(productionUploading?"disabled":"")+' onclick="addProductionJob()">'+(productionUploading?"Enviando arquivos…":"＋ Adicionar à fila")+'</button>'+
         '<div class="production-note">Adicione quantos pares quiser. Depois use “Executar fila” para disparar na hora.</div>'+
