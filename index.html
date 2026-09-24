@@ -1940,6 +1940,11 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-job-cost.unavailable{color:#7e8794;font-weight:700}
 
 .production-job-cost.real-cost{color:#75d89d;font-weight:900}
+
+.production-draft-clear{display:none;position:absolute;z-index:7;right:10px;top:10px;width:28px;height:28px;border:1px solid #343b47;border-radius:8px;background:rgba(8,10,14,.82);color:#fff;font-size:17px;line-height:1;cursor:pointer;backdrop-filter:blur(6px)}
+.production-drop-live.has-preview .production-draft-clear{display:grid;place-items:center}
+.production-draft-clear:hover{background:#32131f;border-color:#7d2946;color:#ff6d9e}
+.production-add-btn:disabled{opacity:.7;cursor:wait}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2020,6 +2025,7 @@ const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
 let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false;
+let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
@@ -4026,48 +4032,72 @@ function productionCounts(){
     failed:jobs.filter(j=>j.status==="failed").length
   };
 }
+function releaseProductionDraft(kind=null){
+  const clearOne=k=>{
+    const url=productionDraft[k+"Url"];
+    if(url){try{URL.revokeObjectURL(url)}catch{}}
+    productionDraft[k]=null;
+    productionDraft[k+"Url"]=null;
+  };
+  if(kind)clearOne(kind);
+  else{clearOne("video");clearOne("frame")}
+}
+function renderProductionDraft(){
+  const renderOne=(kind,file,url)=>{
+    if(!file||!url)return;
+    const box=$("#production"+(kind==="video"?"VideoBox":"FrameBox"));
+    if(!box)return;
+    box.classList.add("selected","has-preview");
+    box.dataset.previewUrl=url;
+    const mediaHost=box.querySelector(".production-upload-preview");
+    if(mediaHost){
+      mediaHost.innerHTML=kind==="video"
+        ? '<video src="'+url+'#t=0.05" muted playsinline preload="metadata"></video><span class="production-preview-play">▶</span>'
+        : '<img src="'+url+'" alt="Frame da modelo">';
+    }
+    const next=(productionData?.jobs?.length||0)+1;
+    const title=box.querySelector(".production-upload-title");
+    const meta=box.querySelector(".production-upload-meta");
+    if(title)title.textContent=(kind==="video"?"Vídeo ":"Frame ")+next;
+    if(meta)meta.textContent=fmtSize(file.size)+" · "+(kind==="video"?"vídeo original":"frame da modelo");
+    box.title=file.name;
+  };
+  renderOne("video",productionDraft.video,productionDraft.videoUrl);
+  renderOne("frame",productionDraft.frame,productionDraft.frameUrl);
+}
 function productionFileChangedFromInput(input){
   const kind=input.dataset.kind;
-  const box=$("#production"+(kind==="video"?"VideoBox":"FrameBox"));
   const file=input?.files?.[0];
-  if(!box||!file)return;
+  if(!file)return;
 
-  const old=box.dataset.previewUrl;
-  if(old){try{URL.revokeObjectURL(old)}catch{}}
+  releaseProductionDraft(kind);
   const url=URL.createObjectURL(file);
-  box.dataset.previewUrl=url;
-  box.classList.add("selected","has-preview");
-
-  const mediaHost=box.querySelector(".production-upload-preview");
-  if(mediaHost){
-    mediaHost.innerHTML=kind==="video"
-      ? '<video src="'+url+'#t=0.05" muted playsinline preload="metadata"></video><span class="production-preview-play">▶</span>'
-      : '<img src="'+url+'" alt="Frame da modelo">';
-  }
-
-  const next=(productionData?.jobs?.length||0)+1;
-  const title=box.querySelector(".production-upload-title");
-  const meta=box.querySelector(".production-upload-meta");
-  if(title)title.textContent=(kind==="video"?"Vídeo ":"Frame ")+next;
-  if(meta)meta.textContent=fmtSize(file.size)+" · "+(kind==="video"?"vídeo original":"frame da modelo");
-  box.title=file.name;
+  productionDraft[kind]=file;
+  productionDraft[kind+"Url"]=url;
+  renderProductionDraft();
 }
 
 async function addProductionJob(){
   if(productionUploading)return;
-  const video=$("#productionVideo")?.files?.[0];
-  const frame=$("#productionFrame")?.files?.[0];
+  const video=productionDraft.video||$("#productionVideo")?.files?.[0];
+  const frame=productionDraft.frame||$("#productionFrame")?.files?.[0];
   if(!video||!frame){toast("Selecione o vídeo e o frame da modelo.","err");return}
   productionUploading=true;
+  productionPage();
   try{
     const fd=new FormData();
     fd.append("video",video);
     fd.append("frame",frame);
     await cloudFetch("?action=production-upload",{method:"POST",body:fd});
-    await loadProductionData();
+    await loadProductionData(true);
+    releaseProductionDraft();
     toast("Adicionado à fila de produção.","ok");
-  }catch(e){toast(e.message,"err")}
-  finally{productionUploading=false;productionPage()}
+  }catch(e){
+    toast(e.message,"err");
+  }finally{
+    productionUploading=false;
+    productionPage();
+  }
 }
 async function controlRunningHub(operation){
   try{
@@ -4447,13 +4477,15 @@ function productionPage(){
           '<label class="production-drop production-drop-live" id="productionVideoBox">'+
             '<input id="productionVideo" data-kind="video" type="file" accept="video/*" hidden onchange="productionFileChangedFromInput(this)">'+
             '<div class="production-upload-preview"><span class="production-drop-icon">▶</span></div>'+
-            '<div class="production-upload-overlay"><b class="production-upload-title">Vídeo original</b><small class="production-upload-meta">Load Video · node #336</small></div>'+
+            '<button type="button" class="production-draft-clear" onclick="event.preventDefault();event.stopPropagation();releaseProductionDraft('video');productionPage()" title="Remover vídeo">×</button>
+            <div class="production-upload-overlay"><b class="production-upload-title">Vídeo original</b><small class="production-upload-meta">Load Video · node #336</small></div>'+
           '</label>'+
           '<div class="production-plus">＋</div>'+
           '<label class="production-drop production-drop-live" id="productionFrameBox">'+
             '<input id="productionFrame" data-kind="frame" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="productionFileChangedFromInput(this)">'+
             '<div class="production-upload-preview"><span class="production-drop-icon frame">▧</span></div>'+
-            '<div class="production-upload-overlay"><b class="production-upload-title">Frame da modelo</b><small class="production-upload-meta">Load Reference Image · node #338</small></div>'+
+            '<button type="button" class="production-draft-clear" onclick="event.preventDefault();event.stopPropagation();releaseProductionDraft('frame');productionPage()" title="Remover frame">×</button>
+            <div class="production-upload-overlay"><b class="production-upload-title">Frame da modelo</b><small class="production-upload-meta">Load Reference Image · node #338</small></div>'+
           '</label>'+
         '</div>'+
         '<button class="btn primary production-add-btn" '+(productionUploading?"disabled":"")+' onclick="addProductionJob()">'+(productionUploading?"Enviando arquivos…":"＋ Adicionar à fila")+'</button>'+
@@ -4462,7 +4494,10 @@ function productionPage(){
     '</div>'+
     '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><small class="muted">Acompanhamento automático</small></div><div class="production-queue">'+rows+'</div></div>';
   ensureProductionTicker();
-  setTimeout(syncProductionElapsed,0);
+  setTimeout(()=>{
+    syncProductionElapsed();
+    renderProductionDraft();
+  },0);
 }
 
 
