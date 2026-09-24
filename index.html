@@ -1776,6 +1776,42 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:900px){.runninghub-settings-intro-4{grid-template-columns:1fr 1fr}.runninghub-commandbar{align-items:flex-start;flex-direction:column}}
 @media(max-width:560px){.runninghub-settings-intro-4{grid-template-columns:1fr}.runninghub-command-actions{width:100%}.runninghub-command-actions .btn{flex:1}}
 
+
+/* ===== Production Queue Patch v2 ===== */
+.production-media-cell{grid-template-columns:46px minmax(0,1fr)!important}
+.production-inline-preview,.production-preview-fallback{width:46px!important;height:58px!important;border-radius:8px!important;display:block!important;object-fit:cover!important;background:#11151b!important;border:1px solid #262c35!important}
+.production-preview-fallback{display:grid!important;place-items:center!important;color:#7c8491!important}
+.production-media-cell.frame .production-inline-preview{object-fit:cover!important}
+.production-job.is-live{background:linear-gradient(90deg,rgba(255,64,128,.025),transparent 46%)}
+.production-status{gap:5px;align-items:center}
+.production-status>i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:productionPulse 1.15s ease-in-out infinite}
+.production-progress.animated{position:relative;overflow:hidden}
+.production-progress.animated i{position:relative;overflow:hidden}
+.production-progress.animated i:after{content:"";position:absolute;inset:0;width:36%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:productionShimmer 1.2s linear infinite}
+.production-job-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+.production-job-meta small,.production-elapsed,.production-wait-detail,.production-job-cost{font-size:7.5px;color:#6f7886;white-space:nowrap}
+.production-elapsed{color:#9aa3b1}.production-job-cost{color:#f1c968;font-weight:800}
+@keyframes productionPulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.22)}}
+@keyframes productionShimmer{0%{transform:translateX(-130%)}100%{transform:translateX(360%)}}
+
+/* ===== Calendar Header Patch ===== */
+.calendar-head-v2{margin-bottom:12px!important}
+.calendar-control-card{border:1px solid #20252e;border-radius:14px;background:#0c0f14;padding:13px 14px;margin-bottom:12px}
+.calendar-control-main{display:grid;grid-template-columns:minmax(180px,1fr) 165px auto;gap:14px;align-items:end}
+.calendar-week-identity span,.calendar-week-identity b,.calendar-week-identity small{display:block}
+.calendar-week-identity span{font-size:7.5px;color:#646d7b;font-weight:900;letter-spacing:.09em}
+.calendar-week-identity b{font-size:16px;margin-top:3px;text-transform:capitalize}
+.calendar-week-identity small{font-size:8px;color:#747d8b;margin-top:3px}
+.calendar-date-control{display:grid;gap:5px}.calendar-date-control span{font-size:8px;color:#707987;font-weight:800}.calendar-date-control input{height:34px!important}
+.calendar-nav-controls{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.calendar-health-row{display:grid;grid-template-columns:repeat(4,minmax(90px,.7fr)) minmax(210px,1.5fr);gap:7px;margin-top:12px;padding-top:11px;border-top:1px solid #1b2028}
+.calendar-health-row>div{padding:8px 9px;border:1px solid #1e242d;border-radius:9px;background:#090b0f}
+.calendar-health-row span,.calendar-health-row b{display:block}.calendar-health-row span{font-size:7.5px;color:#636d7a}.calendar-health-row b{font-size:10px;margin-top:2px}
+.calendar-mode-chip.stable{border-color:#234333!important;background:#0d1712!important}.calendar-mode-chip.stable b{color:#6fdaa0}
+.calendar-protection-note{font-size:8px;color:#656f7d;margin-top:9px}
+@media(max-width:980px){.calendar-control-main{grid-template-columns:1fr 165px}.calendar-nav-controls{grid-column:1/-1;justify-content:flex-start}.calendar-health-row{grid-template-columns:repeat(2,1fr)}.calendar-mode-chip{grid-column:1/-1}}
+@media(max-width:600px){.calendar-control-main{grid-template-columns:1fr}.calendar-health-row{grid-template-columns:1fr 1fr}.calendar-date-control{max-width:180px}}
+
 </style>
 </head>
 <body>
@@ -2780,27 +2816,55 @@ function jumpToCalendarDay(date){
 }
 
 function calendarPage(){
-  const dates=weekDates(), weekdays=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
+  const dates=weekDates(),weekdays=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
   const auto=automationData?.settings?.automation||{};
+  const smart=automationData?.settings?.smart_scheduler||{};
+  const gap=automationData?.settings?.min_gap_minutes||state.minGap;
+  const filled=weekScheduledCount();
+  const start=dates[0],end=dates[6];
+  const startLabel=start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
+  const endLabel=end.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
+  const stable=smart.mode==="stable"||Number(smart.exploration||0)===0;
+
   $("#calendar").innerHTML=`
-    <div class="ui3-page-head calendar-head">
-      <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Agende os vídeos no dia escolhido. Agendamentos manuais permanecem nesse dia e horário.</p></div>
+    <div class="ui3-page-head calendar-head calendar-head-v2">
+      <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Organize a semana e deixe o CloudentFlow cuidar dos horários e publicações.</p></div>
       <button class="btn primary" onclick="openScheduleModal()">＋ Agendar vídeo</button>
     </div>
-    <div class="calendar-top ui3-calendar-toolbar">
-      <div class="left"><div class="field"><label>Semana</label><input id="weekStart" type="date" value="${state.weekStart}"></div></div>
-      <div class="toolbar">
-        <span class="ui3-auto-pill ${auto.autoOptimizeCalendar!==false?"on":""}">✦ Auto Scheduler ${auto.autoOptimizeCalendar!==false?"ativo":"pausado"}</span>
-        <button class="btn" onclick="shiftWeek(-7)">←</button><button class="btn" onclick="goCurrentWeek()">Hoje</button><button class="btn" onclick="shiftWeek(7)">→</button>
-        <details class="more-menu"><summary class="btn">•••</summary><div class="more-popover"><button onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button><button class="danger-link" onclick="clearCurrentWeek()">Limpar semana</button></div></details>
+
+    <div class="calendar-control-card">
+      <div class="calendar-control-main">
+        <div class="calendar-week-identity">
+          <span>SEMANA ATUAL</span>
+          <b>${startLabel} — ${endLabel}</b>
+          <small>${filled} de 35 posições preenchidas</small>
+        </div>
+
+        <label class="calendar-date-control">
+          <span>Início da semana</span>
+          <input id="weekStart" type="date" value="${state.weekStart}">
+        </label>
+
+        <div class="calendar-nav-controls">
+          <span class="ui3-auto-pill ${auto.autoOptimizeCalendar!==false?"on":""}">✦ Scheduler ${auto.autoOptimizeCalendar!==false?"ativo":"pausado"}</span>
+          <button class="btn" onclick="shiftWeek(-7)" title="Semana anterior">←</button>
+          <button class="btn" onclick="goCurrentWeek()">Hoje</button>
+          <button class="btn" onclick="shiftWeek(7)" title="Próxima semana">→</button>
+          <details class="more-menu"><summary class="btn">•••</summary><div class="more-popover"><button onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button><button class="danger-link" onclick="clearCurrentWeek()">Limpar semana</button></div></details>
+        </div>
       </div>
+
+      <div class="calendar-health-row">
+        <div><span>Ocupação</span><b>${filled}/35</b></div>
+        <div><span>Livres</span><b>${35-filled}</b></div>
+        <div><span>Posts/dia</span><b>${automationData?.settings?.posts_per_day||5}</b></div>
+        <div><span>Intervalo mínimo</span><b>${gap} min</b></div>
+        <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · sem testes automáticos":"Smart Scheduler"}</b></div>
+      </div>
+
+      <div class="calendar-protection-note">🔒 Posts próximos do horário ficam protegidos contra alterações de última hora.</div>
     </div>
-    <div class="week-summary">
-      <div class="summary-chip">${weekScheduledCount()}/35 posições preenchidas</div>
-      <div class="summary-chip">Intervalo mínimo: ${automationData?.settings?.min_gap_minutes||state.minGap} min</div>
-      <div class="summary-chip">Posts próximos ficam bloqueados para evitar mudanças de última hora</div>
-      <div class="summary-chip smart-legend-chip">✓ 4 Testados + 🧪 1 Teste por dia</div>
-    </div>
+
     <div class="calendar-content-days">
       <span>Com vídeos:</span>
       ${calendarDaysWithPosts().length
@@ -2811,6 +2875,7 @@ function calendarPage(){
   `;
   $("#weekStart").onchange=e=>{state.weekStart=mondayISO(new Date(e.target.value+"T00:00:00"));save();calendarPage()}
 }
+
 function dayColumn(d,label){
   const iso=localISO(d), count=filledCount(iso);
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
@@ -3628,20 +3693,37 @@ function automationPage(){
 }
 
 
-async function loadProductionData(){
+async function loadProductionData(forcePreviews=false){
   if(!cloudSession){productionData=null;return}
+  const previousPreviews=productionData?.previews||{};
+  const previousSignature=productionData?.previewSignature||"";
   const [queue,status]=await Promise.all([
     cloudFetch("?resource=production"),
     cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
   ]);
-  productionData={...queue,runninghubStatus:status};
+  const signature=(queue.jobs||[]).slice(0,30).map(j=>j.id).join("|");
+  let previews=previousPreviews;
+  if(currentPage==="production"&&(forcePreviews||!Object.keys(previews).length||signature!==previousSignature)){
+    const p=await cloudFetch("?resource=production-previews").catch(()=>({previews:{}}));
+    previews=p.previews||{};
+  }
+  productionData={...queue,runninghubStatus:status,previews,previewSignature:signature};
 }
 
 function productionStatusMeta(status){
-  const map={waiting:["Aguardando","waiting"],uploading:["Enviando","uploading"],queued:["Na fila","queued"],running:["Gerando","running"],ready:["Pronto","ready"],failed:["Erro","failed"],cancelled:["Cancelado","cancelled"]};
+  const map={
+    waiting:["Aguardando envio","waiting"],
+    uploading:["Enviando arquivos","uploading"],
+    queued:["Na fila do RunningHub","queued"],
+    running:["Gerando","running"],
+    ready:["Pronto","ready"],
+    failed:["Erro","failed"],
+    cancelled:["Cancelado","cancelled"]
+  };
   const x=map[status]||[status||"Aguardando","waiting"];
   return {label:x[0],cls:x[1]};
 }
+
 function productionCounts(){
   const jobs=productionData?.jobs||[];
   const today=new Date().toISOString().slice(0,10);
@@ -3695,7 +3777,7 @@ async function controlRunningHub(operation){
 async function productionAction(id,operation){
   try{
     await cloudFetch("?action=production-job",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,operation})});
-    await loadProductionData();
+    await loadProductionData(true);
     productionPage();
     toast(operation==="retry"?"Job reenviado para a fila.":"Job cancelado.","ok");
   }catch(e){toast(e.message,"err")}
@@ -3782,23 +3864,80 @@ async function testRunningHubConfig(){
   }
 }
 
+function formatProductionSeconds(seconds){
+  const s=Math.max(0,Math.floor(Number(seconds)||0));
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return h>0
+    ? String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0")
+    : String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+}
+function productionElapsedSeconds(j){
+  const apiRuntime=Number(j?.runninghub_runtime_seconds);
+  if(j?.status==="ready"&&Number.isFinite(apiRuntime)&&apiRuntime>0)return apiRuntime;
+  if(!j?.started_at)return 0;
+  const start=new Date(j.started_at).getTime();
+  const end=j.completed_at?new Date(j.completed_at).getTime():Date.now();
+  return Math.max(0,(end-start)/1000);
+}
+function syncProductionElapsed(){
+  document.querySelectorAll(".production-elapsed[data-started]").forEach(el=>{
+    const start=Number(el.dataset.started||0);
+    const completed=Number(el.dataset.completed||0);
+    const runtime=Number(el.dataset.runtime||0);
+    const done=el.dataset.done==="1";
+    const seconds=done&&runtime>0?runtime:Math.max(0,((completed||Date.now())-start)/1000);
+    el.textContent=(done?"Tempo total ":"Decorrido ")+formatProductionSeconds(seconds);
+  });
+}
+function ensureProductionTicker(){
+  if(window.__cloudentProductionTicker)return;
+  window.__cloudentProductionTicker=setInterval(syncProductionElapsed,1000);
+}
+function productionPreviewMarkup(url,kind){
+  if(!url)return '<span class="production-preview-fallback">'+(kind==="frame"?"▧":"▶")+'</span>';
+  if(kind==="frame")return '<img class="production-inline-preview" src="'+esc(url)+'" alt="Frame">';
+  return '<video class="production-inline-preview" src="'+esc(url)+'#t=0.05" muted playsinline preload="metadata"></video>';
+}
+
 function productionJobRow(j,i,total){
   const st=productionStatusMeta(j.status);
+  const live=["uploading","queued","running"].includes(j.status);
+  const pv=productionData?.previews?.[j.id]||{};
   let action="";
   if(j.status==="ready") action='<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>';
   else if(["failed","cancelled"].includes(j.status)) action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
   else action='<button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button>';
+
   const err=j.last_error?'<em title="'+esc(j.last_error)+'">'+esc(String(j.last_error).slice(0,90))+'</em>':"";
   const task=j.runninghub_task_id?"Task "+esc(String(j.runninghub_task_id).slice(-8)):"Tentativa "+j.attempt_count+"/"+j.max_attempts;
-  return '<div class="production-job">'+
+  const elapsed=j.started_at
+    ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
+    : '<span class="production-wait-detail">'+(j.status==="waiting"?"Aguardando o worker enviar ao RunningHub":"")+'</span>';
+  const credits=j.status==="ready"&&j.credits_used!==null&&j.credits_used!==undefined
+    ? '<span class="production-job-cost">◉ '+Number(j.credits_used).toLocaleString("pt-BR")+" créditos usados</span>"
+    : "";
+
+  return '<div class="production-job '+(live?"is-live":"")+'">'+
     '<div class="production-job-num">'+String(total-i).padStart(2,"0")+'</div>'+
-    '<button class="production-media-cell" data-id="'+esc(j.id)+'" data-kind="original" onclick="productionPreviewFromButton(this)"><span>▶</span><div><b>'+esc(j.original_file_name)+'</b><small>'+fmtSize(j.original_size_bytes)+'</small></div></button>'+
+    '<button class="production-media-cell" data-id="'+esc(j.id)+'" data-kind="original" onclick="productionPreviewFromButton(this)">'+
+      productionPreviewMarkup(pv.original,"video")+
+      '<div><b>'+esc(j.original_file_name)+'</b><small>'+fmtSize(j.original_size_bytes)+' · vídeo original</small></div>'+
+    '</button>'+
     '<div class="production-arrow">＋</div>'+
-    '<button class="production-media-cell frame" data-id="'+esc(j.id)+'" data-kind="frame" onclick="productionPreviewFromButton(this)"><span>▧</span><div><b>'+esc(j.frame_file_name)+'</b><small>'+fmtSize(j.frame_size_bytes)+'</small></div></button>'+
-    '<div class="production-job-state"><span class="production-status '+st.cls+'">'+st.label+'</span><div class="production-progress"><i style="width:'+Math.max(0,Math.min(100,Number(j.progress||0)))+'%"></i></div><small>'+task+'</small>'+err+'</div>'+
+    '<button class="production-media-cell frame" data-id="'+esc(j.id)+'" data-kind="frame" onclick="productionPreviewFromButton(this)">'+
+      productionPreviewMarkup(pv.frame,"frame")+
+      '<div><b>'+esc(j.frame_file_name)+'</b><small>'+fmtSize(j.frame_size_bytes)+' · frame da modelo</small></div>'+
+    '</button>'+
+    '<div class="production-job-state">'+
+      '<span class="production-status '+st.cls+'">'+(live?'<i></i>':"")+st.label+'</span>'+
+      '<div class="production-progress '+(live?"animated":"")+'"><i style="width:'+Math.max(0,Math.min(100,Number(j.progress||0)))+'%"></i></div>'+
+      '<div class="production-job-meta"><small>'+task+'</small>'+elapsed+credits+'</div>'+
+      err+
+    '</div>'+
     '<div class="production-job-actions">'+action+'</div>'+
     '</div>';
 }
+
 function productionPage(){
   const root=$("#production");
   if(!root)return;
@@ -3825,7 +3964,7 @@ function productionPage(){
       '<div class="runninghub-command-actions">'+
         '<button class="btn success" onclick="controlRunningHub(\'run\')">▶ Executar fila</button>'+
         '<button class="btn" onclick="controlRunningHub(\'pause\')">Ⅱ Pausar</button>'+
-        '<button class="btn" onclick="loadProductionData().then(productionPage)">↻ Atualizar</button>'+
+        '<button class="btn" onclick="loadProductionData(true).then(productionPage)">↻ Atualizar</button>'+
       '</div>'+
     '</div>'+
 
@@ -3848,6 +3987,8 @@ function productionPage(){
       '</div>'+
     '</div>'+
     '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><small class="muted">Acompanhamento automático</small></div><div class="production-queue">'+rows+'</div></div>';
+  ensureProductionTicker();
+  setTimeout(syncProductionElapsed,0);
 }
 
 function setSettingsTab(tab){
