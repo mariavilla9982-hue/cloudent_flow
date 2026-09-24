@@ -1938,6 +1938,8 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 @media(max-width:650px){.daypart-compare{grid-template-columns:1fr}.reel-vs-card{grid-template-columns:1fr}.reel-vs-card>strong{padding:2px}}
 
 .production-job-cost.unavailable{color:#7e8794;font-weight:700}
+
+.production-job-cost.real-cost{color:#75d89d;font-weight:900}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -4278,20 +4280,35 @@ async function deleteProductionJob(id){
 }
 
 function productionCreditUsage(j){
-  const exact=Number(j?.credits_used);
-  if(Number.isFinite(exact)&&exact>0)return {value:exact,live:false};
+  const raw=j?.credits_used;
+  if(raw!==null&&raw!==undefined&&raw!==""){
+    const exact=Number(raw);
+    if(Number.isFinite(exact))return {value:exact,live:false};
+  }
 
   const before=Number(j?.credits_before);
   const current=Number(productionData?.runninghubStatus?.credits);
   const active=["uploading","queued","running"].includes(j?.status);
-  const latestWithCredit=(productionData?.jobs||[]).find(x=>x?.credits_before!==null&&x?.credits_before!==undefined);
-  const canEstimate=active||(j?.status==="ready"&&latestWithCredit?.id===j?.id);
-
-  if(canEstimate&&Number.isFinite(before)&&Number.isFinite(current)){
+  if(active&&Number.isFinite(before)&&Number.isFinite(current)){
     const delta=Math.max(0,before-current);
     if(delta>0)return {value:delta,live:true};
   }
   return null;
+}
+function productionMoneyUsage(j){
+  const raw=j?.runninghub_cost_money;
+  const thirdRaw=j?.runninghub_third_party_cost_money;
+  const base=raw===null||raw===undefined||raw===""?null:Number(raw);
+  const third=thirdRaw===null||thirdRaw===undefined||thirdRaw===""?null:Number(thirdRaw);
+  return {
+    base:Number.isFinite(base)?base:null,
+    third:Number.isFinite(third)?third:null,
+    total:(Number.isFinite(base)?base:0)+(Number.isFinite(third)?third:0),
+    has:Number.isFinite(base)||Number.isFinite(third)
+  };
+}
+function formatRhMoney(value){
+  return Number(value||0).toLocaleString("pt-BR",{minimumFractionDigits:3,maximumFractionDigits:4});
 }
 
 function productionJobRow(j,i,total){
@@ -4325,13 +4342,18 @@ function productionJobRow(j,i,total){
     ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
     : '<span class="production-wait-detail">'+(j.status==="waiting"?"Aguardando o worker enviar ao RunningHub":"")+'</span>';
   const creditUsage=productionCreditUsage(j);
+  const moneyUsage=productionMoneyUsage(j);
   let credits="";
   if(["uploading","queued","running"].includes(j.status)){
-    credits='<span class="production-job-cost '+(creditUsage?.live?"live":"")+'">◉ '+(creditUsage?creditUsage.value.toLocaleString("pt-BR")+" créditos agora":"calculando créditos…")+'</span>';
+    credits='<span class="production-job-cost '+(creditUsage?.live?"live":"")+'">◉ '+(creditUsage?creditUsage.value.toLocaleString("pt-BR")+" créditos agora":"calculando custo…")+'</span>';
   }else if(j.status==="ready"){
-    credits=creditUsage
-      ? '<span class="production-job-cost">◉ '+creditUsage.value.toLocaleString("pt-BR")+' créditos usados</span>'
-      : '<span class="production-job-cost unavailable" title="A RunningHub concluiu o job, mas não informou consumeCoins e o saldo da conta não mudou na consulta.">◉ créditos indisponíveis</span>';
+    if(moneyUsage.has){
+      credits='<span class="production-job-cost real-cost" title="Custo real retornado pela RunningHub">¥ '+formatRhMoney(moneyUsage.total)+' custo real</span>';
+    }else if(creditUsage){
+      credits='<span class="production-job-cost">◉ '+creditUsage.value.toLocaleString("pt-BR")+' créditos usados</span>';
+    }else{
+      credits='<span class="production-job-cost unavailable">custo indisponível</span>';
+    }
   }
 
   return '<div class="production-job '+(live?"is-live":"")+'">'+
@@ -4357,28 +4379,27 @@ function productionJobRow(j,i,total){
 
 function productionCostSummary(){
   const jobs=productionData?.jobs||[];
-  const completed=jobs.filter(j=>Number(j.credits_used)>0&&j.completed_at);
-  const avg=completed.length?completed.reduce((a,j)=>a+Number(j.credits_used||0),0)/completed.length:null;
+  const completed=jobs.filter(j=>j.completed_at&&productionMoneyUsage(j).has);
+  const totalOf=j=>productionMoneyUsage(j).total;
+  const avg=completed.length?completed.reduce((a,j)=>a+totalOf(j),0)/completed.length:null;
   const now=Date.now();
   const sumSince=ms=>{
     const rows=completed.filter(j=>new Date(j.completed_at).getTime()>=now-ms);
-    return rows.length?rows.reduce((a,j)=>a+Number(j.credits_used||0),0):null;
+    return rows.length?rows.reduce((a,j)=>a+totalOf(j),0):null;
   };
   const waiting=jobs.filter(j=>["waiting","uploading","queued","running"].includes(j.status)).length;
-  const forecast=avg?Math.round(avg*waiting):null;
-  return {avg,waiting,forecast,today:sumSince(86400000),week:sumSince(7*86400000),month:sumSince(30*86400000)};
+  const forecast=avg!==null?avg*waiting:null;
+  return {avg,waiting,forecast,today:sumSince(86400000),week:sumSince(7*86400000),month:sumSince(30*86400000),samples:completed.length};
 }
 function productionCreditDashboard(){
   const s=productionCostSummary();
-  const credits=Number(productionData?.runninghubStatus?.credits);
-  const after=Number.isFinite(credits)&&s.forecast!==null?Math.max(0,credits-s.forecast):null;
-  const fmt=n=>n===null||n===undefined?"—":Math.round(Number(n)).toLocaleString("pt-BR");
+  const fmt=n=>n===null||n===undefined?"—":"¥ "+formatRhMoney(n);
   return '<div class="production-cost-dashboard">' +
-    '<div><small>HOJE</small><b>'+fmt(s.today)+'</b><span>créditos usados</span></div>' +
-    '<div><small>7 DIAS</small><b>'+fmt(s.week)+'</b><span>créditos usados</span></div>' +
-    '<div><small>30 DIAS</small><b>'+fmt(s.month)+'</b><span>créditos usados</span></div>' +
-    '<div><small>MÉDIA / JOB</small><b>'+(s.avg?fmt(s.avg):"—")+'</b><span>'+(s.avg?"histórico real":"aguardando histórico")+'</span></div>' +
-    '<div class="forecast"><small>PREVISÃO DA FILA</small><b>'+(s.forecast===null?"—":fmt(s.forecast))+'</b><span>'+s.waiting+' job(s) · saldo após fila '+(after===null?"—":fmt(after))+'</span></div>' +
+    '<div><small>CUSTO HOJE</small><b>'+fmt(s.today)+'</b><span>RunningHub real</span></div>' +
+    '<div><small>7 DIAS</small><b>'+fmt(s.week)+'</b><span>custo acumulado</span></div>' +
+    '<div><small>30 DIAS</small><b>'+fmt(s.month)+'</b><span>custo acumulado</span></div>' +
+    '<div><small>MÉDIA / GERAÇÃO</small><b>'+fmt(s.avg)+'</b><span>'+s.samples+' geração(ões) com custo</span></div>' +
+    '<div class="forecast"><small>PREVISÃO DA FILA</small><b>'+fmt(s.forecast)+'</b><span>'+s.waiting+' job(s) × média real</span></div>' +
   '</div>';
 }
 
