@@ -2025,8 +2025,8 @@ let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", 
 let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
 let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
 function defaultSmartSamples(){
-  const rows=[], times=["09:00","12:00","15:00","18:00","21:00"];
-  const hourFactor={"09:00":0.70,"12:00":0.91,"15:00":0.78,"18:00":1.08,"21:00":1.24};
+  const rows=[], times=["07:30","09:30","11:30","14:00","16:30","19:00","21:30"];
+  const hourFactor={"07:30":0.72,"09:30":0.82,"11:30":0.91,"14:00":0.78,"16:30":0.88,"19:00":1.08,"21:30":1.24};
   const today=new Date(); today.setHours(12,0,0,0);
   for(let back=1;back<=21;back++){
     const d=new Date(today); d.setDate(today.getDate()-back);
@@ -2053,7 +2053,7 @@ const saved=JSON.parse(localStorage.getItem("cloudentflow-stage4")||localStorage
 
 const defaultSevenTimes=["07:30","09:30","11:30","14:00","16:30","19:00","21:30"];
 const savedTimes=Array.isArray(saved.defaultTimes)?saved.defaultTimes:[];
-const normalizedDefaultTimes=defaultSevenTimes.map((t,i)=>savedTimes[i]||t);
+const normalizedDefaultTimes=savedTimes.length>=7?savedTimes.slice(0,7):defaultSevenTimes;
 
 const state={
   weekStart:saved.weekStart||mondayISO(new Date()),
@@ -2266,6 +2266,7 @@ async function connectInstagram(){
       last_verified_at:new Date().toISOString()
     };
     if($("#instagramToken"))$("#instagramToken").value="";
+    await loadPlatformAccounts();
     const metrics=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
     liveInstagramMetrics=metrics.media||[];
     mergeInstagramIntoSmartSamples(liveInstagramMetrics);
