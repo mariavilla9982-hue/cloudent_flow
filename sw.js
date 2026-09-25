@@ -1,5 +1,5 @@
-const CACHE="cloudentflow-pwa-v2";
-const STATIC=["/manifest.webmanifest","/cloudent-icon.svg"];
+const CACHE="cloudentflow-pwa-v3";
+const STATIC=["/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(STATIC)).catch(()=>null));
@@ -27,8 +27,8 @@ self.addEventListener("push",event=>{
   const title=data.title||"CloudentFlow";
   const options={
     body:data.body||"O CloudentFlow encontrou uma atualização.",
-    icon:"/cloudent-icon.svg",
-    badge:"/cloudent-icon.svg",
+    icon:"/cloudent-notification-icon.svg",
+    badge:"/cloudent-notification-icon.svg",
     tag:data.tag||("cloudent-"+(data.id||Date.now())),
     renotify:true,
     requireInteraction:data.severity==="error",
