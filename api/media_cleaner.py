@@ -121,12 +121,6 @@ class handler(BaseHTTPRequestHandler):
                 return _json(self, {"ok": False, "error": "anon_key_invalid"}, 400)
 
             max_bytes = _safe_int(cfg.get("max_input_bytes"), 262144000, 1_000_000, MAX_HARD_BYTES)
-            crf = _safe_int(cfg.get("crf"), 19, 16, 26)
-            audio_bitrate = _safe_int(cfg.get("audio_bitrate_kbps"), 128, 64, 256)
-            audio_rate = _safe_int(cfg.get("audio_sample_rate"), 48000, 32000, 48000)
-            preset = str(cfg.get("preset") or "veryfast")
-            if preset not in {"ultrafast", "superfast", "veryfast", "faster", "fast", "medium"}:
-                preset = "veryfast"
 
             with tempfile.NamedTemporaryFile(prefix="cloudent-input-", suffix=".bin", delete=False) as f:
                 input_path = f.name
@@ -160,33 +154,17 @@ class handler(BaseHTTPRequestHandler):
                 "-i",
                 input_path,
                 "-map",
-                "0:v:0",
+                "0:v?",
                 "-map",
-                "0:a:0?",
+                "0:a?",
                 "-map_metadata",
                 "-1",
                 "-map_chapters",
                 "-1",
-                "-vf",
-                "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-c:v",
-                "libx264",
-                "-profile:v",
-                "high",
-                "-pix_fmt",
-                "yuv420p",
-                "-preset",
-                preset,
-                "-crf",
-                str(crf),
-                "-c:a",
-                "aac",
-                "-b:a",
-                str(audio_bitrate) + "k",
-                "-ar",
-                str(audio_rate),
-                "-movflags",
-                "+faststart",
+                "-metadata",
+                "encoder=",
+                "-c",
+                "copy",
                 output_path,
             ]
             result = subprocess.run(
@@ -236,39 +214,44 @@ class handler(BaseHTTPRequestHandler):
                     502,
                 )
 
-            warnings = []
-            video_codec = str(after.get("video_codec") or "").lower()
-            audio_codec = str(after.get("audio_codec") or "").lower()
-            width = after.get("width")
-            height = after.get("height")
-            has_audio = bool(after.get("has_audio"))
-
-            if video_codec and "h264" not in video_codec:
-                warnings.append("unexpected_video_codec")
-            if has_audio and audio_codec and "aac" not in audio_codec:
-                warnings.append("unexpected_audio_codec")
-            if not width or not height:
-                warnings.append("geometry_not_detected")
-            elif min(int(width), int(height)) < 480:
-                warnings.append("low_resolution")
-            if not has_audio:
-                warnings.append("no_audio_stream")
-
-            validation_passed = (
-                ("h264" in video_codec)
-                and bool(width and height)
-                and ((not has_audio) or ("aac" in audio_codec))
+            before_video = str(before.get("video_codec") or "").lower()
+            after_video = str(after.get("video_codec") or "").lower()
+            before_audio = str(before.get("audio_codec") or "").lower()
+            after_audio = str(after.get("audio_codec") or "").lower()
+            same_geometry = (
+                before.get("width") == after.get("width")
+                and before.get("height") == after.get("height")
             )
+            same_video_codec = before_video == after_video
+            same_audio_codec = before_audio == after_audio
+            duration_before = float(before.get("duration_seconds") or 0)
+            duration_after = float(after.get("duration_seconds") or 0)
+            duration_delta = abs(duration_before - duration_after)
+            stream_copy_verified = (
+                same_geometry
+                and same_video_codec
+                and same_audio_codec
+                and duration_delta <= 0.15
+            )
+
+            warnings = []
+            if not same_geometry:
+                warnings.append("geometry_changed")
+            if not same_video_codec:
+                warnings.append("video_codec_changed")
+            if not same_audio_codec:
+                warnings.append("audio_codec_changed")
+            if duration_delta > 0.15:
+                warnings.append("duration_changed")
 
             report = {
                 "engine": "ffmpeg",
-                "normalized": True,
+                "mode": "metadata_only",
+                "metadata_only": True,
                 "metadata_stripped": True,
-                "faststart": True,
-                "target_container": "mp4",
-                "target_video_codec": "h264",
-                "target_audio_codec": "aac",
-                "target_pixel_format": "yuv420p",
+                "reencoded": False,
+                "stream_copy": True,
+                "stream_copy_verified": stream_copy_verified,
                 "input_bytes": input_bytes,
                 "output_bytes": output_bytes,
                 "input_sha256": input_hash,
@@ -283,13 +266,9 @@ class handler(BaseHTTPRequestHandler):
                 "has_audio": after.get("has_audio"),
                 "video_codec": after.get("video_codec"),
                 "audio_codec": after.get("audio_codec"),
-                "crf": crf,
-                "preset": preset,
-                "audio_bitrate_kbps": audio_bitrate,
-                "audio_sample_rate": audio_rate,
-                "technical_validation_passed": validation_passed,
+                "technical_validation_passed": stream_copy_verified,
                 "technical_warnings": warnings,
-                "visual_watermark_check": "not_available",
+                "visual_watermark_check": "not_requested",
             }
             return _json(self, {"ok": True, "target_path": target_path, "report": report})
         except subprocess.TimeoutExpired:
