@@ -4925,7 +4925,7 @@ async function runMediaCleaner(entityType,id,{quiet=false}={}){
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({entity_type:entityType,id,target_path:targetPath,report})
     });
-    if(!quiet)toast("Vídeo preparado para publicação · MP4/H.264/AAC ✓","ok");
+    if(!quiet)toast("Metadados removidos · vídeo preservado ✓","ok");
     return {status:"ready",target_path:targetPath,report};
   }catch(e){
     const message=e?.message||"Falha ao normalizar o vídeo.";
@@ -4967,7 +4967,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
   state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
   save();
-  if(clean?.status==="ready")log(`${file.name} normalizado (MP4/H.264/AAC) e agendado para ${date} às ${t}.`,"ok");
+  if(clean?.status==="ready")log(`${file.name} com metadados removidos e agendado para ${date} às ${t}.`,"ok");
   else log(`${file.name} agendado para ${date} às ${t}; Media Cleaner: ${clean?.status||"pendente"}.`,clean?.status==="skipped"?"warn":"ok");
   return true
 }
@@ -6139,7 +6139,7 @@ async function scheduleProductionResult(id){
     });
     await Promise.all([loadProductionData(true),syncFromBackend()]);
     closeModal();renderAll();
-    toast(clean?.status==="ready"?"Vídeo normalizado e adicionado ao calendário.":"Vídeo adicionado ao calendário.","ok");
+    toast(clean?.status==="ready"?"Metadados removidos e vídeo adicionado ao calendário.":"Vídeo adicionado ao calendário.","ok");
   }catch(e){toast(e.message,"err")}
 }
 async function deleteProductionJob(id){
