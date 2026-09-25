@@ -236,6 +236,30 @@ class handler(BaseHTTPRequestHandler):
                     502,
                 )
 
+            warnings = []
+            video_codec = str(after.get("video_codec") or "").lower()
+            audio_codec = str(after.get("audio_codec") or "").lower()
+            width = after.get("width")
+            height = after.get("height")
+            has_audio = bool(after.get("has_audio"))
+
+            if video_codec and "h264" not in video_codec:
+                warnings.append("unexpected_video_codec")
+            if has_audio and audio_codec and "aac" not in audio_codec:
+                warnings.append("unexpected_audio_codec")
+            if not width or not height:
+                warnings.append("geometry_not_detected")
+            elif min(int(width), int(height)) < 480:
+                warnings.append("low_resolution")
+            if not has_audio:
+                warnings.append("no_audio_stream")
+
+            validation_passed = (
+                ("h264" in video_codec)
+                and bool(width and height)
+                and ((not has_audio) or ("aac" in audio_codec))
+            )
+
             report = {
                 "engine": "ffmpeg",
                 "normalized": True,
@@ -263,6 +287,9 @@ class handler(BaseHTTPRequestHandler):
                 "preset": preset,
                 "audio_bitrate_kbps": audio_bitrate,
                 "audio_sample_rate": audio_rate,
+                "technical_validation_passed": validation_passed,
+                "technical_warnings": warnings,
+                "visual_watermark_check": "not_available",
             }
             return _json(self, {"ok": True, "target_path": target_path, "report": report})
         except subprocess.TimeoutExpired:
