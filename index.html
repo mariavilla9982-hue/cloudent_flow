@@ -2559,6 +2559,34 @@ body.auth-checking .auth-boot{display:grid}
 @media(max-width:900px){.push-status-grid{grid-template-columns:1fr 1fr}.push-hero,.push-controls{align-items:flex-start;flex-direction:column}.push-hero-actions{justify-content:flex-start}}
 @media(max-width:520px){.push-status-grid{grid-template-columns:1fr}.push-controls .toolbar{width:100%}.push-controls .toolbar .btn{flex:1}}
 
+
+/* Smart Scheduler validation lifecycle */
+.smart-validation-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.smart-validation-kpis>.card{padding:12px 14px}.smart-validation-kpis small,.smart-validation-kpis b,.smart-validation-kpis span{display:block}
+.smart-validation-kpis small{font-size:7.5px;color:var(--muted);font-weight:900;letter-spacing:.08em}
+.smart-validation-kpis b{font-size:21px;margin-top:4px}.smart-validation-kpis span{font-size:8px;color:var(--muted);margin-top:2px}
+.smart-validation-kpis>.validated{border-color:rgba(34,197,94,.22);background:rgba(34,197,94,.025)}
+.smart-validation-kpis>.revalidate{border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.025)}
+.smart-validated-panel{padding:15px 16px;margin-bottom:10px}.smart-validated-panel .ui3-panel-head p{font-size:8px;color:var(--muted);margin:3px 0 0}
+.smart-validated-board{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-top:11px}
+.smart-validated-day{padding:8px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.012)}
+.smart-validated-day>b{display:block;font-size:8px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.smart-validated-day>div{display:flex;flex-wrap:wrap;gap:4px}.smart-validated-day span{font-size:8px;font-weight:850;padding:4px 6px;border-radius:6px;background:rgba(34,197,94,.075);color:#78e6a4;border:1px solid rgba(34,197,94,.13)}
+.smart-validated-day em{font-size:9px;color:#555c67;font-style:normal}
+.smart-state-flow{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 12px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.01)}
+.smart-state-flow span{font-size:8px;font-weight:900;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.035)}.smart-state-flow i{color:#565e6b;font-style:normal}
+.smart-state-flow .ok{color:#6fe19c;background:rgba(34,197,94,.07)}.smart-state-flow .warn{color:#e9b85f;background:rgba(245,158,11,.07)}
+.smart-level.validated{color:#62dc91!important;background:rgba(34,197,94,.08)!important;border-color:rgba(34,197,94,.16)!important}
+.smart-level.revalidate{color:#e8b45d!important;background:rgba(245,158,11,.07)!important;border-color:rgba(245,158,11,.16)!important}
+.smart-level.new{color:#9aa3af!important;background:rgba(148,163,184,.07)!important;border-color:rgba(148,163,184,.14)!important}
+.smart-history-panel{margin-top:10px}.smart-history-list{display:flex;flex-direction:column;gap:6px}
+.smart-history-row{display:grid;grid-template-columns:8px minmax(150px,.8fr) minmax(220px,1.6fr) auto;gap:9px;align-items:center;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.01)}
+.smart-history-dot{width:7px;height:7px;border-radius:50%;background:#77808d}.smart-history-dot.validated,.smart-history-dot.champion_promoted{background:#22c55e}.smart-history-dot.rollback{background:#ef4444}.smart-history-dot.challenger_started,.smart-history-dot.revalidate_due_drop{background:#f59e0b}
+.smart-history-row b,.smart-history-row small{display:block}.smart-history-row b{font-size:9px}.smart-history-row small{font-size:7.5px;color:var(--muted);margin-top:2px}
+.smart-history-row p{font-size:8px;color:#aeb5c0;margin:0;line-height:1.4}.smart-history-row time{font-size:7px;color:var(--muted);white-space:nowrap}
+@media(max-width:1000px){.smart-validated-board{grid-template-columns:repeat(4,1fr)}.smart-history-row{grid-template-columns:8px 1fr auto}.smart-history-row p{grid-column:2/-1}}
+@media(max-width:700px){.smart-validation-kpis{grid-template-columns:1fr 1fr}.smart-validated-board{grid-template-columns:repeat(2,1fr)}.smart-state-flow{justify-content:flex-start;overflow:auto}.smart-history-row{grid-template-columns:8px 1fr}.smart-history-row time{grid-column:2}.smart-history-row p{grid-column:2}}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -5510,42 +5538,112 @@ function recommendationSupport(rec){
   return {count:nearby.length,best};
 }
 function smartConfidenceLabel(rec){
-  if(rec.recommendation_type==="test")return {label:"Teste",cls:"test",icon:"🧪"};
+  const state=String(rec.validation_state||"");
+  if(state==="validated")return {label:"Validado",cls:"validated",icon:"✓"};
+  if(state==="revalidate")return {label:"Revalidar",cls:"revalidate",icon:"↻"};
+  if(state==="new")return {label:"Novo",cls:"new",icon:"•"};
+  if(state==="testing")return {label:"Testando",cls:"test",icon:"◌"};
+  if(rec.recommendation_type==="test")return {label:"Testando",cls:"test",icon:"◌"};
   const c=Number(rec.confidence||0);
-  return {label:"Testado",cls:c>=80?"strong":"good",icon:"✓"};
+  return {label:"Testando",cls:c>=80?"strong":"good",icon:"◌"};
 }
 function smartReason(rec){
-  const s=recommendationSupport(rec);
-  if(rec.recommendation_type==="test"){
+  const a=automationData||{settings:{}};
+  const cfg=a.settings?.smart_scheduler||{};
+  const minSamples=Number(cfg.validationMinSamples||4);
+  const minConfidence=Number(cfg.validationMinConfidence||80);
+  const state=String(rec.validation_state||"testing");
+  if(state==="validated"){
     return {
-      main:"Horário escolhido para teste controlado",
-      extra:"O sistema vai comparar o resultado em 30min, 2h, 6h, 24h e 48h"
+      main:"Horário validado e congelado",
+      extra:Number(rec.sample_count||0)+" amostras · "+Number(rec.confidence||0)+"% confiança · só muda se houver motivo"
     };
   }
+  if(state==="revalidate"){
+    const champion=String(rec.champion_time||"").slice(0,5)||"—";
+    const challenger=String(rec.candidate_time||rec.model_time||"").slice(0,5)||"—";
+    return {
+      main:"Campeão "+champion+" × desafiante "+challenger,
+      extra:(rec.validation_conflict?"Desafiante aguardando espaço seguro":"Comparação aberta")+" · "+Number(rec.challenger_streak||0)+"/"+Number(cfg.challengerEvidenceCycles||2)+" evidências"
+    };
+  }
+  if(state==="new"){
+    return {
+      main:"Horário novo",
+      extra:"Ainda sem amostras suficientes para começar a validar"
+    };
+  }
+  const s=recommendationSupport(rec);
   if(s.best){
     const p=localMetricParts(s.best.timestamp);
     const hh=String(p.hour).padStart(2,"0")+":"+String(p.minute).padStart(2,"0");
     return {
-      main:"Reel de "+Number(s.best.views||0).toLocaleString("pt-BR")+" views às "+hh,
-      extra:(s.count===1?"1 Reel próximo desse horário":s.count+" Reels próximos desse horário")
+      main:"Testando consistência · Reel de "+Number(s.best.views||0).toLocaleString("pt-BR")+" views às "+hh,
+      extra:Number(rec.sample_count||0)+"/"+minSamples+" amostras · precisa "+minConfidence+"% confiança para validar"
     };
   }
   return {
-    main:Number(rec.sample_count||0)+" amostra"+(Number(rec.sample_count||0)===1?"":"s")+" no modelo",
-    extra:"Horário ainda em fase de aprendizado"
+    main:"Testando consistência",
+    extra:Number(rec.sample_count||0)+"/"+minSamples+" amostras · "+Number(rec.confidence||0)+"%/"+minConfidence+"% confiança"
   };
 }
+function smartHistoryLabel(event){
+  return ({
+    seed_validated:"Validado pelo histórico",
+    seed_testing:"Entrou em teste",
+    seed_new:"Novo horário",
+    created:"Novo horário",
+    validated:"Horário validado",
+    challenger_started:"Desafiante apareceu",
+    champion_promoted:"Novo campeão",
+    challenger_rejected:"Campeão mantido",
+    revalidate_due_drop:"Revalidação aberta",
+    rollback:"Rollback automático"
+  })[event]||String(event||"Decisão");
+}
+function smartStateCount(state){
+  return Number(automationData?.validation?.[state]||0);
+}
+function smartValidatedBoard(names){
+  const slots=(automationData?.validation_slots||[]).filter(x=>x.state==="validated"&&x.champion_time);
+  return names.map((name,dow)=>{
+    const rows=slots.filter(x=>Number(x.weekday)===dow).sort((a,b)=>Number(a.rank)-Number(b.rank));
+    return `<div class="smart-validated-day"><b>${name.slice(0,3)}</b><div>${rows.length?rows.map(x=>`<span>${String(x.champion_time).slice(0,5)}</span>`).join(""):'<em>—</em>'}</div></div>`;
+  }).join("");
+}
+
 function smartTimesPage(){
-  const a=automationData||{recommendations:[],settings:{}};
+  const a=automationData||{recommendations:[],settings:{},validation:{},validation_slots:[],validation_history:[]};
   const recs=a.recommendations||[];
   const names=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
   const today=new Date().getDay();
   const topViral=[...liveInstagramMetrics].sort((x,y)=>(+y.views||0)-(+x.views||0)).slice(0,5);
+  const history=(a.validation_history||[]).slice(0,12);
+  const vcfg=a.settings?.smart_scheduler||{};
 
   $("#smartTimes").innerHTML=`
     <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">SMART SCHEDULER</span><h2>Horários inteligentes</h2><p>Veja exatamente por que cada horário foi escolhido.</p></div>
+      <div><span class="ui3-eyebrow">SMART SCHEDULER</span><h2>Horários inteligentes</h2><p>O sistema testa, valida e congela horários bons. Só reabre testes quando existe motivo.</p></div>
       <button class="btn" onclick="refreshAutomation()">↻ Atualizar dados</button>
+    </div>
+
+    <div class="smart-validation-kpis">
+      <div class="card"><small>NOVOS</small><b>${smartStateCount("new")}</b><span>sem evidência</span></div>
+      <div class="card"><small>TESTANDO</small><b>${smartStateCount("testing")}</b><span>buscando consistência</span></div>
+      <div class="card validated"><small>VALIDADOS</small><b>${smartStateCount("validated")}</b><span>congelados</span></div>
+      <div class="card revalidate"><small>REVALIDAR</small><b>${smartStateCount("revalidate")}</b><span>campeão × desafiante</span></div>
+    </div>
+
+    <div class="card smart-validated-panel">
+      <div class="ui3-panel-head">
+        <div><span>CAMPEÕES</span><h3>Horários validados</h3><p>Esses horários não ficam mudando. Um desafiante precisa vencer por ${Number(vcfg.challengerMarginPct||12)}% e sustentar a vantagem.</p></div>
+        <span class="status-pill ok">${smartStateCount("validated")} congelados</span>
+      </div>
+      <div class="smart-validated-board">${smartValidatedBoard(names)}</div>
+    </div>
+
+    <div class="smart-state-flow">
+      <span>Novo</span><i>→</i><span>Testando</span><i>→</i><span class="ok">Validado</span><i>→</i><span class="warn">Revalidar só se necessário</span>
     </div>
 
     <div class="smart-learning-strip">
@@ -5594,7 +5692,21 @@ function smartTimesPage(){
           <div><b>Compartilhamentos e saves</b><span>Sinais fortes de conteúdo que vale repetir.</span></div>
           <div><b>Mesmo dia da semana</b><span>Terça aprende principalmente com outras terças.</span></div>
           <div><b>Resultado recente</b><span>Posts mais novos têm mais influência.</span></div>
+          <div><b>Campeão protegido</b><span>Horário validado fica congelado enquanto continua saudável.</span></div>
+          <div><b>Rollback automático</b><span>Se um novo campeão piorar, o último validado pode voltar sozinho.</span></div>
         </div>
+      </div>
+    </div>
+
+    <div class="card ui3-panel smart-history-panel">
+      <div class="ui3-panel-head"><div><span>HISTÓRICO PERMANENTE</span><h3>Decisões do scheduler</h3></div><span class="status-pill">${(a.validation_history||[]).length} carregadas</span></div>
+      <div class="smart-history-list">
+        ${history.length?history.map(h=>`<div class="smart-history-row">
+          <span class="smart-history-dot ${esc(h.event_type||"")}"></span>
+          <div><b>${esc(smartHistoryLabel(h.event_type))}</b><small>${names[Number(h.weekday)||0]} · slot #${Number(h.rank||0)} · ${h.from_time?String(h.from_time).slice(0,5)+" → ":""}${h.to_time?String(h.to_time).slice(0,5):"—"}</small></div>
+          <p>${esc(h.reason||"")}</p>
+          <time>${new Date(h.created_at).toLocaleString("pt-BR")}</time>
+        </div>`).join(""):'<div class="ui3-empty">As decisões de validação aparecerão aqui.</div>'}
       </div>
     </div>`;
 }
