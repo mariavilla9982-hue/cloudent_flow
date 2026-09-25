@@ -2983,7 +2983,7 @@ async function enablePushNotifications(sendTest=true){
     await loadNotifications();
     settings();
     updateLiveChrome();
-    toast(sendTest?"Teste enviado. A notificação deve chegar em alguns segundos.":"Notificações ativadas.","ok");
+    toast(sendTest?"Teste de erro enviado.":"Notificações ativadas.","ok");
   }catch(e){toast("Falha ao ativar notificações: "+e.message,"err")}
 }
 async function sendPushTest(){
@@ -2996,7 +2996,7 @@ async function sendPushTest(){
       body:"{}"
     });
     await loadNotifications();settings();updateLiveChrome();
-    toast("Notificação de teste enviada.","ok");
+    toast("Teste de erro enviado.","ok");
   }catch(e){toast(e.message,"err")}
 }
 async function disablePushNotifications(){
@@ -3041,7 +3041,7 @@ function notificationsMarkup(){
       <div>
         <span class="ui3-eyebrow">ALERTAS 24/7</span>
         <h3>Notificações do CloudentFlow</h3>
-        <p>Receba um aviso no celular quando publicação, Reel teste, Produção IA, X ou backend registrarem erro.</p>
+        <p>Receba no celular somente quando alguma parte do CloudentFlow der erro.</p>
       </div>
       <div class="push-hero-actions">
         <span class="status-pill ${enabled?"ok":"warn"}">${enabled?"Ativas neste dispositivo":"Ativação pendente"}</span>
@@ -3057,9 +3057,9 @@ function notificationsMarkup(){
     </div>
 
     <div class="card push-controls">
-      <div><b>Teste real de ponta a ponta</b><span>O botão cria um alerta no Supabase, o worker envia via Web Push e o service worker exibe no celular.</span></div>
+      <div><b>Teste de alerta de erro</b><span>Simula um erro só para validar a notificação.</span></div>
       <div class="toolbar">
-        <button class="btn primary" onclick="sendPushTest()">Enviar teste</button>
+        <button class="btn primary" onclick="sendPushTest()">Testar erro</button>
         <button class="btn" onclick="markAllNotificationsRead()">Marcar lidas</button>
         ${enabled?'<button class="btn danger" onclick="disablePushNotifications()">Desativar neste dispositivo</button>':""}
       </div>
@@ -3071,7 +3071,7 @@ function notificationsMarkup(){
         ${items.length?items.map(n=>`<div class="push-row ${esc(n.severity||"info")}">
           <span class="push-dot"></span>
           <div><b>${esc(n.title||"CloudentFlow")}</b><p>${esc(n.body||"")}</p><small>${new Date(n.created_at).toLocaleString("pt-BR")} · ${n.status==="read"?"Lida":n.status==="sent"?"Enviada":n.status==="processing"?"Enviando":"Pendente"}</small></div>
-        </div>`).join(""):'<div class="ui3-empty">Nenhuma notificação registrada ainda.</div>'}
+        </div>`).join(""):'<div class="ui3-empty">Nenhum erro registrado ainda.</div>'}
       </div>
     </div>
   </div>`;
