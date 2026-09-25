@@ -4292,12 +4292,13 @@ async function scheduleTrialDraft(){
     fd.append("slot_index",String(trialDraftSlot??0));
     fd.append("auto_time",String(autoTime));
     fd.append("caption",caption);
-    await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
+    const uploaded=await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
+    const clean=uploaded?.item?.id?await runMediaCleaner("trial",uploaded.item.id,{quiet:true}):{status:"skipped"};
     trialDraftFile=null;trialDraftSlot=null;trialDraftSuggestedTime=null;
     await loadTrialReels();
     closeModal();
     updateTrialReelsBlock();
-    toast("Reel teste agendado para "+time+(autoTime?" · Autoajuste ativo.":" · Horário manual."),"ok");
+    toast("Reel teste agendado para "+time+(autoTime?" · Autoajuste ativo.":" · Horário manual.")+(clean?.status==="ready"?" · Media Cleaner ✓":clean?.status==="skipped"?" · Arquivo original mantido":""),"ok");
   }catch(e){
     toast(e.message||"Falha ao agendar Reel teste.","err");
     if(btn){btn.disabled=false;btn.textContent="Agendar Reel teste"}
@@ -4889,6 +4890,67 @@ function firstFreeSlot(date){
   return -1;
 }
 
+async function runMediaCleaner(entityType,id,{quiet=false}={}){
+  if(!cloudSession)throw new Error("Sessão CloudentFlow indisponível.");
+  let ticket=null;
+  try{
+    ticket=await cloudFetch("?action=media-clean-ticket",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({entity_type:entityType,id})
+    });
+    if(ticket?.disabled)return {status:"disabled",report:{}};
+    if(ticket?.already_ready)return {status:"ready",report:ticket.report||{},target_path:ticket.target_path||null};
+
+    const cleaner=await fetch("/api/media_cleaner",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        source_url:ticket.source_url,
+        target_path:ticket.target_path,
+        upload_token:ticket.upload_token,
+        anon_key:ticket.anon_key,
+        config:ticket.config||{}
+      })
+    });
+    let result={};try{result=await cleaner.json()}catch{}
+    if(!cleaner.ok||!result?.ok){
+      throw new Error(result?.message||result?.error||("Media Cleaner HTTP "+cleaner.status));
+    }
+
+    const targetPath=String(result.target_path||ticket.target_path||"");
+    const report=result.report||{};
+    await cloudFetch("?action=media-clean-complete",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({entity_type:entityType,id,target_path:targetPath,report})
+    });
+    if(!quiet)toast("Vídeo preparado para publicação · MP4/H.264/AAC ✓","ok");
+    return {status:"ready",target_path:targetPath,report};
+  }catch(e){
+    const message=e?.message||"Falha ao normalizar o vídeo.";
+    let failed={status:"skipped",fail_open:true};
+    try{
+      failed=await cloudFetch("?action=media-clean-fail",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          entity_type:entityType,
+          id,
+          error:message,
+          original_storage_path:ticket?.original_storage_path||null
+        })
+      });
+    }catch{}
+    if(!quiet){
+      toast(failed?.fail_open!==false
+        ?"Media Cleaner falhou; o arquivo original foi mantido."
+        :"Media Cleaner falhou e bloqueou a publicação.","err");
+    }
+    return {status:failed?.status||"skipped",error:message,fail_open:failed?.fail_open!==false};
+  }
+}
+
 async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto",smartStrategy=null){
   const choice=smartMode==="auto"?smartChoiceForSlot(date,slot):null;
   const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
@@ -4901,8 +4963,13 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);fd.append("platform","instagram");
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
   const schedule=res.schedule,video=res.video;
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:video.size_bytes||file.size,type:video.mime_type||file.type,storagePath:video.storage_path||"",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked};
-  save();log(`${file.name} enviado ao Storage e agendado no backend para ${date} às ${t}.`,"ok");return true
+  const clean=await runMediaCleaner("video",video.id,{quiet:true});
+  const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
+  save();
+  if(clean?.status==="ready")log(`${file.name} normalizado (MP4/H.264/AAC) e agendado para ${date} às ${t}.`,"ok");
+  else log(`${file.name} agendado para ${date} às ${t}; Media Cleaner: ${clean?.status||"pendente"}.`,clean?.status==="skipped"?"warn":"ok");
+  return true
 }
 function updateSlotTime(date,slot,time){
   const k=keyFor(date,slot),x=slotData(date,slot);if(!x)return;
@@ -6058,13 +6125,21 @@ async function scheduleProductionResult(id){
   if(!check.ok){toast(check.msg,"err");return}
   const [h,m]=time.split(":").map(Number),at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
   try{
+    const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+    let clean={status:"legacy"};
+    if(job?.result_video_id){
+      toast("Preparando vídeo para publicação…","ok");
+      clean=await runMediaCleaner("video",job.result_video_id,{quiet:true});
+      if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
+    }
     await cloudFetch("?action=production-schedule",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual"})
     });
     await Promise.all([loadProductionData(true),syncFromBackend()]);
-    closeModal();renderAll();toast("Vídeo adicionado ao calendário.","ok");
+    closeModal();renderAll();
+    toast(clean?.status==="ready"?"Vídeo normalizado e adicionado ao calendário.":"Vídeo adicionado ao calendário.","ok");
   }catch(e){toast(e.message,"err")}
 }
 async function deleteProductionJob(id){
