@@ -2536,6 +2536,29 @@ body.auth-checking .auth-boot{display:grid}
 @media(max-width:900px){.xw-connect{grid-template-columns:1fr 1fr}.xw-connect-title{grid-column:1/-1}}
 @media(max-width:600px){.xw-connect{grid-template-columns:1fr}.xw-head-status{justify-content:flex-start}}
 
+
+/* Push notifications */
+.push-page{display:flex;flex-direction:column;gap:12px}
+.push-hero{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:18px 20px;background:linear-gradient(135deg,rgba(109,166,255,.07),rgba(182,140,255,.035))}
+.push-hero h3{font-size:18px;margin:4px 0 5px;letter-spacing:-.03em}
+.push-hero p{margin:0;color:var(--muted);font-size:10px;line-height:1.55;max-width:680px}
+.push-hero-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.push-status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.push-status-grid>.card{padding:13px 14px}
+.push-status-grid small,.push-status-grid b,.push-status-grid span{display:block}
+.push-status-grid small{font-size:7.5px;color:var(--muted);font-weight:900;letter-spacing:.08em}
+.push-status-grid b{font-size:17px;margin-top:5px}.push-status-grid span{font-size:8px;color:var(--muted);margin-top:2px}
+.push-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px}
+.push-controls>div:first-child b,.push-controls>div:first-child span{display:block}
+.push-controls>div:first-child b{font-size:10px}.push-controls>div:first-child span{font-size:8.5px;color:var(--muted);margin-top:3px;max-width:650px}
+.push-list{display:flex;flex-direction:column;gap:7px}
+.push-row{display:grid;grid-template-columns:9px 1fr;gap:9px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.012)}
+.push-row .push-dot{width:7px;height:7px;border-radius:50%;margin-top:4px;background:#6da6ff}
+.push-row.error .push-dot{background:#ff6b72}.push-row.warn .push-dot{background:#e5b955}.push-row.info .push-dot{background:#6da6ff}
+.push-row b,.push-row p,.push-row small{display:block}.push-row b{font-size:10px}.push-row p{font-size:9px;color:#b1b7c2;line-height:1.45;margin:3px 0}.push-row small{font-size:8px;color:var(--muted)}
+@media(max-width:900px){.push-status-grid{grid-template-columns:1fr 1fr}.push-hero,.push-controls{align-items:flex-start;flex-direction:column}.push-hero-actions{justify-content:flex-start}}
+@media(max-width:520px){.push-status-grid{grid-template-columns:1fr}.push-controls .toolbar{width:100%}.push-controls .toolbar .btn{flex:1}}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2672,7 +2695,7 @@ const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}};
+let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 let calendarPreviewObserver=null;
@@ -2826,7 +2849,8 @@ async function initCloud(){
     withTimeout(loadFollowerStats(30),4500,"seguidores"),
     withTimeout(loadPlatformAccounts(),4500,"contas"),
     withTimeout(loadTrialReels(),4500,"Trial Reels"),
-    withTimeout(loadXWarmup(),4500,"aquecimento X")
+    withTimeout(loadXWarmup(),4500,"aquecimento X"),
+    withTimeout(loadNotifications(),4500,"notificações")
   ]);
 }
 async function loadDeferredCloudData(){
@@ -2877,6 +2901,180 @@ async function loadAutomationStatus(){
 async function loadPlatformAccounts(){
   if(!cloudSession){platformAccounts=[];return}
   try{platformAccounts=await cloudFetch("?resource=platform-accounts")}catch(e){platformAccounts=[]}
+}
+
+async function loadNotifications(){
+  if(!cloudSession){
+    notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:true};
+    return;
+  }
+  try{
+    const r=await cloudFetch("?resource=notifications");
+    notificationsData={
+      settings:r.settings||{},
+      items:r.items||[],
+      unread:Number(r.unread||0),
+      subscriptions:Number(r.subscriptions||0),
+      worker:r.worker||null,
+      loaded:true
+    };
+  }catch(e){
+    console.warn("Notifications unavailable:",e);
+    notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:true,error:e.message};
+  }
+}
+function pushSupported(){
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+function pushPermission(){
+  if(!("Notification" in window))return "unsupported";
+  return Notification.permission||"default";
+}
+function urlBase64ToUint8Array(base64String){
+  const padding="=".repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)));
+}
+async function currentPushSubscription(){
+  if(!pushSupported())return null;
+  const reg=await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+async function enablePushNotifications(sendTest=true){
+  if(!cloudSession){focusCloudLogin();return}
+  if(!pushSupported()){toast("Este navegador não suporta notificações push.","err");return}
+  try{
+    let permission=Notification.permission;
+    if(permission==="default")permission=await Notification.requestPermission();
+    if(permission!=="granted"){
+      toast("Permissão de notificações não foi liberada no navegador.","err");
+      return;
+    }
+    if(!notificationsData.settings?.public_key)await loadNotifications();
+    const key=String(notificationsData.settings?.public_key||"");
+    if(!key)throw new Error("Chave de push indisponível.");
+
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(key)
+      });
+    }
+    const json=sub.toJSON();
+    await cloudFetch("?action=push-subscribe",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        endpoint:sub.endpoint,
+        expirationTime:sub.expirationTime,
+        keys:json.keys||{}
+      })
+    });
+    if(sendTest){
+      await cloudFetch("?action=notification-test",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:"{}"
+      });
+    }
+    await loadNotifications();
+    settings();
+    updateLiveChrome();
+    toast(sendTest?"Teste enviado. A notificação deve chegar em alguns segundos.":"Notificações ativadas.","ok");
+  }catch(e){toast("Falha ao ativar notificações: "+e.message,"err")}
+}
+async function sendPushTest(){
+  try{
+    const sub=await currentPushSubscription();
+    if(!sub){await enablePushNotifications(true);return}
+    await cloudFetch("?action=notification-test",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:"{}"
+    });
+    await loadNotifications();settings();updateLiveChrome();
+    toast("Notificação de teste enviada.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function disablePushNotifications(){
+  try{
+    const sub=await currentPushSubscription();
+    if(sub){
+      await cloudFetch("?action=push-subscribe",{
+        method:"DELETE",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({endpoint:sub.endpoint})
+      });
+      await sub.unsubscribe().catch(()=>false);
+    }
+    await loadNotifications();settings();updateLiveChrome();
+    toast("Notificações desativadas neste dispositivo.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function markAllNotificationsRead(){
+  try{
+    await cloudFetch("?action=notification-read",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({all:true})
+    });
+    await loadNotifications();settings();updateLiveChrome();
+  }catch(e){toast(e.message,"err")}
+}
+function notificationPermissionLabel(){
+  const p=pushPermission();
+  return p==="granted"?"Permitida":p==="denied"?"Bloqueada":p==="default"?"Aguardando permissão":"Não suportada";
+}
+function notificationsMarkup(){
+  const d=notificationsData||{items:[]};
+  const worker=d.worker||null;
+  const workerOnline=!!worker?.online;
+  const supported=pushSupported();
+  const permission=pushPermission();
+  const enabled=supported&&permission==="granted"&&Number(d.subscriptions||0)>0;
+  const items=d.items||[];
+  return `<div class="push-page">
+    <div class="card push-hero">
+      <div>
+        <span class="ui3-eyebrow">ALERTAS 24/7</span>
+        <h3>Notificações do CloudentFlow</h3>
+        <p>Receba um aviso no celular quando publicação, Reel teste, Produção IA, X ou backend registrarem erro.</p>
+      </div>
+      <div class="push-hero-actions">
+        <span class="status-pill ${enabled?"ok":"warn"}">${enabled?"Ativas neste dispositivo":"Ativação pendente"}</span>
+        <button class="btn primary" onclick="enablePushNotifications(true)">${enabled?"Reativar + testar":"Ativar e testar"}</button>
+      </div>
+    </div>
+
+    <div class="push-status-grid">
+      <div class="card"><small>PERMISSÃO</small><b>${notificationPermissionLabel()}</b><span>${supported?"Push Web disponível":"Navegador incompatível"}</span></div>
+      <div class="card"><small>DISPOSITIVOS</small><b>${Number(d.subscriptions||0)}</b><span>com push ativo</span></div>
+      <div class="card"><small>NÃO LIDAS</small><b>${Number(d.unread||0)}</b><span>alertas no histórico</span></div>
+      <div class="card"><small>WORKER</small><b>${workerOnline?"ONLINE":"—"}</b><span>${workerOnline?"checando a cada minuto":"aguardando heartbeat"}</span></div>
+    </div>
+
+    <div class="card push-controls">
+      <div><b>Teste real de ponta a ponta</b><span>O botão cria um alerta no Supabase, o worker envia via Web Push e o service worker exibe no celular.</span></div>
+      <div class="toolbar">
+        <button class="btn primary" onclick="sendPushTest()">Enviar teste</button>
+        <button class="btn" onclick="markAllNotificationsRead()">Marcar lidas</button>
+        ${enabled?'<button class="btn danger" onclick="disablePushNotifications()">Desativar neste dispositivo</button>':""}
+      </div>
+    </div>
+
+    <div class="card ui3-panel">
+      <div class="ui3-panel-head"><div><span>HISTÓRICO</span><h3>Alertas recentes</h3></div><button class="btn btn-sm" onclick="loadNotifications().then(settings)">↻ Atualizar</button></div>
+      <div class="push-list">
+        ${items.length?items.map(n=>`<div class="push-row ${esc(n.severity||"info")}">
+          <span class="push-dot"></span>
+          <div><b>${esc(n.title||"CloudentFlow")}</b><p>${esc(n.body||"")}</p><small>${new Date(n.created_at).toLocaleString("pt-BR")} · ${n.status==="read"?"Lida":n.status==="sent"?"Enviada":n.status==="processing"?"Enviando":"Pendente"}</small></div>
+        </div>`).join(""):'<div class="ui3-empty">Nenhuma notificação registrada ainda.</div>'}
+      </div>
+    </div>
+  </div>`;
 }
 
 async function loadXWarmup(){
@@ -3287,7 +3485,8 @@ function updateLiveChrome(){
     }
   }
   if(count){
-    const n=failed+Math.min(9,activityFeedItems(20).filter(x=>x.type==="error"||x.type==="warn").length);
+    const fallback=failed+Math.min(9,activityFeedItems(20).filter(x=>x.type==="error"||x.type==="warn").length);
+    const n=cloudSession?(notificationsData?.loaded?Number(notificationsData.unread||0):fallback):0;
     count.textContent=String(n);count.classList.toggle("hidden",n===0);
   }
 }
@@ -3295,7 +3494,7 @@ function updateLiveChrome(){
 async function refreshLiveData(showFeedback=false){
   if(!cloudSession)return;
   try{
-    const tasks=[loadAutomationStatus(),loadServerLogs(),loadFollowerStats(30),syncFromBackend()];
+    const tasks=[loadAutomationStatus(),loadServerLogs(),loadFollowerStats(30),loadNotifications(),syncFromBackend()];
     if(currentPage==="production")tasks.push(loadProductionData());
     if(currentPage==="trialReels")tasks.push(loadTrialReels());
     if(currentPage==="settings"&&settingsTab==="health")tasks.push(loadSystemHealth());
@@ -6705,6 +6904,9 @@ function setSettingsTab(tab){
   if(tab==="health"){
     settings();
     if(cloudSession)loadSystemHealth().then(settings).catch(()=>settings());
+  }else if(tab==="notifications"){
+    settings();
+    if(cloudSession)loadNotifications().then(settings).catch(()=>settings());
   }else if(tab==="logs"&&cloudSession)loadServerLogs().then(settings);
   else if(tab==="integrations"&&cloudSession)loadProductionData().then(settings).catch(()=>settings());
   else settings();
@@ -6988,7 +7190,7 @@ function settings(){
   const rhReady=!!(rh.enabled&&rhMapped&&rhCfg.apiKeyConfigured);
   const a=automationData||{settings:{},workers:[]};
   const cfg=a.settings?.automation||{},smart=a.settings?.smart_scheduler||{};
-  const tabs=[["general","Geral"],["health","Saúde & limites"],["integrations","Integrações"],["automation","Automação"],["logs","Logs"]];
+  const tabs=[["general","Geral"],["notifications","Notificações"],["health","Saúde & limites"],["integrations","Integrações"],["automation","Automação"],["logs","Logs"]];
   let body="";
 
   if(settingsTab==="general"){
@@ -7005,6 +7207,8 @@ function settings(){
         <button class="btn primary" onclick="installCloudentApp()">⬇ Instalar aplicativo</button>
       </div>
     </div>`;
+  }else if(settingsTab==="notifications"){
+    body=notificationsMarkup();
   }else if(settingsTab==="health"){
     body=systemHealthMarkup();
   }else if(settingsTab==="integrations"){
