@@ -1859,6 +1859,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .calendar-day-add-more:hover{color:#ff77a7;border-color:#5b3044;background:#100d12}
 .ui31-day .count.extra{color:#f2c96a;border-color:#4c3c1d;background:#161208}
 .extra-slot{border-left-color:#d49d45!important}.extra-post-badge{background:#21190b!important;color:#efc76e!important;border-color:#493719!important}
+.pretrial-badge{font-size:7px!important;white-space:nowrap}.pretrial-badge.pending{background:#141d2b!important;color:#82afff!important;border-color:#263d60!important}.pretrial-badge.working{background:#241b0d!important;color:#f4c76b!important;border-color:#4d3717!important}.pretrial-badge.done{background:#102319!important;color:#68d99a!important;border-color:#224b35!important}.pretrial-badge.error{background:#281215!important;color:#ff858c!important;border-color:#56252b!important}
 .analytics-useful-card{padding:16px;margin-bottom:12px}
 .analytics-useful-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
 .analytics-useful-head span{font-size:8px;color:#697281;font-weight:900;letter-spacing:.08em}.analytics-useful-head h3{margin:2px 0 0;font-size:13px}
@@ -2764,14 +2765,14 @@ function defaultSmartSamples(){
 
 const saved=JSON.parse(localStorage.getItem("cloudentflow-stage4")||localStorage.getItem("cloudentflow-stage3")||"null")||{};
 
-const defaultSevenTimes=["07:30","09:30","11:30","14:00","16:30","19:00","21:30"];
+const defaultFiveTimes=["07:30","10:00","13:00","16:00","18:30"];
 const savedTimes=Array.isArray(saved.defaultTimes)?saved.defaultTimes:[];
-const normalizedDefaultTimes=savedTimes.length>=7?savedTimes.slice(0,7):defaultSevenTimes;
+const normalizedDefaultTimes=savedTimes.length===5?savedTimes.slice(0,5):defaultFiveTimes;
 
 const state={
   weekStart:(saved.weekStart&&saved.weekStart>=localISO(new Date()))?saved.weekStart:localISO(new Date()),
   slots:saved.slots||{},
-  postsPerDay:7,
+  postsPerDay:5,
   defaultTimes:normalizedDefaultTimes,
   minGap:saved.minGap||60,
   logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"CloudentFlow carregado."}],
@@ -2919,6 +2920,7 @@ async function loadAutomationStatus(){
   if(!cloudSession){automationWorkerStatus=null;automationData=null;return}
   try{
     automationData=await cloudFetch("?resource=automation");
+    state.postsPerDay=Math.max(1,Math.min(10,Number(automationData?.settings?.posts_per_day||5)));
     const pub=(automationData.workers||[]).find(w=>w.worker_name==="instagram_publish");
     automationWorkerStatus={online:!!pub?.online,worker:pub||null};
   }catch(e){
@@ -3330,7 +3332,7 @@ async function syncFromBackend(){
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
       time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
-      instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,
+      instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,pretrial:row.pretrial||null,
       platform:row.platform||"instagram",smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
     };
   }
@@ -3640,6 +3642,7 @@ function weekDates(){
   const start=new Date(ensureCalendarWindowStart()+"T00:00:00");
   return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})
 }
+function calendarBasePostsPerDay(){return Math.max(1,Math.min(10,Number(automationData?.settings?.posts_per_day||state.postsPerDay||5)))}
 function slotData(date,slot){return state.slots[keyFor(date,slot)]||null}
 function filledCount(date){return dateSlots(date).length}
 function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
@@ -3669,7 +3672,7 @@ function validateSchedule(date,time,ignoreKey=null){
 }
 
 function firstValidDefaultSlot(date,ignoreKey=null){
-  for(let i=0;i<7;i++){
+  for(let i=0;i<calendarBasePostsPerDay();i++){
     const k=keyFor(date,i);
     if(!state.slots[k] || k===ignoreKey){
       const time=state.defaultTimes[i]||"12:00";
@@ -3779,7 +3782,7 @@ function estimatedHourScore(hour,weekday){
   if(global.n)return {score:global.score*.97,n:0,confidence:Math.round(global.confidence*.55),direct:false};
   // Interpola horas sem dados usando vizinhos conhecidos e uma penalidade leve.
   const known=[];
-  for(let h=8;h<=23;h++){
+  for(let h=6;h<=19;h++){
     const st=statsForHour(h,weekday);
     if(st.n)known.push({h,score:st.score,confidence:st.confidence})
   }
@@ -4351,9 +4354,11 @@ function calendarPage(){
   const smart=automationData?.settings?.smart_scheduler||{};
   const gap=automationData?.settings?.min_gap_minutes||state.minGap;
   const filled=weekScheduledCount();
+  const basePosts=calendarBasePostsPerDay();
+  const baseCapacity=basePosts*7;
   const dayCounts=dates.map(d=>filledCount(localISO(d)));
-  const baseFilled=dayCounts.reduce((a,n)=>a+Math.min(n,7),0);
-  const extraFilled=dayCounts.reduce((a,n)=>a+Math.max(0,n-7),0);
+  const baseFilled=dayCounts.reduce((a,n)=>a+Math.min(n,basePosts),0);
+  const extraFilled=dayCounts.reduce((a,n)=>a+Math.max(0,n-basePosts),0);
   const start=dates[0],end=dates[6];
   const startLabel=start.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
   const endLabel=end.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
@@ -4370,7 +4375,7 @@ function calendarPage(){
         <div class="calendar-week-identity">
           <span>${atToday?"HOJE + PRÓXIMOS 6 DIAS":"JANELA FUTURA"}</span>
           <b>${startLabel} — ${endLabel}</b>
-          <small>${baseFilled} de 49 posições base${extraFilled?" + "+extraFilled+" extras":""}</small>
+          <small>${baseFilled} de ${baseCapacity} posições base${extraFilled?" + "+extraFilled+" extras":""}</small>
         </div>
 
         <label class="calendar-date-control">
@@ -4388,14 +4393,14 @@ function calendarPage(){
       </div>
 
       <div class="calendar-health-row">
-        <div><span>Ocupação base</span><b>${baseFilled}/49</b></div>
+        <div><span>Ocupação base</span><b>${baseFilled}/${baseCapacity}</b></div>
         <div><span>Extras manuais</span><b>${extraFilled}</b></div>
-        <div><span>Posts/dia</span><b>${automationData?.settings?.posts_per_day||7}</b></div>
+        <div><span>Posts/dia</span><b>${basePosts}</b></div>
         <div><span>Intervalo mínimo</span><b>${gap} min</b></div>
-        <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · sem testes automáticos":"A/B ativo · 3 manhã · 2 tarde · 2 noite"}</b></div>
+        <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · 2 manhã + 3 tarde":"A/B ativo · 2 manhã · 3 tarde · até 19:00"}</b></div>
       </div>
 
-      <div class="calendar-protection-note">🔒 Posts próximos do horário ficam protegidos contra alterações de última hora.</div>
+      <div class="calendar-protection-note">◈ Cada um dos 5 Reels entra em Reels Teste 20 min antes · a madrugada continua isolada. 🔒 Posts próximos do horário ficam protegidos.</div>
     </div>
 
     <div class="calendar-content-days">
@@ -4652,6 +4657,7 @@ async function refreshCalendarLiveData(){
     x.publishedAt=row.published_at||null;
     x.instagramMediaId=row.instagram_media_id||null;
     x.calendarMetrics=row.calendar_metrics||null;
+    x.pretrial=row.pretrial||null;
   }
   save();
   if(structural){
@@ -4679,29 +4685,41 @@ function ensureCalendarMetricsTicker(){
 }
 
 function dayColumn(d,label){
-  const iso=localISO(d),count=filledCount(iso);
+  const iso=localISO(d),count=filledCount(iso),base=calendarBasePostsPerDay();
   const extras=dateSlots(iso)
     .map(x=>Number(String(x.key).split("#")[1]))
-    .filter(i=>Number.isFinite(i)&&i>=7)
+    .filter(i=>Number.isFinite(i)&&i>=base)
     .sort((a,b)=>a-b);
-  const countLabel=count<=7?count+"/7":count+" posts";
+  const countLabel=count<=base?count+"/"+base:count+" posts";
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
-    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>7?"extra":""}">${countLabel}</div></div>
+    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>base?"extra":""}">${countLabel}</div></div>
     <div class="calendar-day-live-host">${calendarDayMetricSummary(iso)}</div>
     <div class="calendar-day-progress-host" data-day="${iso}">${calendarDayProgress(iso)}</div>
     <div class="day-slots">
-      ${Array.from({length:7},(_,i)=>renderSlot(iso,i)).join("")}
+      ${Array.from({length:base},(_,i)=>renderSlot(iso,i)).join("")}
       ${extras.map(i=>renderSlot(iso,i)).join("")}
     </div>
     <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)">＋ Adicionar outro vídeo</button>
   </div>`;
 }
 
-function slotPeriodLabel(i){return i<3?"Manhã":i<5?"Tarde":i<7?"Noite":"Extra"}
+function slotPeriodLabel(i){const base=calendarBasePostsPerDay();return i<2?"Manhã":i<base?"Tarde":"Extra"}
+function calendarPretrialBadge(x){
+  const p=x?.pretrial;
+  if(!p)return '<span class="badge pretrial-badge pending">◈ Trial -20m</span>';
+  const s=String(p.status||"scheduled");
+  if(s==="published")return '<span class="badge pretrial-badge done">◈ Trial ✓</span>';
+  if(s==="processing"||s==="container_created"||s==="publishing")return '<span class="badge pretrial-badge working">◈ Trial publicando</span>';
+  if(s==="failed")return '<span class="badge pretrial-badge error" title="'+esc(p.last_error||"Falha no Trial")+'">◈ Trial erro</span>';
+  const when=p.scheduled_at?new Date(p.scheduled_at):null;
+  const hh=when?String(when.getHours()).padStart(2,"0")+":"+String(when.getMinutes()).padStart(2,"0"):"-20m";
+  return '<span class="badge pretrial-badge pending">◈ Trial '+hh+'</span>';
+}
 function renderSlot(date,i){
+  const base=calendarBasePostsPerDay();
   const x=slotData(date,i),time=x?.time||state.defaultTimes[i]||"";
   if(!x){
-    if(i>=7)return "";
+    if(i>=base)return "";
     return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>${slotPeriodLabel(i)} · posição ${i+1}</b><small>${time}</small></span></button>`;
   }
   const st=getStatus(x),isAuto=x.smartMode==="auto";
@@ -4715,13 +4733,13 @@ function renderSlot(date,i){
         : null;
   const smartBadge=badgeMeta
     ? `<button class="badge smart-strategy-btn ${badgeMeta.cls}" onclick="event.stopPropagation();openSmartStrategyMenu('${date}',${i})" title="Alterar tipo de horário">${badgeMeta.label}</button>`
-    : i>=7?'<span class="badge extra-post-badge">Extra manual</span>':"";
+    : i>=base?'<span class="badge extra-post-badge">Extra manual</span>':"";
   const displayName="Vídeo "+(i+1);
   const next=calendarNextSchedule();
   const performance=calendarMetricSummary(x,date);
   const perfClass=performance?"perf-"+performance.badge.cls:"";
   const justPublished=calendarIsJustPublished(x)?"just-published":"";
-  return `<div class="slot filled ui31-slot ${i>=7?"extra-slot":""} ${perfClass} ${justPublished}" data-schedule-id="${esc(x.scheduleId||"")}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
+  return `<div class="slot filled ui31-slot ${i>=base?"extra-slot":""} ${perfClass} ${justPublished}" data-schedule-id="${esc(x.scheduleId||"")}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
       <button class="ui31-thumb calendar-video-thumb" data-date="${date}" data-slot="${i}" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo"><span class="calendar-thumb-play">▶</span></button>
       <div class="ui31-slot-copy">
@@ -4741,6 +4759,7 @@ function renderSlot(date,i){
     <div class="ui31-slot-bottom">
       <span class="badge calendar-status-badge ${statusClass(st)} status-${st}">${statusLabel(st)}</span>
       ${smartBadge}
+      ${i<base?calendarPretrialBadge(x):""}
       ${x.caption?'<span class="slot-caption-dot" title="Com legenda">●</span>':""}
     </div>
     <div class="calendar-schedule-live-host">${calendarScheduleLive(x)}</div>
@@ -5171,7 +5190,7 @@ async function confirmScheduleModal(){
   const free=firstFreeSlot(date);if(free<0){alert("Esse dia atingiu o limite manual de vídeos.");return}
   const extra=$("#modalExtra")?.value==="1";
   const auto=!extra&&($("#modalSmart")?.checked??false);
-  const choice=auto?smartChoiceForSlot(date,Math.min(free,6)):{time:$("#modalTime").value,strategy:"manual"};
+  const choice=auto?smartChoiceForSlot(date,Math.min(free,calendarBasePostsPerDay()-1)):{time:$("#modalTime").value,strategy:"manual"};
   const time=choice.time;
   const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
 
@@ -5574,7 +5593,7 @@ async function saveAutomationSettings(prefix="auto"){
     lookbackDays:+(g("Lookback")?.value||60),
     minSamples:+(g("Samples")?.value||3),
     minGapMinutes:+(g("Gap")?.value||60),
-    postsPerDay:+(g("Posts")?.value||7)
+    postsPerDay:+(g("Posts")?.value||5)
   };
   try{
     await cloudFetch("?action=automation-settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -5813,7 +5832,7 @@ function automationPage(){
         <div class="ui31-rule-grid">
           <div class="field"><label>Bloquear posts próximos</label><div class="input-suffix"><input id="autoLock" type="number" value="${cfg.lockWindowMinutes||120}"><span>min</span></div></div>
           <div class="field"><label>Intervalo mínimo</label><div class="input-suffix"><input id="autoGap" type="number" value="${a.settings?.min_gap_minutes||60}"><span>min</span></div></div>
-          <div class="field"><label>Posts por dia</label><input id="autoPosts" type="number" value="${a.settings?.posts_per_day||7}" readonly></div>
+          <div class="field"><label>Posts por dia</label><input id="autoPosts" type="number" value="${a.settings?.posts_per_day||5}" readonly></div>
           <div class="field"><label>Janela analisada</label><div class="input-suffix"><input id="autoLookback" type="number" value="${smart.lookbackDays||60}"><span>dias</span></div></div>
           <div class="field"><label>Mínimo de amostras</label><input id="autoSamples" type="number" value="${smart.minSamples||3}"></div>
         </div>
@@ -7386,7 +7405,7 @@ function settings(){
         ${user?`<div class="ui3-account"><b>${esc(user.email||"Conta conectada")}</b><span>Sincronização com o backend ativa.</span><button class="btn danger btn-sm" onclick="signOutCloud()">Sair</button></div>`:`<div class="auth-card"><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><div class="toolbar"><button class="btn primary" onclick="signInCloud()">Entrar</button><button class="btn" onclick="signUpCloud()">Criar conta</button></div></div>`}
       </div>
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Workspace</span><h3>Preferências principais</h3></div></div>
-        <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||7} · 3/2/2</b></div><div><span>Intervalo mínimo</span><b>${a.settings?.min_gap_minutes||60} min</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
+        <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||5} · 2 manhã / 3 tarde</b></div><div><span>Intervalo mínimo</span><b>${a.settings?.min_gap_minutes||60} min</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
       </div>
       <div class="card ui3-panel app-install-card">
         <div class="ui3-panel-head"><div><span>Celular</span><h3>CloudentFlow App</h3></div><span class="status-pill ok">PWA</span></div>
