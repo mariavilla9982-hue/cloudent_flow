@@ -1784,6 +1784,10 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 /* ===== Production Queue Patch v2 ===== */
 .production-media-cell{grid-template-columns:46px minmax(0,1fr)!important}
 .production-inline-preview,.production-preview-fallback{width:46px!important;height:58px!important;border-radius:8px!important;display:block!important;object-fit:cover!important;background:#11151b!important;border:1px solid #262c35!important}
+.calendar-cover-dot{position:absolute;left:2px;bottom:2px;font-size:5px;line-height:1;padding:2px 3px;border-radius:3px;background:rgba(0,0,0,.72);color:#fff;font-weight:900;letter-spacing:.4px;z-index:3}
+.calendar-cover-preview{position:absolute;right:10px;top:48px;width:90px;padding:5px;border-radius:10px;background:rgba(8,10,14,.9);border:1px solid #2a2f38;z-index:5;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.calendar-cover-preview video{width:100%!important;height:112px!important;object-fit:cover;border-radius:7px;display:block;background:#050608}
+.calendar-cover-preview div{padding-top:5px}.calendar-cover-preview b,.calendar-cover-preview span{display:block}.calendar-cover-preview b{font-size:7px;letter-spacing:.8px;color:#ff6ca7}.calendar-cover-preview span{font-size:7px;color:#aab1bd;margin-top:2px}
 .production-preview-fallback{display:grid!important;place-items:center!important;color:#7c8491!important}
 .production-media-cell.frame .production-inline-preview{object-fit:cover!important}
 .production-job.is-live{background:linear-gradient(90deg,rgba(255,64,128,.025),transparent 46%)}
@@ -3391,6 +3395,7 @@ async function syncFromBackend(){
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
+      coverOffsetMs:Number(v.cover_offset_ms||3500),coverStrategy:v.cover_strategy||"auto_after_3s",
       time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
       instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,pretrial:row.pretrial||null,
       platform:row.platform||"instagram",smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
@@ -4813,7 +4818,7 @@ function renderSlot(date,i){
   const justPublished=calendarIsJustPublished(x)?"just-published":"";
   return `<div class="slot filled ui31-slot ${i>=base?"extra-slot":""} ${perfClass} ${justPublished}" data-schedule-id="${esc(x.scheduleId||"")}" draggable="true" ondragstart="dragSlot(event,'${date}',${i})">
     <div class="ui31-slot-top">
-      <button class="ui31-thumb calendar-video-thumb" data-date="${date}" data-slot="${i}" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Ver vídeo"><span class="calendar-thumb-play">▶</span></button>
+      <button class="ui31-thumb calendar-video-thumb" data-date="${date}" data-slot="${i}" onclick="event.stopPropagation();previewScheduled('${date}',${i})" title="Capa automática · ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s"><span class="calendar-thumb-play">▶</span><span class="calendar-cover-dot">CAPA</span></button>
       <div class="ui31-slot-copy">
         <b title="${esc(x.name)}">${displayName}</b>
         <span>${x.time} · ${fmtSize(x.size)}</span>
@@ -5056,7 +5061,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const schedule=res.schedule,video=res.video;
   const clean=await runMediaCleaner("video",video.id,{quiet:true});
   const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
   save();
   if(clean?.status==="ready")log(`${file.name} com metadados removidos e agendado para ${date} às ${t}.`,"ok");
   else log(`${file.name} agendado para ${date} às ${t}; Media Cleaner: ${clean?.status||"pendente"}.`,clean?.status==="skipped"?"warn":"ok");
@@ -5133,12 +5138,17 @@ async function loadCalendarVideoThumb(el){
     }
     if(!url)throw new Error("preview_unavailable");
     const video=document.createElement("video");
-    video.src=url+"#t=0.05";
+    video.src=url;
     video.muted=true;
     video.playsInline=true;
-    video.preload="metadata";
+    video.preload="auto";
     video.setAttribute("aria-hidden","true");
-    video.onloadeddata=()=>{el.classList.add("is-loaded")};
+    const coverSeconds=Math.max(.25,Number(x.coverOffsetMs||3500)/1000);
+    video.onloadedmetadata=()=>{
+      try{video.currentTime=Math.min(coverSeconds,Math.max(.25,(Number(video.duration)||coverSeconds)-.15))}catch{}
+    };
+    video.onseeked=()=>{video.pause();el.classList.add("is-loaded")};
+    video.onloadeddata=()=>{if(video.readyState>=2&&Math.abs((video.currentTime||0)-coverSeconds)<.35)el.classList.add("is-loaded")};
     video.onerror=()=>{el.classList.add("is-unavailable")};
     el.prepend(video);
     el.dataset.loaded="1";
@@ -5164,6 +5174,10 @@ async function previewScheduled(date,slot){
         <button class="reel-close" onclick="closeModal()">×</button>
         <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
         <video src="${esc(url)}" controls autoplay playsinline></video>
+        <div class="calendar-cover-preview">
+          <video src="${esc(url)}#t=${(Number(x.coverOffsetMs||3500)/1000).toFixed(2)}" muted playsinline preload="metadata"></video>
+          <div><b>CAPA AUTO</b><span>Frame escolhido em ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s</span></div>
+        </div>
         <div class="reel-overlay">
           <b>@${esc(instagramIntegration?.account_label||"cloudentflow")}</b>
           <span>${esc(x.caption||x.name||"")}</span>
