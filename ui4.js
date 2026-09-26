@@ -24,7 +24,7 @@
   }
 
   function workerOnline(name){
-    const w=(window.automationData?.workers||[]).find(x=>x.worker_name===name);
+    const w=(automationData?.workers||[]).find(x=>x.worker_name===name);
     return !!w?.online;
   }
 
@@ -38,7 +38,7 @@
       i.title=title||"";
       b.appendChild(i);
     };
-    const pj=window.productionData?.jobs||[];
+    const pj=productionData?.jobs||[];
     const activeProd=pj.filter(j=>["uploading","queued","running"].includes(String(j.status))).length;
     const waitingProd=pj.filter(j=>String(j.status)==="waiting").length;
     const failedProd=pj.filter(j=>String(j.status)==="failed").length;
@@ -46,17 +46,17 @@
     else if(activeProd)add("production","good",activeProd+" job(s) processando");
     else if(waitingProd)add("production","warn",waitingProd+" job(s) aguardando");
 
-    const trials=window.trialReelsData||[];
+    const trials=trialReelsData||[];
     const trialErr=trials.filter(x=>x.status==="failed"&&!x.hidden_at).length;
     const trialActive=trials.filter(x=>["processing","container_created"].includes(x.status)).length;
     if(trialErr)add("trialReels","bad",trialErr+" Trial com erro");
     else if(trialActive)add("trialReels","good","Trial em publicação");
 
-    const unread=Number(window.notificationsData?.unread||0);
+    const unread=Number(notificationsData?.unread||0);
     if(unread)add("settings","bad",unread+" alerta(s)");
 
-    const xAccounts=(window.platformAccounts||[]).filter(x=>x.platform==="x"&&x.enabled).length;
-    add("xStudio",xAccounts?"good":window.xIntegrationConfig?.configured?"warn":"",xAccounts?xAccounts+" conta(s) X conectada(s)":"X ainda não conectado");
+    const xAccounts=(platformAccounts||[]).filter(x=>x.platform==="x"&&x.enabled).length;
+    add("xStudio",xAccounts?"good":xIntegrationConfig?.configured?"warn":"",xAccounts?xAccounts+" conta(s) X conectada(s)":"X ainda não conectado");
     add("automation",workerOnline("automation")?"good":"warn",workerOnline("automation")?"Scheduler online":"Verificar scheduler");
   }
 
@@ -69,18 +69,18 @@
   }
 
   function overviewAttention(){
-    if(window.currentPage!=="overview")return;
+    if(currentPage!=="overview")return;
     const host=qs("#overview");
     if(!host||host.querySelector(".u4-attention"))return;
     const next=nextScheduled();
-    const pj=window.productionData?.jobs||[];
+    const pj=productionData?.jobs||[];
     const running=pj.find(j=>["uploading","queued","running"].includes(String(j.status)));
     const waiting=pj.filter(j=>String(j.status)==="waiting").length;
-    const unread=Number(window.notificationsData?.unread||0);
-    const storage=Number(window.systemHealthData?.usage?.storage_bytes||0);
-    const storageLimit=Number(window.systemHealthData?.limits?.storage_bytes||0);
+    const unread=Number(notificationsData?.unread||0);
+    const storage=Number(systemHealthData?.usage?.storage_bytes||0);
+    const storageLimit=Number(systemHealthData?.limits?.storage_bytes||0);
     const storagePct=storageLimit?storage/storageLimit*100:0;
-    const ig=!!window.instagramIntegration?.enabled;
+    const ig=!!instagramIntegration?.enabled;
     const online=workerOnline("instagram_publish")&&workerOnline("automation");
 
     let title="Operação pronta";
@@ -119,7 +119,7 @@
   }
 
   function calendarEnhance(){
-    if(window.currentPage!=="calendar")return;
+    if(currentPage!=="calendar")return;
     const today=typeof localISO==="function"?localISO(new Date()):new Date().toISOString().slice(0,10);
     document.querySelectorAll(".day-column").forEach(col=>{
       const date=col.dataset.day||col.getAttribute("data-date");
@@ -135,10 +135,10 @@
   }
 
   function productionEnhance(){
-    if(window.currentPage!=="production")return;
+    if(currentPage!=="production")return;
     const host=qs("#production");
     if(!host||host.querySelector(".u4-production-summary"))return;
-    const jobs=window.productionData?.jobs||[];
+    const jobs=productionData?.jobs||[];
     if(!jobs.length)return;
     const counts={
       waiting:jobs.filter(j=>j.status==="waiting").length,
@@ -164,16 +164,16 @@
   }
 
   function brainEnhance(){
-    if(window.currentPage!=="cloudentAI")return;
+    if(currentPage!=="cloudentAI")return;
     const host=qs("#cloudentAI");
     if(!host||host.querySelector(".u4-brain-shell"))return;
     const scheduled=(()=>{try{return typeof allScheduled==="function"?allScheduled().filter(x=>new Date(x.scheduledAt)>new Date()).length:0}catch{return 0}})();
-    const views=(window.liveInstagramMetrics||[]).reduce((n,x)=>n+Number(x.views||0),0);
-    const prod=(window.productionData?.jobs||[]).filter(j=>["waiting","queued","running","uploading"].includes(j.status)).length;
-    const trials=(window.trialReelsData||[]).filter(x=>!x.hidden_at&&["scheduled","processing","container_created"].includes(x.status)).length;
-    const recs=(window.automationData?.recommendations||[]);
+    const views=(liveInstagramMetrics||[]).reduce((n,x)=>n+Number(x.views||0),0);
+    const prod=(productionData?.jobs||[]).filter(j=>["waiting","queued","running","uploading"].includes(j.status)).length;
+    const trials=(trialReelsData||[]).filter(x=>!x.hidden_at&&["scheduled","processing","container_created"].includes(x.status)).length;
+    const recs=(automationData?.recommendations||[]);
     const topTime=recs[0]?.recommended_time?String(recs[0].recommended_time).slice(0,5):"—";
-    const xAccounts=(window.platformAccounts||[]).filter(x=>x.platform==="x"&&x.enabled).length;
+    const xAccounts=(platformAccounts||[]).filter(x=>x.platform==="x"&&x.enabled).length;
     const shell=document.createElement("section");
     shell.className="u4-brain-shell";
     shell.innerHTML='<div class="u4-brain-head"><small>LIVE SYSTEM MAP</small><b>Mente operacional do CloudentFlow</b></div>'+
@@ -199,7 +199,7 @@
   function pageTitleContext(){
     const title=qs("#pageTitle");if(!title)return;
     const map={overview:"Operação",calendar:"Conteúdo",trialReels:"Laboratório",production:"Pipeline",frameExtractor:"Utilitário",xStudio:"Canal",tiktokStudio:"Canal",metrics:"Analytics",smartTimes:"Inteligência",automation:"Sistema",cloudentAI:"Copiloto",settings:"Configurações"};
-    title.dataset.context=map[window.currentPage]||"Workspace";
+    title.dataset.context=map[currentPage]||"Workspace";
   }
 
   function busyDuringNavigation(){
@@ -268,7 +268,7 @@
       return row?{...t,row}:null;
     }
     if(t.type==="trial"){
-      const row=(window.trialReelsData||[]).find(x=>String(x.id)===String(t.id));
+      const row=(trialReelsData||[]).find(x=>String(x.id)===String(t.id));
       return row?{...t,row}:null;
     }
     return null;
@@ -363,7 +363,7 @@
     bindCoverEditor();
     ensureDensityToggle();
     requestAnimationFrame(enhance);
-    setInterval(()=>{if(document.hidden)return;updateNavSignals();if(window.currentPage==="overview")overviewAttention()},15000);
+    setInterval(()=>{if(document.hidden)return;updateNavSignals();if(currentPage==="overview")overviewAttention()},15000);
   }
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});
