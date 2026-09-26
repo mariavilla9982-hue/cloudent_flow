@@ -7026,12 +7026,12 @@ function xWarmupAccountCard(account){
       </div>
       ${!account.platform_account_id?`
         <div class="xw-connect">
-          <div class="xw-connect-title"><span>API X</span><b>Conectar esta conta</b><small>Token fica criptografado no backend.</small></div>
-          <input id="xWarmupUserId_${account.id}" inputmode="numeric" placeholder="User ID numérico">
-          <input id="xWarmupToken_${account.id}" type="password" autocomplete="off" placeholder="User Access Token">
-          <button class="btn primary" id="xWarmupConnectBtn_${account.id}" onclick="connectXWarmupAccount('${account.id}')">Conectar conta</button>
+          <div class="xw-connect-title"><span>API X</span><b>Conectar esta conta</b><small>${xIntegrationConfig?.configured?"OAuth 2.0 PKCE · token renovável":"Configure o App X em Configurações → Integrações."}</small></div>
+          ${xIntegrationConfig?.configured
+            ?`<button class="btn primary" onclick="connectXOfficial()">Entrar no X como @${esc(account.username||"conta")}</button>`
+            :`<button class="btn" onclick="openPlatformIntegrations('x')">Configurar App X</button>`}
         </div>`
-        :`<div class="xw-connected"><span>✓</span><div><b>Conta conectada à API X</b><small>User ID ${esc(account.external_user_id||"confirmado")} · fila automática liberada</small></div></div>`}
+        :`<div class="xw-connected"><span>✓</span><div><b>Conta conectada à API X</b><small>User ID ${esc(account.external_user_id||"confirmado")} · OAuth ativo</small></div></div>`}
       <div class="xw-action-summary">
         <div><b>${actions.length}</b><span>programadas</span></div>
         <div><b>${completed}</b><span>concluídas</span></div>
@@ -7124,7 +7124,9 @@ function platformStudioPage(platform){
           </div>
         </div>
         <div class="channel-hero-actions">
-          <button class="btn primary" onclick="openPlatformIntegrations('${platform}')">${connected?"Gerenciar conta":"Preparar integração"}</button>
+          ${platform==="x"
+            ? `<button class="btn primary" onclick="${xIntegrationConfig?.configured?"connectXOfficial()":"openPlatformIntegrations('x')"}">${connected?"Conectar outra conta":xIntegrationConfig?.configured?"Conectar conta X":"Configurar API X"}</button>`
+            : `<button class="btn primary" onclick="openPlatformIntegrations('${platform}')">${connected?"Gerenciar conta":"Preparar integração"}</button>`}
           <button class="btn" onclick="showPage('production')">Abrir Produção IA</button>
         </div>
       </div>
