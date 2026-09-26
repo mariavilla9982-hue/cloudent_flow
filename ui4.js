@@ -259,6 +259,100 @@
     });
   }
 
+
+  function currentCoverTarget(){
+    const t=window.__u4CoverTarget;
+    if(!t)return null;
+    if(t.type==="schedule"){
+      const row=typeof slotData==="function"?slotData(t.date,t.slot):null;
+      return row?{...t,row}:null;
+    }
+    if(t.type==="trial"){
+      const row=(window.trialReelsData||[]).find(x=>String(x.id)===String(t.id));
+      return row?{...t,row}:null;
+    }
+    return null;
+  }
+
+  function coverModalEnhance(){
+    const modal=qs("#modalHost .reel-preview-modal");
+    if(!modal||modal.querySelector(".u4-cover-editor"))return;
+    const target=currentCoverTarget();
+    if(!target)return;
+    const preview=modal.querySelector(".calendar-cover-preview");
+    if(!preview)return;
+
+    const row=target.row;
+    const offset=Number(target.type==="schedule"?row.coverOffsetMs:row.cover_offset_ms)||3500;
+    const duration=Number(target.type==="schedule"?row.durationSeconds:0)||30;
+    const max=Math.max(3.1,Math.min(60,duration>3.1?duration-.15:30));
+    const editor=document.createElement("div");
+    editor.className="u4-cover-editor";
+    editor.innerHTML=
+      '<div><b>'+(String(target.type==="schedule"?row.coverStrategy:row.cover_strategy)==="manual_after_3s"?"CAPA MANUAL":"CAPA AUTO")+'</b><span>Frame em <strong>'+(offset/1000).toFixed(1)+'s</strong></span></div>'+
+      '<input class="u4-cover-range" type="range" min="3" max="'+max.toFixed(1)+'" step=".1" value="'+Math.max(3,offset/1000).toFixed(1)+'">'+
+      '<button class="u4-cover-save">Usar este frame</button>';
+    preview.appendChild(editor);
+
+    const range=editor.querySelector(".u4-cover-range");
+    const label=editor.querySelector("strong");
+    const video=preview.querySelector("video");
+    range.oninput=()=>{
+      const sec=Math.max(3,Number(range.value||3));
+      if(label)label.textContent=sec.toFixed(1)+"s";
+      if(video){
+        try{video.currentTime=Math.min(sec,Math.max(.25,(Number(video.duration)||sec)-.12));video.pause()}catch{}
+      }
+    };
+    editor.querySelector(".u4-cover-save").onclick=async()=>{
+      const sec=Math.max(3,Number(range.value||3.5));
+      const offsetMs=Math.round(sec*1000);
+      try{
+        const body=target.type==="schedule"
+          ? {video_id:row.videoId,offset_ms:offsetMs}
+          : {trial_id:target.id,offset_ms:offsetMs};
+        await cloudFetch("?action=cover-offset",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        if(target.type==="schedule"){
+          row.coverOffsetMs=offsetMs;
+          row.coverStrategy="manual_after_3s";
+          if(typeof save==="function")save();
+        }else{
+          row.cover_offset_ms=offsetMs;
+          row.cover_strategy="manual_after_3s";
+        }
+        if(typeof toast==="function")toast("Capa salva em "+sec.toFixed(1)+"s.","ok");
+        if(typeof closeModal==="function")closeModal();
+        if(target.type==="schedule"&&typeof calendarPage==="function")calendarPage();
+        if(target.type==="trial"&&typeof trialReelsPage==="function")trialReelsPage();
+      }catch(e){
+        if(typeof toast==="function")toast(e?.message||"Não foi possível salvar a capa.","err");
+      }
+    };
+  }
+
+  function bindCoverEditor(){
+    if(window.__u4CoverBound)return;
+    window.__u4CoverBound=true;
+    if(typeof window.previewScheduled==="function"){
+      const base=window.previewScheduled;
+      window.previewScheduled=function(date,slot){
+        window.__u4CoverTarget={type:"schedule",date,slot};
+        return base.apply(this,arguments);
+      };
+    }
+    if(typeof window.previewTrialReel==="function"){
+      const base=window.previewTrialReel;
+      window.previewTrialReel=function(id){
+        window.__u4CoverTarget={type:"trial",id};
+        return base.apply(this,arguments);
+      };
+    }
+    const host=qs("#modalHost");
+    if(host){
+      new MutationObserver(()=>requestAnimationFrame(coverModalEnhance)).observe(host,{childList:true,subtree:true});
+    }
+  }
+
   function boot(){
     if(U4.mounted)return;
     U4.mounted=true;
@@ -266,6 +360,7 @@
     setDensity(U4.density);
     wrapCore();
     bindKeys();
+    bindCoverEditor();
     ensureDensityToggle();
     requestAnimationFrame(enhance);
     setInterval(()=>{if(document.hidden)return;updateNavSignals();if(window.currentPage==="overview")overviewAttention()},15000);
