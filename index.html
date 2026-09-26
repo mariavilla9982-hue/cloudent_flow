@@ -2916,10 +2916,10 @@ async function edgeFetch(fullUrl,options={},retry=true){
   }
   return data;
 }
-async function loadAutomationStatus(){
+async function loadAutomationStatus(full=false){
   if(!cloudSession){automationWorkerStatus=null;automationData=null;return}
   try{
-    automationData=await cloudFetch("?resource=automation");
+    automationData=await cloudFetch("?resource=automation"+(full?"":"&compact=1"));
     state.postsPerDay=Math.max(1,Math.min(10,Number(automationData?.settings?.posts_per_day||5)));
     const pub=(automationData.workers||[]).find(w=>w.worker_name==="instagram_publish");
     automationWorkerStatus={online:!!pub?.online,worker:pub||null};
@@ -3531,7 +3531,8 @@ async function refreshLiveData(showFeedback=false){
   window.__cloudentGlobalRefreshing=true;
   try{
     const activityOpen=$("#activityPanelHost")?.classList.contains("open");
-    const tasks=[loadAutomationStatus(),loadFollowerStats(30),loadNotifications(),syncFromBackend()];
+    const fullAutomation=currentPage==="automation"||currentPage==="smartTimes";
+    const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(),syncFromBackend()];
     // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
     if(activityOpen||(currentPage==="settings"&&settingsTab==="logs"))tasks.push(loadServerLogs());
     if(currentPage==="production")tasks.push(loadProductionData());
@@ -3633,6 +3634,9 @@ function showPage(id){
   renderAll();
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
+  if((id==="automation"||id==="smartTimes")&&cloudSession){
+    loadAutomationStatus(true).then(()=>renderAll()).catch(e=>toast(e.message,"err"));
+  }
   if(id==="xStudio"&&cloudSession){
     Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus(),loadXWarmup()]).then(()=>renderAll());
   }else if(id==="tiktokStudio"&&cloudSession){
@@ -5592,7 +5596,7 @@ async function loadServerLogs(){
   try{serverLogs=await cloudFetch("?resource=logs")}catch(e){serverLogs=[]}
 }
 async function refreshAutomation(){
-  await Promise.all([loadAutomationStatus(),syncFromBackend()]);
+  await Promise.all([loadAutomationStatus(true),syncFromBackend()]);
   renderAll();
 }
 async function saveAutomationSettings(prefix="auto"){
@@ -5610,7 +5614,7 @@ async function saveAutomationSettings(prefix="auto"){
   };
   try{
     await cloudFetch("?action=automation-settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    await loadAutomationStatus();
+    await loadAutomationStatus(true);
     toast("Configurações salvas. O worker aplica as mudanças automaticamente.","ok");
     renderAll();
   }catch(e){toast(e.message,"err")}
