@@ -3319,9 +3319,14 @@ async function signOutCloud(){
   syncAuthGate();renderAll()
 }
 
+function queueResourcePath(){
+  const start=new Date();
+  start.setHours(0,0,0,0);
+  return "?resource=queue&from="+encodeURIComponent(start.toISOString());
+}
 async function syncFromBackend(){
   if(!cloudSession)return;
-  const q=await cloudFetch("?resource=queue");
+  const q=await cloudFetch(queueResourcePath());
   state.slots={};
   for(const row of q){
     const d=new Date(row.scheduled_at);
@@ -4647,7 +4652,7 @@ function updateCalendarLiveDom(){
   updateCalendarClockDom();
 }
 async function refreshCalendarLiveData(){
-  const [q]=await Promise.all([cloudFetch("?resource=queue"),loadTrialReels()]);
+  const [q]=await Promise.all([cloudFetch(queueResourcePath()),loadTrialReels()]);
   updateTrialReelsBlock();
   const rows=new Map((q||[]).map(r=>[String(r.id),r]));
   const current=Object.values(state.slots).filter(x=>x?.cloud&&x.scheduleId);
@@ -5851,13 +5856,18 @@ function automationPage(){
 }
 
 
-async function loadProductionData(forcePreviews=false){
+async function loadProductionData(forcePreviews=false,forceStatus=false){
   if(!cloudSession){productionData=null;return}
   const previousPreviews=productionData?.previews||{};
   const previousSignature=productionData?.previewSignature||"";
+  const previousStatus=productionData?.runninghubStatus||null;
+  const previousStatusAt=Number(productionData?.runninghubStatusAt||0);
+  const statusStale=!previousStatus||Date.now()-previousStatusAt>60000;
   const [queue,status]=await Promise.all([
     cloudFetch("?resource=production"),
-    cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
+    (forceStatus||statusStale)
+      ? cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
+      : Promise.resolve(previousStatus)
   ]);
   const signature=(queue.jobs||[]).slice(0,30).map(j=>j.id).join("|");
   let previews=previousPreviews;
@@ -5865,7 +5875,7 @@ async function loadProductionData(forcePreviews=false){
     const p=await cloudFetch("?resource=production-previews").catch(()=>({previews:{}}));
     previews=p.previews||{};
   }
-  productionData={...queue,runninghubStatus:status,previews,previewSignature:signature};
+  productionData={...queue,runninghubStatus:status,runninghubStatusAt:(forceStatus||statusStale)?Date.now():previousStatusAt,previews,previewSignature:signature};
 }
 
 function productionStatusMeta(status){
@@ -6376,7 +6386,7 @@ function productionPage(){
       '<div class="runninghub-command-actions">'+
         '<button class="btn success" onclick="controlRunningHub(\'run\')">▶ Executar fila</button>'+
         '<button class="btn" onclick="controlRunningHub(\'pause\')">Ⅱ Pausar</button>'+
-        '<button class="btn" onclick="loadProductionData(true).then(productionPage)">↻ Atualizar</button>'+
+        '<button class="btn" onclick="loadProductionData(true,true).then(productionPage)">↻ Atualizar</button>'+
       '</div>'+
     '</div>'+
 
