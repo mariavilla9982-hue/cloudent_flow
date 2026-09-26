@@ -7202,7 +7202,7 @@ function setSettingsTab(tab){
     settings();
     if(cloudSession)loadNotifications().then(settings).catch(()=>settings());
   }else if(tab==="logs"&&cloudSession)loadServerLogs().then(settings);
-  else if(tab==="integrations"&&cloudSession)loadProductionData().then(settings).catch(()=>settings());
+  else if(tab==="integrations"&&cloudSession)Promise.all([loadProductionData(),loadXIntegrationConfig(),loadPlatformAccounts()]).then(settings).catch(()=>settings());
   else settings();
 }
 
@@ -7515,6 +7515,39 @@ function settings(){
         <div class="ui3-panel-head"><div><span>Multi-conta · Beta</span><h3>Contas Instagram</h3></div><span class="status-pill ${platformAccounts.filter(x=>x.platform==="instagram"&&x.enabled).length?"ok":"warn"}">${platformAccounts.filter(x=>x.platform==="instagram"&&x.enabled).length} ativa(s)</span></div>
         <div class="multi-account-list">${platformAccounts.filter(x=>x.platform==="instagram").map(x=>`<div><b>@${esc(x.account_label||"Instagram")}</b><span>${x.enabled?"Ativa":"Pausada"} · ${esc(x.config?.account_type||"conta profissional")}</span></div>`).join("")||'<div class="ui3-empty">Nenhuma conta registrada.</div>'}</div>
         <p class="muted">A estrutura já separa conteúdo por conta. A publicação continua usando a conta ativa enquanto a conexão de uma segunda conta está em Beta.</p>
+      </div>
+
+
+      <div class="card ui3-panel x-api-settings-card" id="xApiSettingsCard">
+        <div class="ui3-panel-head">
+          <div><span>X API · OAuth 2.0</span><h3>${xIntegrationConfig?.configured?"App configurado":"Configurar App X"}</h3></div>
+          <span class="status-pill ${xIntegrationConfig?.connected_accounts?"ok":"warn"}">${xIntegrationConfig?.connected_accounts?xIntegrationConfig.connected_accounts+" conta(s)":xIntegrationConfig?.configured?"Pronto para autorizar":"Pendente"}</span>
+        </div>
+        <p class="muted">Use um único App do X e autorize cada conta por OAuth 2.0 PKCE. O CloudentFlow guarda tokens criptografados e pede <code>offline.access</code> para renovação 24/7.</p>
+        <div class="runninghub-settings-grid">
+          <div class="field full">
+            <label>Callback URL</label>
+            <div class="toolbar">
+              <input value="${esc(xIntegrationConfig?.callback_url||SUPABASE_URL+"/functions/v1/cloudent-x-oauth?action=callback")}" readonly>
+              <button class="btn btn-sm" onclick="copyXCallback()">Copiar</button>
+            </div>
+            <small>Cadastre exatamente esta URL no App X.</small>
+          </div>
+          <div class="field full">
+            <label>OAuth 2.0 Client ID</label>
+            <input id="xClientId" autocomplete="off" placeholder="${xIntegrationConfig?.configured?"Client ID já salvo — cole novamente apenas para trocar":"Cole o Client ID"}">
+          </div>
+          <div class="field full">
+            <label>OAuth 2.0 Client Secret</label>
+            <input id="xClientSecret" type="password" autocomplete="off" placeholder="${xIntegrationConfig?.configured?"Secret já salvo — deixe vazio para manter":"Cole o Client Secret"}">
+            <small>O secret é criptografado no backend e não volta para o navegador.</small>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="btn" onclick="saveXAppConfig()">Salvar App X</button>
+          <button class="btn primary" onclick="connectXOfficial()" ${xIntegrationConfig?.configured?"":"disabled"}>Conectar conta X</button>
+        </div>
+        <p class="muted">Scopes: <code>tweet.read</code> · <code>tweet.write</code> · <code>users.read</code> · <code>media.write</code> · <code>offline.access</code>.</p>
       </div>
 
       <div class="card ui3-panel platform-foundation-card" id="platformFoundationCard">
