@@ -4419,6 +4419,7 @@ async function previewTrialReel(id){
     $("#modalHost").innerHTML='<div class="modal reel-preview-modal" onclick="if(event.target===this)closeModal()"><div class="reel-phone-shell">'+
       '<button class="reel-close" onclick="closeModal()">×</button><div class="reel-topbar"><b>Trial Reel</b><span>◈</span></div>'+
       '<video src="'+esc(url)+'" controls autoplay muted loop playsinline></video>'+
+      '<div class="calendar-cover-preview"><video src="'+esc(url)+'#t='+(Number(row.cover_offset_ms||3500)/1000).toFixed(2)+'" muted playsinline preload="metadata"></video><div><b>CAPA AUTO</b><span>Frame escolhido em '+(Number(row.cover_offset_ms||3500)/1000).toFixed(1)+'s</span></div></div>'+
       '<div class="reel-overlay"><b>@'+esc(instagramIntegration?.account_label||"Instagram")+'</b><span>'+esc(row.caption||row.file_name||"Trial Reel")+'</span>'+
       '<small>'+esc(trialStatusMeta(row.status).label)+' · '+(row.scheduled_at?new Date(row.scheduled_at).toLocaleString("pt-BR"):"")+'</small></div></div></div>';
   }catch(e){toast(e.message,"err")}
