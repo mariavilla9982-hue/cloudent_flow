@@ -2885,9 +2885,9 @@ async function initCloud(){
 async function loadDeferredCloudData(){
   if(!cloudSession||!backendOnline)return;
   try{
+    // Atividade/logs ficam sob demanda. Evita uma chamada pesada logo no boot.
     await Promise.allSettled([
-      withTimeout(loadInstagramMetricsStored(),12000,"métricas"),
-      withTimeout(loadServerLogs(),7000,"atividade")
+      withTimeout(loadInstagramMetricsStored(),12000,"métricas")
     ]);
     renderAll();
   }catch{}
@@ -3522,17 +3522,25 @@ function updateLiveChrome(){
 }
 
 async function refreshLiveData(showFeedback=false){
-  if(!cloudSession)return;
+  if(!cloudSession||window.__cloudentGlobalRefreshing)return;
+  window.__cloudentGlobalRefreshing=true;
   try{
-    const tasks=[loadAutomationStatus(),loadServerLogs(),loadFollowerStats(30),loadNotifications(),syncFromBackend()];
+    const activityOpen=$("#activityPanelHost")?.classList.contains("open");
+    const tasks=[loadAutomationStatus(),loadFollowerStats(30),loadNotifications(),syncFromBackend()];
+    // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
+    if(activityOpen||(currentPage==="settings"&&settingsTab==="logs"))tasks.push(loadServerLogs());
     if(currentPage==="production")tasks.push(loadProductionData());
     if(currentPage==="trialReels")tasks.push(loadTrialReels());
     if(currentPage==="settings"&&settingsTab==="health")tasks.push(loadSystemHealth());
-    await Promise.all(tasks);
+    await Promise.allSettled(tasks);
     updateLiveChrome();renderAll();
-    if($("#activityPanelHost")?.classList.contains("open"))toggleActivityPanel(true);
+    if(activityOpen)toggleActivityPanel(true);
     if(showFeedback)toast("Dados atualizados.","ok");
-  }catch(e){if(showFeedback)toast(e.message,"err")}
+  }catch(e){
+    if(showFeedback)toast(e.message,"err");
+  }finally{
+    window.__cloudentGlobalRefreshing=false;
+  }
 }
 
 function keyFor(date,slot){return `${date}#${slot}`}
@@ -6086,6 +6094,16 @@ function syncProductionElapsed(){
     el.textContent=(done?"Tempo total ":"Decorrido ")+formatProductionSeconds(seconds);
   });
 }
+function productionLiveSignature(data=productionData){
+  const jobs=(data?.jobs||[]).slice(0,40).map(j=>[
+    j.id,j.status,j.updated_at,j.started_at,j.completed_at,j.queue_position,
+    j.runninghub_status,j.runninghub_runtime_seconds,j.last_error
+  ].map(x=>String(x??"")).join(":")).join("|");
+  const rh=data?.runninghubStatus||{};
+  return jobs+"||"+[
+    rh.enabled,rh.paused,rh.active_tasks,rh.status,rh.error
+  ].map(x=>String(x??"")).join(":");
+}
 function ensureProductionTicker(){
   if(!window.__cloudentProductionTicker){
     window.__cloudentProductionTicker=setInterval(syncProductionElapsed,1000);
@@ -6095,13 +6113,19 @@ function ensureProductionTicker(){
       if(currentPage!=="production"||!cloudSession||document.hidden||window.__cloudentProductionRefreshing)return;
       if($("#productionVideo")?.files?.length||$("#productionFrame")?.files?.length)return;
       window.__cloudentProductionRefreshing=true;
+      const before=productionLiveSignature();
       try{
         await loadProductionData(false);
-        if(currentPage==="production")productionPage();
+        if(currentPage==="production"){
+          const after=productionLiveSignature();
+          // Não destrói/recria toda a fila quando nada visual mudou.
+          if(after!==before)productionPage();
+          else syncProductionElapsed();
+        }
       }catch{}finally{
         window.__cloudentProductionRefreshing=false;
       }
-    },5000);
+    },10000);
   }
 }
 function productionPreviewMarkup(url,kind){
@@ -7535,19 +7559,25 @@ function safeRenderPage(id,fn){
   }
 }
 function renderAll(){
-  safeRenderPage("overview",overview);
-  safeRenderPage("calendar",calendarPage);
-  safeRenderPage("trialReels",trialReelsPage);
-  safeRenderPage("production",productionPage);
-  safeRenderPage("frameExtractor",frameExtractorPage);
-  safeRenderPage("xStudio",xStudioPage);
-  safeRenderPage("tiktokStudio",tiktokStudioPage);
-  safeRenderPage("metrics",metrics);
-  if(currentReelDetail)safeRenderPage("reelDetail",reelDetailPage);
-  safeRenderPage("smartTimes",smartTimesPage);
-  safeRenderPage("automation",automationPage);
-  safeRenderPage("cloudentAI",cloudentAIPage);
-  safeRenderPage("settings",settings);
+  // Renderiza somente a tela visível. Antes, cada atualização reconstruía as 11
+  // páginas escondidas também, criando travadas perceptíveis durante navegação.
+  const renderers={
+    overview,
+    calendar:calendarPage,
+    trialReels:trialReelsPage,
+    production:productionPage,
+    frameExtractor:frameExtractorPage,
+    xStudio:xStudioPage,
+    tiktokStudio:tiktokStudioPage,
+    metrics,
+    reelDetail:reelDetailPage,
+    smartTimes:smartTimesPage,
+    automation:automationPage,
+    cloudentAI:cloudentAIPage,
+    settings
+  };
+  const fn=renderers[currentPage]||overview;
+  safeRenderPage(currentPage,fn);
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
   if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
   if(stat)stat.textContent=instagramIntegration?.enabled?"Conta conectada":"Configurar integração";
@@ -7581,7 +7611,9 @@ async function init(){
     renderAll();
   }
 
-  loadDeferredCloudData();
+  const runDeferred=()=>loadDeferredCloudData();
+  if("requestIdleCallback" in window)requestIdleCallback(runDeferred,{timeout:1500});
+  else setTimeout(runDeferred,250);
 
   const quickPicker=$("#videoPicker");
   if(quickPicker)quickPicker.onchange=()=>handleQuickSlotVideo(quickPicker);
