@@ -5856,18 +5856,13 @@ function automationPage(){
 }
 
 
-async function loadProductionData(forcePreviews=false,forceStatus=false){
+async function loadProductionData(forcePreviews=false){
   if(!cloudSession){productionData=null;return}
   const previousPreviews=productionData?.previews||{};
   const previousSignature=productionData?.previewSignature||"";
-  const previousStatus=productionData?.runninghubStatus||null;
-  const previousStatusAt=Number(productionData?.runninghubStatusAt||0);
-  const statusStale=!previousStatus||Date.now()-previousStatusAt>60000;
   const [queue,status]=await Promise.all([
     cloudFetch("?resource=production"),
-    (forceStatus||statusStale)
-      ? cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
-      : Promise.resolve(previousStatus)
+    cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
   ]);
   const signature=(queue.jobs||[]).slice(0,30).map(j=>j.id).join("|");
   let previews=previousPreviews;
@@ -5875,7 +5870,7 @@ async function loadProductionData(forcePreviews=false,forceStatus=false){
     const p=await cloudFetch("?resource=production-previews").catch(()=>({previews:{}}));
     previews=p.previews||{};
   }
-  productionData={...queue,runninghubStatus:status,runninghubStatusAt:(forceStatus||statusStale)?Date.now():previousStatusAt,previews,previewSignature:signature};
+  productionData={...queue,runninghubStatus:status,previews,previewSignature:signature};
 }
 
 function productionStatusMeta(status){
@@ -6386,7 +6381,7 @@ function productionPage(){
       '<div class="runninghub-command-actions">'+
         '<button class="btn success" onclick="controlRunningHub(\'run\')">▶ Executar fila</button>'+
         '<button class="btn" onclick="controlRunningHub(\'pause\')">Ⅱ Pausar</button>'+
-        '<button class="btn" onclick="loadProductionData(true,true).then(productionPage)">↻ Atualizar</button>'+
+        '<button class="btn" onclick="loadProductionData(true).then(productionPage)">↻ Atualizar</button>'+
       '</div>'+
     '</div>'+
 
