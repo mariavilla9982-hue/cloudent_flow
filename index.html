@@ -2724,7 +2724,8 @@ const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
 const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
-let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
+const X_OAUTH_URL=SUPABASE_URL+"/functions/v1/cloudent-x-oauth";
+let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 let calendarPreviewObserver=null;
@@ -2879,6 +2880,7 @@ async function initCloud(){
     withTimeout(loadPlatformAccounts(),4500,"contas"),
     withTimeout(loadTrialReels(),4500,"Trial Reels"),
     withTimeout(loadXWarmup(),4500,"aquecimento X"),
+    withTimeout(loadXIntegrationConfig(),4500,"integração X"),
     withTimeout(loadNotifications(),4500,"notificações")
   ]);
 }
@@ -3107,6 +3109,59 @@ function notificationsMarkup(){
   </div>`;
 }
 
+async function loadXIntegrationConfig(){
+  if(!cloudSession){
+    xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]};
+    return;
+  }
+  try{xIntegrationConfig=await cloudFetch("?resource=x-app-config")}
+  catch(e){xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[],error:e.message}}
+}
+async function saveXAppConfig(){
+  if(!cloudSession){focusCloudLogin();return}
+  const clientId=$("#xClientId")?.value?.trim();
+  const clientSecret=$("#xClientSecret")?.value?.trim();
+  if(!clientId){toast("Cole o Client ID OAuth 2.0 do X.","err");return}
+  try{
+    await cloudFetch("?action=x-app-config",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({client_id:clientId,client_secret:clientSecret})});
+    if($("#xClientSecret"))$("#xClientSecret").value="";
+    await loadXIntegrationConfig();
+    settings();
+    toast("App X configurado. Agora autorize a primeira conta.","ok");
+  }catch(e){toast(e.message,"err")}
+}
+async function connectXOfficial(){
+  if(!cloudSession){focusCloudLogin();return}
+  if(!xIntegrationConfig?.configured){
+    settingsTab="integrations";showPage("settings");
+    setTimeout(()=>$("#xApiSettingsCard")?.scrollIntoView({behavior:"smooth",block:"center"}),80);
+    toast("Configure o Client ID e Client Secret do App X primeiro.","err");
+    return;
+  }
+  try{
+    const r=await edgeFetch(X_OAUTH_URL+"?action=start",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    if(!r?.auth_url)throw new Error("O X não devolveu a URL de autorização.");
+    window.location.href=r.auth_url;
+  }catch(e){toast(e.message,"err")}
+}
+async function copyXCallback(){
+  const value=String(xIntegrationConfig?.callback_url||"");
+  if(!value)return;
+  try{await navigator.clipboard.writeText(value);toast("Callback copiado.","ok")}
+  catch{toast("Não consegui copiar automaticamente.","err")}
+}
+async function handleXOAuthReturn(){
+  if(!cloudSession)return;
+  const params=new URLSearchParams(window.location.search);
+  const connected=params.get("x_connected"),error=params.get("x_error");
+  if(!connected&&!error)return;
+  try{
+    await Promise.all([loadXIntegrationConfig(),loadPlatformAccounts(),loadXWarmup(),loadAutomationStatus()]);
+    showPage("xStudio");
+    if(connected==="1"){const username=params.get("x_username");toast("Conta X conectada"+(username?" · @"+username:"")+".","ok")}
+    else toast("Falha ao conectar o X: "+String(error||"erro desconhecido"),"err");
+  }finally{history.replaceState(null,"",window.location.pathname+(window.location.hash||""))}
+}
 async function loadXWarmup(){
   if(!cloudSession){xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}};return}
   try{
@@ -3638,7 +3693,7 @@ function showPage(id){
     loadAutomationStatus(true).then(()=>renderAll()).catch(e=>toast(e.message,"err"));
   }
   if(id==="xStudio"&&cloudSession){
-    Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus(),loadXWarmup()]).then(()=>renderAll());
+    Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus(),loadXWarmup(),loadXIntegrationConfig()]).then(()=>renderAll());
   }else if(id==="tiktokStudio"&&cloudSession){
     Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus()]).then(()=>renderAll());
   }
@@ -7619,6 +7674,8 @@ async function init(){
     syncAuthGate();
     renderAll();
   }
+
+  await handleXOAuthReturn().catch(err=>console.warn("X OAuth return:",err));
 
   const runDeferred=()=>loadDeferredCloudData();
   if("requestIdleCallback" in window)requestIdleCallback(runDeferred,{timeout:1500});
