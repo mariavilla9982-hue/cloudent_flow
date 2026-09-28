@@ -1788,6 +1788,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .calendar-cover-preview{position:absolute;right:10px;top:48px;width:90px;padding:5px;border-radius:10px;background:rgba(8,10,14,.9);border:1px solid #2a2f38;z-index:5;box-shadow:0 8px 30px rgba(0,0,0,.35)}
 .calendar-cover-preview video{width:100%!important;height:112px!important;object-fit:cover;border-radius:7px;display:block;background:#050608}
 .calendar-cover-preview div{padding-top:5px}.calendar-cover-preview b,.calendar-cover-preview span{display:block}.calendar-cover-preview b{font-size:7px;letter-spacing:.8px;color:#ff6ca7}.calendar-cover-preview span{font-size:7px;color:#aab1bd;margin-top:2px}
+.calendar-cover-preview .cover-placeholder{height:112px;display:grid;place-items:center;border-radius:7px;background:linear-gradient(145deg,#090b10,#111722);border:1px solid #202733;color:#7f8998;font-size:18px;font-weight:900}
 .production-preview-fallback{display:grid!important;place-items:center!important;color:#7c8491!important}
 .production-media-cell.frame .production-inline-preview{object-fit:cover!important}
 .production-job.is-live{background:linear-gradient(90deg,rgba(255,64,128,.025),transparent 46%)}
@@ -3033,6 +3034,7 @@ const X_OAUTH_URL=SUPABASE_URL+"/functions/v1/cloudent-x-oauth";
 let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
+const trialPreviewCache=new Map();
 let calendarPreviewObserver=null;
 let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
@@ -4767,6 +4769,9 @@ async function retryTrialReel(id){
 }
 async function getTrialPreviewUrl(row){
   if(!row?.storage_path)throw new Error("Arquivo do Trial indisponível.");
+  const key=row.storage_path;
+  const cached=trialPreviewCache.get(key);
+  if(cached&&cached.expires>Date.now()+60000)return cached.url;
   const encoded=row.storage_path.split("/").map(encodeURIComponent).join("/");
   const r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/videos/"+encoded,{
     method:"POST",
@@ -4777,7 +4782,9 @@ async function getTrialPreviewUrl(row){
   if(!r.ok)throw new Error(data?.message||data?.error||"Não consegui abrir o Trial Reel.");
   const signed=data?.signedURL||data?.signedUrl;
   if(!signed)throw new Error("Preview temporário indisponível.");
-  return signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
+  const url=signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
+  trialPreviewCache.set(key,{url,expires:Date.now()+50*60*1000});
+  return url;
 }
 async function previewTrialReel(id){
   const row=(trialReelsData||[]).find(x=>String(x.id)===String(id));if(!row)return;
@@ -4785,8 +4792,8 @@ async function previewTrialReel(id){
     const url=await getTrialPreviewUrl(row);
     $("#modalHost").innerHTML='<div class="modal reel-preview-modal" onclick="if(event.target===this)closeModal()"><div class="reel-phone-shell">'+
       '<button class="reel-close" onclick="closeModal()">×</button><div class="reel-topbar"><b>Trial Reel</b><span>◈</span></div>'+
-      '<video src="'+esc(url)+'" controls autoplay muted loop playsinline></video>'+
-      '<div class="calendar-cover-preview"><video src="'+esc(url)+'#t='+(Number(row.cover_offset_ms||3500)/1000).toFixed(2)+'" muted playsinline preload="metadata"></video><div><b>CAPA AUTO</b><span>Frame escolhido em '+(Number(row.cover_offset_ms||3500)/1000).toFixed(1)+'s</span></div></div>'+
+      '<video src="'+esc(url)+'" controls autoplay muted loop playsinline preload="metadata"></video>'+
+      '<div class="calendar-cover-preview"><div class="cover-placeholder">◈</div><div><b>CAPA AUTO</b><span>Frame escolhido em '+(Number(row.cover_offset_ms||3500)/1000).toFixed(1)+'s · sem segundo download</span></div></div>'+
       '<div class="reel-overlay"><b>@'+esc(instagramIntegration?.account_label||"Instagram")+'</b><span>'+esc(row.caption||row.file_name||"Trial Reel")+'</span>'+
       '<small>'+esc(trialStatusMeta(row.status).label)+' · '+(row.scheduled_at?new Date(row.scheduled_at).toLocaleString("pt-BR"):"")+'</small></div></div></div>';
   }catch(e){toast(e.message,"err")}
@@ -5459,6 +5466,9 @@ async function getScheduledPreviewUrl(x){
   if(!x?.cloud)return null;
   if(!x.storagePath)throw new Error("Caminho do vídeo não encontrado.");
   if(!cloudSession)throw new Error("Faça login para abrir o vídeo.");
+  const key=x.storagePath;
+  const cached=calendarPreviewCache.get(key);
+  if(cached&&cached.expires>Date.now()+60000)return cached.url;
   const encoded=x.storagePath.split("/").map(encodeURIComponent).join("/");
   const r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/videos/"+encoded,{
     method:"POST",
@@ -5469,7 +5479,9 @@ async function getScheduledPreviewUrl(x){
   if(!r.ok)throw new Error(data?.message||data?.error||"Não consegui abrir o vídeo.");
   const signed=data?.signedURL||data?.signedUrl;
   if(!signed)throw new Error("URL temporária indisponível.");
-  return signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
+  const url=signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
+  calendarPreviewCache.set(key,{url,expires:Date.now()+50*60*1000});
+  return url;
 }
 function setupCalendarVideoThumbs(){
   if(calendarPreviewObserver){try{calendarPreviewObserver.disconnect()}catch{}}
@@ -5490,12 +5502,8 @@ async function loadCalendarVideoThumb(el){
   el.dataset.loading="1";
   try{
     let url=null;
-    const key=x.storagePath||x.scheduleId||x.videoId||date+"#"+slot;
-    const cached=calendarPreviewCache.get(key);
-    if(cached&&cached.expires>Date.now()+60000)url=cached.url;
-    else if(x.cloud){
+    if(x.cloud){
       url=await getScheduledPreviewUrl(x);
-      if(url)calendarPreviewCache.set(key,{url,expires:Date.now()+50*60*1000});
     }else{
       const rec=await dbGet(x.videoId);
       if(rec?.blob)url=URL.createObjectURL(rec.blob);
@@ -5505,7 +5513,7 @@ async function loadCalendarVideoThumb(el){
     video.src=url;
     video.muted=true;
     video.playsInline=true;
-    video.preload="auto";
+    video.preload="metadata";
     video.setAttribute("aria-hidden","true");
     const coverSeconds=Math.max(.25,Number(x.coverOffsetMs||3500)/1000);
     video.onloadedmetadata=()=>{
@@ -5537,10 +5545,10 @@ async function previewScheduled(date,slot){
       <div class="reel-phone-shell">
         <button class="reel-close" onclick="closeModal()">×</button>
         <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
-        <video src="${esc(url)}" controls autoplay playsinline></video>
+        <video src="${esc(url)}" controls autoplay playsinline preload="metadata"></video>
         <div class="calendar-cover-preview">
-          <video src="${esc(url)}#t=${(Number(x.coverOffsetMs||3500)/1000).toFixed(2)}" muted playsinline preload="metadata"></video>
-          <div><b>CAPA AUTO</b><span>Frame escolhido em ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s</span></div>
+          <div class="cover-placeholder">▶</div>
+          <div><b>CAPA AUTO</b><span>Frame escolhido em ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s · sem segundo download</span></div>
         </div>
         <div class="reel-overlay">
           <b>@${esc(instagramIntegration?.account_label||"cloudentflow")}</b>
@@ -5554,7 +5562,16 @@ async function previewScheduled(date,slot){
   }catch(e){alert(e.message)}
 }
 
-function closeModal(){const m=$("#modalHost .modal");if(m?.dataset.url)URL.revokeObjectURL(m.dataset.url);$("#modalHost").innerHTML=""}
+function closeModal(){
+  const m=$("#modalHost .modal");
+  if(m){
+    m.querySelectorAll("video,audio").forEach(media=>{
+      try{media.pause();media.removeAttribute("src");media.load()}catch{}
+    });
+  }
+  if(m?.dataset.url)URL.revokeObjectURL(m.dataset.url);
+  $("#modalHost").innerHTML="";
+}
 let dragInfo=null;
 function dragSlot(e,date,slot){dragInfo={date,slot};e.dataTransfer.setData("text/plain","slot")}
 function dropOnDay(e,date){
@@ -6640,9 +6657,8 @@ function goFromProductionToCalendar(date){
 }
 
 function productionPreviewMarkup(url,kind){
-  if(!url)return '<span class="production-preview-fallback">'+(kind==="frame"?"▧":"▶")+'</span>';
-  if(kind==="frame")return '<img class="production-inline-preview" src="'+esc(url)+'" alt="Frame">';
-  return '<video class="production-inline-preview" src="'+esc(url)+'#t=0.05" muted playsinline preload="metadata"></video>';
+  if(kind==="frame"&&url)return '<img class="production-inline-preview" src="'+esc(url)+'" alt="Frame">';
+  return '<span class="production-preview-fallback" aria-hidden="true">'+(kind==="frame"?"▧":"▶")+'</span>';
 }
 
 async function downloadProductionResult(id,number){
