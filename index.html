@@ -2592,6 +2592,44 @@ body.auth-checking .auth-boot{display:grid}
 @media(max-width:1000px){.smart-validated-board{grid-template-columns:repeat(4,1fr)}.smart-history-row{grid-template-columns:8px 1fr auto}.smart-history-row p{grid-column:2/-1}}
 @media(max-width:700px){.smart-validation-kpis{grid-template-columns:1fr 1fr}.smart-validated-board{grid-template-columns:repeat(2,1fr)}.smart-state-flow{justify-content:flex-start;overflow:auto}.smart-history-row{grid-template-columns:8px 1fr}.smart-history-row time{grid-column:2}.smart-history-row p{grid-column:2}}
 
+
+/* ===== Quota-safe previews + fluid interaction patch ===== */
+:where(button,.btn,[role="button"]){-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+:where(button,.btn,[role="button"]):not(:disabled){
+  transition:transform .14s cubic-bezier(.2,.8,.2,1),background-color .14s ease,border-color .14s ease,color .14s ease,opacity .14s ease,box-shadow .14s ease;
+  will-change:transform;
+}
+:where(button,.btn,[role="button"]):not(:disabled):active{transform:translate3d(0,1px,0) scale(.975)}
+:where(button,.btn).is-pending{pointer-events:none;opacity:.72;cursor:progress}
+.button-spinner{width:11px;height:11px;border:1.5px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:buttonSpin .55s linear infinite;flex:0 0 auto}
+@keyframes buttonSpin{to{transform:rotate(360deg)}}
+.calendar-video-thumb.is-lightweight video{display:none!important}
+.calendar-video-thumb.is-lightweight{background:linear-gradient(145deg,#17131a,#0d1015)}
+.calendar-video-thumb.is-lightweight .calendar-thumb-play{opacity:1}
+.production-calendar-overview-btn{display:inline-flex!important;align-items:center;gap:6px}
+.production-calendar-overview-btn b{min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:#24131b;color:#ff78a7;font-size:8px}
+.production-calendar-capacity{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:13px 0}
+.production-calendar-day{min-width:0;padding:9px 7px;border:1px solid #272d36;border-radius:10px;background:#0d1015;color:#d8dde5;text-align:left;display:flex;flex-direction:column;gap:3px}
+.production-calendar-day span{text-transform:capitalize;font-size:8px;color:#7b8492;font-weight:900}
+.production-calendar-day b{font-size:10px;white-space:nowrap}
+.production-calendar-day small{font-size:7px;color:#697281;white-space:nowrap}
+.production-calendar-day.has-space:hover,.production-calendar-day.selected{border-color:#6f3048;background:#191016;box-shadow:0 0 0 1px rgba(255,63,127,.12)}
+.production-calendar-day.selected b{color:#ff74a5}
+.production-calendar-day.is-full{opacity:.48}
+.production-calendar-capacity.overview .production-calendar-day.is-full{opacity:.7}
+.production-calendar-overview-note{display:flex;gap:7px;align-items:flex-start;margin-top:10px;padding:10px;border:1px solid #202630;border-radius:9px;background:#0a0d12;color:#747d8b;font-size:8px;line-height:1.45}
+.production-calendar-overview-note span{color:#ff4f8d}
+.production-calendar-fields{margin-top:12px}
+.production-calendar-modal-actions{justify-content:flex-end;margin-top:14px;gap:7px}
+.production-scheduled-summary{display:flex;align-items:center;gap:10px;margin:12px 0;padding:12px;border:1px solid #284535;border-radius:10px;background:#0b1510}
+.production-scheduled-summary>span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#153321;color:#77e6a3;font-weight:900}
+.production-scheduled-summary b,.production-scheduled-summary small{display:block}
+.production-scheduled-summary b{font-size:10px}.production-scheduled-summary small{font-size:8px;color:#748078;margin-top:3px}
+.calendar-job-toggle.scheduled{border-color:#28513a!important;background:#0c1912!important;color:#7ce9a7!important}
+.btn.danger{border-color:#542830!important;background:#1a0d10!important;color:#ff9299!important}
+@media(max-width:760px){.production-calendar-capacity{grid-template-columns:repeat(4,minmax(0,1fr))}.runninghub-command-actions{flex-wrap:wrap}}
+@media(max-width:430px){.production-calendar-capacity{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){:where(button,.btn,[role="button"]){transition:none!important}.button-spinner{animation-duration:1s}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -5106,19 +5144,15 @@ async function getScheduledPreviewUrl(x){
 }
 function setupCalendarVideoThumbs(){
   if(calendarPreviewObserver){try{calendarPreviewObserver.disconnect()}catch{}}
-  const thumbs=[...document.querySelectorAll(".calendar-video-thumb")];
-  if(!thumbs.length)return;
-  const load=el=>loadCalendarVideoThumb(el);
-  if(!("IntersectionObserver" in window)){thumbs.forEach(load);return}
-  calendarPreviewObserver=new IntersectionObserver(entries=>{
-    entries.forEach(entry=>{
-      if(!entry.isIntersecting)return;
-      calendarPreviewObserver.unobserve(entry.target);
-      load(entry.target);
-    });
-  },{root:document.querySelector(".ui3-calendar-scroll"),rootMargin:"180px"});
-  thumbs.forEach(el=>calendarPreviewObserver.observe(el));
+  calendarPreviewObserver=null;
+  // Calendar cards stay lightweight; the real video loads only after a tap.
+  document.querySelectorAll(".calendar-video-thumb").forEach(el=>{
+    el.classList.add("is-lightweight");
+    delete el.dataset.loading;
+    delete el.dataset.loaded;
+  });
 }
+
 async function loadCalendarVideoThumb(el){
   if(!el||el.dataset.loading==="1"||el.dataset.loaded==="1")return;
   const date=el.dataset.date,slot=Number(el.dataset.slot);
@@ -5932,19 +5966,13 @@ function automationPage(){
 
 async function loadProductionData(forcePreviews=false){
   if(!cloudSession){productionData=null;return}
-  const previousPreviews=productionData?.previews||{};
-  const previousSignature=productionData?.previewSignature||"";
   const [queue,status]=await Promise.all([
     cloudFetch("?resource=production"),
     cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
   ]);
-  const signature=(queue.jobs||[]).slice(0,30).map(j=>j.id).join("|");
-  let previews=previousPreviews;
-  if(currentPage==="production"&&(forcePreviews||!Object.keys(previews).length||signature!==previousSignature)){
-    const p=await cloudFetch("?resource=production-previews").catch(()=>({previews:{}}));
-    previews=p.previews||{};
-  }
-  productionData={...queue,runninghubStatus:status,previews,previewSignature:signature};
+  // Previews are intentionally on-demand. Auto-loading metadata for every video
+  // caused repeated range requests and unnecessary Supabase egress.
+  productionData={...queue,runninghubStatus:status,previews:{},previewSignature:"lightweight"};
 }
 
 function productionStatusMeta(status){
@@ -6038,36 +6066,45 @@ async function addProductionJob(){
     productionPage();
   }
 }
-async function controlRunningHub(operation){
+async function controlRunningHub(operation,button=null){
+  actionButtonBusy(button,true,operation==="pause"?"Pausando…":"Executando…");
   try{
     await cloudFetch("?action=runninghub-control",{
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({operation})
     });
-    await loadProductionData();
-    renderAll();
+    await loadProductionData(false);
+    if(currentPage==="production")productionPage();
     const msg=operation==="pause"?"Fila pausada.":operation==="run"?"Fila executada agora.":"Produção retomada.";
     toast(msg,"ok");
-  }catch(e){toast(e.message,"err")}
+  }catch(e){
+    actionButtonBusy(button,false);
+    toast(e.message,"err");
+  }
 }
 
-async function productionAction(id,operation){
+async function productionAction(id,operation,button=null){
+  actionButtonBusy(button,true,operation==="cancel"?"Cancelando…":operation==="retry"?"Reenviando…":"Executando…");
   try{
     const result=await cloudFetch("?action=production-job",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,operation})});
-    await loadProductionData(true);
-    productionPage();
+    await loadProductionData(false);
+    if(currentPage==="production")productionPage();
     const msg=operation==="retry"
       ?"Job reenviado para a fila."
       :operation==="run"
         ?(result?.queued?"Job priorizado. Vai iniciar assim que a vaga atual liberar.":"Execução iniciada para este job.")
         :"Job cancelado.";
     toast(msg,"ok");
-  }catch(e){toast(e.message,"err")}
+  }catch(e){
+    actionButtonBusy(button,false);
+    toast(e.message,"err");
+  }
 }
+
 function productionPreviewFromButton(el){previewProductionJob(el.dataset.id,el.dataset.kind||"result")}
 
-function productionActionFromButton(el){productionAction(el.dataset.id,el.dataset.op)}
+function productionActionFromButton(el){productionAction(el.dataset.id,el.dataset.op,el)}
 async function previewProductionJob(id,kind="result"){
   try{
     const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind="+encodeURIComponent(kind));
@@ -6207,6 +6244,72 @@ function ensureProductionTicker(){
     },10000);
   }
 }
+function actionButtonBusy(button,busy,label=""){
+  if(!button)return;
+  if(busy){
+    if(!button.dataset.idleHtml)button.dataset.idleHtml=button.innerHTML;
+    button.classList.add("is-pending");
+    button.disabled=true;
+    if(label)button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>'+esc(label)+'</span>';
+  }else{
+    button.classList.remove("is-pending");
+    button.disabled=false;
+    if(button.dataset.idleHtml){
+      button.innerHTML=button.dataset.idleHtml;
+      delete button.dataset.idleHtml;
+    }
+  }
+}
+function productionCalendarCapacity(){
+  const base=calendarBasePostsPerDay();
+  return weekDates().map(d=>{
+    const date=localISO(d);
+    const used=filledCount(date);
+    const baseUsed=Math.min(base,used);
+    return {
+      date,dateObj:d,used,base,
+      free:Math.max(0,base-baseUsed),
+      label:d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".",""),
+      number:String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")
+    };
+  });
+}
+function productionCalendarCapacityMarkup(selectedDate="",interactive=true){
+  return '<div class="production-calendar-capacity">'+productionCalendarCapacity().map(x=>
+    '<button type="button" data-calendar-date="'+x.date+'" class="production-calendar-day '+(x.date===selectedDate?"selected ":"")+(x.free?"has-space":"is-full")+'" '+
+      (interactive&&x.free?'onclick="setProductionScheduleDay(\''+x.date+'\')"':'disabled')+'>'+
+      '<span>'+esc(x.label)+'</span><b>'+x.free+(x.free===1?" vaga":" vagas")+'</b><small>'+x.number+' · '+x.used+'/'+x.base+'</small>'+
+    '</button>'
+  ).join("")+'</div>';
+}
+function setProductionScheduleDay(date){
+  const row=productionCalendarCapacity().find(x=>x.date===date);
+  if(!row||row.free<=0)return;
+  const day=$("#productionScheduleDay"),time=$("#productionScheduleTime");
+  if(day)day.value=date;
+  const target=firstValidDefaultSlot(date);
+  if(time&&target?.time)time.value=target.time;
+  document.querySelectorAll(".production-calendar-day").forEach(el=>el.classList.toggle("selected",el.dataset.calendarDate===date));
+}
+function openProductionCalendarOverview(){
+  const rows=productionCalendarCapacity();
+  const total=rows.reduce((n,x)=>n+x.free,0);
+  $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box production-calendar-overview">'+
+    '<div class="modal-head"><div><b>Calendário · '+total+' vagas livres</b><div class="muted">Vagas base dos próximos 7 dias. Toque em um dia para abrir no calendário.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
+    '<div class="production-calendar-capacity overview">'+rows.map(x=>
+      '<button type="button" data-calendar-date="'+x.date+'" class="production-calendar-day '+(x.free?"has-space":"is-full")+'" onclick="goFromProductionToCalendar(\''+x.date+'\')">'+
+        '<span>'+esc(x.label)+'</span><b>'+x.free+(x.free===1?" vaga":" vagas")+'</b><small>'+x.number+' · '+x.used+'/'+x.base+'</small>'+
+      '</button>'
+    ).join("")+'</div>'+
+    '<div class="production-calendar-overview-note"><span>●</span> O limite base atual é '+calendarBasePostsPerDay()+' vídeos por dia. Extras manuais continuam disponíveis no calendário.</div>'+
+  '</div></div>';
+}
+function goFromProductionToCalendar(date){
+  closeModal();
+  showPage("calendar");
+  requestAnimationFrame(()=>setTimeout(()=>jumpToCalendarDay(date),30));
+}
+
 function productionPreviewMarkup(url,kind){
   if(!url)return '<span class="production-preview-fallback">'+(kind==="frame"?"▧":"▶")+'</span>';
   if(kind==="frame")return '<img class="production-inline-preview" src="'+esc(url)+'" alt="Frame">';
@@ -6228,42 +6331,98 @@ async function downloadProductionResult(id,number){
 }
 function openProductionScheduleModal(id,number){
   if(!cloudSession)return;
+  const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+  if(!job)return;
+  const scheduled=!!job.meta?.scheduled;
+  const scheduledAt=job.meta?.scheduled_at?new Date(job.meta.scheduled_at):null;
   const today=new Date(),tomorrow=new Date(today);tomorrow.setDate(today.getDate()+1);
-  const day=localISO(tomorrow);
-  $("#modalHost").innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box production-schedule-modal">
-    <div class="modal-head"><div><b>Adicionar Vídeo final ${number} ao calendário</b><div class="muted">Escolha dia e horário. Esse agendamento fica manual e protegido do Smart Scheduler.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
-    <div class="formgrid">
-      <div class="field"><label>Dia</label><input id="productionScheduleDay" type="date" value="${day}"></div>
-      <div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="12:00"></div>
-      <div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>
-    </div>
-    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="scheduleProductionResult('${id}')">Adicionar ao calendário</button></div>
-  </div></div>`;
+  const rows=productionCalendarCapacity();
+  const preferred=localISO(tomorrow);
+  const initial=scheduled&&scheduledAt
+    ? localISO(scheduledAt)
+    : (rows.find(x=>x.date===preferred&&x.free>0)?.date||rows.find(x=>x.free>0)?.date||rows[0]?.date||preferred);
+  const initialTarget=firstValidDefaultSlot(initial);
+  const initialTime=scheduled&&scheduledAt
+    ? String(scheduledAt.getHours()).padStart(2,"0")+":"+String(scheduledAt.getMinutes()).padStart(2,"0")
+    : (initialTarget?.time||"12:00");
+  const noSpace=!scheduled&&!rows.some(x=>x.free>0);
+
+  $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box production-schedule-modal">'+
+    '<div class="modal-head"><div><b>'+(scheduled?'Vídeo final '+number+' no calendário':'Adicionar Vídeo final '+number+' ao calendário')+'</b>'+
+      '<div class="muted">'+(scheduled?'Você pode remover do calendário sem apagar o vídeo gerado.':'Escolha um dia pelas vagas disponíveis. O horário continua manual e protegido do Smart Scheduler.')+'</div></div>'+
+      '<button class="btn" onclick="closeModal()">Fechar</button></div>'+
+    productionCalendarCapacityMarkup(initial,!scheduled)+
+    (scheduled
+      ? '<div class="production-scheduled-summary"><span>✓</span><div><b>Agendado para '+esc(initial)+' às '+esc(initialTime)+'</b><small>O arquivo gerado continua salvo mesmo se você retirar do calendário.</small></div></div>'+
+        '<div class="toolbar production-calendar-modal-actions"><button id="productionScheduleRemove" class="btn danger" onclick="removeProductionResultFromCalendar(\''+esc(id)+'\',this)">− Tirar do calendário</button><button class="btn" onclick="goFromProductionToCalendar(\''+esc(initial)+'\')">Abrir calendário</button></div>'
+      : '<div class="formgrid production-calendar-fields">'+
+          '<div class="field"><label>Dia</label><input id="productionScheduleDay" type="date" value="'+esc(initial)+'" readonly></div>'+
+          '<div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="'+esc(initialTime)+'"></div>'+
+          '<div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>'+
+        '</div>'+
+        '<div class="toolbar production-calendar-modal-actions"><button id="productionScheduleSave" class="btn primary" '+(noSpace?'disabled':'')+' onclick="scheduleProductionResult(\''+esc(id)+'\',this)">'+(noSpace?'Semana sem vagas base':'＋ Adicionar ao calendário')+'</button></div>'
+    )+
+  '</div></div>';
 }
-async function scheduleProductionResult(id){
+async function scheduleProductionResult(id,button=null){
   const day=$("#productionScheduleDay")?.value,time=$("#productionScheduleTime")?.value,caption=$("#productionScheduleCaption")?.value||"";
   if(!day||!time){toast("Escolha dia e horário.","err");return}
+  const capacity=productionCalendarCapacity().find(x=>x.date===day);
+  if(capacity&&capacity.free<=0){toast("Esse dia não tem vaga base livre.","err");return}
   const check=validateSchedule(day,time);
   if(!check.ok){toast(check.msg,"err");return}
   const [h,m]=time.split(":").map(Number),at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
+  actionButtonBusy(button,true,"Adicionando…");
   try{
     const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
     let clean={status:"legacy"};
     if(job?.result_video_id){
-      toast("Preparando vídeo para publicação…","ok");
+      if(button)button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>Preparando vídeo…</span>';
       clean=await runMediaCleaner("video",job.result_video_id,{quiet:true});
       if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
     }
-    await cloudFetch("?action=production-schedule",{
+    const result=await cloudFetch("?action=production-schedule",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual"})
     });
-    await Promise.all([loadProductionData(true),syncFromBackend()]);
-    closeModal();renderAll();
+    if(job){
+      job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:at.toISOString()};
+    }
+    closeModal();
+    if(currentPage==="production")productionPage();
     toast(clean?.status==="ready"?"Metadados removidos e vídeo adicionado ao calendário.":"Vídeo adicionado ao calendário.","ok");
-  }catch(e){toast(e.message,"err")}
+    Promise.allSettled([loadProductionData(false),syncFromBackend()]).then(()=>{
+      if(currentPage==="production")productionPage();
+    });
+  }catch(e){
+    actionButtonBusy(button,false);
+    toast(e.message,"err");
+  }
 }
+async function removeProductionResultFromCalendar(id,button=null){
+  const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+  if(!job)return;
+  actionButtonBusy(button,true,"Removendo…");
+  try{
+    await cloudFetch("?action=production-schedule",{
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id,schedule_id:job.meta?.schedule_id||null})
+    });
+    job.meta={...(job.meta||{}),scheduled:false,schedule_id:null,scheduled_at:null};
+    closeModal();
+    if(currentPage==="production")productionPage();
+    toast("Vídeo retirado do calendário. O resultado foi preservado.","ok");
+    Promise.allSettled([loadProductionData(false),syncFromBackend()]).then(()=>{
+      if(currentPage==="production")productionPage();
+    });
+  }catch(e){
+    actionButtonBusy(button,false);
+    toast(e.message,"err");
+  }
+}
+
 async function deleteProductionJob(id){
   if(!confirm("Excluir este job e seus arquivos de produção? Se o resultado já estiver no calendário, o vídeo agendado será preservado."))return;
   try{
@@ -6345,7 +6504,7 @@ function productionJobRow(j,i,total){
     action='<div class="production-ready-actions">'+
       '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
-      (scheduled?'<button disabled>✓ No calendário</button>':'<button onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">📅 Adicionar ao calendário</button>')+
+      '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
     '</div>';
   }else if(["failed","cancelled"].includes(j.status)){
@@ -6436,6 +6595,8 @@ function productionPage(){
   const worker=productionData?.worker;
   const rh=productionData?.runninghubStatus||{};
   const c=productionCounts();
+  const calendarCapacity=productionCalendarCapacity();
+  const calendarFree=calendarCapacity.reduce((sum,x)=>sum+x.free,0);
   const workerOnline=!!worker?.online;
   const credits=Number.isFinite(Number(rh.credits))?Number(rh.credits):null;
   const activeTasks=Number.isFinite(Number(rh.activeTasks))?Number(rh.activeTasks):null;
@@ -6453,9 +6614,10 @@ function productionPage(){
     '<div class="runninghub-commandbar">'+
       '<div class="runninghub-command-info"><span>RunningHub</span><b>'+(rh.enabled?"Produção ativa":"Produção pausada")+'</b><small>'+(activeTasks===null?"Status de tarefas indisponível":activeTasks+" tarefa(s) ativa(s)")+'</small></div>'+
       '<div class="runninghub-command-actions">'+
-        '<button class="btn success" onclick="controlRunningHub(\'run\')">▶ Executar fila</button>'+
-        '<button class="btn" onclick="controlRunningHub(\'pause\')">Ⅱ Pausar</button>'+
-        '<button class="btn" onclick="loadProductionData(true).then(productionPage)">↻ Atualizar</button>'+
+        '<button class="btn production-calendar-overview-btn" onclick="openProductionCalendarOverview()">📅 Calendário <b>'+calendarFree+'</b></button>'+
+        '<button class="btn success" onclick="controlRunningHub(\'run\',this)">▶ Executar fila</button>'+
+        '<button class="btn" onclick="controlRunningHub(\'pause\',this)">Ⅱ Pausar</button>'+
+        '<button class="btn" onclick="actionButtonBusy(this,true,\'Atualizando…\');loadProductionData(false).then(productionPage).catch(e=>{actionButtonBusy(this,false);toast(e.message,\'err\')})">↻ Atualizar</button>'+
       '</div>'+
     '</div>'+
 
