@@ -4791,13 +4791,21 @@ async function getTrialPreviewUrl(row){
 async function previewTrialReel(id){
   const row=(trialReelsData||[]).find(x=>String(x.id)===String(id));if(!row)return;
   try{
+    closeModal();
     const url=await getTrialPreviewUrl(row);
+    auditMediaAccess("trial_preview",{bytes:Number(row.media_clean_report?.output_bytes||row.media_clean_report?.input_bytes||0)});
     $("#modalHost").innerHTML='<div class="modal reel-preview-modal" onclick="if(event.target===this)closeModal()"><div class="reel-phone-shell">'+
       '<button class="reel-close" onclick="closeModal()">×</button><div class="reel-topbar"><b>Trial Reel</b><span>◈</span></div>'+
       '<video src="'+esc(url)+'" controls autoplay muted loop playsinline preload="metadata"></video>'+
-      '<div class="calendar-cover-preview"><div class="cover-placeholder">◈</div><div><b>CAPA AUTO</b><span>Frame escolhido em '+(Number(row.cover_offset_ms||3500)/1000).toFixed(1)+'s · sem segundo download</span></div></div>'+
+      '<div class="calendar-cover-preview"><div class="cover-placeholder" data-trial-cover-thumb="1">◈</div><div><b>CAPA AUTO</b><span>Frame escolhido em '+(Number(row.cover_offset_ms||3500)/1000).toFixed(1)+'s · imagem leve</span></div></div>'+
       '<div class="reel-overlay"><b>@'+esc(instagramIntegration?.account_label||"Instagram")+'</b><span>'+esc(row.caption||row.file_name||"Trial Reel")+'</span>'+
       '<small>'+esc(trialStatusMeta(row.status).label)+' · '+(row.scheduled_at?new Date(row.scheduled_at).toLocaleString("pt-BR"):"")+'</small></div></div></div>';
+    if(row.thumbnail_storage_path){
+      getSignedThumbnailUrl(row.thumbnail_storage_path).then(thumb=>{
+        const host=$("#modalHost [data-trial-cover-thumb='1']");
+        if(host&&thumb)host.outerHTML='<img src="'+esc(thumb)+'" alt="Capa automática" loading="lazy">';
+      }).catch(()=>{});
+    }
   }catch(e){toast(e.message,"err")}
 }
 
@@ -5573,7 +5581,8 @@ async function previewScheduled(date,slot){
   const x=slotData(date,slot);if(!x)return;
   let url=null,objectUrl=false;
   try{
-    if(x.cloud)url=await getScheduledPreviewUrl(x);
+    closeModal();
+    if(x.cloud){url=await getScheduledPreviewUrl(x);auditMediaAccess("video_preview",{videoId:x.videoId,bytes:x.size})}
     else{
       const rec=await dbGet(x.videoId);
       if(!rec?.blob)throw new Error("Vídeo local indisponível.");
@@ -5585,8 +5594,8 @@ async function previewScheduled(date,slot){
         <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
         <video src="${esc(url)}" controls autoplay playsinline preload="metadata"></video>
         <div class="calendar-cover-preview">
-          <div class="cover-placeholder">▶</div>
-          <div><b>CAPA AUTO</b><span>Frame escolhido em ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s · sem segundo download</span></div>
+          <div class="cover-placeholder" data-cover-thumb="1">▶</div>
+          <div><b>CAPA AUTO</b><span>Frame escolhido em ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s · imagem leve</span></div>
         </div>
         <div class="reel-overlay">
           <b>@${esc(instagramIntegration?.account_label||"cloudentflow")}</b>
@@ -5597,6 +5606,12 @@ async function previewScheduled(date,slot){
     </div>`;
     const modal=$("#modalHost .modal");
     if(objectUrl)modal.dataset.url=url;
+    if(x.thumbnailPath){
+      getSignedThumbnailUrl(x.thumbnailPath).then(thumb=>{
+        const host=modal?.querySelector('[data-cover-thumb="1"]');
+        if(host&&thumb)host.outerHTML='<img src="'+esc(thumb)+'" alt="Capa automática" loading="lazy">';
+      }).catch(()=>{});
+    }
   }catch(e){alert(e.message)}
 }
 
@@ -6491,7 +6506,10 @@ function productionPreviewFromButton(el){previewProductionJob(el.dataset.id,el.d
 function productionActionFromButton(el){productionAction(el.dataset.id,el.dataset.op,el)}
 async function previewProductionJob(id,kind="result"){
   try{
+    closeModal();
+    const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
     const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind="+encodeURIComponent(kind));
+    if(kind!=="frame")auditMediaAccess("production_preview",{videoId:kind==="result"?job?.result_video_id:null,bytes:kind==="original"?Number(job?.original_size_bytes||0):0});
     const title=kind==="frame"?"Frame da modelo":kind==="original"?"Vídeo original":"Resultado RunningHub";
     const media=kind==="frame"
       ? '<img src="'+esc(r.url)+'" alt="Frame">'
@@ -7965,6 +7983,12 @@ function systemHealthMarkup(){
   const storage=systemPct(u.storage_bytes,limits.storage_bytes);
   const database=systemPct(u.database_bytes,limits.database_bytes);
   const rh=h.runninghub||{};
+  const eg=h.egress_guard||{};
+  const egressToday=Number(eg.estimated_today_bytes||0);
+  const egressWarn=Number(eg.warn_bytes||125829120);
+  const egressCritical=Number(eg.critical_bytes||167772160);
+  const egressPct=egressCritical?Math.min(100,egressToday/egressCritical*100):0;
+  const egressLevel=egressToday>=egressCritical?"critical":egressToday>=egressWarn?"warn":"ok";
   const workers=h.workers||[];
   const workerOnline=workers.filter(w=>w.online).length;
   const workerTotal=workers.length;
@@ -7984,6 +8008,11 @@ function systemHealthMarkup(){
     '<div class="system-usage-grid">'+
       systemUsageCard("Storage",u.storage_bytes,limits.storage_bytes,(u.storage_objects||0)+" arquivos armazenados")+
       systemUsageCard("Banco de dados",u.database_bytes,limits.database_bytes,(counts.metrics_snapshots||0).toLocaleString("pt-BR")+" snapshots de métricas")+
+      '<div class="system-usage-card '+egressLevel+'">'+
+        '<div class="system-usage-card-head"><div><small>EGRESS ESTIMADO HOJE</small><b>'+systemFmtBytes(egressToday)+' <em>/ '+systemFmtBytes(egressCritical)+'</em></b></div><strong>'+egressPct.toFixed(1).replace(".",",")+'%</strong></div>'+
+        '<div class="system-meter"><i style="width:'+egressPct+'%"></i></div>'+
+        '<span>'+(egressLevel==="critical"?"Crítico — evite previews repetidos":egressLevel==="warn"?"Atenção — consumo diário alto":"Normal — previews protegidos")+'</span>'+
+      '</div>'+
       '<div class="system-usage-card '+(rhCredits!==null&&rh.avg_credits_per_job&&rhCredits<rh.avg_credits_per_job*3?"warn":"ok")+'">'+
         '<div class="system-usage-card-head"><div><small>RUNNINGHUB</small><b>'+(rhCredits===null?"—":rhCredits.toLocaleString("pt-BR"))+' <em>créditos</em></b></div><strong>'+(rh.estimated_jobs_remaining===null||rh.estimated_jobs_remaining===undefined?"—":"~"+rh.estimated_jobs_remaining+" jobs")+'</strong></div>'+
         '<div class="system-meter credit"><i style="width:'+(rhCredits===null?0:Math.min(100,Math.max(8,rh.estimated_jobs_remaining?Math.min(100,rh.estimated_jobs_remaining*10):15)))+'%"></i></div>'+
@@ -8034,7 +8063,7 @@ function systemHealthMarkup(){
         '<div><small>REALTIME / MÊS</small><b>'+Number(limits.realtime_messages_monthly||0).toLocaleString("pt-BR")+'</b><span>mensagens</span></div>'+
         '<div><small>CONEXÕES REALTIME</small><b>'+Number(limits.realtime_peak_connections||0).toLocaleString("pt-BR")+'</b><span>pico permitido</span></div>'+
       '</div>'+
-      '<p class="system-reference-note">Storage e banco acima são medidos diretamente no projeto. Para Egress, Edge Functions e Realtime, o CloudentFlow mostra o teto do plano sem inventar um consumo que o runtime não consegue ler.</p>'+
+      '<p class="system-reference-note">Storage e banco são medidos diretamente no projeto. O card “Egress estimado hoje” contabiliza leituras de mídia feitas pelo próprio CloudentFlow e serve como proteção antecipada; ele não substitui o valor oficial do Billing do Supabase.</p>'+
     '</div>'+
   '</div>';
 }
