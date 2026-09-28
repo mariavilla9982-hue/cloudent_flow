@@ -3035,6 +3035,7 @@ let cloudSession=null, backendOnline=false, instagramIntegration=null, platformA
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 const trialPreviewCache=new Map();
+const thumbnailUrlCache=new Map();
 let calendarPreviewObserver=null;
 let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
@@ -3699,6 +3700,7 @@ async function syncFromBackend(){
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
+      thumbnailPath:v.thumbnail_storage_path||"",
       coverOffsetMs:Number(v.cover_offset_ms||3500),coverStrategy:v.cover_strategy||"auto_after_3s",
       time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
       instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,pretrial:row.pretrial||null,
@@ -5380,6 +5382,9 @@ async function runMediaCleaner(entityType,id,{quiet=false}={}){
         source_url:ticket.source_url,
         target_path:ticket.target_path,
         upload_token:ticket.upload_token,
+        thumbnail_path:ticket.thumbnail_path||"",
+        thumbnail_upload_token:ticket.thumbnail_upload_token||"",
+        cover_offset_ms:Number(ticket.cover_offset_ms||3500),
         anon_key:ticket.anon_key,
         config:ticket.config||{}
       })
@@ -5390,14 +5395,15 @@ async function runMediaCleaner(entityType,id,{quiet=false}={}){
     }
 
     const targetPath=String(result.target_path||ticket.target_path||"");
+    const thumbnailPath=String(result.thumbnail_path||ticket.thumbnail_path||"");
     const report=result.report||{};
-    await cloudFetch("?action=media-clean-complete",{
+    const complete=await cloudFetch("?action=media-clean-complete",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({entity_type:entityType,id,target_path:targetPath,report})
+      body:JSON.stringify({entity_type:entityType,id,target_path:targetPath,thumbnail_path:thumbnailPath,report})
     });
     if(!quiet)toast("Metadados removidos · vídeo preservado ✓","ok");
-    return {status:"ready",target_path:targetPath,report};
+    return {status:"ready",target_path:targetPath,thumbnail_path:complete?.thumbnail_path||thumbnailPath||null,report};
   }catch(e){
     const message=e?.message||"Falha ao normalizar o vídeo.";
     let failed={status:"skipped",fail_open:true};
@@ -5436,7 +5442,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const schedule=res.schedule,video=res.video;
   const clean=await runMediaCleaner("video",video.id,{quiet:true});
   const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
-  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
+  state.slots[keyFor(date,slot)]={cloud:true,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,thumbnailPath:clean?.thumbnail_path||video.thumbnail_storage_path||"",coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
   save();
   if(clean?.status==="ready")log(`${file.name} com metadados removidos e agendado para ${date} às ${t}.`,"ok");
   else log(`${file.name} agendado para ${date} às ${t}; Media Cleaner: ${clean?.status||"pendente"}.`,clean?.status==="skipped"?"warn":"ok");
