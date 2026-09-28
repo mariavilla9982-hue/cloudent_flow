@@ -32,6 +32,13 @@ def _valid_target(path):
     ))
 
 
+def _valid_thumbnail_target(path):
+    return bool(re.fullmatch(
+        r"[0-9a-fA-F-]{36}/thumbnails/(?:video|trial)/[0-9a-fA-F-]{36}\.jpg",
+        path or "",
+    ))
+
+
 def _safe_int(value, fallback, low, high):
     try:
         n = int(value)
@@ -99,6 +106,7 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         input_path = None
         output_path = None
+        thumbnail_file = None
         try:
             length = int(self.headers.get("Content-Length") or 0)
             if length <= 0 or length > 65536:
@@ -108,6 +116,9 @@ class handler(BaseHTTPRequestHandler):
             source_url = str(payload.get("source_url") or "")
             target_path = str(payload.get("target_path") or "")
             upload_token = str(payload.get("upload_token") or "")
+            thumbnail_target = str(payload.get("thumbnail_path") or "")
+            thumbnail_upload_token = str(payload.get("thumbnail_upload_token") or "")
+            cover_offset_ms = _safe_int(payload.get("cover_offset_ms"), 3500, 250, 15000)
             anon_key = str(payload.get("anon_key") or "")
             cfg = payload.get("config") or {}
 
@@ -117,6 +128,10 @@ class handler(BaseHTTPRequestHandler):
                 return _json(self, {"ok": False, "error": "target_invalid"}, 400)
             if len(upload_token) < 20:
                 return _json(self, {"ok": False, "error": "upload_token_invalid"}, 400)
+            if thumbnail_target and not _valid_thumbnail_target(thumbnail_target):
+                return _json(self, {"ok": False, "error": "thumbnail_target_invalid"}, 400)
+            if thumbnail_target and len(thumbnail_upload_token) < 20:
+                return _json(self, {"ok": False, "error": "thumbnail_upload_token_invalid"}, 400)
             if len(anon_key) < 20:
                 return _json(self, {"ok": False, "error": "anon_key_invalid"}, 400)
 
@@ -179,6 +194,60 @@ class handler(BaseHTTPRequestHandler):
                 return _json(self, {"ok": False, "error": "ffmpeg_failed", "message": message}, 422)
 
             after = _probe(ffmpeg, output_path)
+
+            thumbnail_error = None
+            thumbnail_bytes = 0
+            if thumbnail_target:
+                try:
+                    fd, thumbnail_file = tempfile.mkstemp(prefix="cloudent-thumb-", suffix=".jpg")
+                    os.close(fd)
+                    seek_seconds = max(0.25, cover_offset_ms / 1000.0)
+                    duration_seconds = float(before.get("duration_seconds") or 0)
+                    if duration_seconds > 0:
+                        seek_seconds = min(seek_seconds, max(0.25, duration_seconds - 0.15))
+                    thumb_cmd = [
+                        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-ss", f"{seek_seconds:.3f}",
+                        "-i", input_path,
+                        "-frames:v", "1",
+                        "-vf", "scale='min(360,iw)':-2",
+                        "-q:v", "4",
+                        thumbnail_file,
+                    ]
+                    thumb_result = subprocess.run(
+                        thumb_cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=60,
+                    )
+                    if thumb_result.returncode != 0 or not os.path.exists(thumbnail_file) or os.path.getsize(thumbnail_file) <= 0:
+                        raise RuntimeError((thumb_result.stderr or "thumbnail_ffmpeg_failed").strip()[-500:])
+
+                    thumb_url = (
+                        SUPABASE_URL
+                        + "/storage/v1/object/upload/sign/videos/"
+                        + urllib.parse.quote(thumbnail_target, safe="/")
+                        + "?token="
+                        + urllib.parse.quote(thumbnail_upload_token, safe="")
+                    )
+                    thumb_headers = {
+                        "apikey": anon_key,
+                        "Authorization": "Bearer " + anon_key,
+                        "Content-Type": "image/jpeg",
+                        "cache-control": "max-age=2592000",
+                        "x-upsert": "true",
+                    }
+                    with open(thumbnail_file, "rb") as thumb:
+                        thumb_uploaded = requests.put(
+                            thumb_url, data=thumb, headers=thumb_headers, timeout=(20, 60)
+                        )
+                    if thumb_uploaded.status_code < 200 or thumb_uploaded.status_code >= 300:
+                        raise RuntimeError("thumbnail_upload_" + str(thumb_uploaded.status_code))
+                    thumbnail_bytes = os.path.getsize(thumbnail_file)
+                except Exception as exc:
+                    thumbnail_error = str(exc)[:500]
+
             input_bytes = os.path.getsize(input_path)
             output_bytes = os.path.getsize(output_path)
             input_hash = _sha256_file(input_path)
@@ -269,8 +338,20 @@ class handler(BaseHTTPRequestHandler):
                 "technical_validation_passed": stream_copy_verified,
                 "technical_warnings": warnings,
                 "visual_watermark_check": "not_requested",
+                "thumbnail_generated": bool(thumbnail_target and not thumbnail_error and thumbnail_bytes > 0),
+                "thumbnail_bytes": thumbnail_bytes,
+                "thumbnail_error": thumbnail_error,
+                "thumbnail_offset_ms": cover_offset_ms if thumbnail_target else None,
             }
-            return _json(self, {"ok": True, "target_path": target_path, "report": report})
+            return _json(
+                self,
+                {
+                    "ok": True,
+                    "target_path": target_path,
+                    "thumbnail_path": thumbnail_target if thumbnail_target and not thumbnail_error and thumbnail_bytes > 0 else None,
+                    "report": report,
+                },
+            )
         except subprocess.TimeoutExpired:
             return _json(self, {"ok": False, "error": "media_clean_timeout"}, 504)
         except requests.RequestException as exc:
@@ -278,7 +359,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as exc:
             return _json(self, {"ok": False, "error": "media_clean_failed", "message": str(exc)[:800]}, 500)
         finally:
-            for path in (input_path, output_path):
+            for path in (input_path, output_path, thumbnail_file):
                 if path:
                     try:
                         os.remove(path)
