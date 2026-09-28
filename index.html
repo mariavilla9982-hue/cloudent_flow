@@ -2630,6 +2630,242 @@ body.auth-checking .auth-boot{display:grid}
 @media(max-width:760px){.production-calendar-capacity{grid-template-columns:repeat(4,minmax(0,1fr))}.runninghub-command-actions{flex-wrap:wrap}}
 @media(max-width:430px){.production-calendar-capacity{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){:where(button,.btn,[role="button"]){transition:none!important}.button-spinner{animation-duration:1s}}
+
+/* ===== CloudentFlow Mobile UI v1 ===== */
+.mobile-appbar,.mobile-bottom-nav{display:none}
+#mobileMoreHost{display:none}
+
+@media(max-width:760px){
+  html{background:#07080b}
+  body{background:#07080b;overscroll-behavior-y:none}
+  body.auth-checking .mobile-appbar,
+  body.auth-checking .mobile-bottom-nav,
+  body:not(.auth-logged-in) .mobile-appbar,
+  body:not(.auth-logged-in) .mobile-bottom-nav{display:none!important}
+
+  .app,.app.sidebar-collapsed{display:block!important;min-height:100dvh}
+  .sidebar{display:none!important}
+  .topbar{display:none!important}
+  .main{
+    width:100%!important;
+    max-width:none!important;
+    padding:
+      calc(72px + env(safe-area-inset-top))
+      12px
+      calc(90px + env(safe-area-inset-bottom))!important;
+    margin:0!important;
+    overflow-x:hidden
+  }
+
+  .mobile-appbar{
+    position:fixed;
+    z-index:510;
+    inset:0 0 auto 0;
+    height:calc(60px + env(safe-area-inset-top));
+    padding:env(safe-area-inset-top) 12px 0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:rgba(8,9,13,.92);
+    border-bottom:1px solid #1b1f27;
+    backdrop-filter:blur(18px) saturate(135%);
+    -webkit-backdrop-filter:blur(18px) saturate(135%)
+  }
+  .mobile-brand{
+    flex:1;min-width:0;border:0;background:transparent;color:#fff;padding:0;
+    display:flex;align-items:center;gap:9px;text-align:left
+  }
+  .mobile-logo{
+    width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
+    flex:0 0 34px;background:linear-gradient(145deg,#ff4a88,#a6285d);
+    color:#fff;font-size:14px;font-weight:950;box-shadow:0 7px 22px rgba(255,63,127,.2)
+  }
+  .mobile-brand>span:last-child{min-width:0}
+  .mobile-brand b,.mobile-brand small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-brand b{font-size:12px;letter-spacing:-.02em}
+  .mobile-brand b span{color:#ff5b94}
+  .mobile-brand small{margin-top:1px;color:#6d7584;font-size:8px;font-weight:750}
+  .mobile-appbar-actions{display:flex;gap:7px}
+  .mobile-icon-btn,.mobile-add-btn{
+    position:relative;width:36px;height:36px;border-radius:11px;
+    border:1px solid #242a34;background:#101319;color:#c9ced7;display:grid;place-items:center;padding:0
+  }
+  .mobile-add-btn{
+    border-color:#ff3f7f;background:#ff3f7f;color:#fff;font-size:19px;
+    box-shadow:0 8px 22px rgba(255,63,127,.2)
+  }
+  .mobile-icon-btn i{
+    position:absolute;right:-3px;top:-4px;min-width:16px;height:16px;padding:0 4px;
+    border-radius:999px;background:#ff3f7f;color:#fff;font-size:7px;font-style:normal;
+    display:grid;place-items:center;border:2px solid #08090d
+  }
+
+  .mobile-bottom-nav{
+    position:fixed;z-index:520;left:8px;right:8px;bottom:calc(7px + env(safe-area-inset-bottom));
+    height:66px;padding:5px;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:2px;
+    background:rgba(13,15,20,.95);border:1px solid #242933;border-radius:20px;
+    box-shadow:0 18px 60px rgba(0,0,0,.5);
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%)
+  }
+  .mobile-bottom-nav button{
+    min-width:0;border:0;background:transparent;color:#697280;border-radius:15px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:5px 2px
+  }
+  .mobile-bottom-nav button.active{background:#1a1218;color:#ff6aa0}
+  .mobile-bottom-nav button b{font-size:7px;line-height:1;font-weight:850;white-space:nowrap}
+  .mobile-nav-icon,.mobile-nav-more{height:20px;display:grid;place-items:center}
+  .mobile-nav-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}
+  .mobile-nav-more{font-size:14px;font-weight:950;letter-spacing:1px}
+
+  #mobileMoreHost.open{display:block;position:fixed;z-index:700;inset:0}
+  .mobile-more-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px)}
+  .mobile-more-sheet{
+    position:absolute;left:0;right:0;bottom:0;
+    max-height:min(78dvh,680px);overflow:auto;
+    padding:8px 12px calc(18px + env(safe-area-inset-bottom));
+    background:#0b0d12;border:1px solid #252a34;border-bottom:0;
+    border-radius:24px 24px 0 0;box-shadow:0 -30px 70px rgba(0,0,0,.55);
+    animation:mobileSheetIn .22s cubic-bezier(.2,.8,.2,1)
+  }
+  @keyframes mobileSheetIn{from{transform:translateY(24px);opacity:.5}to{transform:translateY(0);opacity:1}}
+  .mobile-more-handle{width:42px;height:4px;border-radius:999px;background:#343a45;margin:2px auto 12px}
+  .mobile-more-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .mobile-more-head small,.mobile-more-head b{display:block}
+  .mobile-more-head small{font-size:7px;color:#646d7b;letter-spacing:.12em;font-weight:900}
+  .mobile-more-head b{font-size:16px;margin-top:2px}
+  .mobile-more-head>button{width:34px;height:34px;border-radius:10px;border:1px solid #242a33;background:#12151b;color:#9da5b2;font-size:18px}
+  .mobile-more-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .mobile-more-grid>button{
+    border:1px solid #20252e;border-radius:13px;background:#0f1218;color:#dfe3e9;
+    display:grid;grid-template-columns:34px 1fr 12px;gap:8px;align-items:center;
+    text-align:left;padding:10px
+  }
+  .mobile-more-grid>button>span{width:32px;height:32px;border-radius:10px;background:#17131b;color:#ff6b9f;display:grid;place-items:center}
+  .mobile-more-grid svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8}
+  .mobile-more-grid b,.mobile-more-grid small{display:block}
+  .mobile-more-grid b{font-size:9px}.mobile-more-grid small{font-size:7px;color:#697281;margin-top:2px}
+  .mobile-more-grid em{font-style:normal;color:#555e6c}
+  .mobile-more-account{margin-top:9px;padding:10px;border:1px solid #1f252d;border-radius:12px;background:#090b0f;display:grid;grid-template-columns:8px 1fr;gap:9px;align-items:center}
+  .mobile-more-account b,.mobile-more-account small{display:block}.mobile-more-account b{font-size:9px}.mobile-more-account small{font-size:7px;color:#687180;margin-top:2px}
+
+  /* Mobile page rhythm */
+  .page{animation:mobilePageIn .16s ease-out}
+  @keyframes mobilePageIn{from{opacity:.4;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .ui3-page-head,.dashboard-head,.production-head,.calendar-head,.trial-page-head{
+    margin:2px 0 12px!important;gap:8px!important;display:flex!important;align-items:flex-start!important;flex-direction:column!important
+  }
+  .ui3-page-head h2,.dashboard-title,.production-head h2{font-size:21px!important;line-height:1.08!important;margin:2px 0 4px!important}
+  .ui3-page-head p,.dashboard-sub,.production-head p{font-size:9px!important;line-height:1.45!important;color:#737c8a!important}
+  .ui3-eyebrow,.eyebrow-v2,.panel-kicker{font-size:7px!important}
+  .ui3-page-head>.btn,.calendar-head>.btn,.trial-page-head>.btn{width:100%;min-height:40px}
+
+  .card,.ui3-panel,.ui3-kpi,.kpi-v2,.calendar-control-card,.trial-page-control,.runninghub-commandbar{
+    border-radius:14px!important
+  }
+  .card,.ui3-panel{padding:13px!important}
+  .ui3-kpis,.kpi-grid-v2{grid-template-columns:1fr 1fr!important;gap:7px!important}
+  .ui3-kpi,.kpi-v2{padding:12px!important}
+  .ui3-kpi strong,.kpi-v2 strong{font-size:21px!important}
+  .ui3-grid-main,.ui3-grid-bottom,.ui3-analytics-grid,.ui3-settings-grid,.dashboard-grid-main,.dashboard-grid-bottom{
+    grid-template-columns:1fr!important;gap:9px!important
+  }
+  .ui3-panel-head{align-items:flex-start!important}
+
+  /* Calendar = native mobile feed, one day per card */
+  .ui3-calendar-scroll,.trial-page-scroll,.trial-reels-scroll{overflow:visible!important}
+  .week-grid.ui3-seven-days,.trial-page-week,.trial-week-grid{
+    display:grid!important;grid-template-columns:1fr!important;min-width:0!important;gap:9px!important
+  }
+  .day-column,.trial-page-day,.trial-day{min-height:0!important;border-radius:15px!important;padding:11px!important}
+  .calendar-control-main{grid-template-columns:1fr!important;gap:9px!important}
+  .calendar-date-control{max-width:none!important}
+  .calendar-nav-controls{grid-column:auto!important;justify-content:stretch!important;display:grid!important;grid-template-columns:1fr 1fr!important}
+  .calendar-nav-controls .btn{width:100%}
+  .calendar-health-row{grid-template-columns:1fr 1fr!important;gap:6px!important}
+  .calendar-mode-chip{grid-column:1/-1!important}
+  .ui31-slot{min-height:90px!important}
+  .calendar-day-add-more{min-height:38px}
+
+  /* Trial */
+  .trial-page-control{grid-template-columns:1fr!important;align-items:stretch!important;padding:11px!important}
+  .trial-page-kpis{grid-template-columns:1fr 1fr!important}
+  .trial-page-week{min-width:0!important}
+
+  /* Production / RunningHub */
+  .runninghub-commandbar{padding:11px!important}
+  .runninghub-command-actions{width:100%!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
+  .runninghub-command-actions .btn{width:100%!important;min-height:38px!important}
+  .production-stats,.production-cost-dashboard{grid-template-columns:1fr 1fr!important;gap:7px!important}
+  .production-cost-dashboard>div:last-child{grid-column:1/-1}
+  .production-main-grid,.production-input-grid{grid-template-columns:1fr!important}
+  .production-job{
+    display:grid!important;
+    grid-template-columns:24px minmax(0,1fr)!important;
+    gap:8px!important;padding:12px 2px!important
+  }
+  .production-job-num{grid-row:1;grid-column:1}
+  .production-media-cell{grid-row:1;grid-column:2;grid-template-columns:44px minmax(0,1fr)!important;width:100%!important}
+  .production-job .production-media-cell.frame,.production-job .production-arrow{display:none!important}
+  .production-job-state{grid-column:1/-1!important;grid-row:auto!important;padding-left:32px}
+  .production-job-actions{grid-column:1/-1!important;grid-row:auto!important;min-width:0!important;text-align:left!important;padding-left:32px}
+  .production-ready-actions,.production-wait-actions{grid-template-columns:1fr 1fr!important;min-width:0!important}
+  .production-ready-actions button,.production-wait-actions button,.production-job-actions>button{min-height:36px!important}
+  .production-drop-live{min-height:180px!important}
+  .production-calendar-capacity{grid-template-columns:1fr 1fr!important}
+
+  /* Frame extractor */
+  .frame-extractor-layout,.frame-extractor-v2{grid-template-columns:1fr!important}
+  .frame-links-input{min-height:160px!important}
+  .frame-download-grid{grid-template-columns:1fr!important}
+  .frame-result-row{grid-template-columns:48px minmax(0,1fr)!important}
+  .frame-result-number{display:none}
+  .frame-result-preview{width:48px;height:62px}
+  .frame-result-copy{grid-column:2}
+  .frame-result-status,.frame-result-actions{grid-column:2!important}
+  .frame-result-actions button{width:100%;min-height:36px}
+
+  /* Charts / tables / settings */
+  .ui3-chart-wrap{height:250px!important;padding:10px!important;overflow:hidden}
+  .ui3-chart-wrap svg{height:210px!important}
+  .ui3-preview-strip{grid-template-columns:repeat(4,112px)!important;overflow-x:auto!important;padding-bottom:5px}
+  .ui3-tabs{max-width:100%;width:100%!important;overflow-x:auto!important}
+  .ui3-settings-form{grid-template-columns:1fr!important}
+  .ui3-info-rows>div{align-items:flex-start}
+  .ui3-logs>div{grid-template-columns:1fr!important;gap:3px!important}
+  table{min-width:560px}
+  .card:has(table){overflow-x:auto}
+  .smart-validated-board{grid-template-columns:1fr 1fr!important}
+  .smart-validation-kpis{grid-template-columns:1fr 1fr!important}
+
+  /* Modals behave like bottom sheets */
+  .modal{align-items:flex-end!important;padding:0!important}
+  .modal-box{
+    width:100%!important;max-width:none!important;max-height:88dvh!important;overflow:auto!important;
+    margin:0!important;border-radius:22px 22px 0 0!important;padding:15px 13px calc(16px + env(safe-area-inset-bottom))!important;
+    border-left:0!important;border-right:0!important;border-bottom:0!important;
+    animation:mobileSheetIn .2s cubic-bezier(.2,.8,.2,1)
+  }
+  .formgrid{grid-template-columns:1fr!important}
+  .formgrid .full{grid-column:auto!important}
+  .toolbar{flex-wrap:wrap}
+  .toolbar>.btn{min-height:38px}
+
+  /* Login tuned for phone */
+  .login-shell{padding:12px!important}
+  .login-card{width:100%!important;max-width:420px!important;border-radius:18px!important;padding:18px!important}
+  .login-card-top h2{font-size:24px!important}
+}
+
+@media(max-width:390px){
+  .main{padding-left:9px!important;padding-right:9px!important}
+  .ui3-kpis,.kpi-grid-v2,.production-stats,.production-cost-dashboard{grid-template-columns:1fr!important}
+  .production-cost-dashboard>div:last-child{grid-column:auto}
+  .mobile-more-grid{grid-template-columns:1fr}
+  .calendar-health-row,.trial-page-kpis{grid-template-columns:1fr!important}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2689,6 +2925,18 @@ body.auth-checking .auth-boot{display:grid}
   </div>
 </div>
 <div class="app" id="appShell">
+  <header class="mobile-appbar" id="mobileAppbar">
+    <button class="mobile-brand" onclick="showPage('overview')" aria-label="Ir para visão geral">
+      <span class="mobile-logo">C</span>
+      <span><b>Cloudent<span>Flow</span></b><small id="mobilePageTitle">Visão geral</small></span>
+    </button>
+    <div class="mobile-appbar-actions">
+      <button class="mobile-icon-btn" onclick="toggleActivityPanel()" aria-label="Atividade">
+        <span>◔</span><i id="mobileNotificationCount" class="hidden">0</i>
+      </button>
+      <button class="mobile-add-btn" onclick="showPage('calendar');setTimeout(openScheduleModal,0)" aria-label="Agendar vídeo">＋</button>
+    </div>
+  </header>
 <aside class="sidebar">
   <div class="brand">
     <div class="brand-main"><div class="logo">C</div><span class="brand-name">Cloudent<span class="brand-accent">Flow</span></span></div>
@@ -2734,8 +2982,10 @@ body.auth-checking .auth-boot{display:grid}
   <section id="cloudentAI" class="page hidden"></section>
   <section id="settings" class="page hidden"></section>
 </main>
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Navegação principal"></nav>
 </div>
 
+<div id="mobileMoreHost"></div>
 <input id="videoPicker" type="file" accept="video/*" hidden>
 <input id="trialVideoPicker" type="file" accept="video/*" hidden>
 <div id="modalHost"></div>
@@ -3621,6 +3871,8 @@ function updateLiveChrome(){
     const fallback=failed+Math.min(9,activityFeedItems(20).filter(x=>x.type==="error"||x.type==="warn").length);
     const n=cloudSession?(notificationsData?.loaded?Number(notificationsData.unread||0):fallback):0;
     count.textContent=String(n);count.classList.toggle("hidden",n===0);
+    const mobileCount=$("#mobileNotificationCount");
+    if(mobileCount){mobileCount.textContent=String(n);mobileCount.classList.toggle("hidden",n===0)}
   }
 }
 
@@ -3698,7 +3950,66 @@ function bindSidebarHover(){
   });
   window.addEventListener("resize",()=>{
     if(window.innerWidth<=760)sidebar.classList.remove("hover-open");
+    else toggleMobileMore(false);
+    renderMobileNav();
   });
+}
+function isMobileUI(){return window.matchMedia("(max-width:760px)").matches}
+function mobilePrimaryPages(){return ["overview","calendar","production","metrics"]}
+function mobileNavItem(id){
+  const x=navItems.find(n=>n[0]===id);
+  return x||[id,"",id];
+}
+function renderMobileNav(){
+  const host=$("#mobileBottomNav");
+  if(!host)return;
+  const primary=mobilePrimaryPages();
+  const pageForActive=primary.includes(currentPage)?currentPage:"more";
+  host.innerHTML=primary.map(id=>{
+    const x=mobileNavItem(id);
+    const short={overview:"Início",calendar:"Agenda",production:"Produção",metrics:"Métricas"}[id]||x[2];
+    return '<button class="'+(pageForActive===id?"active":"")+'" data-mobile-page="'+id+'" onclick="showPage(\''+id+'\')">'+
+      '<span class="mobile-nav-icon">'+x[1]+'</span><b>'+short+'</b></button>';
+  }).join("")+
+    '<button class="'+(pageForActive==="more"?"active":"")+'" data-mobile-page="more" onclick="toggleMobileMore()">'+
+      '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
+}
+function mobileMoreItems(){
+  return ["trialReels","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+}
+function toggleMobileMore(force){
+  const host=$("#mobileMoreHost");if(!host)return;
+  const open=typeof force==="boolean"?force:!host.classList.contains("open");
+  if(!open){
+    host.className="";
+    host.innerHTML="";
+    return;
+  }
+  host.className="open";
+  host.innerHTML='<div class="mobile-more-backdrop" onclick="toggleMobileMore(false)"></div>'+
+    '<section class="mobile-more-sheet" role="dialog" aria-label="Mais opções">'+
+      '<div class="mobile-more-handle"></div>'+
+      '<div class="mobile-more-head"><div><small>CLOUDENTFLOW</small><b>Mais ferramentas</b></div><button onclick="toggleMobileMore(false)">×</button></div>'+
+      '<div class="mobile-more-grid">'+mobileMoreItems().map(id=>{
+        const x=mobileNavItem(id);
+        const beta=["xStudio","tiktokStudio"].includes(id);
+        return '<button onclick="toggleMobileMore(false);showPage(\''+id+'\')">'+
+          '<span>'+x[1]+'</span><div><b>'+x[2]+'</b><small>'+(beta?"Beta":id==="cloudentAI"?"IA":"Abrir")+'</small></div><em>›</em></button>';
+      }).join("")+'</div>'+
+      '<div class="mobile-more-account"><span class="connection-dot"></span><div><b id="mobileAccountLabel">'+esc(instagramIntegration?.account_label||"Instagram")+'</b><small>'+(instagramIntegration?.enabled?"Conectado":"Verificando conexão…")+'</small></div></div>'+
+    '</section>';
+}
+function syncMobileChrome(){
+  const meta=navItems.find(x=>x[0]===currentPage);
+  const title=meta?.[2]||"CloudentFlow";
+  const mt=$("#mobilePageTitle");if(mt)mt.textContent=title;
+  const desktopCount=$("#notificationCount");
+  const mobileCount=$("#mobileNotificationCount");
+  if(mobileCount&&desktopCount){
+    mobileCount.textContent=desktopCount.textContent||"0";
+    mobileCount.classList.toggle("hidden",desktopCount.classList.contains("hidden"));
+  }
+  renderMobileNav();
 }
 function nav(){
   const groups=[
@@ -3719,6 +4030,7 @@ function nav(){
       }).join("")}
     </div>`).join("");
   document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
+  renderMobileNav();
 }
 
 function showPage(id){
@@ -3729,6 +4041,9 @@ function showPage(id){
   page.classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   $("#pageTitle").textContent=meta[2];
+  const mobileTitle=$("#mobilePageTitle");if(mobileTitle)mobileTitle.textContent=meta[2];
+  toggleMobileMore(false);
+  renderMobileNav();
   renderAll();
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
@@ -7865,6 +8180,7 @@ async function init(){
   nav();
   bindSidebarHover();
   renderAll();
+  syncMobileChrome();
   document.body.classList.add("booting");
   openDB().catch(err=>console.warn("IndexedDB unavailable:",err));
 
