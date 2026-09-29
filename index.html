@@ -7843,6 +7843,9 @@ function friendlyFrameError(message){
   if(m.includes("instagram_video_fetch_failed"))return "O Instagram bloqueou o download desse vídeo. Tente novamente.";
   if(m.includes("instagram_identity_mismatch"))return "O Instagram devolveu outro Reel. O CloudentFlow bloqueou o resultado para não baixar vídeo errado.";
   if(m.includes("instagram_identity_unverified"))return "Não consegui confirmar que o vídeo pertence exatamente a esse Reel. Tente novamente.";
+  if(m.includes("instagram_web_session_expired"))return "Sua sessão do Instagram expirou. Atualize o sessionid em Configurações > Integrações.";
+  if(m.includes("Conecte sua sessão do Instagram"))return m;
+  if(m.includes("O Instagram não liberou esse Reel para a sessão conectada"))return m;
   if(m.includes("video_too_large"))return "Esse vídeo é grande demais para o extrator.";
   return m||"Falha ao processar esse Reel.";
 }
@@ -7861,14 +7864,25 @@ async function processFrameRow(row){
   try{
     row.status="resolving";row.error=null;frameExtractorPage();
     let source=null;
-    let exactError=null;
+    let publicError=null;
+    let cloudError=null;
 
-    // Use yt-dlp first for public Reels because it resolves the exact URL the
-    // user pasted. The Supabase HTML resolver is now a strict fallback only.
-    try{
+    const resolveFromCloud=async()=>{
+      const resolved=await cloudFetch("?action=frame-source",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({url:row.link})
+      });
+      cleanupPath=resolved.cleanup_path;
+      resolved.fetch_url=resolved.video_url;
+      resolved.resolver=resolved.resolver||"instagram-exact-context";
+      if(resolved.identity_verified!==true)throw new Error("instagram_identity_mismatch");
+      return resolved;
+    };
+    const resolveFromPublic=async()=>{
       const exact=await resolvePublicInstagramFallback(row.link);
       if(exact.identity_verified!==true)throw new Error("instagram_identity_unverified");
-      source={
+      return {
         fetch_url:exact.proxy_url,
         extension:exact.extension||"mp4",
         resolver:exact.resolver||"yt-dlp",
@@ -7876,29 +7890,16 @@ async function processFrameRow(row){
         identity_verified:true,
         requested_shortcode:exact.requested_shortcode||null
       };
-    }catch(e){
-      exactError=e;
-    }
+    };
 
-    if(!source){
-      try{
-        source=await cloudFetch("?action=frame-source",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({url:row.link})
-        });
-        cleanupPath=source.cleanup_path;
-        source.fetch_url=source.video_url;
-        source.resolver=source.resolver||"instagram-exact-context";
-        if(source.identity_verified!==true)throw new Error("instagram_identity_mismatch");
-      }catch(primaryError){
-        // Prefer the second resolver's diagnosis: it has just tested the
-        // authenticated Cloudent backend and is usually more specific than the
-        // generic yt-dlp error returned by the first route.
-        throw primaryError||exactError;
-      }
+    if(instagramWebSession?.configured){
+      try{source=await resolveFromCloud()}catch(e){cloudError=e}
+      if(!source){try{source=await resolveFromPublic()}catch(e){publicError=e}}
+    }else{
+      try{source=await resolveFromPublic()}catch(e){publicError=e}
+      if(!source){try{source=await resolveFromCloud()}catch(e){cloudError=e}}
     }
-
+    if(!source)throw cloudError||publicError||new Error("instagram_video_not_resolved");
     row.resolver=source.resolver||null;
     row.status="downloading";frameExtractorPage();
 
