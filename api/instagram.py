@@ -60,14 +60,28 @@ def _shortcode_from_url(value):
     return match.group(1) if match else ""
 
 
+def _identity_candidates(info):
+    values = []
+    if not info:
+        return values
+    for key in ("webpage_url", "original_url"):
+        code = _shortcode_from_url(info.get(key))
+        if code:
+            values.append(code)
+    for key in ("display_id", "shortcode", "code"):
+        value = str(info.get(key) or "").strip()
+        if re.fullmatch(r"[A-Za-z0-9_-]+", value):
+            values.append(value)
+    return list(dict.fromkeys(values))
+
+
 def _identity_match(info, expected_shortcode):
     if not info or not expected_shortcode:
         return None
-    for key in ("webpage_url", "original_url", "url"):
-        code = _shortcode_from_url(info.get(key))
-        if code:
-            return code == expected_shortcode
-    return None
+    candidates = _identity_candidates(info)
+    if not candidates:
+        return None
+    return expected_shortcode in candidates
 
 
 def _first_media(info, expected_shortcode=None):
@@ -131,9 +145,15 @@ def _resolve(url):
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
     expected_shortcode = _shortcode_from_url(url)
+    top_identity = _identity_match(info, expected_shortcode)
+    if top_identity is False:
+        raise RuntimeError("identity_mismatch")
     media = _first_media(info, expected_shortcode)
     if not media or not media.get("url"):
         raise RuntimeError("video_not_found")
+    media_identity = _identity_match(media, expected_shortcode)
+    if media_identity is False:
+        raise RuntimeError("identity_mismatch")
     media_url = media["url"]
     if not _is_allowed_media_url(media_url):
         raise RuntimeError("media_host_not_allowed")
@@ -147,6 +167,8 @@ def _resolve(url):
         "title": media.get("title") or (info or {}).get("title"),
         "ext": ext,
         "id": media.get("id") or (info or {}).get("id"),
+        "requested_shortcode": expected_shortcode,
+        "identity_verified": bool(top_identity is True or media_identity is True),
     }
 
 
@@ -178,6 +200,8 @@ class handler(BaseHTTPRequestHandler):
                 "title": data["title"],
                 "extension": data["ext"],
                 "media_id": data["id"],
+                "requested_shortcode": data["requested_shortcode"],
+                "identity_verified": data["identity_verified"],
             })
         except yt_dlp.utils.DownloadError as exc:
             message = str(exc)
@@ -185,6 +209,17 @@ class handler(BaseHTTPRequestHandler):
             if "login" in lower or "cookies" in lower or "private" in lower:
                 return _json(self, {"ok": False, "error": "instagram_login_required", "message": "Esse Reel exige login ou não é público."}, 422)
             return _json(self, {"ok": False, "error": "instagram_public_extract_failed", "message": "Não consegui resolver esse Reel público agora."}, 422)
+        except RuntimeError as exc:
+            code = str(exc)
+            if code == "identity_mismatch":
+                return _json(self, {
+                    "ok": False,
+                    "error": "instagram_identity_mismatch",
+                    "message": "O Instagram devolveu uma mídia diferente do Reel solicitado."
+                }, 422)
+            if code == "video_not_found":
+                return _json(self, {"ok": False, "error": "instagram_video_not_resolved", "message": "Não consegui resolver o vídeo exato desse Reel."}, 422)
+            return _json(self, {"ok": False, "error": "instagram_resolver_failed", "message": "Falha no resolvedor externo."}, 500)
         except Exception:
             return _json(self, {"ok": False, "error": "instagram_resolver_failed", "message": "Falha no resolvedor externo."}, 500)
 
