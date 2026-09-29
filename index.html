@@ -2984,6 +2984,144 @@ body.auth-checking .auth-boot{display:grid}
   #overview>.ui3-page-head:first-child{margin-top:0!important}
   #overview>.ui3-page-head:first-child h2{max-width:520px}
 }
+
+
+/* ===== CloudentFlow SaaS Brand System — 29/09/2026 ===== */
+.cloudent-mark-svg{width:100%;height:100%;display:block;overflow:visible}
+.cloudent-brand-mark,.mobile-logo,.auth-boot-mark,.login-brand-mark{
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(circle at 22% 18%,rgba(183,156,255,.13),transparent 44%),
+    linear-gradient(145deg,#11141b,#090b10)!important;
+  border:1px solid #2a303a!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 8px 24px rgba(0,0,0,.24)!important;
+}
+.cloudent-brand-mark:after,.mobile-logo:after,.auth-boot-mark:after,.login-brand-mark:after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.045),transparent 42%);
+}
+.cloudent-brand-mark .cloudent-mark-svg{width:22px;height:22px}
+.mobile-logo .cloudent-mark-svg{width:22px;height:22px}
+.auth-boot-mark .cloudent-mark-svg{width:25px;height:25px}
+.login-brand-mark .cloudent-mark-svg{width:24px;height:24px}
+
+@media(min-width:761px){
+  .sidebar{
+    width:248px!important;
+    padding:15px 13px 12px!important;
+    background:linear-gradient(180deg,#080a0e 0%,#090b10 100%)!important;
+    border-right:1px solid #1b2028!important;
+  }
+  .brand{
+    min-height:48px!important;
+    margin:0 2px 10px!important;
+    padding:0 3px 10px!important;
+    border-bottom:1px solid #171c23!important;
+    font-size:initial!important;
+  }
+  .brand-main{gap:10px!important;min-width:0}
+  .brand .logo{
+    width:36px!important;height:36px!important;flex:0 0 36px!important;
+    border-radius:10px!important;
+    display:grid!important;place-items:center!important;
+    color:transparent!important;font-size:0!important;
+  }
+  .brand-lockup{min-width:0;display:grid;gap:2px;line-height:1}
+  .brand-name{
+    display:block!important;
+    font-size:13px!important;
+    font-weight:820!important;
+    letter-spacing:-.035em!important;
+    color:#f2f4f7!important;
+  }
+  .brand-accent{
+    color:transparent!important;
+    background:linear-gradient(90deg,#b7a0ff,#a082ff 48%,#ff78b2)!important;
+    -webkit-background-clip:text!important;background-clip:text!important;
+  }
+  .brand-lockup small{
+    display:block;font-size:5.8px;line-height:1.25;
+    color:#505966;letter-spacing:.115em;font-weight:850;white-space:nowrap;
+  }
+  .sidebar-pin{
+    width:28px!important;height:28px!important;flex:0 0 28px!important;
+    border-radius:8px!important;border-color:#222934!important;
+    background:#0d1015!important;color:#68717f!important;
+  }
+  .sidebar-pin:hover{background:#12161d!important;border-color:#303844!important;color:#d8dde5!important}
+  .sidebar-pin.active{background:#121019!important;border-color:#342a3d!important;color:#ad94ff!important}
+
+  .workspace-switch{
+    display:grid!important;
+    grid-template-columns:30px minmax(0,1fr) auto 12px!important;
+    align-items:center!important;gap:8px!important;
+    min-height:48px!important;
+    margin:0 1px 16px!important;padding:7px 8px!important;
+    border:1px solid #202630!important;border-radius:10px!important;
+    background:linear-gradient(180deg,#0d1015,#0b0e13)!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.02)!important;
+  }
+  .workspace-switch:hover{border-color:#2d3541!important;background:#0f1218!important}
+  .workspace-avatar{
+    width:30px!important;height:30px!important;border-radius:8px!important;
+    display:grid!important;place-items:center!important;
+    background:#11151c!important;border:1px solid #252d38!important;color:#7f8998!important;
+  }
+  .workspace-avatar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5}
+  .workspace-copy{min-width:0;display:grid;gap:2px}
+  .workspace-copy>span{
+    display:block!important;margin:0!important;
+    font-size:5.8px!important;line-height:1!important;
+    color:#555f6d!important;letter-spacing:.105em!important;font-weight:900!important;
+  }
+  .workspace-copy b{
+    display:block!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:9.8px!important;line-height:1.2!important;color:#dce1e7!important;font-weight:760!important;
+  }
+  .workspace-state{
+    display:inline-flex;align-items:center;gap:4px;
+    padding:3px 5px;border-radius:999px;border:1px solid #1f3a2d;background:#0d1712;
+  }
+  .workspace-state i{width:4px;height:4px;border-radius:50%;background:#55d995;box-shadow:0 0 0 2px rgba(85,217,149,.07)}
+  .workspace-state span{display:block!important;margin:0!important;color:#6fd49b!important;font-size:5.4px!important;font-weight:950!important;letter-spacing:.07em}
+  .workspace-caret{font-size:10px!important;color:#596270!important;line-height:1!important}
+
+  .sidebar.compact .brand{
+    min-height:42px!important;padding-bottom:8px!important;border-bottom-color:transparent!important;
+    justify-content:center!important;
+  }
+  .sidebar.compact .brand-lockup{display:none!important}
+  .sidebar.compact .brand .logo{width:38px!important;height:38px!important;flex-basis:38px!important}
+  .sidebar.compact .cloudent-brand-mark .cloudent-mark-svg{width:23px;height:23px}
+  .sidebar.compact .workspace-switch{display:none!important}
+
+  .sidebar.compact:hover .brand{
+    min-height:48px!important;margin:0 2px 10px!important;padding:0 3px 10px!important;
+    border-bottom:1px solid #171c23!important;justify-content:space-between!important;
+  }
+  .sidebar.compact:hover .brand-main{gap:10px!important}
+  .sidebar.compact:hover .brand-lockup{display:grid!important}
+  .sidebar.compact:hover .brand .logo{width:36px!important;height:36px!important;flex-basis:36px!important}
+  .sidebar.compact:hover .workspace-switch{
+    display:grid!important;
+    grid-template-columns:30px minmax(0,1fr) auto 12px!important;
+  }
+  .sidebar.compact:hover{
+    width:248px!important;padding-left:13px!important;padding-right:13px!important;
+    box-shadow:16px 0 46px rgba(0,0,0,.34)!important;
+  }
+}
+
+/* Mobile keeps the same brand language without wasting vertical space. */
+@media(max-width:760px){
+  .mobile-logo{background:linear-gradient(145deg,#11141b,#090b10)!important;border-color:#29303a!important}
+  .mobile-brand b{font-weight:820!important;letter-spacing:-.035em!important}
+  .mobile-brand b span{
+    color:transparent!important;background:linear-gradient(90deg,#b7a0ff,#ff78b2)!important;
+    -webkit-background-clip:text!important;background-clip:text!important;
+  }
+  .mobile-brand small{color:#626c79!important}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -2994,7 +3132,17 @@ body.auth-checking .auth-boot{display:grid}
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
   <div class="auth-boot-inner">
-    <div class="auth-boot-mark">C</div>
+    <div class="auth-boot-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
+  <defs>
+    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B79CFF"/>
+      <stop offset=".52" stop-color="#8B6CFF"/>
+      <stop offset="1" stop-color="#FF6BA8"/>
+    </linearGradient>
+  </defs>
+  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+</svg></div>
     <div class="auth-boot-name">CloudentFlow</div>
     <div class="auth-boot-bar"><i></i></div>
   </div>
@@ -3003,7 +3151,17 @@ body.auth-checking .auth-boot{display:grid}
   <div class="login-shell">
     <section class="login-visual" aria-hidden="true">
       <div class="login-brand">
-        <div class="login-brand-mark">C</div>
+        <div class="login-brand-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
+  <defs>
+    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B79CFF"/>
+      <stop offset=".52" stop-color="#8B6CFF"/>
+      <stop offset="1" stop-color="#FF6BA8"/>
+    </linearGradient>
+  </defs>
+  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+</svg></div>
         <div class="login-brand-copy"><b>CloudentFlow</b><span>Autopilot for content</span></div>
       </div>
       <div class="login-hero">
@@ -3045,7 +3203,17 @@ body.auth-checking .auth-boot{display:grid}
 <div class="app" id="appShell">
   <header class="mobile-appbar" id="mobileAppbar">
     <button class="mobile-brand" onclick="showPage('overview')" aria-label="Ir para visão geral">
-      <span class="mobile-logo">C</span>
+      <span class="mobile-logo"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
+  <defs>
+    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B79CFF"/>
+      <stop offset=".52" stop-color="#8B6CFF"/>
+      <stop offset="1" stop-color="#FF6BA8"/>
+    </linearGradient>
+  </defs>
+  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+</svg></span>
       <span><b>Cloudent<span>Flow</span></b><small id="mobilePageTitle">Visão geral</small></span>
     </button>
     <div class="mobile-appbar-actions">
@@ -3057,12 +3225,33 @@ body.auth-checking .auth-boot{display:grid}
   </header>
 <aside class="sidebar">
   <div class="brand">
-    <div class="brand-main"><div class="logo">C</div><span class="brand-name">Cloudent<span class="brand-accent">Flow</span></span></div>
-    <button id="sidebarPinBtn" class="sidebar-pin" onclick="toggleSidebarPin()" title="Desafixar sidebar" aria-label="Desafixar sidebar">⊣</button>
+    <div class="brand-main">
+      <div class="logo cloudent-brand-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
+  <defs>
+    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B79CFF"/>
+      <stop offset=".52" stop-color="#8B6CFF"/>
+      <stop offset="1" stop-color="#FF6BA8"/>
+    </linearGradient>
+  </defs>
+  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+</svg></div>
+      <span class="brand-lockup">
+        <span class="brand-name">Cloudent<span class="brand-accent">Flow</span></span>
+        <small>CONTENT OPERATING SYSTEM</small>
+      </span>
+    </div>
+    <button id="sidebarPinBtn" class="sidebar-pin" onclick="toggleSidebarPin()" title="Recolher sidebar" aria-label="Recolher sidebar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 5 3 3v1h-6v7l-1 2-1-2v-7H5v-1l3-3 1-5Z"></path></svg>
+    </button>
   </div>
-  <div class="workspace-switch">
-    <div class="workspace-avatar">CF</div>
-    <div><b>CloudentFlow</b><span>Workspace principal</span></div>
+  <div class="workspace-switch" aria-label="Workspace atual">
+    <div class="workspace-avatar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg>
+    </div>
+    <div class="workspace-copy"><span>WORKSPACE</span><b>Produção principal</b></div>
+    <div class="workspace-state"><i></i><span>LIVE</span></div>
     <span class="workspace-caret">⌄</span>
   </div>
   <div class="nav" id="nav"></div>
