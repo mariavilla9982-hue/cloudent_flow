@@ -7126,6 +7126,7 @@ function friendlyFrameError(message){
   if(m.includes("instagram_public_extract_failed"))return "Não consegui resolver esse Reel público agora. Tente novamente.";
   if(m.includes("instagram_video_not_resolved"))return "Não consegui acessar o vídeo.";
   if(m.includes("instagram_video_fetch_failed"))return "O Instagram bloqueou o download desse vídeo. Tente novamente.";
+  if(m.includes("instagram_identity_mismatch"))return "O Instagram devolveu outro Reel. O CloudentFlow bloqueou o resultado para não baixar vídeo errado.";
   if(m.includes("video_too_large"))return "Esse vídeo é grande demais para o extrator.";
   return m||"Falha ao processar esse Reel.";
 }
@@ -7144,23 +7145,38 @@ async function processFrameRow(row){
   try{
     row.status="resolving";row.error=null;frameExtractorPage();
     let source=null;
+    let exactError=null;
+
+    // Use yt-dlp first for public Reels because it resolves the exact URL the
+    // user pasted. The Supabase HTML resolver is now a strict fallback only.
     try{
-      source=await cloudFetch("?action=frame-source",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({url:row.link})
-      });
-      cleanupPath=source.cleanup_path;
-      source.fetch_url=source.video_url;
-      source.resolver=source.resolver||"instagram-official";
-    }catch(primaryError){
-      const fallback=await resolvePublicInstagramFallback(row.link);
+      const exact=await resolvePublicInstagramFallback(row.link);
       source={
-        fetch_url:fallback.proxy_url,
-        extension:fallback.extension||"mp4",
-        resolver:fallback.resolver||"yt-dlp",
-        thumbnail_url:fallback.thumbnail_url||null
+        fetch_url:exact.proxy_url,
+        extension:exact.extension||"mp4",
+        resolver:exact.resolver||"yt-dlp",
+        thumbnail_url:exact.thumbnail_url||null,
+        identity_verified:exact.identity_verified===true,
+        requested_shortcode:exact.requested_shortcode||null
       };
+    }catch(e){
+      exactError=e;
+    }
+
+    if(!source){
+      try{
+        source=await cloudFetch("?action=frame-source",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({url:row.link})
+        });
+        cleanupPath=source.cleanup_path;
+        source.fetch_url=source.video_url;
+        source.resolver=source.resolver||"instagram-exact-context";
+        if(source.identity_verified!==true)throw new Error("instagram_identity_mismatch");
+      }catch(primaryError){
+        throw exactError||primaryError;
+      }
     }
 
     row.resolver=source.resolver||null;
