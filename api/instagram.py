@@ -154,6 +154,8 @@ def _resolve(url):
     media_identity = _identity_match(media, expected_shortcode)
     if media_identity is False:
         raise RuntimeError("identity_mismatch")
+    if top_identity is not True and media_identity is not True:
+        raise RuntimeError("identity_unverified")
     media_url = media["url"]
     if not _is_allowed_media_url(media_url):
         raise RuntimeError("media_host_not_allowed")
@@ -219,6 +221,12 @@ class handler(BaseHTTPRequestHandler):
                 }, 422)
             if code == "video_not_found":
                 return _json(self, {"ok": False, "error": "instagram_video_not_resolved", "message": "Não consegui resolver o vídeo exato desse Reel."}, 422)
+            if code == "identity_unverified":
+                return _json(self, {
+                    "ok": False,
+                    "error": "instagram_identity_unverified",
+                    "message": "Não consegui confirmar que a mídia pertence exatamente ao Reel solicitado."
+                }, 422)
             return _json(self, {"ok": False, "error": "instagram_resolver_failed", "message": "Falha no resolvedor externo."}, 500)
         except Exception:
             return _json(self, {"ok": False, "error": "instagram_resolver_failed", "message": "Falha no resolvedor externo."}, 500)
