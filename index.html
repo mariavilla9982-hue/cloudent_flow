@@ -6974,7 +6974,7 @@ function goFromProductionToCalendar(date){
 function productionPreviewMarkup(job,kind){
   const isFrame=kind==="frame";
   const path=isFrame?job?.meta?.frame_thumbnail_path:job?.meta?.original_thumbnail_path;
-  const thumbKind=isFrame?"frame-thumb":(path?"video-thumb":"");
+  const thumbKind=isFrame?(path?"frame-thumb":"frame"):(path?"video-thumb":"");
   if(thumbKind){
     return '<span class="production-media-preview-shell '+(isFrame?"frame":"video")+'" data-production-thumb-id="'+esc(job.id)+'" data-production-thumb-kind="'+thumbKind+'">'+
       '<span class="production-media-icon">'+(isFrame?"▧":"▶")+'</span>'+
