@@ -51,14 +51,45 @@ def _is_allowed_media_url(value):
     return allowed
 
 
-def _first_media(info):
+def _shortcode_from_url(value):
+    try:
+        u = urllib.parse.urlparse(str(value or ""))
+    except Exception:
+        return ""
+    match = re.search(r"/(?:reel|reels|p|tv)/([A-Za-z0-9_-]+)", u.path or "", re.I)
+    return match.group(1) if match else ""
+
+
+def _identity_match(info, expected_shortcode):
+    if not info or not expected_shortcode:
+        return None
+    for key in ("webpage_url", "original_url", "url"):
+        code = _shortcode_from_url(info.get(key))
+        if code:
+            return code == expected_shortcode
+    return None
+
+
+def _first_media(info, expected_shortcode=None):
     if not info:
         return None
     if info.get("_type") in {"playlist", "multi_video"} or info.get("entries"):
+        unknown = []
         for entry in info.get("entries") or []:
-            media = _first_media(entry)
-            if media:
+            media = _first_media(entry, expected_shortcode)
+            if not media:
+                continue
+            match = _identity_match(media, expected_shortcode)
+            if match is True:
                 return media
+            if match is None:
+                unknown.append(media)
+        # Only accept an unverified playlist entry when there is exactly one.
+        # This prevents a recommended/neighboring Instagram Reel from silently
+        # becoming the result for the requested URL.
+        return unknown[0] if len(unknown) == 1 else None
+
+    if _identity_match(info, expected_shortcode) is False:
         return None
     if info.get("url"):
         return info
@@ -87,7 +118,7 @@ def _resolve(url):
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
-        "noplaylist": False,
+        "noplaylist": True,
         "format": "best[ext=mp4]/best",
         "socket_timeout": 25,
         "retries": 2,
@@ -99,7 +130,8 @@ def _resolve(url):
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
-    media = _first_media(info)
+    expected_shortcode = _shortcode_from_url(url)
+    media = _first_media(info, expected_shortcode)
     if not media or not media.get("url"):
         raise RuntimeError("video_not_found")
     media_url = media["url"]
