@@ -3313,6 +3313,14 @@ body.auth-checking .auth-boot{display:block!important}
   .auth-boot-main{grid-template-rows:1fr}
   .auth-boot-stage:before{width:130vw;height:130vw}.auth-boot-stage:after{width:78vw;height:78vw}
 }
+
+/* Instagram authenticated extractor session */
+#instagramWebSessionCard .auth-card{display:grid;gap:9px;margin-top:12px}
+#instagramWebSessionCard input{width:100%}
+#instagramWebSessionCard .integration-help{margin-top:10px;border-top:1px solid #1d2430;padding-top:9px}
+#instagramWebSessionCard .integration-help summary{cursor:pointer;color:#a6afbd;font-size:9px;font-weight:800}
+#instagramWebSessionCard .integration-help p{margin:8px 0 0;line-height:1.55}
+#instagramWebSessionCard code{font:8px ui-monospace,SFMono-Regular,Menlo,monospace;color:#c8b7ff}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -8005,6 +8013,14 @@ function frameExtractorStatus(row){
     error:["Erro","error"]
   }[row.status]||["Aguardando","waiting"];
 }
+function frameSessionAction(row){
+  const text=String(row?.error||"");
+  if(!text)return "";
+  if(text.toLowerCase().includes("sessão")||text.includes("Configurações > Integrações")){
+    return '<button class="frame-download-btn frame" onclick="openInstagramWebSessionSettings()">Conectar sessão do Instagram</button>';
+  }
+  return "";
+}
 function frameMediaCard(row,i){
   const st=frameExtractorStatus(row);
   const ready=row.status==="ready";
@@ -8033,6 +8049,7 @@ function frameMediaCard(row,i){
         <button class="frame-download-btn frame" onclick="downloadExtractedFrame(${i})"><span>↓</span> Baixar 1º frame</button>
         <button class="frame-download-btn video" onclick="downloadExtractedVideo(${i})"><span>↓</span> Baixar vídeo</button>
       `:row.status==="error"?`
+        ${frameSessionAction(row)}
         <button class="frame-download-btn retry" onclick="retryFrameResult(${i})">↻ Tentar novamente</button>
       `:`<button class="frame-download-btn waiting" disabled>${st[0]}…</button>`}
     </div>
@@ -8839,6 +8856,24 @@ function settings(){
         ${ig?.enabled?`<p class="muted">Publicação e métricas autorizadas.</p><div class="toolbar"><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas</button></div>`:`<div class="auth-card"><p class="muted">Cole seu Instagram User Access Token.</p><input id="instagramToken" type="password" autocomplete="off" placeholder="Access Token"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>`}
       </div>
 
+      <div class="card ui3-panel" id="instagramWebSessionCard">
+        <div class="ui3-panel-head">
+          <div><span>Instagram · Extrator</span><h3>Sessão do navegador</h3></div>
+          <span class="status-pill ${instagramWebSession?.configured?"ok":"warn"}">${instagramWebSession?.configured?"Conectada":"Opcional"}</span>
+        </div>
+        <p class="muted">Usada somente pelo Extrator quando o Instagram bloqueia downloads sem login. O segredo fica no Vault do backend e nunca é exibido novamente.</p>
+        <div class="auth-card">
+          <input id="instagramWebSessionInput" type="password" autocomplete="off" placeholder="${instagramWebSession?.configured?"Cole um novo sessionid para atualizar":"Cole o valor do sessionid"}">
+          <div class="toolbar">
+            <button class="btn primary" onclick="saveInstagramWebSession(this)">${instagramWebSession?.configured?"Atualizar sessão":"Conectar sessão"}</button>
+            ${instagramWebSession?.configured?"<button class=\"btn danger\" onclick=\"removeInstagramWebSession(this)\">Remover</button>":""}
+          </div>
+        </div>
+        <details class="integration-help">
+          <summary>Como pegar o sessionid da minha conta?</summary>
+          <p class="muted">No navegador em que você já está logado no Instagram: abra instagram.com → F12 → Application/Armazenamento → Cookies → instagram.com → copie somente o valor de <code>sessionid</code>. Cole aqui, não no chat.</p>
+        </details>
+      </div>
       <div class="card ui3-panel multi-account-card">
         <div class="ui3-panel-head"><div><span>Multi-conta · Beta</span><h3>Contas Instagram</h3></div><span class="status-pill ${platformAccounts.filter(x=>x.platform==="instagram"&&x.enabled).length?"ok":"warn"}">${platformAccounts.filter(x=>x.platform==="instagram"&&x.enabled).length} ativa(s)</span></div>
         <div class="multi-account-list">${platformAccounts.filter(x=>x.platform==="instagram").map(x=>`<div><b>@${esc(x.account_label||"Instagram")}</b><span>${x.enabled?"Ativa":"Pausada"} · ${esc(x.config?.account_type||"conta profissional")}</span></div>`).join("")||'<div class="ui3-empty">Nenhuma conta registrada.</div>'}</div>
