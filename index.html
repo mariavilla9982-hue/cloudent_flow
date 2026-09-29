@@ -8066,6 +8066,7 @@ function frameExtractorPage(){
         <p>Cole links de Reels e receba um card com preview, primeiro frame e vídeo.</p>
       </div>
       <div class="frame-head-actions">
+        <span class="status-pill ${instagramWebSession?.configured?"ok":"warn"}">${instagramWebSession?.configured?"Sessão IG ativa":"Modo público"}</span>
         ${ready?'<button class="btn success" onclick="downloadAllExtractedFrames()">↓ Baixar frames prontos</button>':""}
         <button class="btn" onclick="clearFrameExtractor()">Limpar</button>
       </div>
