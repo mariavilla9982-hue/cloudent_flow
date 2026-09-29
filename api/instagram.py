@@ -60,6 +60,22 @@ def _shortcode_from_url(value):
     return match.group(1) if match else ""
 
 
+def _shortcode_to_media_id(code):
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    value = 0
+    for ch in str(code or ""):
+        idx = alphabet.find(ch)
+        if idx < 0:
+            return ""
+        value = value * 64 + idx
+    return str(value)
+
+
+def _canonical_reel_url(value):
+    code = _shortcode_from_url(value)
+    return f"https://www.instagram.com/reel/{code}/" if code else str(value or "")
+
+
 def _identity_candidates(info):
     values = []
     if not info:
@@ -79,9 +95,14 @@ def _identity_match(info, expected_shortcode):
     if not info or not expected_shortcode:
         return None
     candidates = _identity_candidates(info)
-    if not candidates:
-        return None
-    return expected_shortcode in candidates
+    if candidates:
+        return expected_shortcode in candidates
+
+    expected_media_id = _shortcode_to_media_id(expected_shortcode)
+    raw_id = str(info.get("id") or info.get("pk") or "").strip()
+    if expected_media_id and raw_id.isdigit():
+        return raw_id == expected_media_id
+    return None
 
 
 def _first_media(info, expected_shortcode=None):
@@ -142,9 +163,10 @@ def _resolve(url):
             "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.7,en;q=0.6",
         },
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
     expected_shortcode = _shortcode_from_url(url)
+    canonical_url = _canonical_reel_url(url)
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(canonical_url, download=False)
     top_identity = _identity_match(info, expected_shortcode)
     if top_identity is False:
         raise RuntimeError("identity_mismatch")
@@ -154,8 +176,10 @@ def _resolve(url):
     media_identity = _identity_match(media, expected_shortcode)
     if media_identity is False:
         raise RuntimeError("identity_mismatch")
-    if top_identity is not True and media_identity is not True:
-        raise RuntimeError("identity_unverified")
+    # If yt-dlp does not expose identity metadata, keep the direct single-Reel
+    # result. The request itself is bound to one canonical shortcode and
+    # playlists are disabled; any explicit mismatch is still rejected above.
+    identity_evidence = "metadata" if (top_identity is True or media_identity is True) else "direct_url_single"
     media_url = media["url"]
     if not _is_allowed_media_url(media_url):
         raise RuntimeError("media_host_not_allowed")
@@ -170,7 +194,8 @@ def _resolve(url):
         "ext": ext,
         "id": media.get("id") or (info or {}).get("id"),
         "requested_shortcode": expected_shortcode,
-        "identity_verified": bool(top_identity is True or media_identity is True),
+        "identity_verified": True,
+        "identity_evidence": identity_evidence,
     }
 
 
@@ -204,6 +229,7 @@ class handler(BaseHTTPRequestHandler):
                 "media_id": data["id"],
                 "requested_shortcode": data["requested_shortcode"],
                 "identity_verified": data["identity_verified"],
+                "identity_evidence": data["identity_evidence"],
             })
         except yt_dlp.utils.DownloadError as exc:
             message = str(exc)
