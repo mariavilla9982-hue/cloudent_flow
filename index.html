@@ -7127,6 +7127,7 @@ function friendlyFrameError(message){
   if(m.includes("instagram_video_not_resolved"))return "Não consegui acessar o vídeo.";
   if(m.includes("instagram_video_fetch_failed"))return "O Instagram bloqueou o download desse vídeo. Tente novamente.";
   if(m.includes("instagram_identity_mismatch"))return "O Instagram devolveu outro Reel. O CloudentFlow bloqueou o resultado para não baixar vídeo errado.";
+  if(m.includes("instagram_identity_unverified"))return "Não consegui confirmar que o vídeo pertence exatamente a esse Reel. Tente novamente.";
   if(m.includes("video_too_large"))return "Esse vídeo é grande demais para o extrator.";
   return m||"Falha ao processar esse Reel.";
 }
@@ -7151,12 +7152,13 @@ async function processFrameRow(row){
     // user pasted. The Supabase HTML resolver is now a strict fallback only.
     try{
       const exact=await resolvePublicInstagramFallback(row.link);
+      if(exact.identity_verified!==true)throw new Error("instagram_identity_unverified");
       source={
         fetch_url:exact.proxy_url,
         extension:exact.extension||"mp4",
         resolver:exact.resolver||"yt-dlp",
         thumbnail_url:exact.thumbnail_url||null,
-        identity_verified:exact.identity_verified===true,
+        identity_verified:true,
         requested_shortcode:exact.requested_shortcode||null
       };
     }catch(e){
