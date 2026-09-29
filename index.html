@@ -7802,7 +7802,7 @@ function frameVideoExtension(blob,source){
 function friendlyFrameError(message){
   const m=String(message||"");
   if(m.includes("instagram_login_required"))return "Esse Reel exige login, é privado ou não está acessível publicamente.";
-  if(m.includes("instagram_public_extract_failed"))return "Não consegui resolver esse Reel público agora. Tente novamente.";
+  if(m.includes("instagram_public_extract_failed"))return "O Instagram bloqueou a rota pública desse Reel. O CloudentFlow vai tentar a rota alternativa.";
   if(m.includes("instagram_video_not_resolved"))return "Não consegui acessar o vídeo.";
   if(m.includes("instagram_video_fetch_failed"))return "O Instagram bloqueou o download desse vídeo. Tente novamente.";
   if(m.includes("instagram_identity_mismatch"))return "O Instagram devolveu outro Reel. O CloudentFlow bloqueou o resultado para não baixar vídeo errado.";
@@ -7856,7 +7856,10 @@ async function processFrameRow(row){
         source.resolver=source.resolver||"instagram-exact-context";
         if(source.identity_verified!==true)throw new Error("instagram_identity_mismatch");
       }catch(primaryError){
-        throw exactError||primaryError;
+        // Prefer the second resolver's diagnosis: it has just tested the
+        // authenticated Cloudent backend and is usually more specific than the
+        // generic yt-dlp error returned by the first route.
+        throw primaryError||exactError;
       }
     }
 
