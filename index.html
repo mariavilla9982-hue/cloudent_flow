@@ -2855,6 +2855,7 @@ body.auth-checking .auth-boot{display:grid}
   .mobile-more-grid em{font-style:normal;color:#555e6c}
   .mobile-more-account{margin-top:9px;padding:10px;border:1px solid #1f252d;border-radius:12px;background:#090b0f;display:grid;grid-template-columns:8px 1fr;gap:9px;align-items:center}
   .mobile-more-account b,.mobile-more-account small{display:block}.mobile-more-account b{font-size:9px}.mobile-more-account small{font-size:7px;color:#687180;margin-top:2px}
+  .mobile-instagram-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid #2b3340}
 
   /* Mobile page rhythm */
   .page{animation:mobilePageIn .16s ease-out}
@@ -3215,6 +3216,9 @@ body{background:#060810!important}
     background:linear-gradient(180deg,#9e76f7,#6e45a8);
   }
   .saas-account-avatar span{display:none}
+  .saas-account-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;z-index:2}
+  .saas-account-avatar.has-photo{background:#0c0f15!important;border-color:#343b49!important}
+  .saas-account-avatar.has-photo:after{display:none!important}
   .account-copy{display:grid!important;grid-template-columns:1fr;gap:1px!important}
   .account-copy b{font-size:9.8px!important;color:#eef0f5!important;font-weight:820!important}
   .account-copy span{font-size:8.2px!important;color:#858fa0!important;margin:0!important}
@@ -3444,7 +3448,7 @@ body.auth-checking .auth-boot{display:block!important}
   <div class="nav" id="nav"></div>
   <div class="sidebar-foot">
     <button class="account-chip saas-account-card" type="button" onclick="showPage('settings')" title="Abrir configurações da conta">
-      <div class="account-avatar saas-account-avatar"><span></span></div>
+      <div class="account-avatar saas-account-avatar" id="sidebarInstagramAvatarWrap"><img id="sidebarInstagramAvatar" alt="" referrerpolicy="no-referrer"><span></span></div>
       <div class="account-copy"><b>Conta Pro</b><span id="sidebarAccount">CloudentFlow</span><small id="sidebarAccountStatus">Verificando conexão…</small></div>
       <span class="account-chevron">›</span>
     </button>
@@ -4145,7 +4149,7 @@ async function connectInstagram(){
       provider:"instagram",enabled:true,
       account_label:r.profile?.username||r.profile?.name||"Instagram",
       external_account_id:r.profile?.id||"",
-      config:{status:"connected",account_type:r.profile?.account_type||null,api_mode:r.mode||"instagram_login"},
+      config:{status:"connected",account_type:r.profile?.account_type||null,api_mode:r.mode||"instagram_login",profile_picture_url:r.profile?.profile_picture_url||null},
       last_verified_at:new Date().toISOString()
     };
     if($("#instagramToken"))$("#instagramToken").value="";
@@ -4592,7 +4596,7 @@ function toggleMobileMore(force){
         return '<button onclick="toggleMobileMore(false);showPage(\''+id+'\')">'+
           '<span>'+x[1]+'</span><div><b>'+x[2]+'</b><small>'+(beta?"Beta":id==="cloudentAI"?"IA":"Abrir")+'</small></div><em>›</em></button>';
       }).join("")+'</div>'+
-      '<div class="mobile-more-account"><span class="connection-dot"></span><div><b id="mobileAccountLabel">'+esc(instagramIntegration?.account_label||"Instagram")+'</b><small>'+(instagramIntegration?.enabled?"Conectado":"Verificando conexão…")+'</small></div></div>'+
+      '<div class="mobile-more-account">'+(instagramIntegration?.config?.profile_picture_url?'<img class="mobile-instagram-avatar" src="'+esc(instagramIntegration.config.profile_picture_url)+'" alt="" referrerpolicy="no-referrer">':'<span class="connection-dot"></span>')+'<div><b id="mobileAccountLabel">'+esc(instagramIntegration?.account_label||"Instagram")+'</b><small>'+(instagramIntegration?.enabled?"Conectado":"Verificando conexão…")+'</small></div></div>'+
     '</section>';
 }
 function syncMobileChrome(){
@@ -9042,6 +9046,17 @@ function renderAll(){
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
   if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"CloudentFlow";
   if(stat)stat.textContent=instagramIntegration?.enabled?"Instagram conectado":"Abrir configurações";
+  const avatar=$("#sidebarInstagramAvatar"),avatarWrap=$("#sidebarInstagramAvatarWrap");
+  const avatarUrl=String(instagramIntegration?.config?.profile_picture_url||"").trim();
+  if(avatar&&avatarWrap){
+    if(avatarUrl){
+      if(avatar.getAttribute("src")!==avatarUrl)avatar.setAttribute("src",avatarUrl);
+      avatar.hidden=false;avatarWrap.classList.add("has-photo");
+      avatar.onerror=()=>{avatar.hidden=true;avatarWrap.classList.remove("has-photo")};
+    }else{
+      avatar.removeAttribute("src");avatar.hidden=true;avatarWrap.classList.remove("has-photo");
+    }
+  }
   updateLiveChrome();
 }
 
