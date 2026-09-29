@@ -6,6 +6,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler
 
 import yt_dlp
+from curl_cffi import requests as curl_requests
 
 
 MAX_BYTES = 200 * 1024 * 1024
@@ -69,6 +70,153 @@ def _shortcode_to_media_id(code):
             return ""
         value = value * 64 + idx
     return str(value)
+
+
+def _decode_instagram_url(value):
+    out = str(value or "").strip()
+    for _ in range(3):
+        out = (
+            out.replace("&amp;", "&")
+            .replace("&#38;", "&")
+            .replace("&#x26;", "&")
+            .replace("&quot;", '"')
+            .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("\\u0025", "%")
+            .replace("\\u002f", "/")
+            .replace("\\/", "/")
+        )
+    return out
+
+
+def _exact_page_media(html_text, expected_shortcode):
+    if not html_text or not expected_shortcode:
+        return None
+
+    identity_patterns = [
+        r'<meta[^>]+property=["\']og:url["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:url["\']',
+        r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)["\']',
+        r'<link[^>]+href=["\']([^"\']+)["\'][^>]+rel=["\']canonical["\']',
+    ]
+    page_code = ""
+    for pattern in identity_patterns:
+        m = re.search(pattern, html_text, re.I)
+        if m:
+            page_code = _shortcode_from_url(_decode_instagram_url(m.group(1)))
+            if page_code:
+                break
+    if page_code != expected_shortcode:
+        return None
+
+    video_patterns = [
+        r'<meta[^>]+property=["\']og:video(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:video(?::secure_url)?["\']',
+        r'<meta[^>]+name=["\']twitter:player:stream["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:player:stream["\']',
+    ]
+    image_patterns = [
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+    ]
+    video = ""
+    thumbnail = ""
+    for pattern in video_patterns:
+        m = re.search(pattern, html_text, re.I)
+        if m:
+            video = _decode_instagram_url(m.group(1))
+            break
+    for pattern in image_patterns:
+        m = re.search(pattern, html_text, re.I)
+        if m:
+            thumbnail = _decode_instagram_url(m.group(1))
+            break
+    if not video:
+        return None
+    return {"url": video, "thumbnail": thumbnail, "ext": "mp4", "identity_evidence": "exact_page_meta"}
+
+
+def _anchored_page_media(html_text, expected_shortcode):
+    if not html_text or not expected_shortcode:
+        return None
+    media_id = _shortcode_to_media_id(expected_shortcode)
+    anchors = [
+        f'"shortcode":"{expected_shortcode}"',
+        f'\\"shortcode\\":\\"{expected_shortcode}\\"',
+        f'"code":"{expected_shortcode}"',
+        f'\\"code\\":\\"{expected_shortcode}\\"',
+    ]
+    if media_id:
+        anchors += [f'"pk":"{media_id}"', f'\\"pk\\":\\"{media_id}\\"']
+
+    for anchor in anchors:
+        start = html_text.find(anchor)
+        if start < 0:
+            continue
+        end = min(len(html_text), start + 90000)
+        segment = html_text[start:end]
+        variants = [segment, segment.replace('\\\"', '"').replace("\\/", "/")]
+        for source in variants:
+            patterns = [
+                r'"video_url"\s*:\s*"([^"]+)"',
+                r'"video_versions"[\s\S]{0,6000}?"url"\s*:\s*"([^"]+)"',
+            ]
+            for pattern in patterns:
+                m = re.search(pattern, source, re.I)
+                if not m:
+                    continue
+                video = _decode_instagram_url(m.group(1))
+                thumb = ""
+                tm = re.search(r'"(?:thumbnail_src|display_url)"\s*:\s*"([^"]+)"', source, re.I)
+                if tm:
+                    thumb = _decode_instagram_url(tm.group(1))
+                return {"url": video, "thumbnail": thumb, "ext": "mp4", "identity_evidence": "anchored_html"}
+    return None
+
+
+def _resolve_with_browser_tls(url):
+    expected_shortcode = _shortcode_from_url(url)
+    if not expected_shortcode:
+        return None
+    canonical = _canonical_reel_url(url)
+    candidates = [
+        canonical,
+        f"https://www.instagram.com/p/{expected_shortcode}/embed/captioned/",
+        f"https://www.instagram.com/reel/{expected_shortcode}/embed/",
+    ]
+    headers = {
+        "User-Agent": UA,
+        "Referer": "https://www.instagram.com/",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.7,en;q=0.6",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    for candidate in candidates:
+        try:
+            res = curl_requests.get(
+                candidate,
+                headers=headers,
+                impersonate="chrome",
+                timeout=20,
+                allow_redirects=True,
+            )
+        except Exception:
+            continue
+        if res.status_code != 200 or not res.text:
+            continue
+        media = _exact_page_media(res.text, expected_shortcode) or _anchored_page_media(res.text, expected_shortcode)
+        if not media:
+            continue
+        if not _is_allowed_media_url(media.get("url")):
+            continue
+        media.update({
+            "duration": None,
+            "title": None,
+            "id": _shortcode_to_media_id(expected_shortcode) or expected_shortcode,
+            "requested_shortcode": expected_shortcode,
+            "identity_verified": True,
+        })
+        return media
+    return None
 
 
 def _canonical_reel_url(value):
@@ -165,13 +313,50 @@ def _resolve(url):
     }
     expected_shortcode = _shortcode_from_url(url)
     canonical_url = _canonical_reel_url(url)
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(canonical_url, download=False)
+    info = None
+    yt_error = None
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(canonical_url, download=False)
+    except Exception as exc:
+        yt_error = exc
+
+    if not info:
+        browser_media = _resolve_with_browser_tls(canonical_url)
+        if browser_media:
+            return {
+                "media_url": browser_media["url"],
+                "thumbnail": browser_media.get("thumbnail"),
+                "duration": browser_media.get("duration"),
+                "title": browser_media.get("title"),
+                "ext": browser_media.get("ext") or "mp4",
+                "id": browser_media.get("id"),
+                "requested_shortcode": expected_shortcode,
+                "identity_verified": True,
+                "identity_evidence": browser_media.get("identity_evidence") or "browser_tls",
+            }
+        if yt_error:
+            raise yt_error
+        raise RuntimeError("video_not_found")
+
     top_identity = _identity_match(info, expected_shortcode)
     if top_identity is False:
         raise RuntimeError("identity_mismatch")
     media = _first_media(info, expected_shortcode)
     if not media or not media.get("url"):
+        browser_media = _resolve_with_browser_tls(canonical_url)
+        if browser_media:
+            return {
+                "media_url": browser_media["url"],
+                "thumbnail": browser_media.get("thumbnail"),
+                "duration": browser_media.get("duration"),
+                "title": browser_media.get("title"),
+                "ext": browser_media.get("ext") or "mp4",
+                "id": browser_media.get("id"),
+                "requested_shortcode": expected_shortcode,
+                "identity_verified": True,
+                "identity_evidence": browser_media.get("identity_evidence") or "browser_tls",
+            }
         raise RuntimeError("video_not_found")
     media_identity = _identity_match(media, expected_shortcode)
     if media_identity is False:
