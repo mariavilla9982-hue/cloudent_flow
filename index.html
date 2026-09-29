@@ -1916,6 +1916,19 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-wait-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .production-wait-actions .run-now{border-color:#315743;background:#102218;color:#78e7aa;font-weight:900}
 .production-wait-actions .run-now:hover{background:#153022;border-color:#4c8062}
+.production-failed-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.production-failed-actions .danger{color:#ff8d97;border-color:#4d282e;background:#180e11}
+.production-failed-actions .danger:hover{color:#ffb0b6;border-color:#743740;background:#211015}
+.production-job,.production-job-actions button,.production-ready-actions button,.production-wait-actions button,.production-failed-actions button{
+  transition:background-color .14s ease,border-color .14s ease,color .14s ease,box-shadow .14s ease,opacity .14s ease,transform .12s ease!important
+}
+.production-job:hover{border-color:#2d3440!important;background-color:#0d1016!important}
+.production-job-actions button:not(:disabled):hover,.production-ready-actions button:not(:disabled):hover,.production-wait-actions button:not(:disabled):hover,.production-failed-actions button:not(:disabled):hover{
+  transform:translateY(-1px)!important
+}
+.production-job-actions button:not(:disabled):active,.production-ready-actions button:not(:disabled):active,.production-wait-actions button:not(:disabled):active,.production-failed-actions button:not(:disabled):active{
+  transform:scale(.98)!important
+}
 .production-job-cost.live{color:#ffd36b;text-shadow:0 0 14px rgba(255,205,88,.15)}
 
 /* ===== Patch: 7/day + costs + comparisons + PWA ===== */
@@ -6824,16 +6837,31 @@ async function removeProductionResultFromCalendar(id,button=null){
   }
 }
 
-async function deleteProductionJob(id){
+async function deleteProductionJob(id,button=null){
   if(!confirm("Excluir este job e seus arquivos de produção? Se o resultado já estiver no calendário, o vídeo agendado será preservado."))return;
+  actionButtonBusy(button,true,"Excluindo…");
   try{
     await cloudFetch("?action=production-job",{
       method:"DELETE",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({id})
     });
-    await loadProductionData(true);productionPage();toast("Job excluído.","ok");
-  }catch(e){toast(e.message,"err")}
+
+    // Remove o card na hora para a fila responder sem sensação de travamento.
+    if(productionData?.jobs){
+      productionData.jobs=productionData.jobs.filter(j=>String(j.id)!==String(id));
+    }
+    if(currentPage==="production")productionPage();
+    toast("Job excluído.","ok");
+
+    // Sincroniza em background para confirmar o estado real do backend.
+    loadProductionData(true).then(()=>{
+      if(currentPage==="production")productionPage();
+    }).catch(()=>{});
+  }catch(e){
+    actionButtonBusy(button,false);
+    toast(e.message,"err");
+  }
 }
 
 async function clearCompletedProductionJobs(){
@@ -6909,7 +6937,10 @@ function productionJobRow(j,i,total){
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
     '</div>';
   }else if(["failed","cancelled"].includes(j.status)){
-    action='<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>';
+    action='<div class="production-failed-actions">'+
+      '<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>'+
+      '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\',this)">Excluir</button>'+
+    '</div>';
   }else if(j.status==="waiting"){
     action='<div class="production-wait-actions">'+
       '<button class="run-now" data-id="'+esc(j.id)+'" data-op="run" onclick="productionActionFromButton(this)">'+(otherActive?"★ Priorizar na fila":"▶ Executar")+'</button>'+
