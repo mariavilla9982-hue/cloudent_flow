@@ -3122,6 +3122,197 @@ body.auth-checking .auth-boot{display:grid}
   }
   .mobile-brand small{color:#626c79!important}
 }
+
+
+/* ===== CloudentFlow SaaS Shell v4 — mock implementation ===== */
+:root{
+  --saas-violet:#9f7aea;
+  --saas-pink:#ff4f9b;
+  --saas-panel:#090b12;
+  --saas-panel-2:#0d1018;
+  --saas-line:#1d2330;
+}
+body{background:#060810!important}
+.app{background:
+  radial-gradient(circle at 72% 8%,rgba(122,70,179,.055),transparent 31%),
+  #070910!important}
+.main{max-width:none!important;padding-left:38px!important;padding-right:38px!important}
+@media(min-width:761px){
+  .app{grid-template-columns:260px minmax(0,1fr)!important}
+  .sidebar{
+    width:260px!important;padding:19px 18px 16px!important;
+    background:linear-gradient(180deg,#090b12 0%,#070910 100%)!important;
+    border-right:1px solid #1b2030!important;
+    box-shadow:8px 0 38px rgba(0,0,0,.16)!important;
+  }
+  .brand{
+    min-height:72px!important;margin:0!important;padding:0 4px 17px!important;
+    border-bottom:1px solid #181e2a!important;
+  }
+  .brand-main{gap:12px!important}
+  .brand .logo{
+    width:48px!important;height:48px!important;flex:0 0 48px!important;border-radius:13px!important;
+    background:
+      radial-gradient(circle at 35% 15%,rgba(169,139,250,.22),transparent 40%),
+      linear-gradient(145deg,#151525,#090b13)!important;
+    border:1px solid #30304c!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 12px 28px rgba(0,0,0,.3)!important;
+  }
+  .cloudent-brand-mark .cloudent-mark-svg{width:31px!important;height:31px!important}
+  .brand-lockup{gap:4px!important}
+  .brand-name{font-size:17px!important;font-weight:850!important;color:#f6f3fb!important}
+  .brand-lockup small{font-size:6.2px!important;color:#697184!important;letter-spacing:.19em!important}
+  .sidebar-pin{
+    width:31px!important;height:31px!important;flex-basis:31px!important;border:0!important;
+    background:transparent!important;color:#687083!important;
+  }
+  .sidebar-pin:hover{background:#111521!important;color:#d9d7e5!important}
+  .nav{gap:0!important;padding-top:13px!important}
+  .nav-group{
+    gap:3px!important;margin:0!important;padding:11px 0 12px!important;
+    border-top:1px solid #151a25!important;
+  }
+  .nav-group:first-child{border-top:0!important;padding-top:5px!important}
+  .nav-label{
+    padding:0 11px 7px!important;font-size:7.2px!important;letter-spacing:.16em!important;
+    color:#687184!important;font-weight:900!important;
+  }
+  .nav button{
+    min-height:41px!important;padding:9px 11px!important;border-radius:9px!important;
+    gap:11px!important;font-size:11.2px!important;font-weight:720!important;color:#9aa2b2!important;
+    border:1px solid transparent!important;
+  }
+  .nav button:hover{background:#10131c!important;border-color:#1d2430!important;color:#e6e7ee!important}
+  .nav button.active{
+    background:linear-gradient(90deg,rgba(255,79,155,.15),rgba(120,75,174,.09))!important;
+    color:#fff!important;border:1px solid rgba(255,79,155,.22)!important;
+    box-shadow:inset 3px 0 0 var(--saas-pink)!important;
+  }
+  .nav button.active .nav-icon{color:#ff69a9!important}
+  .nav-icon{width:20px!important;height:20px!important;flex-basis:20px!important;color:#778197!important}
+  .nav-icon svg{width:17px!important;height:17px!important;stroke-width:1.65!important}
+  .nav-beta{
+    margin-left:auto!important;padding:3px 5px!important;font-size:5.6px!important;
+    border-color:#34284a!important;background:#120f1a!important;color:#a991d2!important;
+  }
+  .sidebar-foot{
+    left:18px!important;right:18px!important;bottom:16px!important;
+    padding-top:12px!important;border-top:1px solid #171c27!important;
+  }
+  .saas-account-card{
+    width:100%;min-height:55px;display:grid!important;grid-template-columns:34px minmax(0,1fr) 18px!important;
+    gap:9px!important;align-items:center;text-align:left;
+    padding:8px 9px!important;border:1px solid #242b38!important;border-radius:11px!important;
+    background:linear-gradient(180deg,#0e1119,#0a0d14)!important;color:#fff!important;
+  }
+  .saas-account-card:hover{border-color:#343d4c!important;background:#11151e!important}
+  .saas-account-avatar{
+    position:relative;width:34px!important;height:34px!important;border-radius:50%!important;
+    border:1px solid #473664!important;background:radial-gradient(circle at 50% 32%,#a984ff 0 22%,#4b2f72 23% 42%,#171220 43%)!important;
+  }
+  .saas-account-avatar:after{
+    content:"";position:absolute;left:7px;right:7px;bottom:4px;height:10px;border-radius:50% 50% 42% 42%;
+    background:linear-gradient(180deg,#9e76f7,#6e45a8);
+  }
+  .saas-account-avatar span{display:none}
+  .account-copy{display:grid!important;grid-template-columns:1fr;gap:1px!important}
+  .account-copy b{font-size:9.8px!important;color:#eef0f5!important;font-weight:820!important}
+  .account-copy span{font-size:8.2px!important;color:#858fa0!important;margin:0!important}
+  .account-copy small{font-size:6.7px!important;color:#596374!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .account-chevron{font-size:18px;color:#606a79;justify-self:end}
+  .sidebar.compact .saas-account-card{width:44px!important;height:44px!important;padding:5px!important;grid-template-columns:1fr!important}
+  .sidebar.compact .saas-account-avatar{width:32px!important;height:32px!important;margin:auto!important}
+  .sidebar.compact .account-chevron{display:none!important}
+  .sidebar.compact:hover .saas-account-card{
+    width:100%!important;height:auto!important;padding:8px 9px!important;grid-template-columns:34px minmax(0,1fr) 18px!important
+  }
+  .sidebar.compact:hover .account-chevron{display:block!important}
+  .sidebar.compact:hover .account-copy{display:grid!important}
+  .sidebar.compact:hover{
+    width:260px!important;padding-left:18px!important;padding-right:18px!important;
+  }
+  .sidebar.compact:hover .brand{margin:0!important;padding:0 4px 17px!important}
+}
+
+/* Top command bar from the approved SaaS mock */
+.saas-topbar{
+  min-height:82px!important;margin:0 -38px 26px!important;padding:16px 38px!important;
+  display:grid!important;grid-template-columns:minmax(235px,.85fr) minmax(320px,1.1fr) minmax(260px,.8fr)!important;
+  align-items:center!important;gap:24px!important;
+  background:rgba(7,9,16,.92)!important;border-bottom:1px solid #1b2030!important;
+  backdrop-filter:blur(20px) saturate(130%)!important;
+}
+.topbar-title-block{min-width:0}
+.topbar-title-block h1{margin:0!important;font-size:22px!important;line-height:1.1!important;letter-spacing:-.035em!important}
+.topbar-title-block p{margin:5px 0 0;color:#7e8798;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-search-trigger{
+  width:100%;height:42px;display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:9px;align-items:center;
+  border:1px solid #252c3a;border-radius:10px;background:linear-gradient(180deg,#0e121b,#0b0e15);
+  color:#788397;padding:0 11px;text-align:left;
+}
+.top-search-trigger:hover{border-color:#394154!important;background:#111620!important;color:#aeb6c5!important}
+.top-search-trigger svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7}
+.top-search-trigger span{font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-search-trigger kbd{font:700 7px/1 system-ui;color:#626c7b;background:#111621;border:1px solid #28303d;border-radius:5px;padding:5px}
+.saas-topbar .top-actions{justify-content:flex-end!important}
+.saas-topbar .live-worker-pill{background:#0d1412!important;border-color:#20362c!important}
+.saas-topbar .top-icon-btn{width:38px;height:38px;border-radius:10px;background:#0e1118}
+.saas-topbar .btn.primary{height:38px;border-radius:9px!important}
+
+/* Full-screen auth boot now looks like an actual SaaS shell, not an empty black page */
+body.auth-checking{background:#060810!important}
+.auth-boot{padding:14px!important;background:#060810!important}
+body.auth-checking .auth-boot{display:block!important}
+.auth-boot-shell{
+  width:100%;height:calc(100vh - 28px);display:grid;grid-template-columns:244px minmax(0,1fr);
+  overflow:hidden;border:1px solid #1c2230;border-radius:20px;background:#080a12;
+  box-shadow:0 30px 90px rgba(0,0,0,.42);
+}
+.auth-boot-sidebar{padding:24px 18px;background:linear-gradient(180deg,#090b13,#070910);border-right:1px solid #1c2230}
+.auth-boot-brand{height:62px;display:flex;align-items:center;gap:11px;border-bottom:1px solid #171d28;padding:0 5px 16px}
+.auth-boot-brandmark{width:43px;height:43px;display:grid;place-items:center;border-radius:12px;background:#111522;border:1px solid #2d3246}
+.auth-boot-brandmark .cloudent-mark-svg{width:28px;height:28px}
+.auth-boot-brand b,.auth-boot-brand small{display:block}.auth-boot-brand b{font-size:15px;letter-spacing:-.035em}.auth-boot-brand b span{color:#ff63a6}.auth-boot-brand small{margin-top:4px;font-size:5.5px;color:#646e81;letter-spacing:.16em;font-weight:900}
+.auth-boot-nav{padding:18px 6px;display:grid;gap:8px}.auth-boot-nav span{margin:7px 0 1px;font-size:6.3px;color:#4f596a;letter-spacing:.15em;font-weight:900}.auth-boot-nav i{display:block;height:34px;border-radius:8px;background:linear-gradient(90deg,#0d1119,#0b0e14)}
+.auth-boot-main{display:grid;grid-template-rows:72px minmax(0,1fr);min-width:0}
+.auth-boot-topbar{display:flex;align-items:center;justify-content:space-between;padding:0 30px;border-bottom:1px solid #1a2030;background:#080a12}.auth-boot-topbar b,.auth-boot-topbar small{display:block}.auth-boot-topbar b{font-size:16px}.auth-boot-topbar small{margin-top:4px;font-size:8px;color:#687284}.auth-boot-topbar>span{width:320px;height:38px;border:1px solid #1e2532;border-radius:9px;background:#0b0f17}
+.auth-boot-stage{
+  position:relative;display:grid;place-items:center;align-content:center;overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 52%,rgba(128,68,194,.18),transparent 16%),
+    radial-gradient(circle at 96% 6%,rgba(142,76,204,.11),transparent 24%),
+    radial-gradient(circle at 0% 100%,rgba(102,57,161,.09),transparent 27%),
+    #070910;
+}
+.auth-boot-stage:before,.auth-boot-stage:after{content:"";position:absolute;border:1px solid rgba(142,81,190,.16);border-radius:50%;pointer-events:none}
+.auth-boot-stage:before{width:68vw;height:68vw;max-width:920px;max-height:920px}
+.auth-boot-stage:after{width:43vw;height:43vw;max-width:590px;max-height:590px}
+.auth-boot-mark{width:76px!important;height:76px!important;border-radius:20px!important;display:grid!important;place-items:center!important;z-index:1;background:linear-gradient(145deg,#17172a,#0b0c15)!important;border:1px solid #5b3d7d!important;box-shadow:0 0 45px rgba(143,77,196,.18)!important}
+.auth-boot-mark .cloudent-mark-svg{width:50px!important;height:50px!important}
+.auth-boot-name{z-index:1;margin-top:18px;font-size:29px!important;font-weight:900!important;letter-spacing:-.05em!important}.auth-boot-name span{color:#ff5fa7}
+.auth-boot-tagline{z-index:1;margin-top:6px;font-size:7px;letter-spacing:.32em;color:#6f7890;font-weight:900}
+.auth-boot-ring{z-index:1;width:38px;height:38px;margin-top:26px;border-radius:50%;border:3px solid #24293a;border-top-color:#9e77ff;border-right-color:#ff5fa7;animation:saasBootSpin .9s linear infinite}
+@keyframes saasBootSpin{to{transform:rotate(360deg)}}
+.auth-boot-copy{z-index:1;text-align:center;margin-top:12px}.auth-boot-copy b,.auth-boot-copy span{display:block}.auth-boot-copy b{font-size:10px;color:#bec4d0}.auth-boot-copy span{margin-top:5px;font-size:8px;color:#626c7c}
+.auth-boot-inner,.auth-boot-bar{display:none!important}
+
+@media(max-width:1120px){
+  .saas-topbar{grid-template-columns:minmax(210px,1fr) minmax(280px,1.2fr) auto!important}
+  .saas-topbar .live-worker-pill{display:none!important}
+}
+@media(max-width:900px) and (min-width:761px){
+  .top-search-trigger{display:none}
+  .saas-topbar{grid-template-columns:1fr auto!important}
+}
+@media(max-width:760px){
+  .main{padding-left:14px!important;padding-right:14px!important}
+  .saas-topbar{display:none!important}
+  .auth-boot{padding:0!important}
+  .auth-boot-shell{height:100vh;border:0;border-radius:0;grid-template-columns:1fr}
+  .auth-boot-sidebar,.auth-boot-topbar{display:none}
+  .auth-boot-main{grid-template-rows:1fr}
+  .auth-boot-stage:before{width:130vw;height:130vw}.auth-boot-stage:after{width:78vw;height:78vw}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -3131,20 +3322,37 @@ body.auth-checking .auth-boot{display:grid}
 </head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
-  <div class="auth-boot-inner">
-    <div class="auth-boot-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
-  <defs>
-    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#B79CFF"/>
-      <stop offset=".52" stop-color="#8B6CFF"/>
-      <stop offset="1" stop-color="#FF6BA8"/>
-    </linearGradient>
-  </defs>
-  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
-  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <div class="auth-boot-shell">
+    <aside class="auth-boot-sidebar">
+      <div class="auth-boot-brand">
+        <div class="auth-boot-brandmark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M24 8.2H13.5c-3.5 0-5.8 1.8-5.8 4.5 0 2.4 1.9 3.9 4.8 3.9h7c2.9 0 4.8 1.5 4.8 3.9 0 2.7-2.3 4.5-5.8 4.5H8" fill="none" stroke="#A78BFA" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22.5 10.9H14c-1.8 0-2.8.7-2.8 1.8 0 .9.8 1.4 2.1 1.4h6.4c4.6 0 7.8 2.4 7.8 6.3 0 4.4-3.6 7.3-9 7.3H9.8" fill="none" stroke="#FF5FA7" stroke-width="2.2" stroke-linecap="round" opacity=".88"/>
 </svg></div>
-    <div class="auth-boot-name">CloudentFlow</div>
-    <div class="auth-boot-bar"><i></i></div>
+        <div><b>Cloudent<span>Flow</span></b><small>CONTENT OPERATING SYSTEM</small></div>
+      </div>
+      <div class="auth-boot-nav">
+        <span>PLANEJAMENTO</span>
+        <i></i><i></i><i></i>
+        <span>PRODUÇÃO</span>
+        <i></i><i></i>
+        <span>INTELIGÊNCIA</span>
+        <i></i><i></i>
+      </div>
+    </aside>
+    <section class="auth-boot-main">
+      <div class="auth-boot-topbar"><div><b>Visão geral</b><small>Preparando seu workspace</small></div><span></span></div>
+      <div class="auth-boot-stage">
+        <div class="auth-boot-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M24 8.2H13.5c-3.5 0-5.8 1.8-5.8 4.5 0 2.4 1.9 3.9 4.8 3.9h7c2.9 0 4.8 1.5 4.8 3.9 0 2.7-2.3 4.5-5.8 4.5H8" fill="none" stroke="#A78BFA" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22.5 10.9H14c-1.8 0-2.8.7-2.8 1.8 0 .9.8 1.4 2.1 1.4h6.4c4.6 0 7.8 2.4 7.8 6.3 0 4.4-3.6 7.3-9 7.3H9.8" fill="none" stroke="#FF5FA7" stroke-width="2.2" stroke-linecap="round" opacity=".88"/>
+</svg></div>
+        <div class="auth-boot-name">Cloudent<span>Flow</span></div>
+        <div class="auth-boot-tagline">CONTENT OPERATING SYSTEM</div>
+        <div class="auth-boot-ring" aria-hidden="true"></div>
+        <div class="auth-boot-copy"><b>Carregando seu espaço de criação…</b><span>Organize. Produza. Publique. Cresça.</span></div>
+      </div>
+    </section>
   </div>
 </div>
 <div id="loginGate" class="login-gate">
@@ -3152,15 +3360,8 @@ body.auth-checking .auth-boot{display:grid}
     <section class="login-visual" aria-hidden="true">
       <div class="login-brand">
         <div class="login-brand-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
-  <defs>
-    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#B79CFF"/>
-      <stop offset=".52" stop-color="#8B6CFF"/>
-      <stop offset="1" stop-color="#FF6BA8"/>
-    </linearGradient>
-  </defs>
-  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
-  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M24 8.2H13.5c-3.5 0-5.8 1.8-5.8 4.5 0 2.4 1.9 3.9 4.8 3.9h7c2.9 0 4.8 1.5 4.8 3.9 0 2.7-2.3 4.5-5.8 4.5H8" fill="none" stroke="#A78BFA" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22.5 10.9H14c-1.8 0-2.8.7-2.8 1.8 0 .9.8 1.4 2.1 1.4h6.4c4.6 0 7.8 2.4 7.8 6.3 0 4.4-3.6 7.3-9 7.3H9.8" fill="none" stroke="#FF5FA7" stroke-width="2.2" stroke-linecap="round" opacity=".88"/>
 </svg></div>
         <div class="login-brand-copy"><b>CloudentFlow</b><span>Autopilot for content</span></div>
       </div>
@@ -3204,15 +3405,8 @@ body.auth-checking .auth-boot{display:grid}
   <header class="mobile-appbar" id="mobileAppbar">
     <button class="mobile-brand" onclick="showPage('overview')" aria-label="Ir para visão geral">
       <span class="mobile-logo"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
-  <defs>
-    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#B79CFF"/>
-      <stop offset=".52" stop-color="#8B6CFF"/>
-      <stop offset="1" stop-color="#FF6BA8"/>
-    </linearGradient>
-  </defs>
-  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
-  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M24 8.2H13.5c-3.5 0-5.8 1.8-5.8 4.5 0 2.4 1.9 3.9 4.8 3.9h7c2.9 0 4.8 1.5 4.8 3.9 0 2.7-2.3 4.5-5.8 4.5H8" fill="none" stroke="#A78BFA" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22.5 10.9H14c-1.8 0-2.8.7-2.8 1.8 0 .9.8 1.4 2.1 1.4h6.4c4.6 0 7.8 2.4 7.8 6.3 0 4.4-3.6 7.3-9 7.3H9.8" fill="none" stroke="#FF5FA7" stroke-width="2.2" stroke-linecap="round" opacity=".88"/>
 </svg></span>
       <span><b>Cloudent<span>Flow</span></b><small id="mobilePageTitle">Visão geral</small></span>
     </button>
@@ -3227,15 +3421,8 @@ body.auth-checking .auth-boot{display:grid}
   <div class="brand">
     <div class="brand-main">
       <div class="logo cloudent-brand-mark"><svg class="cloudent-mark-svg" viewBox="0 0 32 32" aria-hidden="true">
-  <defs>
-    <linearGradient id="cfBrandGradient" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#B79CFF"/>
-      <stop offset=".52" stop-color="#8B6CFF"/>
-      <stop offset="1" stop-color="#FF6BA8"/>
-    </linearGradient>
-  </defs>
-  <path d="M22.8 8.2h-8.5a6.2 6.2 0 1 0 0 12.4h4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
-  <path d="M9.2 23.8h8.5a6.2 6.2 0 1 0 0-12.4h-4.1" fill="none" stroke="url(#cfBrandGradient)" stroke-width="3.15" stroke-linecap="round"/>
+  <path d="M24 8.2H13.5c-3.5 0-5.8 1.8-5.8 4.5 0 2.4 1.9 3.9 4.8 3.9h7c2.9 0 4.8 1.5 4.8 3.9 0 2.7-2.3 4.5-5.8 4.5H8" fill="none" stroke="#A78BFA" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22.5 10.9H14c-1.8 0-2.8.7-2.8 1.8 0 .9.8 1.4 2.1 1.4h6.4c4.6 0 7.8 2.4 7.8 6.3 0 4.4-3.6 7.3-9 7.3H9.8" fill="none" stroke="#FF5FA7" stroke-width="2.2" stroke-linecap="round" opacity=".88"/>
 </svg></div>
       <span class="brand-lockup">
         <span class="brand-name">Cloudent<span class="brand-accent">Flow</span></span>
@@ -3246,30 +3433,25 @@ body.auth-checking .auth-boot{display:grid}
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 5 3 3v1h-6v7l-1 2-1-2v-7H5v-1l3-3 1-5Z"></path></svg>
     </button>
   </div>
-  <div class="workspace-switch" aria-label="Workspace atual">
-    <div class="workspace-avatar">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg>
-    </div>
-    <div class="workspace-copy"><span>WORKSPACE</span><b>Produção principal</b></div>
-    <div class="workspace-state"><i></i><span>LIVE</span></div>
-    <span class="workspace-caret">⌄</span>
-  </div>
   <div class="nav" id="nav"></div>
   <div class="sidebar-foot">
-    <div class="account-chip">
-      <div class="account-avatar">IG</div>
-      <div class="account-copy"><b id="sidebarAccount">@Instagram</b><span id="sidebarAccountStatus">Verificando conexão…</span></div>
-      <span class="connection-dot"></span>
-    </div>
+    <button class="account-chip saas-account-card" type="button" onclick="showPage('settings')" title="Abrir configurações da conta">
+      <div class="account-avatar saas-account-avatar"><span></span></div>
+      <div class="account-copy"><b>Conta Pro</b><span id="sidebarAccount">CloudentFlow</span><small id="sidebarAccountStatus">Verificando conexão…</small></div>
+      <span class="account-chevron">›</span>
+    </button>
   </div>
 </aside>
 
 <main class="main">
-  <div class="topbar">
-    <div><div class="kicker">CLOUDENTFLOW / WORKSPACE</div><h1 id="pageTitle">Visão geral</h1></div>
+  <div class="topbar saas-topbar">
+    <div class="topbar-title-block"><h1 id="pageTitle">Visão geral</h1><p id="pageSubtitle">Acompanhe conteúdo, desempenho e próximos passos.</p></div>
+    <button class="top-search-trigger" type="button" onclick="openCommandPalette()" title="Buscar no CloudentFlow">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+      <span>Buscar conteúdos, ideias, métricas…</span><kbd>⌘ K</kbd>
+    </button>
     <div class="top-actions">
       <button class="live-worker-pill" id="liveWorkerPill" onclick="showPage('automation')" title="Status da automação"><span class="live-pulse"></span><span id="liveWorkerText">Sincronizando…</span></button>
-      <button class="top-icon-btn command-trigger" onclick="openCommandPalette()" title="Comandos rápidos"><span>⌘</span><small>K</small></button>
       <button class="top-icon-btn notification-trigger" onclick="toggleActivityPanel()" title="Atividade"><span>◔</span><i id="notificationCount" class="hidden">0</i></button>
       <button class="btn primary" id="newVideoBtn">＋ Agendar vídeo</button>
     </div>
@@ -3304,14 +3486,14 @@ const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const navItems=[
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
-  ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels teste"],
+  ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
-  ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrair frame"],
+  ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrator de frames"],
   ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X"],
   ["tiktokStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14 4v10.4a4.6 4.6 0 1 1-3.3-4.4\"></path><path d=\"M14 4c1.2 2.6 3 4 5.5 4.4\"></path></svg>","TikTok"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
-  ["smartTimes","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"></circle><path d=\"M12 7v5l3 2\"></path><path d=\"M4 4l2 2M20 4l-2 2\"></path></svg>","Horários"],
-  ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Automação"],
+  ["smartTimes","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"></circle><path d=\"M12 7v5l3 2\"></path><path d=\"M4 4l2 2M20 4l-2 2\"></path></svg>","Smart Scheduler"],
+  ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Central de automação"],
   ["cloudentAI","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3 14.1 8.9 20 11l-5.9 2.1L12 19l-2.1-5.9L4 11l5.9-2.1L12 3Z\"></path><path d=\"m18 3 .8 2.2L21 6l-2.2.8L18 9l-.8-2.2L15 6l2.2-.8L18 3Z\"></path></svg>","Cloudent AI"],
   ["settings","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.08A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.08A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.08A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.39.28.7.63.88 1.08.17.44.21.92.12 1.39-.08.47-.29.9-.6 1.26-.11.13-.24.24-.4.34Z\"></path></svg>","Configurações"]
 ];
@@ -3324,6 +3506,20 @@ const IG_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-status";
 const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
 const X_OAUTH_URL=SUPABASE_URL+"/functions/v1/cloudent-x-oauth";
+const pageSubtitles={
+  overview:"Acompanhe conteúdo, desempenho e próximos passos.",
+  calendar:"Planeje e distribua sua operação de conteúdo.",
+  trialReels:"Teste novos horários sem misturar o aprendizado principal.",
+  production:"Transforme vídeo + frame em uma fila de produção contínua.",
+  frameExtractor:"Extraia o primeiro frame e organize referências rapidamente.",
+  xStudio:"Gerencie a operação do canal X.",
+  tiktokStudio:"Prepare e acompanhe sua operação no TikTok.",
+  metrics:"Entenda desempenho, alcance e evolução do conteúdo.",
+  smartTimes:"Use dados reais para decidir quando publicar.",
+  automation:"Acompanhe workers, filas e rotinas automáticas.",
+  cloudentAI:"Use a inteligência do CloudentFlow para apoiar sua operação.",
+  settings:"Gerencie integrações, conta e preferências do workspace."
+};
 let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
@@ -4369,7 +4565,7 @@ function syncMobileChrome(){
 }
 function nav(){
   const groups=[
-    {label:"Workspace",pages:["overview","calendar","trialReels"]},
+    {label:"Planejamento",pages:["overview","calendar","trialReels"]},
     {label:"Produção",pages:["production","frameExtractor"]},
     {label:"Canais",pages:["xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
@@ -4397,6 +4593,7 @@ function showPage(id){
   page.classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   $("#pageTitle").textContent=meta[2];
+  const subtitle=$("#pageSubtitle");if(subtitle)subtitle.textContent=pageSubtitles[id]||"CloudentFlow Content Operating System";
   const mobileTitle=$("#mobilePageTitle");if(mobileTitle)mobileTitle.textContent=meta[2];
   toggleMobileMore(false);
   renderMobileNav();
@@ -4714,6 +4911,7 @@ function showInternalPage(id,title){
   const page=$("#"+id);if(page)page.classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(x=>x.classList.remove("active"));
   if($("#pageTitle"))$("#pageTitle").textContent=title;
+  const subtitle=$("#pageSubtitle");if(subtitle)subtitle.textContent="Detalhes e contexto da sua operação.";
 }
 
 function overview(){
@@ -8766,8 +8964,8 @@ function renderAll(){
   const fn=renderers[currentPage]||overview;
   safeRenderPage(currentPage,fn);
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
-  if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"Instagram";
-  if(stat)stat.textContent=instagramIntegration?.enabled?"Conta conectada":"Configurar integração";
+  if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"CloudentFlow";
+  if(stat)stat.textContent=instagramIntegration?.enabled?"Instagram conectado":"Abrir configurações";
   updateLiveChrome();
 }
 
