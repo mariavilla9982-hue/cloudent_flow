@@ -1,7 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>
-<rect width="512" height="512" rx="116" fill="#09090d"/>
-<path d="M151 126h210c21 0 38 17 38 38v184c0 21-17 38-38 38H151c-21 0-38-17-38-38V164c0-21 17-38 38-38Z" fill="#11131a" stroke="url(#g)" stroke-width="18"/>
-<path d="M225 196 330 256 225 316Z" fill="url(#g)"/>
-<path d="M151 126h210l-30-40H181Z" fill="#171925" stroke="url(#g)" stroke-width="14" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="g" x1="96" y1="82" x2="420" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B79CFF"/>
+      <stop offset=".52" stop-color="#8B6CFF"/>
+      <stop offset="1" stop-color="#FF6BA8"/>
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientTransform="translate(150 120) rotate(45) scale(360)">
+      <stop stop-color="#171829"/>
+      <stop offset="1" stop-color="#090B10"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bgGlow)"/>
+  <rect x="18" y="18" width="476" height="476" rx="100" fill="none" stroke="#2B303A" stroke-width="8"/>
+  <path d="M365 148H226c-57 0-103 46-103 103s46 103 103 103h67"
+        fill="none" stroke="url(#g)" stroke-width="50" stroke-linecap="round"/>
+  <path d="M147 364h139c57 0 103-46 103-103s-46-103-103-103h-67"
+        fill="none" stroke="url(#g)" stroke-width="50" stroke-linecap="round"/>
 </svg>
