@@ -5573,14 +5573,19 @@ function updateSlotTime(date,slot,time){
   const [h,m]=time.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
   x.scheduledAt=at.toISOString();syncQueue();renderAll()
 }
-async function removeSlot(date,slot){
+async function removeSlot(date,slot,button=null){
   const k=keyFor(date,slot),x=state.slots[k];if(!x)return;
   if(!confirm(`Remover "${x.name}" deste horário?`))return;
+  actionButtonBusy(button,true,"Excluindo…");
+  const card=x.scheduleId?document.querySelector('[data-schedule-id="'+CSS.escape(String(x.scheduleId))+'"]'):null;
+  card?.classList.add("calendar-card-removing");
   if(x.cloud&&x.scheduleId){
     try{await cloudFetch("?action=schedule",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:x.scheduleId})})}
-    catch(e){toast(friendlyCloudentError(e.message),"err");return}
+    catch(e){card?.classList.remove("calendar-card-removing");actionButtonBusy(button,false);toast("Não consegui excluir: "+friendlyCloudentError(e.message),"err");return}
   }else if(db){try{await dbDelete(x.videoId)}catch{}}
-  delete state.slots[k];save();log(`${x.name} removido do calendário, banco e fila.`,"warn")
+  delete state.slots[k];save();
+  if(currentPage==="calendar")calendarPage();
+  toast((x.name||"Vídeo")+" removido do calendário.","ok");
 }
 async function getSignedThumbnailUrl(path){
   if(!path||!cloudSession)return null;
@@ -5805,12 +5810,12 @@ function openScheduleModal(presetDate=null,extraManual=false){
       <div class="field full"><label>Legenda</label><textarea id="modalCaption" placeholder="Legenda do Reel..."></textarea></div>
       <div class="field full"><label>Arquivo</label><input id="modalFile" type="file" accept="video/*"></div>
     </div>
-    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="confirmScheduleModal()">Salvar no calendário</button></div>
+    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary calendar-modal-save" onclick="confirmScheduleModal(this)">✓ Salvar no calendário</button></div>
   </div></div>`;
   setTimeout(updateScheduleModalSmartTime,0);
 }
 
-async function confirmScheduleModal(){
+async function confirmScheduleModal(button=null){
   const date=$("#modalDay").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
   if(!file){toast("Escolha um vídeo.","warn");return}
   const free=firstFreeSlot(date);if(free<0){toast("Esse dia atingiu o limite manual de vídeos.","warn");return}
@@ -5820,8 +5825,8 @@ async function confirmScheduleModal(){
   const time=choice.time;
   const valid=validateSchedule(date,time);if(!valid.ok){toast(valid.msg,"warn");return}
 
-  const btn=document.querySelector('#modalHost .btn.primary');
-  if(btn){btn.disabled=true;btn.textContent="Enviando…"}
+  const btn=button||document.querySelector('#modalHost .btn.primary');
+  actionButtonBusy(btn,true,"Agendando…");
   try{
     const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual",auto?choice.strategy:"manual");
     if(ok){
@@ -5835,7 +5840,7 @@ async function confirmScheduleModal(){
     console.error("Schedule upload error:",e);
     toast("Não consegui agendar o vídeo: "+friendlyCloudentError(e?.message||"erro desconhecido"),"err");
   }finally{
-    if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent="Salvar no calendário"}
+    if(btn&&document.body.contains(btn))actionButtonBusy(btn,false);
   }
 }
 
@@ -5853,10 +5858,10 @@ function openEditScheduleModal(date,slot){
         ${["agendado","fila","publicando","publicado","erro"].map(s=>`<option value="${s}" ${getStatus(x)===s?"selected":""}>${statusLabel(s)}</option>`).join("")}
       </select></div>
     </div>
-    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" onclick="confirmEditSchedule('${date}',${slot})">Salvar alterações</button></div>
+    <div class="toolbar" style="justify-content:flex-end;margin-top:14px"><button class="btn primary calendar-modal-save" onclick="confirmEditSchedule('${date}',${slot},this)">✓ Salvar alterações</button></div>
   </div></div>`;
 }
-async function confirmEditSchedule(oldDate,oldSlot){
+async function confirmEditSchedule(oldDate,oldSlot,button=null){
   const oldKey=keyFor(oldDate,oldSlot),x=state.slots[oldKey];if(!x)return;
   const newDate=$("#editDay").value,newTime=$("#editTime").value,newCaption=$("#editCaption").value,newStatus=$("#editStatus").value,file=$("#editFile").files[0];
   const movingDay=newDate!==oldDate;
@@ -5868,9 +5873,10 @@ async function confirmEditSchedule(oldDate,oldSlot){
   }
   const valid=validateSchedule(newDate,newTime,movingDay?null:oldKey);
   if(!valid.ok){toast(valid.msg,"warn");return}
+  actionButtonBusy(button,true,"Salvando…");
 
   if(file){
-    if(x.cloud){toast("Para trocar o arquivo, remova este agendamento e envie o novo vídeo. Dia, hora e legenda podem ser editados normalmente.","warn");return}
+    if(x.cloud){actionButtonBusy(button,false);toast("Para trocar o arquivo, remova este agendamento e envie o novo vídeo. Dia, hora e legenda podem ser editados normalmente.","warn");return}
     await dbDelete(x.videoId);
     const id=crypto.randomUUID();
     await dbPut({id,name:file.name,size:file.size,type:file.type,blob:file,added:new Date().toISOString()});
@@ -5895,7 +5901,9 @@ async function confirmEditSchedule(oldDate,oldSlot){
   }catch(e){
     await syncFromBackend().catch(()=>{});
     renderAll();
-    toast("Não consegui salvar o horário: "+(e?.message||"erro"),"err");
+    toast("Não consegui salvar o horário: "+friendlyCloudentError(e?.message||"erro"),"err");
+  }finally{
+    if(button&&document.body.contains(button))actionButtonBusy(button,false);
   }
 }
 function setMetricsPeriod(days){metricsPeriod=days;metrics()}
