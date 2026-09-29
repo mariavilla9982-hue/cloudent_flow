@@ -3520,7 +3520,7 @@ const pageSubtitles={
   cloudentAI:"Use a inteligência do CloudentFlow para apoiar sua operação.",
   settings:"Gerencie integrações, conta e preferências do workspace."
 };
-let cloudSession=null, backendOnline=false, instagramIntegration=null, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
+let cloudSession=null, backendOnline=false, instagramIntegration=null, instagramWebSession={configured:false,mode:"browser_session"}, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 const trialPreviewCache=new Map();
@@ -3688,6 +3688,7 @@ async function initCloud(){
   await Promise.allSettled([
     withTimeout(syncFromBackend(),4500,"calendário"),
     withTimeout(loadInstagramStatus(false),4500,"status do Instagram"),
+    withTimeout(loadInstagramWebSessionStatus(),4500,"sessão web Instagram"),
     withTimeout(loadAutomationStatus(),4500,"automação"),
     withTimeout(loadFollowerStats(30),4500,"seguidores"),
     withTimeout(loadPlatformAccounts(),4500,"contas"),
@@ -4036,6 +4037,40 @@ async function loadInstagramStatus(loadMetrics=true){
   }catch(e){
     console.warn("Instagram status unavailable:",e);
   }
+}
+async function loadInstagramWebSessionStatus(){
+  if(!cloudSession){instagramWebSession={configured:false,mode:"browser_session"};return}
+  try{instagramWebSession=await cloudFetch("?resource=instagram-web-session")}
+  catch(e){instagramWebSession={configured:false,mode:"browser_session",error:e.message}}
+}
+function openInstagramWebSessionSettings(){
+  settingsTab="integrations";showPage("settings");
+  setTimeout(()=>$("#instagramWebSessionCard")?.scrollIntoView({behavior:"smooth",block:"center"}),100);
+}
+async function saveInstagramWebSession(button=null){
+  if(!cloudSession){focusCloudLogin();return}
+  const input=$("#instagramWebSessionInput"),value=input?.value?.trim()||"";
+  if(!value){toast("Cole o valor do sessionid da sua própria conta do Instagram.","warn");return}
+  actionButtonBusy(button,true,"Validando…");
+  try{
+    const r=await cloudFetch("?action=instagram-web-session",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({session:value})});
+    if(input)input.value="";
+    instagramWebSession={configured:true,mode:"browser_session",username:r.username||null};
+    settings();
+    toast("Sessão do Instagram conectada ao Extrator"+(r.username?" · @"+r.username:"")+".","ok");
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
+  finally{if(button&&document.body.contains(button))actionButtonBusy(button,false)}
+}
+async function removeInstagramWebSession(button=null){
+  if(!cloudSession)return;
+  if(!confirm("Remover a sessão web do Instagram usada pelo Extrator?"))return;
+  actionButtonBusy(button,true,"Removendo…");
+  try{
+    await cloudFetch("?action=instagram-web-session",{method:"DELETE"});
+    instagramWebSession={configured:false,mode:"browser_session"};
+    settings();toast("Sessão web do Instagram removida.","ok");
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
+  finally{if(button&&document.body.contains(button))actionButtonBusy(button,false)}
 }
 async function loadInstagramMetricsStored(){
   if(!cloudSession||!instagramIntegration?.enabled)return;
@@ -4440,6 +4475,7 @@ async function refreshLiveData(showFeedback=false){
     if(currentPage==="production")tasks.push(loadProductionData());
     if(currentPage==="trialReels")tasks.push(loadTrialReels());
     if(currentPage==="settings"&&settingsTab==="health")tasks.push(loadSystemHealth());
+    if(currentPage==="settings"&&settingsTab==="integrations")tasks.push(loadInstagramWebSessionStatus());
     await Promise.allSettled(tasks);
     updateLiveChrome();renderAll();
     if(activityOpen)toggleActivityPanel(true);
