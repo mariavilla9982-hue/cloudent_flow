@@ -3661,7 +3661,7 @@ function focusCloudLogin(){
 async function connectInstagram(){
   if(!cloudSession){focusCloudLogin();return}
   const token=$("#instagramToken")?.value?.trim();
-  if(!token){alert("Cole seu token do Instagram.");return}
+  if(!token){toast("Cole seu token do Instagram.","warn");return}
   const btn=$("#connectInstagramBtn");
   if(btn){btn.disabled=true;btn.textContent="Conectando e testando..."}
   try{
@@ -3689,13 +3689,13 @@ async function connectInstagram(){
     state.logs=state.logs.slice(0,100);save();
     showPage("metrics");
   }catch(e){
-    alert("Falha ao conectar/testar Instagram: "+e.message);
+    toast("Falha ao conectar/testar Instagram: "+friendlyCloudentError(e.message),"err");
     state.logs.unshift({t:new Date().toISOString(),type:"err",m:"Instagram: "+e.message});
     state.logs=state.logs.slice(0,100);save();renderAll();
   }
 }
 async function syncInstagramToday(){
-  if(!cloudSession){alert("Entre no Cloud Backend primeiro.");showPage("settings");return}
+  if(!cloudSession){toast("Entre no CloudentFlow primeiro.","warn");showPage("settings");return}
   try{
     const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
     liveInstagramMetrics=r.media||[];
@@ -3706,7 +3706,7 @@ async function syncInstagramToday(){
     });
     state.logs=state.logs.slice(0,100);save();
   }catch(e){
-    alert("Não consegui buscar as métricas: "+e.message);
+    toast("Não consegui buscar as métricas: "+friendlyCloudentError(e.message),"err");
     state.logs.unshift({t:new Date().toISOString(),type:"err",m:"Falha ao sincronizar métricas: "+e.message});
     state.logs=state.logs.slice(0,100);save();
   }finally{renderAll()}
@@ -3719,14 +3719,14 @@ async function testBackend(){
 }
 async function signUpCloud(){
   const email=$("#authEmail")?.value?.trim(),password=$("#authPassword")?.value||"";
-  if(!email||password.length<6){alert("Informe email e senha com pelo menos 6 caracteres.");return}
+  if(!email||password.length<6){toast("Informe email e senha com pelo menos 6 caracteres.","warn");return}
   try{
     const r=await authRequest("/signup",{method:"POST",body:JSON.stringify({email,password})});
     const session=r?.access_token?r:r?.session;
     if(session?.access_token){
       persistCloudSession(session);await testBackend();await syncFromBackend();await loadInstagramStatus();renderAll();
-    }else alert("Conta criada. Se a confirmação por email estiver ativa, confirme seu email e depois entre.");
-  }catch(e){alert(e.message)}
+    }else toast("Conta criada. Se a confirmação por email estiver ativa, confirme seu email e depois entre.","info");
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
 }
 async function signInCloud(){
   const email=$("#loginEmail")?.value?.trim()||$("#authEmail")?.value?.trim(),password=$("#loginPassword")?.value||$("#authPassword")?.value||"";
@@ -4424,7 +4424,7 @@ function recalcSmart(){
   state.smartSettings.lastRun=new Date().toISOString();save();log("Smart Scheduler recalculou scores, confiança e horários sugeridos.","ok")
 }
 function optimizeFutureCalendar(){
-  if(!state.smartSettings.enabled){alert("Ative o Smart Scheduler primeiro.");return}
+  if(!state.smartSettings.enabled){toast("Ative o Smart Scheduler primeiro.","warn");return}
   if(!confirm("Reorganizar os horários futuros usando as recomendações atuais? Os vídeos continuam nos mesmos dias."))return;
   const now=new Date();let changed=0;
   const dates=[...new Set(Object.keys(state.slots).map(k=>k.split("#")[0]))].sort();
@@ -4452,10 +4452,10 @@ function optimizeFutureCalendar(){
 }
 function addSmartSample(){
   const date=$("#sampleDate").value,time=$("#sampleTime").value;
-  if(!date||!time){alert("Preencha data e horário.");return}
+  if(!date||!time){toast("Preencha data e horário.","warn");return}
   const fields=["views","reach","likes","comments","shares","saves"],obj={id:crypto.randomUUID(),date,time,source:"manual"};
   for(const f of fields)obj[f]=Math.max(0,+$("#sample_"+f).value||0);
-  if(!obj.reach){alert("Alcance precisa ser maior que zero.");return}
+  if(!obj.reach){toast("Alcance precisa ser maior que zero.","warn");return}
   state.smartSamples.push(obj);state.smartSettings.lastRun=new Date().toISOString();save();log(`Nova amostra manual adicionada: ${date} ${time}.`,"ok")
 }
 function resetSmartDemo(){
@@ -4935,7 +4935,7 @@ function calendarPage(){
   $("#calendar").innerHTML=`
     <div class="ui3-page-head calendar-head calendar-head-v2">
       <div><span class="ui3-eyebrow">PLANEJAMENTO</span><h2>Calendário de publicação</h2><p>Organize hoje e os próximos dias; datas passadas ficam só no histórico e nas métricas.</p></div>
-      <button class="btn primary" onclick="openScheduleModal()">＋ Agendar vídeo</button>
+      <button class="btn primary" onclick="openScheduleModal()"><span>＋</span> Agendar vídeo</button>
     </div>
 
     <div class="calendar-control-card">
@@ -4953,10 +4953,10 @@ function calendarPage(){
 
         <div class="calendar-nav-controls">
           <span class="ui3-auto-pill ${auto.autoOptimizeCalendar!==false?"on":""}">✦ Scheduler ${auto.autoOptimizeCalendar!==false?"ativo":"pausado"}</span>
-          <button class="btn" onclick="shiftWeek(-7)" ${atToday?"disabled":""} title="${atToday?"Já está começando em hoje":"Voltar 7 dias"}">←</button>
-          <button class="btn" onclick="goCurrentWeek()">Hoje</button>
-          <button class="btn" onclick="shiftWeek(7)" title="Avançar 7 dias">→</button>
-          <details class="more-menu"><summary class="btn">•••</summary><div class="more-popover"><button onclick="applyDefaultTimesToWeek()">Aplicar horários padrão</button><button class="danger-link" onclick="clearCurrentWeek()">Limpar semana</button></div></details>
+          <button class="btn calendar-nav-btn icon" onclick="shiftWeek(-7)" ${atToday?"disabled":""} title="${atToday?"A janela já começa hoje":"Voltar 7 dias"}" aria-label="Voltar 7 dias">←</button>
+          <button class="btn calendar-nav-btn today" onclick="goCurrentWeek()" title="Voltar para hoje">Hoje</button>
+          <button class="btn calendar-nav-btn icon" onclick="shiftWeek(7)" title="Avançar 7 dias" aria-label="Avançar 7 dias">→</button>
+          <details class="more-menu calendar-nav-more"><summary class="btn" title="Mais ações" aria-label="Mais ações">•••</summary><div class="more-popover"><button onclick="applyDefaultTimesToWeek()"><span>↻</span> Aplicar horários padrão</button><button class="danger-link" onclick="clearCurrentWeek()"><span>×</span> Limpar semana</button></div></details>
         </div>
       </div>
 
@@ -5267,7 +5267,7 @@ function dayColumn(d,label){
       ${Array.from({length:base},(_,i)=>renderSlot(iso,i)).join("")}
       ${extras.map(i=>renderSlot(iso,i)).join("")}
     </div>
-    <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)">＋ Adicionar outro vídeo</button>
+    <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)"><span>＋</span> Adicionar outro vídeo</button>
   </div>`;
 }
 
@@ -5315,11 +5315,11 @@ function renderSlot(date,i){
         <span>${x.time} · ${fmtSize(x.size)}</span>
       </div>
       <details class="slot-menu" onclick="event.stopPropagation()">
-        <summary title="Ações">•••</summary>
+        <summary title="Ações do vídeo" aria-label="Ações do vídeo">•••</summary>
         <div class="slot-menu-pop">
-          <button onclick="previewScheduled('${date}',${i})">▶ Ver preview</button>
-          <button onclick="openEditScheduleModal('${date}',${i})">Editar</button>
-          <button class="danger-link" onclick="removeSlot('${date}',${i})">Excluir</button>
+          <button onclick="previewScheduled('${date}',${i})"><span>▶</span> Ver preview</button>
+          <button onclick="openEditScheduleModal('${date}',${i})"><span>✎</span> Editar</button>
+          <button class="danger-link" onclick="removeSlot('${date}',${i},this)"><span>×</span> Excluir</button>
         </div>
       </details>
     </div>
@@ -5370,7 +5370,7 @@ async function setSmartStrategy(date,slot,strategy){
     toast("Horário marcado como "+label+".","ok");
   }catch(e){
     x.smartStrategy=oldStrategy;x.smartStrategyLocked=oldLocked;save();renderAll();
-    alert("Não consegui salvar: "+e.message);
+    toast("Não consegui salvar: "+friendlyCloudentError(e.message),"err");
   }
 }
 async function setSmartStrategyAuto(date,slot){
@@ -5389,7 +5389,7 @@ async function setSmartStrategyAuto(date,slot){
     closeModal();toast("Smart Scheduler voltou a decidir esse selo.","ok");
   }catch(e){
     x.smartStrategy=oldStrategy;x.smartStrategyLocked=oldLocked;save();renderAll();
-    alert("Não consegui salvar: "+e.message);
+    toast("Não consegui salvar: "+friendlyCloudentError(e.message),"err");
   }
 }
 
@@ -5467,7 +5467,7 @@ async function handleQuickSlotVideo(input){
     }
   }catch(e){
     console.error("Quick schedule upload error:",e);
-    alert("Não consegui agendar o vídeo: "+(e?.message||"erro desconhecido"));
+    toast("Não consegui agendar o vídeo: "+friendlyCloudentError(e?.message||"erro desconhecido"),"err");
   }finally{
     input.value="";
   }
@@ -5547,9 +5547,9 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
   const strategy=smartStrategy||(smartMode==="auto"?(choice?.strategy||"tested"):"manual");
   const valid=validateSchedule(date,t);
-  if(!valid.ok){alert(valid.msg);return false}
-  if(state.slots[keyFor(date,slot)]){alert("Essa posição já está ocupada.");return false}
-  if(!cloudSession){alert("Entre na sua conta do CloudentFlow em Configurações para salvar vídeos no backend.");showPage("settings");return false}
+  if(!valid.ok){toast(valid.msg,"warn");return false}
+  if(state.slots[keyFor(date,slot)]){toast("Essa posição já está ocupada.","warn");return false}
+  if(!cloudSession){toast("Entre na sua conta do CloudentFlow para salvar vídeos no calendário.","warn");showPage("settings");return false}
   const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
   const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);fd.append("platform","instagram");
   const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
@@ -5565,7 +5565,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
 function updateSlotTime(date,slot,time){
   const k=keyFor(date,slot),x=slotData(date,slot);if(!x)return;
   const valid=validateSchedule(date,time,k);
-  if(!valid.ok){alert(valid.msg);renderAll();return}
+  if(!valid.ok){toast(valid.msg,"warn");renderAll();return}
   x.time=time;
   x.smartMode="manual";
   x.smartStrategy="manual";
@@ -5578,7 +5578,7 @@ async function removeSlot(date,slot){
   if(!confirm(`Remover "${x.name}" deste horário?`))return;
   if(x.cloud&&x.scheduleId){
     try{await cloudFetch("?action=schedule",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:x.scheduleId})})}
-    catch(e){alert(e.message);return}
+    catch(e){toast(friendlyCloudentError(e.message),"err");return}
   }else if(db){try{await dbDelete(x.videoId)}catch{}}
   delete state.slots[k];save();log(`${x.name} removido do calendário, banco e fila.`,"warn")
 }
@@ -5718,7 +5718,7 @@ async function previewScheduled(date,slot){
         if(host&&thumb)host.outerHTML='<img src="'+esc(thumb)+'" alt="Capa automática" loading="lazy">';
       }).catch(()=>{});
     }
-  }catch(e){alert(e.message)}
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
 }
 
 function closeModal(){
@@ -5738,7 +5738,7 @@ function dropOnDay(e,date){
   const oldKey=keyFor(dragInfo.date,dragInfo.slot),x=state.slots[oldKey];if(!x)return;
   if(dragInfo.date===date){dragInfo=null;return}
   const target=firstValidDefaultSlot(date,oldKey);
-  if(!target){alert("Não há posição válida nesse dia respeitando limite e intervalo mínimo.");return}
+  if(!target){toast("Não há posição válida nesse dia respeitando limite e intervalo mínimo.","warn");return}
   delete state.slots[oldKey];
   x.time=target.time;
   x.smartMode="manual";
@@ -5812,13 +5812,13 @@ function openScheduleModal(presetDate=null,extraManual=false){
 
 async function confirmScheduleModal(){
   const date=$("#modalDay").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
-  if(!file){alert("Escolha um vídeo.");return}
-  const free=firstFreeSlot(date);if(free<0){alert("Esse dia atingiu o limite manual de vídeos.");return}
+  if(!file){toast("Escolha um vídeo.","warn");return}
+  const free=firstFreeSlot(date);if(free<0){toast("Esse dia atingiu o limite manual de vídeos.","warn");return}
   const extra=$("#modalExtra")?.value==="1";
   const auto=!extra&&($("#modalSmart")?.checked??false);
   const choice=auto?smartChoiceForSlot(date,Math.min(free,calendarBasePostsPerDay()-1)):{time:$("#modalTime").value,strategy:"manual"};
   const time=choice.time;
-  const valid=validateSchedule(date,time);if(!valid.ok){alert(valid.msg);return}
+  const valid=validateSchedule(date,time);if(!valid.ok){toast(valid.msg,"warn");return}
 
   const btn=document.querySelector('#modalHost .btn.primary');
   if(btn){btn.disabled=true;btn.textContent="Enviando…"}
@@ -5833,7 +5833,7 @@ async function confirmScheduleModal(){
     }
   }catch(e){
     console.error("Schedule upload error:",e);
-    alert("Não consegui agendar o vídeo: "+(e?.message||"erro desconhecido"));
+    toast("Não consegui agendar o vídeo: "+friendlyCloudentError(e?.message||"erro desconhecido"),"err");
   }finally{
     if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent="Salvar no calendário"}
   }
@@ -5863,14 +5863,14 @@ async function confirmEditSchedule(oldDate,oldSlot){
   let targetSlot=oldSlot;
   if(movingDay){
     const free=firstFreeSlot(newDate);
-    if(free<0){alert("O novo dia atingiu o limite de vídeos.");return}
+    if(free<0){toast("O novo dia atingiu o limite de vídeos.","warn");return}
     targetSlot=free;
   }
   const valid=validateSchedule(newDate,newTime,movingDay?null:oldKey);
-  if(!valid.ok){alert(valid.msg);return}
+  if(!valid.ok){toast(valid.msg,"warn");return}
 
   if(file){
-    if(x.cloud){alert("Para trocar o arquivo de um agendamento online, remova este item e envie o novo vídeo. Os demais dados podem ser editados normalmente.");return}
+    if(x.cloud){toast("Para trocar o arquivo, remova este agendamento e envie o novo vídeo. Dia, hora e legenda podem ser editados normalmente.","warn");return}
     await dbDelete(x.videoId);
     const id=crypto.randomUUID();
     await dbPut({id,name:file.name,size:file.size,type:file.type,blob:file,added:new Date().toISOString()});
@@ -7008,9 +7008,10 @@ function formatRhMoney(value){
 function productionFriendlyError(message){
   const raw=String(message||"");
   if(!raw)return "";
+  if(raw.toUpperCase().includes("TASK_QUEUE_MAXED"))return "Fila cheia · vai iniciar quando a vaga atual liberar.";
   if(raw.includes("工作流运行失败"))return "Tentativa anterior falhou; retry automático.";
   if(/workflow.*failed|runninghub falhou/i.test(raw))return "Tentativa anterior falhou; retry automático.";
-  return raw;
+  return friendlyCloudentError(raw);
 }
 function productionJobRow(j,i,total){
   const otherActive=(productionData?.jobs||[]).some(x=>x.id!==j.id&&["uploading","queued","running"].includes(x.status));
