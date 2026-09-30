@@ -3532,7 +3532,7 @@ const pageSubtitles={
   cloudentAI:"Use a inteligência do CloudentFlow para apoiar sua operação.",
   settings:"Gerencie integrações, conta e preferências do workspace."
 };
-let cloudSession=null, backendOnline=false, instagramIntegration=null, instagramWebSession={configured:false,mode:"browser_session"}, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
+let cloudSession=null, backendOnline=false, storageBackend={configured:false,provider:"supabase",bucket:null,endpoint:null,account_hint:null}, instagramIntegration=null, instagramWebSession={configured:false,mode:"browser_session"}, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 const calendarPreviewCache=new Map();
 const trialPreviewCache=new Map();
@@ -3699,6 +3699,7 @@ async function initCloud(){
 
   await Promise.allSettled([
     withTimeout(syncFromBackend(),4500,"calendário"),
+    withTimeout(loadStorageBackendStatus(),4500,"armazenamento"),
     withTimeout(loadInstagramStatus(false),4500,"status do Instagram"),
     withTimeout(loadInstagramWebSessionStatus(),4500,"sessão web Instagram"),
     withTimeout(loadAutomationStatus(),4500,"automação"),
@@ -3729,6 +3730,51 @@ async function cloudFetch(path="",options={},retry=true){
   if(!res.ok)throw new Error(responseErrorMessage(data,res.status));
   return data;
 }
+async function loadStorageBackendStatus(){
+  if(!cloudSession)return storageBackend;
+  try{
+    storageBackend=await cloudFetch("?resource=storage-backend");
+  }catch{
+    storageBackend={configured:false,provider:"supabase",bucket:null,endpoint:null,account_hint:null};
+  }
+  return storageBackend;
+}
+function r2CorsPolicyText(){
+  return JSON.stringify([{
+    AllowedOrigins:[location.origin],
+    AllowedMethods:["PUT","GET","HEAD"],
+    AllowedHeaders:["Content-Type"],
+    ExposeHeaders:["ETag"],
+    MaxAgeSeconds:3600
+  }],null,2);
+}
+async function copyR2Cors(){
+  try{await navigator.clipboard.writeText(r2CorsPolicyText());toast("CORS do R2 copiado.","ok")}
+  catch{toast("Não consegui copiar automaticamente.","warn")}
+}
+async function saveR2Config(button=null){
+  if(!cloudSession)return;
+  const accountId=$("#r2AccountId")?.value?.trim()||"";
+  const accessKeyId=$("#r2AccessKeyId")?.value?.trim()||"";
+  const secretAccessKey=$("#r2SecretAccessKey")?.value?.trim()||"";
+  const bucket=$("#r2Bucket")?.value?.trim()||"";
+  const endpoint=$("#r2Endpoint")?.value?.trim()||"";
+  if(!accountId||!accessKeyId||!secretAccessKey||!bucket){
+    toast("Preencha Account ID, Access Key, Secret Key e Bucket.","warn");return;
+  }
+  actionButtonBusy(button,true,"Testando R2…");
+  try{
+    const result=await cloudFetch("?action=r2-config",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({account_id:accountId,access_key_id:accessKeyId,secret_access_key:secretAccessKey,bucket,endpoint})
+    });
+    storageBackend={...storageBackend,...result,configured:true,provider:"r2"};
+    toast("R2 conectado e testado. Agora configure o CORS do bucket.","ok");
+    settings();
+  }catch(e){toast("R2: "+friendlyCloudentError(e?.message||""),"err")}
+  finally{actionButtonBusy(button,false)}
+}
+
 async function edgeFetch(fullUrl,options={},retry=true){
   if(!cloudSession) throw new Error("Faça login no CloudentFlow primeiro.");
   const headers={...(options.headers||{}),Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
@@ -4250,7 +4296,7 @@ async function syncFromBackend(){
     const v=row.videos||{};
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
-      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",
+      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",storageProvider:v.storage_provider||"supabase",
       thumbnailPath:v.thumbnail_storage_path||"",
       coverOffsetMs:Number(v.cover_offset_ms||3500),coverStrategy:v.cover_strategy||"auto_after_3s",
       time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
@@ -5358,17 +5404,9 @@ async function getTrialPreviewUrl(row){
   const key=row.storage_path;
   const cached=trialPreviewCache.get(key);
   if(cached&&cached.expires>Date.now()+60000)return cached.url;
-  const encoded=row.storage_path.split("/").map(encodeURIComponent).join("/");
-  const r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/videos/"+encoded,{
-    method:"POST",
-    headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token,"Content-Type":"application/json"},
-    body:JSON.stringify({expiresIn:3600})
-  });
-  let data=null;try{data=await r.json()}catch{}
-  if(!r.ok)throw new Error(data?.message||data?.error||"Não consegui abrir o Trial Reel.");
-  const signed=data?.signedURL||data?.signedUrl;
-  if(!signed)throw new Error("Preview temporário indisponível.");
-  const url=signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
+  const data=await cloudFetch("?resource=media-url&entity=trial&id="+encodeURIComponent(row.id)+"&kind=video");
+  const url=data?.url;
+  if(!url)throw new Error("Preview temporário indisponível.");
   trialPreviewCache.set(key,{url,expires:Date.now()+50*60*1000});
   return url;
 }
@@ -5385,7 +5423,7 @@ async function previewTrialReel(id){
       '<div class="reel-overlay"><b>@'+esc(instagramIntegration?.account_label||"Instagram")+'</b><span>'+esc(row.caption||row.file_name||"Trial Reel")+'</span>'+
       '<small>'+esc(trialStatusMeta(row.status).label)+' · '+(row.scheduled_at?new Date(row.scheduled_at).toLocaleString("pt-BR"):"")+'</small></div></div></div>';
     if(row.thumbnail_storage_path){
-      getSignedThumbnailUrl(row.thumbnail_storage_path).then(thumb=>{
+      getSignedThumbnailUrl(row.thumbnail_storage_path,{entity:"trial",id:row.id}).then(thumb=>{
         const host=$("#modalHost [data-trial-cover-thumb='1']");
         if(host&&thumb)host.outerHTML='<img src="'+esc(thumb)+'" alt="Capa automática" loading="lazy">';
       }).catch(()=>{});
@@ -5974,8 +6012,10 @@ async function runMediaCleaner(entityType,id,{quiet=false}={}){
         source_url:ticket.source_url,
         target_path:ticket.target_path,
         upload_token:ticket.upload_token,
+        target_upload_url:ticket.target_upload_url||"",
         thumbnail_path:ticket.thumbnail_path||"",
         thumbnail_upload_token:ticket.thumbnail_upload_token||"",
+        thumbnail_upload_url:ticket.thumbnail_upload_url||"",
         cover_offset_ms:Number(ticket.cover_offset_ms||3500),
         anon_key:ticket.anon_key,
         config:ticket.config||{}
@@ -6020,6 +6060,35 @@ async function runMediaCleaner(entityType,id,{quiet=false}={}){
   }
 }
 
+async function uploadScheduledVideoDirect(file,{scheduledAt,caption="",smartMode="auto",smartStrategy="tested",platform="instagram"}){
+  const ticket=await cloudFetch("?action=upload-ticket",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      scheduled_at:scheduledAt,caption,smart_mode:smartMode,smart_strategy:smartStrategy,platform,
+      file_name:file.name,mime_type:file.type||"video/mp4",size_bytes:file.size
+    })
+  });
+  if(ticket?.fallback){
+    const fd=new FormData();
+    fd.append("file",file);fd.append("scheduled_at",scheduledAt);fd.append("caption",caption);
+    fd.append("smart_mode",smartMode);fd.append("smart_strategy",smartStrategy);fd.append("platform",platform);
+    return await cloudFetch("?action=upload",{method:"POST",body:fd});
+  }
+  const put=await fetch(ticket.upload_url,{
+    method:"PUT",
+    headers:{"Content-Type":ticket.content_type||file.type||"video/mp4"},
+    body:file
+  });
+  if(!put.ok)throw new Error("O upload direto para o R2 falhou ("+put.status+"). Confira o CORS do bucket.");
+  return await cloudFetch("?action=upload-complete",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      object_path:ticket.object_path,scheduled_at:scheduledAt,caption,smart_mode:smartMode,smart_strategy:smartStrategy,platform,
+      file_name:file.name,mime_type:file.type||"video/mp4",size_bytes:file.size
+    })
+  });
+}
+
 async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto",smartStrategy=null){
   const choice=smartMode==="auto"?smartChoiceForSlot(date,slot):null;
   const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
@@ -6029,8 +6098,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   if(state.slots[keyFor(date,slot)]){toast("Essa posição já está ocupada.","warn");return false}
   if(!cloudSession){toast("Entre na sua conta do CloudentFlow para salvar vídeos no calendário.","warn");showPage("settings");return false}
   const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
-  const fd=new FormData();fd.append("file",file);fd.append("scheduled_at",at.toISOString());fd.append("caption",caption);fd.append("smart_mode",smartMode);fd.append("smart_strategy",strategy);fd.append("platform","instagram");
-  const res=await cloudFetch("?action=upload",{method:"POST",body:fd});
+  const res=await uploadScheduledVideoDirect(file,{scheduledAt:at.toISOString(),caption,smartMode,smartStrategy:strategy,platform:"instagram"});
   const schedule=res.schedule,video=res.video;
   const clean=await runMediaCleaner("video",video.id,{quiet:true});
   const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
@@ -6065,10 +6133,20 @@ async function removeSlot(date,slot,button=null){
   if(currentPage==="calendar")calendarPage();
   toast((x.name||"Vídeo")+" removido do calendário.","ok");
 }
-async function getSignedThumbnailUrl(path){
+async function getSignedThumbnailUrl(path,{entity="video",id=null}={}){
   if(!path||!cloudSession)return null;
-  const cached=thumbnailUrlCache.get(path);
+  const cacheKey=entity+":"+String(id||"")+":"+path;
+  const cached=thumbnailUrlCache.get(cacheKey);
   if(cached&&cached.expires>Date.now()+60000)return cached.url;
+  if(id){
+    try{
+      const data=await cloudFetch("?resource=media-url&entity="+encodeURIComponent(entity)+"&id="+encodeURIComponent(id)+"&kind=thumbnail");
+      if(data?.url){
+        thumbnailUrlCache.set(cacheKey,{url:data.url,expires:Date.now()+50*60*1000});
+        return data.url;
+      }
+    }catch{}
+  }
   const encoded=String(path).split("/").map(encodeURIComponent).join("/");
   const r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/videos/"+encoded,{
     method:"POST",
@@ -6077,10 +6155,9 @@ async function getSignedThumbnailUrl(path){
   });
   let data=null;try{data=await r.json()}catch{}
   if(!r.ok)return null;
-  const signed=data?.signedURL||data?.signedUrl;
-  if(!signed)return null;
+  const signed=data?.signedURL||data?.signedUrl;if(!signed)return null;
   const url=signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
-  thumbnailUrlCache.set(path,{url,expires:Date.now()+50*60*1000});
+  thumbnailUrlCache.set(cacheKey,{url,expires:Date.now()+50*60*1000});
   return url;
 }
 function auditMediaAccess(kind,{videoId=null,bytes=0}={}){
@@ -6099,17 +6176,9 @@ async function getScheduledPreviewUrl(x){
   const key=x.storagePath;
   const cached=calendarPreviewCache.get(key);
   if(cached&&cached.expires>Date.now()+60000)return cached.url;
-  const encoded=x.storagePath.split("/").map(encodeURIComponent).join("/");
-  const r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/videos/"+encoded,{
-    method:"POST",
-    headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token,"Content-Type":"application/json"},
-    body:JSON.stringify({expiresIn:3600})
-  });
-  let data=null;try{data=await r.json()}catch{}
-  if(!r.ok)throw new Error(data?.message||data?.error||"Não consegui abrir o vídeo.");
-  const signed=data?.signedURL||data?.signedUrl;
-  if(!signed)throw new Error("URL temporária indisponível.");
-  const url=signed.startsWith("http")?signed:SUPABASE_URL+"/storage/v1"+signed;
+  const data=await cloudFetch("?resource=media-url&entity=video&id="+encodeURIComponent(x.videoId)+"&kind=video");
+  const url=data?.url;
+  if(!url)throw new Error("URL temporária indisponível.");
   calendarPreviewCache.set(key,{url,expires:Date.now()+50*60*1000});
   return url;
 }
@@ -6146,7 +6215,7 @@ async function loadCalendarVideoThumb(el){
   try{
     let url=null;
     if(x.cloud&&x.thumbnailPath){
-      url=await getSignedThumbnailUrl(x.thumbnailPath);
+      url=await getSignedThumbnailUrl(x.thumbnailPath,{entity:"video",id:x.videoId});
     }
     if(!url)throw new Error("thumbnail_unavailable");
     const img=document.createElement("img");
@@ -6196,7 +6265,7 @@ async function previewScheduled(date,slot){
     const modal=$("#modalHost .modal");
     if(objectUrl)modal.dataset.url=url;
     if(x.thumbnailPath){
-      getSignedThumbnailUrl(x.thumbnailPath).then(thumb=>{
+      getSignedThumbnailUrl(x.thumbnailPath,{entity:"video",id:x.videoId}).then(thumb=>{
         const host=modal?.querySelector('[data-cover-thumb="1"]');
         if(host&&thumb)host.outerHTML='<img src="'+esc(thumb)+'" alt="Capa automática" loading="lazy">';
       }).catch(()=>{});
@@ -8928,6 +8997,31 @@ function settings(){
       </div>
 
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Backend</span><h3>Supabase</h3></div><span class="status-pill ${backendOnline?"ok":"warn"}">${backendOnline?"Online":"Desconectado"}</span></div><p class="muted">Banco, Storage, workers e automações 24/7.</p></div>
+
+      <div class="card ui3-panel" id="r2StorageCard">
+        <div class="ui3-panel-head">
+          <div><span>Mídia pesada</span><h3>Cloudflare R2</h3></div>
+          <span class="status-pill ${storageBackend?.configured?"ok":"warn"}">${storageBackend?.configured?"Conectado":"Configurar"}</span>
+        </div>
+        <p class="muted">${storageBackend?.configured?"Novos vídeos do calendário usam upload direto para o R2. Supabase fica com banco, métricas e automação.":"Conecte o R2 para tirar vídeos pesados do Supabase sem quebrar os arquivos atuais."}</p>
+        ${storageBackend?.configured
+          ? `<div class="ui3-info-rows"><div><span>Bucket</span><b>${esc(storageBackend.bucket||"—")}</b></div><div><span>Conta</span><b>${esc(storageBackend.account_hint||"—")}</b></div><div><span>Upload</span><b>Direto navegador → R2</b></div></div>`
+          : `<div class="runninghub-settings-grid">
+              <div class="field"><label>Account ID</label><input id="r2AccountId" autocomplete="off" placeholder="Cloudflare Account ID"></div>
+              <div class="field"><label>Bucket</label><input id="r2Bucket" autocomplete="off" value="cloudentflow-media"></div>
+              <div class="field full"><label>Access Key ID</label><input id="r2AccessKeyId" autocomplete="off" placeholder="R2 Access Key ID"></div>
+              <div class="field full"><label>Secret Access Key</label><input id="r2SecretAccessKey" type="password" autocomplete="off" placeholder="R2 Secret Access Key"></div>
+              <div class="field full"><label>Endpoint (opcional)</label><input id="r2Endpoint" autocomplete="off" placeholder="https://ACCOUNT_ID.r2.cloudflarestorage.com"></div>
+            </div>
+            <div class="toolbar"><button class="btn primary" onclick="saveR2Config(this)">Testar e conectar R2</button></div>`
+        }
+        <details class="integration-help">
+          <summary>CORS necessário para upload direto</summary>
+          <p class="muted">No bucket R2 → Settings → CORS, cole a política abaixo. Ela libera somente este CloudentFlow para enviar arquivos.</p>
+          <pre style="white-space:pre-wrap;font-size:11px">${esc(r2CorsPolicyText())}</pre>
+          <button class="btn btn-sm" onclick="copyR2Cors()">Copiar CORS</button>
+        </details>
+      </div>
 
       <div class="card ui3-panel runninghub-settings-card">
         <div class="ui3-panel-head">
