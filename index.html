@@ -5355,6 +5355,34 @@ function handleTrialVideoPicker(input){
   '</div></div>';
 }
 
+async function uploadTrialVideoDirect(file,{scheduledAt,trialDay,slotIndex,autoTime,caption=""}){
+  const ticket=await cloudFetch("?action=trial-upload-ticket",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      scheduled_at:scheduledAt,trial_day:trialDay,slot_index:slotIndex,auto_time:autoTime,caption,
+      file_name:file.name,mime_type:file.type||"video/mp4",size_bytes:file.size
+    })
+  });
+  if(ticket?.fallback){
+    const fd=new FormData();
+    fd.append("file",file);fd.append("scheduled_at",scheduledAt);fd.append("trial_day",trialDay);
+    fd.append("slot_index",String(slotIndex));fd.append("auto_time",String(autoTime));fd.append("caption",caption);
+    return await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
+  }
+  const put=await fetch(ticket.upload_url,{
+    method:"PUT",headers:{"Content-Type":ticket.content_type||file.type||"video/mp4"},body:file
+  });
+  if(!put.ok)throw new Error("O upload do Reel teste para o R2 falhou ("+put.status+"). Confira o CORS do bucket.");
+  return await cloudFetch("?action=trial-upload-complete",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      object_path:ticket.object_path,scheduled_at:scheduledAt,trial_day:trialDay,
+      slot_index:slotIndex,auto_time:autoTime,caption,file_name:file.name,
+      mime_type:file.type||"video/mp4",size_bytes:file.size
+    })
+  });
+}
+
 async function scheduleTrialDraft(){
   const file=trialDraftFile,day=$("#trialDay")?.value,time=$("#trialTime")?.value,caption=$("#trialCaption")?.value||"";
   if(!file||!day||!time){toast("Preencha dia e horário.","err");return}
@@ -5366,14 +5394,9 @@ async function scheduleTrialDraft(){
   const btn=$("#trialScheduleBtn");if(btn){btn.disabled=true;btn.textContent="Enviando…"}
   try{
     const autoTime=time===trialDraftSuggestedTime;
-    const fd=new FormData();
-    fd.append("file",file);
-    fd.append("scheduled_at",at.toISOString());
-    fd.append("trial_day",day);
-    fd.append("slot_index",String(trialDraftSlot??0));
-    fd.append("auto_time",String(autoTime));
-    fd.append("caption",caption);
-    const uploaded=await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
+    const uploaded=await uploadTrialVideoDirect(file,{
+      scheduledAt:at.toISOString(),trialDay:day,slotIndex:Number(trialDraftSlot??0),autoTime,caption
+    });
     const clean=uploaded?.item?.id?await runMediaCleaner("trial",uploaded.item.id,{quiet:true}):{status:"skipped"};
     trialDraftFile=null;trialDraftSlot=null;trialDraftSuggestedTime=null;
     await loadTrialReels();
