@@ -3749,7 +3749,7 @@ function r2CorsPolicyText(){
   }],null,2);
 }
 async function copyR2Cors(){
-  try{await navigator.clipboard.writeText(r2CorsPolicyText());toast("CORS do R2 copiado.","ok")}
+  try{await navigator.clipboard.writeText(r2CorsPolicyText());toast("CORS do Backblaze B2 copiado.","ok")}
   catch{toast("Não consegui copiar automaticamente.","warn")}
 }
 async function saveR2Config(button=null){
@@ -3762,14 +3762,14 @@ async function saveR2Config(button=null){
   if(!accountId||!accessKeyId||!secretAccessKey||!bucket){
     toast("Preencha Account ID, Access Key, Secret Key e Bucket.","warn");return;
   }
-  actionButtonBusy(button,true,"Testando R2…");
+  actionButtonBusy(button,true,"Testando Backblaze B2…");
   try{
     const result=await cloudFetch("?action=r2-config",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({account_id:accountId,access_key_id:accessKeyId,secret_access_key:secretAccessKey,bucket,endpoint})
     });
     storageBackend={...storageBackend,...result,configured:true,provider:"r2"};
-    toast("R2 conectado e testado. Agora configure o CORS do bucket.","ok");
+    toast("Backblaze B2 conectado e testado. Agora configure o CORS do bucket.","ok");
     settings();
   }catch(e){toast("R2: "+friendlyCloudentError(e?.message||""),"err")}
   finally{actionButtonBusy(button,false)}
@@ -5372,7 +5372,7 @@ async function uploadTrialVideoDirect(file,{scheduledAt,trialDay,slotIndex,autoT
   const put=await fetch(ticket.upload_url,{
     method:"PUT",headers:{"Content-Type":ticket.content_type||file.type||"video/mp4"},body:file
   });
-  if(!put.ok)throw new Error("O upload do Reel teste para o R2 falhou ("+put.status+"). Confira o CORS do bucket.");
+  if(!put.ok)throw new Error("O upload do Reel teste para o Backblaze B2 falhou ("+put.status+"). Confira o CORS do bucket.");
   return await cloudFetch("?action=trial-upload-complete",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -6102,7 +6102,7 @@ async function uploadScheduledVideoDirect(file,{scheduledAt,caption="",smartMode
     headers:{"Content-Type":ticket.content_type||file.type||"video/mp4"},
     body:file
   });
-  if(!put.ok)throw new Error("O upload direto para o R2 falhou ("+put.status+"). Confira o CORS do bucket.");
+  if(!put.ok)throw new Error("O upload direto para o Backblaze B2 falhou ("+put.status+"). Confira o CORS do bucket.");
   return await cloudFetch("?action=upload-complete",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -7249,7 +7249,7 @@ async function uploadProductionJobDirect(video,frame,videoThumb=null,frameThumb=
       if(!r.ok)throw new Error("HTTP "+r.status);
       return true;
     }catch(e){
-      if(required)throw new Error("Upload para o R2 falhou. Confira o CORS do bucket. "+(e?.message||""));
+      if(required)throw new Error("Upload para o Backblaze B2 falhou. Confira o CORS do bucket. "+(e?.message||""));
       return false;
     }
   };
@@ -7258,7 +7258,7 @@ async function uploadProductionJobDirect(video,frame,videoThumb=null,frameThumb=
     putOne(ticket.video,video,true),
     putOne(ticket.frame,frame,true)
   ]);
-  if(!videoOk||!frameOk)throw new Error("Vídeo ou frame não terminou de enviar para o R2.");
+  if(!videoOk||!frameOk)throw new Error("Vídeo ou frame não terminou de enviar para o Backblaze B2.");
 
   const [videoThumbOk,frameThumbOk]=await Promise.all([
     putOne(ticket.video_thumb,videoThumb,false),
@@ -9074,26 +9074,24 @@ function settings(){
 
       <div class="card ui3-panel" id="r2StorageCard">
         <div class="ui3-panel-head">
-          <div><span>Mídia pesada</span><h3>Cloudflare R2</h3></div>
+          <div><span>Mídia pesada</span><h3>Backblaze B2</h3></div>
           <span class="status-pill ${storageBackend?.configured?"ok":"warn"}">${storageBackend?.configured?"Conectado":"Configurar"}</span>
         </div>
-        <p class="muted">${storageBackend?.configured?"Novos vídeos do calendário usam upload direto para o R2. Supabase fica com banco, métricas e automação.":"Conecte o R2 para tirar vídeos pesados do Supabase sem quebrar os arquivos atuais."}</p>
+        <p class="muted">${storageBackend?.configured?"Novos vídeos do calendário usam upload direto para o Backblaze B2. Supabase fica com banco, métricas e automação.":"Conecte o Backblaze B2 para tirar vídeos pesados do Supabase sem quebrar os arquivos atuais."}</p>
         ${storageBackend?.configured
           ? `<div class="ui3-info-rows"><div><span>Bucket</span><b>${esc(storageBackend.bucket||"—")}</b></div><div><span>Conta</span><b>${esc(storageBackend.account_hint||"—")}</b></div><div><span>Upload</span><b>Direto navegador → R2</b></div></div>`
           : `<div class="runninghub-settings-grid">
-              <div class="field"><label>Account ID</label><input id="r2AccountId" autocomplete="off" placeholder="Cloudflare Account ID"></div>
+              <div class="field"><label>Account ID</label><input id="r2AccountId" autocomplete="off" placeholder="Backblaze Account ID"></div>
               <div class="field"><label>Bucket</label><input id="r2Bucket" autocomplete="off" value="cloudentflow-media"></div>
-              <div class="field full"><label>Access Key ID</label><input id="r2AccessKeyId" autocomplete="off" placeholder="R2 Access Key ID"></div>
-              <div class="field full"><label>Secret Access Key</label><input id="r2SecretAccessKey" type="password" autocomplete="off" placeholder="R2 Secret Access Key"></div>
-              <div class="field full"><label>Endpoint (opcional)</label><input id="r2Endpoint" autocomplete="off" placeholder="https://ACCOUNT_ID.r2.cloudflarestorage.com"></div>
+              <div class="field full"><label>Access Key ID</label><input id="r2AccessKeyId" autocomplete="off" placeholder="Backblaze Key ID"></div>
+              <div class="field full"><label>Secret Access Key</label><input id="r2SecretAccessKey" type="password" autocomplete="off" placeholder="Backblaze Application Key"></div>
+              <div class="field full"><label>Endpoint (opcional)</label><input id="r2Endpoint" autocomplete="off" placeholder="https://s3.us-east-005.backblazeb2.com"></div>
             </div>
-            <div class="toolbar"><button class="btn primary" onclick="saveR2Config(this)">Testar e conectar R2</button></div>`
+            <div class="toolbar"><button class="btn primary" onclick="saveR2Config(this)">Testar e conectar Backblaze</button></div>`
         }
         <details class="integration-help">
-          <summary>CORS necessário para upload direto</summary>
-          <p class="muted">No bucket R2 → Settings → CORS, cole a política abaixo. Ela libera somente este CloudentFlow para enviar arquivos.</p>
-          <pre style="white-space:pre-wrap;font-size:11px">${esc(r2CorsPolicyText())}</pre>
-          <button class="btn btn-sm" onclick="copyR2Cors()">Copiar CORS</button>
+          <summary>CORS do Backblaze</summary>
+          <p class="muted">Já configurei o bucket para aceitar uploads diretos do domínio do CloudentFlow e do localhost de desenvolvimento.</p>
         </details>
       </div>
 
