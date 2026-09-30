@@ -39,6 +39,19 @@ def _valid_thumbnail_target(path):
     ))
 
 
+def _allowed_signed_source_url(value):
+    try:
+        parsed = urllib.parse.urlparse(str(value or ""))
+        host = (parsed.hostname or "").lower()
+        if parsed.scheme != "https":
+            return False
+        if host == "dxrhvudvutmgrmfkmzxo.supabase.co":
+            return True
+        return host.endswith(".r2.cloudflarestorage.com")
+    except Exception:
+        return False
+
+
 def _safe_int(value, fallback, low, high):
     try:
         n = int(value)
@@ -118,21 +131,29 @@ class handler(BaseHTTPRequestHandler):
             upload_token = str(payload.get("upload_token") or "")
             thumbnail_target = str(payload.get("thumbnail_path") or "")
             thumbnail_upload_token = str(payload.get("thumbnail_upload_token") or "")
+            target_upload_url = str(payload.get("target_upload_url") or "")
+            thumbnail_upload_url = str(payload.get("thumbnail_upload_url") or "")
             cover_offset_ms = _safe_int(payload.get("cover_offset_ms"), 3500, 250, 15000)
             anon_key = str(payload.get("anon_key") or "")
             cfg = payload.get("config") or {}
 
-            if not source_url.startswith(SUPABASE_URL + "/storage/v1/object/sign/videos/"):
+            if not _allowed_signed_source_url(source_url):
                 return _json(self, {"ok": False, "error": "source_not_allowed"}, 403)
             if not _valid_target(target_path):
                 return _json(self, {"ok": False, "error": "target_invalid"}, 400)
-            if len(upload_token) < 20:
+            if target_upload_url:
+                if not _allowed_signed_source_url(target_upload_url):
+                    return _json(self, {"ok": False, "error": "target_upload_url_not_allowed"}, 403)
+            elif len(upload_token) < 20:
                 return _json(self, {"ok": False, "error": "upload_token_invalid"}, 400)
             if thumbnail_target and not _valid_thumbnail_target(thumbnail_target):
                 return _json(self, {"ok": False, "error": "thumbnail_target_invalid"}, 400)
-            if thumbnail_target and len(thumbnail_upload_token) < 20:
+            if thumbnail_upload_url:
+                if not _allowed_signed_source_url(thumbnail_upload_url):
+                    return _json(self, {"ok": False, "error": "thumbnail_upload_url_not_allowed"}, 403)
+            elif thumbnail_target and len(thumbnail_upload_token) < 20:
                 return _json(self, {"ok": False, "error": "thumbnail_upload_token_invalid"}, 400)
-            if len(anon_key) < 20:
+            if not target_upload_url and len(anon_key) < 20:
                 return _json(self, {"ok": False, "error": "anon_key_invalid"}, 400)
 
             max_bytes = _safe_int(cfg.get("max_input_bytes"), 262144000, 1_000_000, MAX_HARD_BYTES)
@@ -224,20 +245,24 @@ class handler(BaseHTTPRequestHandler):
                     if thumb_result.returncode != 0 or not os.path.exists(thumbnail_file) or os.path.getsize(thumbnail_file) <= 0:
                         raise RuntimeError((thumb_result.stderr or "thumbnail_ffmpeg_failed").strip()[-500:])
 
-                    thumb_url = (
-                        SUPABASE_URL
-                        + "/storage/v1/object/upload/sign/videos/"
-                        + urllib.parse.quote(thumbnail_target, safe="/")
-                        + "?token="
-                        + urllib.parse.quote(thumbnail_upload_token, safe="")
-                    )
-                    thumb_headers = {
-                        "apikey": anon_key,
-                        "Authorization": "Bearer " + anon_key,
-                        "Content-Type": "image/jpeg",
-                        "cache-control": "max-age=2592000",
-                        "x-upsert": "true",
-                    }
+                    if thumbnail_upload_url:
+                        thumb_url = thumbnail_upload_url
+                        thumb_headers = {"Content-Type": "image/jpeg"}
+                    else:
+                        thumb_url = (
+                            SUPABASE_URL
+                            + "/storage/v1/object/upload/sign/videos/"
+                            + urllib.parse.quote(thumbnail_target, safe="/")
+                            + "?token="
+                            + urllib.parse.quote(thumbnail_upload_token, safe="")
+                        )
+                        thumb_headers = {
+                            "apikey": anon_key,
+                            "Authorization": "Bearer " + anon_key,
+                            "Content-Type": "image/jpeg",
+                            "cache-control": "max-age=2592000",
+                            "x-upsert": "true",
+                        }
                     with open(thumbnail_file, "rb") as thumb:
                         thumb_uploaded = requests.put(
                             thumb_url, data=thumb, headers=thumb_headers, timeout=(20, 60)
@@ -253,22 +278,26 @@ class handler(BaseHTTPRequestHandler):
             input_hash = _sha256_file(input_path)
             output_hash = _sha256_file(output_path)
 
-            encoded_path = urllib.parse.quote(target_path, safe="/")
-            encoded_token = urllib.parse.quote(upload_token, safe="")
-            upload_url = (
-                SUPABASE_URL
-                + "/storage/v1/object/upload/sign/videos/"
-                + encoded_path
-                + "?token="
-                + encoded_token
-            )
-            headers = {
-                "apikey": anon_key,
-                "Authorization": "Bearer " + anon_key,
-                "Content-Type": "video/mp4",
-                "cache-control": "max-age=3600",
-                "x-upsert": "true",
-            }
+            if target_upload_url:
+                upload_url = target_upload_url
+                headers = {"Content-Type": "video/mp4"}
+            else:
+                encoded_path = urllib.parse.quote(target_path, safe="/")
+                encoded_token = urllib.parse.quote(upload_token, safe="")
+                upload_url = (
+                    SUPABASE_URL
+                    + "/storage/v1/object/upload/sign/videos/"
+                    + encoded_path
+                    + "?token="
+                    + encoded_token
+                )
+                headers = {
+                    "apikey": anon_key,
+                    "Authorization": "Bearer " + anon_key,
+                    "Content-Type": "video/mp4",
+                    "cache-control": "max-age=3600",
+                    "x-upsert": "true",
+                }
             with open(output_path, "rb") as out:
                 uploaded = requests.put(upload_url, data=out, headers=headers, timeout=(20, 120))
             if uploaded.status_code < 200 or uploaded.status_code >= 300:
