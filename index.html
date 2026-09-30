@@ -7223,6 +7223,62 @@ function setupProductionThumbs(){
   els.forEach(el=>productionThumbObserver.observe(el));
 }
 
+async function uploadProductionJobDirect(video,frame,videoThumb=null,frameThumb=null){
+  const ticket=await cloudFetch("?action=production-upload-ticket",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      video_file_name:video.name,video_mime_type:video.type||"video/mp4",video_size_bytes:video.size,
+      frame_file_name:frame.name,frame_mime_type:frame.type||"image/jpeg",frame_size_bytes:frame.size,
+      has_video_thumb:!!videoThumb,has_frame_thumb:!!frameThumb
+    })
+  });
+  if(ticket?.fallback){
+    const fd=new FormData();
+    fd.append("video",video);fd.append("frame",frame);
+    if(videoThumb)fd.append("video_thumb",videoThumb,"video-thumb.jpg");
+    if(frameThumb)fd.append("frame_thumb",frameThumb,"frame-thumb.jpg");
+    return await cloudFetch("?action=production-upload",{method:"POST",body:fd});
+  }
+
+  const putOne=async(part,blob,required=true)=>{
+    if(!part||!blob)return false;
+    try{
+      const r=await fetch(part.upload_url,{
+        method:"PUT",headers:{"Content-Type":part.content_type||blob.type||"application/octet-stream"},body:blob
+      });
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      return true;
+    }catch(e){
+      if(required)throw new Error("Upload para o R2 falhou. Confira o CORS do bucket. "+(e?.message||""));
+      return false;
+    }
+  };
+
+  const [videoOk,frameOk]=await Promise.all([
+    putOne(ticket.video,video,true),
+    putOne(ticket.frame,frame,true)
+  ]);
+  if(!videoOk||!frameOk)throw new Error("Vídeo ou frame não terminou de enviar para o R2.");
+
+  const [videoThumbOk,frameThumbOk]=await Promise.all([
+    putOne(ticket.video_thumb,videoThumb,false),
+    putOne(ticket.frame_thumb,frameThumb,false)
+  ]);
+
+  return await cloudFetch("?action=production-upload-complete",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      job_id:ticket.job_id,
+      video_path:ticket.video.path,
+      frame_path:ticket.frame.path,
+      video_thumb_path:videoThumbOk&&ticket.video_thumb?ticket.video_thumb.path:"",
+      frame_thumb_path:frameThumbOk&&ticket.frame_thumb?ticket.frame_thumb.path:"",
+      video_file_name:video.name,video_mime_type:video.type||"video/mp4",video_size_bytes:video.size,
+      frame_file_name:frame.name,frame_mime_type:frame.type||"image/jpeg",frame_size_bytes:frame.size
+    })
+  });
+}
+
 async function addProductionJob(){
   if(productionUploading)return;
   const video=productionDraft.video||$("#productionVideo")?.files?.[0];
@@ -7231,16 +7287,11 @@ async function addProductionJob(){
   productionUploading=true;
   productionPage();
   try{
-    const fd=new FormData();
-    fd.append("video",video);
-    fd.append("frame",frame);
     const [videoThumb,frameThumb]=await Promise.all([
       createProductionThumbnail(video,"video"),
       createProductionThumbnail(frame,"frame")
     ]);
-    if(videoThumb)fd.append("video_thumb",videoThumb,"video-thumb.jpg");
-    if(frameThumb)fd.append("frame_thumb",frameThumb,"frame-thumb.jpg");
-    await cloudFetch("?action=production-upload",{method:"POST",body:fd});
+    await uploadProductionJobDirect(video,frame,videoThumb,frameThumb);
     await loadProductionData(true);
     releaseProductionDraft();
     toast("Adicionado à fila de produção.","ok");
