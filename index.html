@@ -3333,6 +3333,16 @@ body.auth-checking .auth-boot{display:block!important}
 .day-period-group{display:grid;gap:7px;margin-top:7px}.day-period-head{display:flex;align-items:center;justify-content:space-between;padding:3px 1px;color:#707988;font-size:7px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.day-period-head b{color:#aab1bd;font-size:7px}
 .day-period-group+.day-period-group{padding-top:6px;border-top:1px solid #191e26}
 
+
+/* ===== Bulk publish · Trial -> Normal, 1 minute cadence ===== */
+.bulk-publish-layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:12px;align-items:start}
+.bulk-launch-card,.bulk-queue-card{padding:16px}.bulk-drop{border:1px dashed #3b2c49;border-radius:12px;background:#0d0a12;padding:22px;text-align:center;cursor:pointer}.bulk-drop:hover{border-color:#7d55a4;background:#120d19}.bulk-drop b,.bulk-drop span{display:block}.bulk-drop b{font-size:12px}.bulk-drop span{font-size:8px;color:#756b80;margin-top:5px}
+.bulk-flow{display:grid;grid-template-columns:1fr auto 1fr;gap:7px;align-items:center;margin:12px 0}.bulk-flow>div{padding:10px;border:1px solid #252b35;border-radius:9px;background:#090b0f}.bulk-flow span,.bulk-flow b{display:block}.bulk-flow span{font-size:7px;color:#697382}.bulk-flow b{font-size:9px;margin-top:3px}.bulk-flow>i{font-style:normal;color:#8f72bd}
+.bulk-countdown{padding:13px;border:1px solid #2f263a;border-radius:10px;background:#100c16;text-align:center}.bulk-countdown span,.bulk-countdown b{display:block}.bulk-countdown span{font-size:7px;color:#88779a}.bulk-countdown b{font-size:24px;margin-top:3px;font-variant-numeric:tabular-nums}.bulk-countdown small{font-size:7px;color:#686f7c}
+.bulk-progress{margin-top:10px}.bulk-progress-track{height:5px;background:#171b22;border-radius:999px;overflow:hidden}.bulk-progress-track i{display:block;height:100%;background:#ff3f7f}.bulk-progress small{display:block;color:#717a88;font-size:7px;margin-top:5px}
+.bulk-queue-list{display:grid;gap:7px}.bulk-row{display:grid;grid-template-columns:34px minmax(120px,1fr) 110px 110px;gap:8px;align-items:center;padding:9px;border:1px solid #20252e;border-radius:9px;background:#090b0f}.bulk-num{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;background:#15101d;color:#b99ae7;font-size:8px;font-weight:900}.bulk-copy b,.bulk-copy small{display:block}.bulk-copy b{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bulk-copy small{font-size:7px;color:#66707d;margin-top:2px}.bulk-stage{padding:6px 7px;border:1px solid #272d36;border-radius:7px}.bulk-stage span,.bulk-stage b{display:block}.bulk-stage span{font-size:6px;color:#626b78;text-transform:uppercase}.bulk-stage b{font-size:7.5px;margin-top:2px}.bulk-stage.done{border-color:#244633;color:#68d99a}.bulk-stage.active{border-color:#49345f;color:#c3a5ef;background:#100c16}
+@media(max-width:900px){.bulk-publish-layout{grid-template-columns:1fr}.bulk-row{grid-template-columns:30px 1fr}.bulk-stage{grid-column:auto}}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -3480,6 +3490,7 @@ body.auth-checking .auth-boot{display:block!important}
   <section id="overview" class="page"></section>
   <section id="calendar" class="page hidden"></section>
   <section id="trialReels" class="page hidden"></section>
+  <section id="bulkPublish" class="page hidden"></section>
   <section id="production" class="page hidden"></section>
   <section id="frameExtractor" class="page hidden"></section>
   <section id="xStudio" class="page hidden"></section>
@@ -3497,6 +3508,7 @@ body.auth-checking .auth-boot{display:block!important}
 <div id="mobileMoreHost"></div>
 <input id="videoPicker" type="file" accept="video/*" hidden>
 <input id="trialVideoPicker" type="file" accept="video/*" hidden>
+<input id="bulkVideoPicker" type="file" accept="video/*" multiple hidden>
 <div id="modalHost"></div>
 <div id="activityPanelHost"></div>
 <div id="commandPaletteHost"></div>
@@ -3507,6 +3519,7 @@ const navItems=[
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
+  ["bulkPublish","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 5h14v14H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M3 8V3h5M21 16v5h-5\"></path></svg>","Postagem em lote"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
   ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrator de frames"],
   ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X"],
@@ -3530,6 +3543,7 @@ const pageSubtitles={
   overview:"Acompanhe conteúdo, desempenho e próximos passos.",
   calendar:"Planeje e distribua sua operação de conteúdo.",
   trialReels:"Teste novos horários sem misturar o aprendizado principal.",
+  bulkPublish:"Envie vários vídeos; cada um passa por Trial e depois Reel normal.",
   production:"Transforme vídeo + frame em uma fila de produção contínua.",
   frameExtractor:"Extraia o primeiro frame e organize referências rapidamente.",
   xStudio:"Gerencie a operação do canal X.",
@@ -3557,6 +3571,7 @@ let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", 
 let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
 let xWarmupSelectedAccountId=null;
 let trialPendingDate=null,trialPendingSlot=null,trialDraftFile=null,trialDraftSlot=null,trialDraftSuggestedTime=null;
+let bulkPublishRows=[],bulkPublishUploading=false,bulkPublishProgress={done:0,total:0,current:""};
 let cloudentAIHistory=(()=>{try{return JSON.parse(localStorage.getItem("cloudentflow-ai-history")||"[]")}catch{return []}})();
 function defaultSmartSamples(){
   const rows=[], times=["07:30","09:30","11:30","14:00","16:30","19:00","21:30"];
@@ -4706,6 +4721,7 @@ function showPage(id){
   if((id==="automation"||id==="smartTimes")&&cloudSession){
     loadAutomationStatus(true).then(()=>renderAll()).catch(e=>toast(e.message,"err"));
   }
+  if(id==="bulkPublish"&&cloudSession){loadBulkPublishRows().then(()=>{if(currentPage==="bulkPublish")bulkPublishPage()}).catch(()=>{});}
   if(id==="xStudio"&&cloudSession){
     Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus(),loadXWarmup(),loadXIntegrationConfig()]).then(()=>renderAll());
   }else if(id==="tiktokStudio"&&cloudSession){
@@ -5318,6 +5334,85 @@ function trialReelsPage(){
     </div>
   `;
 }
+
+function bulkOpenPicker(){
+  if(!cloudSession){toast("Entre no CloudentFlow primeiro.","err");showPage("settings");return}
+  const input=$("#bulkVideoPicker");if(!input)return;input.value="";input.click();
+}
+function bulkStatusLabel(s){return ({scheduled:"Agendado",queued:"Na fila",processing:"Publicando",published:"Publicado",failed:"Erro",cancelled:"Cancelado"})[String(s||"scheduled")]||String(s||"Agendado")}
+async function loadBulkPublishRows(){
+  if(!cloudSession)return;
+  try{
+    const from=new Date(Date.now()-24*3600000).toISOString();
+    const rows=await cloudFetch("?resource=queue&from="+encodeURIComponent(from));
+    bulkPublishRows=(Array.isArray(rows)?rows:[]).filter(x=>x.smart_mode==="bulk_1m").slice(-100).reverse();
+  }catch(e){console.warn("bulk queue",e)}
+}
+function bulkEvents(){
+  const events=[];
+  for(const r of bulkPublishRows){
+    if(r.pretrial&&r.pretrial.status!=="published"&&r.pretrial.status!=="failed")events.push({at:r.pretrial.scheduled_at,label:"Reels Teste · "+(r.videos?.file_name||"Vídeo")});
+    if(r.status!=="published"&&r.status!=="failed"&&r.status!=="cancelled")events.push({at:r.scheduled_at,label:"Reel normal · "+(r.videos?.file_name||"Vídeo")});
+  }
+  return events.filter(x=>Date.parse(x.at)>Date.now()-90000).sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
+}
+function bulkCountdown(){
+  const e=bulkEvents()[0];if(!e)return {text:"--:--",label:"Fila aguardando novos vídeos"};
+  const sec=Math.max(0,Math.ceil((Date.parse(e.at)-Date.now())/1000));
+  return {text:String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0"),label:e.label};
+}
+function updateBulkCountdownDom(){
+  if(currentPage!=="bulkPublish")return;
+  const x=bulkCountdown(),clock=$("#bulkCountdownClock"),label=$("#bulkCountdownLabel");
+  if(clock)clock.textContent=x.text;if(label)label.textContent=x.label;
+}
+function bulkPublishPage(){
+  const cd=bulkCountdown();
+  const pct=bulkPublishProgress.total?Math.round(bulkPublishProgress.done/bulkPublishProgress.total*100):0;
+  $("#bulkPublish").innerHTML=`
+    <div class="ui3-page-head"><div><span class="ui3-eyebrow">PUBLICAÇÃO RÁPIDA</span><h2>Postagem em lote</h2><p>Vários vídeos em fila. Cada vídeo vai primeiro para Reels Teste e depois para o Reel normal.</p></div><button class="btn primary" onclick="bulkOpenPicker()" ${bulkPublishUploading?"disabled":""}>＋ Selecionar vídeos</button></div>
+    <div class="bulk-publish-layout">
+      <div class="card bulk-launch-card">
+        <div class="bulk-drop" onclick="bulkOpenPicker()"><b>Selecionar vários vídeos</b><span>MP4, MOV ou M4V · seleção múltipla</span></div>
+        <div class="bulk-flow"><div><span>ETAPA 1</span><b>◈ Reels Teste</b></div><i>→ 1 min →</i><div><span>ETAPA 2</span><b>▶ Reel normal</b></div></div>
+        <div class="bulk-countdown"><span>PRÓXIMA POSTAGEM</span><b id="bulkCountdownClock">${cd.text}</b><small id="bulkCountdownLabel">${esc(cd.label)}</small></div>
+        ${bulkPublishUploading?`<div class="bulk-progress"><div class="bulk-progress-track"><i style="width:${pct}%"></i></div><small>${bulkPublishProgress.done}/${bulkPublishProgress.total} enviados · ${esc(bulkPublishProgress.current)}</small></div>`:""}
+        <div class="trial-modal-rule"><b>Cadência de 1 minuto</b><span>A fila alterna: Trial do vídeo 1 → 1 min → Reel normal 1 → 1 min → Trial do vídeo 2 → 1 min → Reel normal 2. O mesmo arquivo é reutilizado, sem duplicar o armazenamento.</span></div>
+      </div>
+      <div class="card bulk-queue-card">
+        <div class="ui3-panel-head"><div><span>FILA</span><h3>Vídeos preparados</h3></div><button class="btn btn-sm" onclick="loadBulkPublishRows().then(bulkPublishPage)">↻ Atualizar</button></div>
+        <div class="bulk-queue-list">${bulkPublishRows.length?bulkPublishRows.map((r,i)=>{
+          const t=r.pretrial||{},trialDone=t.status==="published",normalDone=r.status==="published";
+          return '<div class="bulk-row"><div class="bulk-num">'+(bulkPublishRows.length-i)+'</div><div class="bulk-copy"><b>'+esc(r.videos?.file_name||"Vídeo")+'</b><small>'+new Date(r.scheduled_at).toLocaleString("pt-BR")+'</small></div>'+
+            '<div class="bulk-stage '+(trialDone?"done":t.status==="processing"||t.status==="container_created"?"active":"")+'"><span>Reels Teste</span><b>'+esc(bulkStatusLabel(t.status||"scheduled"))+'</b></div>'+
+            '<div class="bulk-stage '+(normalDone?"done":r.status==="processing"?"active":"")+'"><span>Reel normal</span><b>'+esc(bulkStatusLabel(r.status))+'</b></div></div>';
+        }).join(""):'<div class="ui3-empty"><span>Selecione vários vídeos para iniciar a fila.</span></div>'}</div>
+      </div>
+    </div>`;
+  updateBulkCountdownDom();
+}
+async function handleBulkVideoPicker(input){
+  const files=[...(input?.files||[])].filter(f=>f.type.startsWith("video/")||/\.(mp4|mov|m4v|webm)$/i.test(f.name));
+  if(!files.length)return;
+  if(bulkPublishUploading){toast("Já existe um envio em andamento.","warn");return}
+  bulkPublishUploading=true;bulkPublishProgress={done:0,total:files.length,current:files[0].name};bulkPublishPage();
+  // +2 min gives the first upload time to finish; after that there is one publication every minute.
+  const firstNormal=Date.now()+2*60_000;
+  let failed=0;
+  for(let i=0;i<files.length;i++){
+    const file=files[i];bulkPublishProgress.current=file.name;bulkPublishPage();
+    try{
+      const normalAt=new Date(firstNormal+i*2*60_000).toISOString();
+      const res=await uploadScheduledVideoDirect(file,{scheduledAt:normalAt,caption:"",smartMode:"bulk_1m",smartStrategy:"manual",platform:"instagram"});
+      if(res?.video?.id)await runMediaCleaner("video",res.video.id,{quiet:true});
+      bulkPublishProgress.done++;
+    }catch(e){failed++;console.error("bulk upload",e);toast("Falha em "+file.name+": "+friendlyCloudentError(e?.message||"erro"),"err")}
+  }
+  bulkPublishUploading=false;bulkPublishProgress.current="";
+  await loadBulkPublishRows();bulkPublishPage();
+  toast(failed?((files.length-failed)+" enviados · "+failed+" falharam."):(files.length+" vídeos adicionados. Trial → 1 min → normal."),failed?"warn":"ok");
+}
+setInterval(updateBulkCountdownDom,1000);
 
 function shiftTrialWeek(days){
   const d=new Date(ensureCalendarWindowStart()+"T00:00:00");d.setDate(d.getDate()+days);
@@ -9229,6 +9324,7 @@ function renderAll(){
     overview,
     calendar:calendarPage,
     trialReels:trialReelsPage,
+    bulkPublish:bulkPublishPage,
     production:productionPage,
     frameExtractor:frameExtractorPage,
     xStudio:xStudioPage,
@@ -9297,6 +9393,8 @@ async function init(){
   if(quickPicker)quickPicker.onchange=()=>handleQuickSlotVideo(quickPicker);
   const trialPicker=$("#trialVideoPicker");
   if(trialPicker)trialPicker.onchange=()=>handleTrialVideoPicker(trialPicker);
+  const bulkPicker=$("#bulkVideoPicker");
+  if(bulkPicker)bulkPicker.onchange=()=>handleBulkVideoPicker(bulkPicker);
 
   const newVideoBtn=$("#newVideoBtn");
   if(newVideoBtn)newVideoBtn.onclick=()=>{
