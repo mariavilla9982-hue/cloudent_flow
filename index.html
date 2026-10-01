@@ -3614,6 +3614,186 @@ body,.app,.main,.page{box-sizing:border-box}
     max-width:240px!important;
   }
 }
+
+/* ===== FINAL SIDEBAR BEHAVIOR v2: collapsed -> hover push -> pin ===== */
+@media(min-width:761px){
+  .app{
+    display:grid!important;
+    grid-template-columns:240px minmax(0,1fr)!important;
+    transition:grid-template-columns .18s cubic-bezier(.2,.8,.2,1)!important;
+  }
+  .app.sidebar-collapsed{
+    grid-template-columns:72px minmax(0,1fr)!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open{
+    grid-template-columns:240px minmax(0,1fr)!important;
+  }
+
+  .sidebar{
+    position:sticky!important;
+    top:0!important;
+    align-self:start!important;
+    height:100vh!important;
+    max-height:100vh!important;
+    width:240px!important;
+    min-width:240px!important;
+    max-width:240px!important;
+    overflow:hidden!important;
+    z-index:40!important;
+    box-shadow:none!important;
+    transition:width .18s cubic-bezier(.2,.8,.2,1),min-width .18s cubic-bezier(.2,.8,.2,1),max-width .18s cubic-bezier(.2,.8,.2,1)!important;
+  }
+
+  .app.sidebar-collapsed .sidebar.compact{
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    padding-left:9px!important;
+    padding-right:9px!important;
+    overflow:hidden!important;
+    box-shadow:none!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact{
+    width:240px!important;
+    min-width:240px!important;
+    max-width:240px!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+    overflow:hidden!important;
+    box-shadow:none!important;
+  }
+
+  /* Kill all old CSS :hover expansion rules unless JS says hover-open. */
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact:hover{
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    padding-left:9px!important;
+    padding-right:9px!important;
+    box-shadow:none!important;
+  }
+
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .brand-name,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .workspace-switch,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .nav-label,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .nav button b,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .account-copy,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .connection-dot,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .account-chevron{
+    display:none!important;
+    opacity:0!important;
+    max-width:0!important;
+    pointer-events:none!important;
+  }
+
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .brand{
+    justify-content:center!important;
+    margin:0!important;
+  }
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .nav{
+    width:100%!important;
+    margin-top:51px!important;
+    display:grid!important;
+    gap:5px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding-bottom:72px!important;
+  }
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .nav-group{
+    display:grid!important;
+    gap:5px!important;
+    margin:0!important;
+  }
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .nav button{
+    width:50px!important;
+    min-width:50px!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+    gap:0!important;
+  }
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .sidebar-foot{
+    left:9px!important;
+    right:9px!important;
+    bottom:10px!important;
+  }
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .account-chip{
+    width:50px!important;
+    min-width:50px!important;
+    height:42px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+
+  /* Expanded on hover or pinned: same geometry, never overlay main content. */
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .brand-name,
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .nav-label,
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .nav button b,
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .account-copy,
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .connection-dot,
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .account-chevron{
+    display:block!important;
+    opacity:1!important;
+    max-width:180px!important;
+    pointer-events:auto!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .workspace-switch{
+    display:grid!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .brand{
+    justify-content:space-between!important;
+    margin:0 0 14px!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .nav{
+    width:100%!important;
+    margin-top:0!important;
+    display:grid!important;
+    gap:13px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding-bottom:76px!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .nav-group{
+    display:grid!important;
+    gap:3px!important;
+    margin:0!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .nav button{
+    width:100%!important;
+    min-width:0!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:7px 9px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:9px!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .sidebar-foot{
+    left:12px!important;
+    right:12px!important;
+    bottom:10px!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .account-chip{
+    width:100%!important;
+    height:auto!important;
+    min-width:0!important;
+    padding:6px!important;
+    display:grid!important;
+    grid-template-columns:28px minmax(0,1fr) 7px!important;
+    gap:7px!important;
+  }
+
+  .main{
+    min-width:0!important;
+    width:auto!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -3838,7 +4018,13 @@ let calendarPreviewObserver=null;
 let cloudLoading=true, currentReelDetail=null, previousPageBeforeReel="metrics";
 const SESSION_KEY="cloudentflow-user-session";
 const SIDEBAR_PIN_KEY="cloudentflow-sidebar-pinned";
-let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
+const SIDEBAR_LAYOUT_VERSION_KEY="cloudentflow-sidebar-layout-version";
+const SIDEBAR_LAYOUT_VERSION="2026-10-01-v2";
+if(localStorage.getItem(SIDEBAR_LAYOUT_VERSION_KEY)!==SIDEBAR_LAYOUT_VERSION){
+  localStorage.setItem(SIDEBAR_PIN_KEY,"false");
+  localStorage.setItem(SIDEBAR_LAYOUT_VERSION_KEY,SIDEBAR_LAYOUT_VERSION);
+}
+let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)==="true";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30, metricSeries="views";
 let dashboardPeriod="month", dashboardHideNames=false;
@@ -4934,19 +5120,32 @@ function applySidebarState(){
 function toggleSidebarPin(){
   sidebarPinned=!sidebarPinned;
   localStorage.setItem(SIDEBAR_PIN_KEY,String(sidebarPinned));
+  const app=document.querySelector(".app"),sidebar=document.querySelector(".sidebar");
+  sidebar?.classList.remove("hover-open");
+  app?.classList.remove("sidebar-hover-open");
   applySidebarState();
 }
 function bindSidebarHover(){
   const sidebar=document.querySelector(".sidebar"),app=document.querySelector(".app");
   if(!sidebar||!app||sidebar.dataset.hoverBound==="1")return;
   sidebar.dataset.hoverBound="1";
-  // Sidebar compacta fica compacta. Abrir inteira agora é só pelo botão de fixar.
-  sidebar.classList.remove("hover-open");
-  app.classList.remove("sidebar-hover-open");
-  window.addEventListener("resize",()=>{
+  const open=()=>{
+    if(window.innerWidth<=760||sidebarPinned)return;
+    sidebar.classList.add("hover-open");
+    app.classList.add("sidebar-hover-open");
+  };
+  const close=()=>{
+    if(window.innerWidth<=760||sidebarPinned)return;
     sidebar.classList.remove("hover-open");
     app.classList.remove("sidebar-hover-open");
-    if(window.innerWidth>760)toggleMobileMore(false);
+  };
+  sidebar.addEventListener("mouseenter",open);
+  sidebar.addEventListener("mouseleave",close);
+  window.addEventListener("resize",()=>{
+    if(window.innerWidth<=760){
+      sidebar.classList.remove("hover-open");
+      app.classList.remove("sidebar-hover-open");
+    }else toggleMobileMore(false);
     renderMobileNav();
   });
 }
