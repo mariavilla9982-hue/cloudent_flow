@@ -3558,6 +3558,8 @@ const pageSubtitles={
 };
 let cloudSession=null, backendOnline=false, storageBackend={configured:false,provider:"supabase",bucket:null,endpoint:null,account_hint:null}, instagramIntegration=null, instagramWebSession={configured:false,mode:"browser_session"}, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
+// UI-only selection state. Never touches jobs until the user explicitly confirms deletion.
+let productionSelectedJobs=new Set();
 const calendarPreviewCache=new Map();
 const trialPreviewCache=new Map();
 const thumbnailUrlCache=new Map();
