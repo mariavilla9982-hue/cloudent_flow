@@ -4699,6 +4699,17 @@ function nav(){
         return `<button class="${id===currentPage?"active":""}" data-page="${id}" data-label="${x[2]}" title="${x[2]}"><span class="nav-icon">${x[1]}</span><b>${x[2]}</b>${beta?'<em class="nav-beta">Beta</em>':""}</button>`;
       }).join("")}
     </div>`).join("");
+  /* Hard guarantee: bulk publishing must always be visible, even if a stale nav group definition is restored. */
+  if(!$("#nav [data-page='bulkPublish']")){
+    const trialBtn=$("#nav [data-page='trialReels']");
+    const bulk=byId.bulkPublish;
+    if(trialBtn&&bulk){
+      const btn=document.createElement("button");
+      btn.dataset.page="bulkPublish";btn.dataset.label=bulk[2];btn.title=bulk[2];
+      btn.innerHTML='<span class="nav-icon">'+bulk[1]+'</span><b>'+bulk[2]+'</b>';
+      trialBtn.insertAdjacentElement("afterend",btn);
+    }
+  }
   document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
   renderMobileNav();
 }
