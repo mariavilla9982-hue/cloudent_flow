@@ -7866,20 +7866,23 @@ function toggleAllReadyProduction(checked){
   productionPage();
 }
 async function deleteSelectedProductionJobs(){
-  const ids=[...productionSelectedJobs].filter(id=>(productionData?.jobs||[]).some(j=>String(j.id)===id&&j.status==="ready"));
-  if(!ids.length){toast("Selecione pelo menos um vídeo.","warn");return}
-  if(!confirm("Excluir "+ids.length+" job(s) selecionado(s)?\n\nVídeos já enviados ao calendário continuam preservados."))return;
+  const selected=[...productionSelectedJobs].map(id=>(productionData?.jobs||[]).find(j=>String(j.id)===String(id))).filter(j=>j&&j.status==="ready");
+  if(!selected.length){toast("Selecione pelo menos um vídeo.","warn");return}
+  const safe=selected.filter(j=>!!j.meta?.scheduled);
+  const protectedJobs=selected.filter(j=>!j.meta?.scheduled);
+  if(!safe.length){toast("Os selecionados ainda não estão no calendário. Mande para o calendário antes de limpar os arquivos.","warn");return}
+  const extra=protectedJobs.length?"\n\n"+protectedJobs.length+" vídeo(s) sem calendário serão protegidos e NÃO serão apagados.":"";
+  if(!confirm("Limpar arquivos de produção de "+safe.length+" vídeo(s)?\n\nO vídeo final do Calendário será preservado. Originais, frames, thumbnails e arquivos temporários da Produção IA serão removidos."+extra))return;
   let ok=0,fail=0;
-  for(const id of ids){
+  for(const j of safe){
     try{
-      await cloudFetch("?action=production-job",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
-      productionSelectedJobs.delete(id);ok++;
+      await cloudFetch("?action=production-job",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id})});
+      productionSelectedJobs.delete(String(j.id));ok++;
     }catch(e){fail++}
   }
-  if(productionData?.jobs)productionData.jobs=productionData.jobs.filter(j=>!ids.includes(String(j.id))||productionSelectedJobs.has(String(j.id)));
-  await loadProductionData(false).catch(()=>{});
+  await loadProductionData(true).catch(()=>{});
   productionPage();
-  toast(ok+" excluído(s)"+(fail?" · "+fail+" falharam":""),fail?"warn":"ok");
+  toast(ok+" limpo(s) · vídeo do calendário preservado"+(protectedJobs.length?" · "+protectedJobs.length+" protegido(s)":"")+(fail?" · "+fail+" falharam":""),fail?"warn":"ok");
 }
 async function deleteProductionJob(id,button=null){
   if(!confirm("Excluir este job e seus arquivos de produção? Se o resultado já estiver no calendário, o vídeo agendado será preservado."))return;
@@ -7910,18 +7913,18 @@ async function deleteProductionJob(id,button=null){
 
 async function clearCompletedProductionJobs(){
   const ready=(productionData?.jobs||[]).filter(j=>j.status==="ready");
-  if(!ready.length){toast("Não há concluídos para limpar.","ok");return}
-  if(!confirm("Limpar "+ready.length+" job(s) concluído(s) desta fila?\n\nIsso só remove os cards da fila. Os vídeos finais, agendamentos, métricas e dados de aprendizado continuam preservados."))return;
-  try{
-    const r=await cloudFetch("?action=production-clear-completed",{
-      method:"PATCH",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({})
-    });
-    await loadProductionData(true);
-    productionPage();
-    toast((r.cleared||0)+" concluído(s) removido(s) da fila.","ok");
-  }catch(e){toast(e.message,"err")}
+  const safe=ready.filter(j=>!!j.meta?.scheduled);
+  const protectedJobs=ready.filter(j=>!j.meta?.scheduled);
+  if(!safe.length){toast(protectedJobs.length?"Nenhum concluído pode ser limpo ainda: "+protectedJobs.length+" vídeo(s) não estão no calendário.":"Não há concluídos para limpar.","warn");return}
+  if(!confirm("Limpar definitivamente os arquivos de produção de "+safe.length+" vídeo(s)?\n\nO vídeo final já guardado no Calendário será mantido. Originais, frames, thumbnails e temporários serão apagados para liberar espaço."+ (protectedJobs.length?"\n\n"+protectedJobs.length+" vídeo(s) fora do calendário serão protegidos.":"")))return;
+  let ok=0,fail=0;
+  for(const j of safe){
+    try{await cloudFetch("?action=production-job",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id})});productionSelectedJobs.delete(String(j.id));ok++}
+    catch(e){fail++}
+  }
+  await loadProductionData(true).catch(()=>{});
+  productionPage();
+  toast(ok+" produção(ões) limpa(s) · calendário preservado"+(protectedJobs.length?" · "+protectedJobs.length+" protegido(s)":"")+(fail?" · "+fail+" falharam":""),fail?"warn":"ok");
 }
 
 function productionCreditUsage(j){
