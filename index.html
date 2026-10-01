@@ -3476,6 +3476,32 @@ body,.app,.main,.page{box-sizing:border-box}
   .sr-head-actions{width:100%;flex-wrap:wrap}
   .sr-periods{overflow-x:auto;padding-bottom:3px}
 }
+
+/* Dashboard account card micro-animation */
+.sr-account-card{
+  position:relative!important;overflow:hidden!important;
+  transition:transform .22s cubic-bezier(.2,.8,.2,1),border-color .22s ease,background-color .22s ease!important;
+}
+.sr-account-card:before{
+  content:"";position:absolute;left:-26%;bottom:0;width:26%;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);
+  animation:ctfAccountSweep 5.2s ease-in-out infinite;
+}
+.sr-account-card:hover{transform:translateY(-2px)!important;border-color:#3a3a3a!important;background:#0b0b0b!important}
+.sr-account-icon{transition:transform .22s ease,border-color .22s ease,background-color .22s ease!important}
+.sr-account-card:hover .sr-account-icon{transform:scale(1.04);border-color:#4b4b4b!important;background:#101010!important}
+.sr-account-metrics b{transition:transform .22s ease,color .22s ease!important}
+.sr-account-card:hover .sr-account-metrics b{transform:translateY(-1px);color:#fff!important}
+@keyframes ctfAccountSweep{
+  0%,18%{left:-26%;opacity:0}
+  28%{opacity:.7}
+  62%{left:102%;opacity:.55}
+  72%,100%{left:102%;opacity:0}
+}
+@media(prefers-reduced-motion:reduce){
+  .sr-account-card:before{animation:none!important}
+  .sr-account-card,.sr-account-icon,.sr-account-metrics b{transition:none!important}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
