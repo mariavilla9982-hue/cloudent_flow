@@ -4127,7 +4127,7 @@ async function loadInstagramStatus(loadMetrics=true){
   try{
     const r=await edgeFetch(IG_STATUS_URL);
     instagramIntegration=r.integration||null;
-    if(loadMetrics&&instagramIntegration?.enabled)await loadInstagramMetricsStored();
+    if(loadMetrics&&igIntegration?.enabled)await loadInstagramMetricsStored();
   }catch(e){
     console.warn("Instagram status unavailable:",e);
   }
@@ -4167,7 +4167,7 @@ async function removeInstagramWebSession(button=null){
   finally{if(button&&document.body.contains(button))actionButtonBusy(button,false)}
 }
 async function loadInstagramMetricsStored(){
-  if(!cloudSession||!instagramIntegration?.enabled)return;
+  if(!cloudSession||!igIntegration?.enabled)return;
   try{
     const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=120",{method:"GET"});
     liveInstagramMetrics=stored.media||[];
@@ -4678,7 +4678,7 @@ function toggleMobileMore(force){
         return '<button onclick="toggleMobileMore(false);showPage(\''+id+'\')">'+
           '<span>'+x[1]+'</span><div><b>'+x[2]+'</b><small>'+(beta?"Beta":id==="cloudentAI"?"IA":"Abrir")+'</small></div><em>›</em></button>';
       }).join("")+'</div>'+
-      '<div class="mobile-more-account">'+(instagramIntegration?.config?.profile_picture_url?'<img class="mobile-instagram-avatar" src="'+esc(instagramIntegration.config.profile_picture_url)+'" alt="" referrerpolicy="no-referrer">':'<span class="connection-dot"></span>')+'<div><b id="mobileAccountLabel">'+esc(instagramIntegration?.account_label||"Instagram")+'</b><small>'+(instagramIntegration?.enabled?"Conectado":"Verificando conexão…")+'</small></div></div>'+
+      '<div class="mobile-more-account">'+(igIntegration?.config?.profile_picture_url?'<img class="mobile-instagram-avatar" src="'+esc(instagramIntegration.config.profile_picture_url)+'" alt="" referrerpolicy="no-referrer">':'<span class="connection-dot"></span>')+'<div><b id="mobileAccountLabel">'+esc(igIntegration?.account_label||"Instagram")+'</b><small>'+(igIntegration?.enabled?"Conectado":"Verificando conexão…")+'</small></div></div>'+
     '</section>';
 }
 function syncMobileChrome(){
@@ -5076,13 +5076,13 @@ function overview(){
   const future=scheduled.filter(x=>new Date(x.scheduledAt).getTime()>=now && !["publicado","erro"].includes(getStatus(x)));
   const totals=liveInstagramMetrics.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0)}),{views:0,reach:0,likes:0});
   const counts={total:scheduled.length,scheduled:scheduled.filter(x=>["agendado","processando"].includes(getStatus(x))).length,published:scheduled.filter(x=>getStatus(x)==="publicado").length,error:scheduled.filter(x=>getStatus(x)==="erro").length};
-  const instagramIntegration=(integrationsData||[]).find(x=>x.provider==="instagram");
-  const account=instagramIntegration?.account_label?("@"+instagramIntegration.account_label):"Instagram";
+  const igIntegration=instagramIntegration;
+  const account=igIntegration?.account_label?("@"+igIntegration.account_label):"Instagram";
   const today=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase();
   const next=future.slice(0,8);
   $("#overview").innerHTML=`
     <div class="sr-dashboard-top">
-      <div class="sr-greeting">Bom dia, <b>${esc((instagramIntegration?.account_label||"Cloudent").replace(/^@/,"").split(/[._]/)[0])}</b><small>${today}</small></div>
+      <div class="sr-greeting">Bom dia, <b>${esc((igIntegration?.account_label||"Cloudent").replace(/^@/,"").split(/[._]/)[0])}</b><small>${today}</small></div>
       <div class="sr-top-actions"><button onclick="showPage('settings')">?</button><button onclick="toggleActivityPanel()">♧</button><button onclick="showPage('calendar')">▣</button><button onclick="showPage('automation')">▤</button></div>
     </div>
     <div class="sr-dashboard-head"><div><h2>Dashboard</h2><p>Visão geral das postagens</p></div><div class="sr-head-actions"><button onclick="loadCloudData(true)">✓ Verificar Contas</button><button onclick="showPage('settings')">? Ajuda</button></div></div>
@@ -5096,7 +5096,7 @@ function overview(){
     <div class="sr-operation">
       <div class="sr-section-head"><div><span>OPERAÇÃO POR CONTA</span><p>Cada Instagram com fila de reels, stories e cobertura estimada com base na origem dos vídeos.</p></div><button>◉ Esconder nomes</button></div>
       <div class="sr-account-card">
-        <div class="sr-account-icon">◎</div><div><b>${esc(account)}</b><span>${instagramIntegration?.enabled?"Conta conectada · operação ativa":"Nenhuma conta conectada"}</span></div>
+        <div class="sr-account-icon">◎</div><div><b>${esc(account)}</b><span>${igIntegration?.enabled?"Conta conectada · operação ativa":"Nenhuma conta conectada"}</span></div>
         <div class="sr-account-metrics"><span>Views <b>${totals.views.toLocaleString("pt-BR")}</b></span><span>Alcance <b>${totals.reach.toLocaleString("pt-BR")}</b></span><span>Fila <b>${future.length}</b></span></div>
       </div>
     </div>
@@ -5552,7 +5552,7 @@ async function previewTrialReel(id){
       '<button class="reel-close" onclick="closeModal()">×</button><div class="reel-topbar"><b>Trial Reel</b><span>◈</span></div>'+
       '<video src="'+esc(url)+'" controls autoplay muted loop playsinline preload="metadata"></video>'+
       '<div class="calendar-cover-preview"><div class="cover-placeholder" data-trial-cover-thumb="1">◈</div><div><b>CAPA AUTO</b><span>Frame escolhido em '+(Number(row.cover_offset_ms||3500)/1000).toFixed(1)+'s · imagem leve</span></div></div>'+
-      '<div class="reel-overlay"><b>@'+esc(instagramIntegration?.account_label||"Instagram")+'</b><span>'+esc(row.caption||row.file_name||"Trial Reel")+'</span>'+
+      '<div class="reel-overlay"><b>@'+esc(igIntegration?.account_label||"Instagram")+'</b><span>'+esc(row.caption||row.file_name||"Trial Reel")+'</span>'+
       '<small>'+esc(trialStatusMeta(row.status).label)+' · '+(row.scheduled_at?new Date(row.scheduled_at).toLocaleString("pt-BR"):"")+'</small></div></div></div>';
     if(row.thumbnail_storage_path){
       getSignedThumbnailUrl(row.thumbnail_storage_path,{entity:"trial",id:row.id}).then(thumb=>{
@@ -6411,7 +6411,7 @@ async function previewScheduled(date,slot){
           <div><b>CAPA AUTO</b><span>Frame escolhido em ${(Number(x.coverOffsetMs||3500)/1000).toFixed(1)}s · imagem leve</span></div>
         </div>
         <div class="reel-overlay">
-          <b>@${esc(instagramIntegration?.account_label||"cloudentflow")}</b>
+          <b>@${esc(igIntegration?.account_label||"cloudentflow")}</b>
           <span>${esc(x.caption||x.name||"")}</span>
           <small>${date} · ${x.time} · ${statusLabel(getStatus(x))}</small>
         </div>
@@ -6693,7 +6693,7 @@ function followerLiveSummary(){
   const workerOnline=!!followerStats?.worker?.online;
   const error=followerStats?.error||"";
   return `<div class="follower-live-summary">
-    <div><small>SEGUIDORES AGORA</small><strong class="${followerChanged?"follower-count-bump":""}">${current!==null?current.toLocaleString("pt-BR"):"—"}</strong><span>@${esc(followerStats?.account_label||instagramIntegration?.account_label||"Instagram")}</span></div>
+    <div><small>SEGUIDORES AGORA</small><strong class="${followerChanged?"follower-count-bump":""}">${current!==null?current.toLocaleString("pt-BR"):"—"}</strong><span>@${esc(followerStats?.account_label||igIntegration?.account_label||"Instagram")}</span></div>
     <div class="follower-today ${net>=0?"positive":"negative"}"><small>HOJE</small><b>${net>=0?"+":""}${net}</b><span>desde o primeiro registro do dia</span></div>
     <div class="follower-live-state"><i class="${workerOnline?"on":""}"></i><div><b>${workerOnline?"Monitorando ao vivo":error?"Falha ao carregar":"Atualizando"}</b><span>${error?esc(error):(checked?"checado "+relativeTime(checked):"aguardando primeira leitura")}</span></div></div>
   </div>`;
@@ -6779,7 +6779,7 @@ function reelDetailPage(){
     <div class="reel-detail-layout">
       <div class="card reel-detail-media">
         ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls playsinline></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">Preview indisponível</div>'}
-        <div><b>@${esc(instagramIntegration?.account_label||"Instagram")}</b><p>${esc(m.caption||"Sem legenda")}</p></div>
+        <div><b>@${esc(igIntegration?.account_label||"Instagram")}</b><p>${esc(m.caption||"Sem legenda")}</p></div>
       </div>
       <div class="reel-detail-main">
         <div class="ui3-kpis reel-detail-kpis">
@@ -6807,7 +6807,7 @@ function openReelPreview(id){
       <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
       ${media}
       <div class="reel-overlay">
-        <b>@${esc(instagramIntegration?.account_label||"Instagram")}</b>
+        <b>@${esc(igIntegration?.account_label||"Instagram")}</b>
         <span>${esc((m.caption||"Sem legenda").slice(0,160))}</span>
         <small>▶ ${(+m.views||0).toLocaleString("pt-BR")} · ♥ ${(+m.likes||0).toLocaleString("pt-BR")} · ◎ ${(+m.reach||0).toLocaleString("pt-BR")}</small>
       </div>
@@ -6902,7 +6902,7 @@ function metrics(){
             <div class="reel-media-layer">
               ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" muted loop playsinline autoplay preload="metadata"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">▶</div>'}
               <div class="reel-card-top"><span>REEL</span><b>⋮</b></div>
-              <div class="reel-card-bottom"><b>@${esc(instagramIntegration?.account_label||"Instagram")}</b><span>▶ ${(+m.views||0).toLocaleString("pt-BR")} views</span></div>
+              <div class="reel-card-bottom"><b>@${esc(igIntegration?.account_label||"Instagram")}</b><span>▶ ${(+m.views||0).toLocaleString("pt-BR")} views</span></div>
             </div>
           </button>`).join("")||'<div class="ui3-empty">Sincronize para carregar os previews.</div>'}</div>
       </div>
@@ -9398,10 +9398,10 @@ function renderAll(){
   const fn=renderers[currentPage]||overview;
   safeRenderPage(currentPage,fn);
   const side=$("#sidebarAccount"),stat=$("#sidebarAccountStatus");
-  if(side)side.textContent=instagramIntegration?.enabled?"@"+(instagramIntegration.account_label||"Instagram"):"CloudentFlow";
-  if(stat)stat.textContent=instagramIntegration?.enabled?"Instagram conectado":"Abrir configurações";
+  if(side)side.textContent=igIntegration?.enabled?"@"+(igIntegration.account_label||"Instagram"):"CloudentFlow";
+  if(stat)stat.textContent=igIntegration?.enabled?"Instagram conectado":"Abrir configurações";
   const avatar=$("#sidebarInstagramAvatar"),avatarWrap=$("#sidebarInstagramAvatarWrap");
-  const avatarUrl=String(instagramIntegration?.config?.profile_picture_url||"").trim();
+  const avatarUrl=String(igIntegration?.config?.profile_picture_url||"").trim();
   if(avatar&&avatarWrap){
     if(avatarUrl){
       if(avatar.getAttribute("src")!==avatarUrl)avatar.setAttribute("src",avatarUrl);
