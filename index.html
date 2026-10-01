@@ -3615,7 +3615,7 @@ const state={
   slots:saved.slots||{},
   postsPerDay:5,
   defaultTimes:normalizedDefaultTimes,
-  minGap:saved.minGap||60,
+  minGap:0,
   dayVolumeModes:saved.dayVolumeModes||{},
   logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"CloudentFlow carregado."}],
   performance:saved.performance||{"09:00":67,"12:00":81,"15:00":72,"18:00":96,"21:00":120},
@@ -4788,18 +4788,28 @@ function validateSchedule(date,time,ignoreKey=null){
   for(const item of items){
     const other=minutesOf(item.time);
     if(other===mins) return {ok:false,msg:`Já existe um vídeo às ${time}.`};
-    if(Math.abs(other-mins)<state.minGap) return {ok:false,msg:`Mantenha pelo menos ${state.minGap} minutos entre os vídeos.`};
+    // Sem intervalo mínimo global. Só impedimos exatamente o mesmo horário.
   }
   return {ok:true};
 }
 
 function firstValidDefaultSlot(date,ignoreKey=null){
-  for(let i=0;i<calendarBasePostsPerDay(date);i++){
+  const capacity=calendarBasePostsPerDay(date);
+  const preferred=capacity===15
+    ? ["07:30","08:30","09:30","10:30","11:30","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"]
+    : state.defaultTimes.slice(0,5);
+  for(let i=0;i<capacity;i++){
     const k=keyFor(date,i);
-    if(!state.slots[k] || k===ignoreKey){
-      const time=state.defaultTimes[i]||"12:00";
-      if(validateSchedule(date,time,ignoreKey).ok) return {slot:i,time};
+    if(state.slots[k]&&k!==ignoreKey)continue;
+    const candidates=[preferred[i]||"12:00",...preferred];
+    for(const time of candidates){
+      if(validateSchedule(date,time,ignoreKey).ok)return {slot:i,time};
     }
+  }
+  // Se os horários preferidos já estiverem ocupados, acha automaticamente o primeiro minuto livre do dia.
+  for(let mins=0;mins<1440;mins++){
+    const time=String(Math.floor(mins/60)).padStart(2,"0")+":"+String(mins%60).padStart(2,"0");
+    if(validateSchedule(date,time,ignoreKey).ok)return {slot:null,time};
   }
   return null;
 }
