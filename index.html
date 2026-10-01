@@ -7720,6 +7720,29 @@ async function downloadProductionResult(id,number){
     setTimeout(()=>URL.revokeObjectURL(url),1500);
   }catch(e){toast(e.message,"err")}
 }
+async function sendProductionResultToBulk(id,button=null){
+  if(!cloudSession)return;
+  const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+  if(!job||job.status!=="ready"||!job.result_video_id){toast("Esse vídeo ainda não está pronto.","err");return}
+  actionButtonBusy(button,true,"Enviando…");
+  try{
+    const clean=await runMediaCleaner("video",job.result_video_id,{quiet:true});
+    if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
+    // In bulk_1m the DB pretrial trigger creates the Trial exactly 1 minute before the normal Reel.
+    const rows=await cloudFetch("?resource=queue&from="+encodeURIComponent(new Date(Date.now()-3600000).toISOString())).catch(()=>[]);
+    const bulk=(Array.isArray(rows)?rows:[]).filter(x=>x.smart_mode==="bulk_1m"&&["scheduled","queued","processing"].includes(String(x.status||"")));
+    const latest=bulk.reduce((max,x)=>Math.max(max,Date.parse(x.scheduled_at)||0),0);
+    const normalAt=new Date(Math.max(Date.now()+2*60_000,latest?latest+2*60_000:0)).toISOString();
+    const result=await cloudFetch("?action=production-schedule",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id,scheduled_at:normalAt,caption:"",smart_mode:"bulk_1m",smart_strategy:"manual"})
+    });
+    job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:normalAt,bulk_1m:true};
+    await loadBulkPublishRows().catch(()=>{});
+    if(currentPage==="production")productionPage();
+    toast("Vídeo enviado para Postagem em lote · Trial → 1 min → Reel normal.","ok");
+  }catch(e){actionButtonBusy(button,false);toast(friendlyCloudentError(e?.message||"erro"),"err")}
+}
 function openProductionScheduleModal(id,number){
   if(!cloudSession)return;
   const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
@@ -7912,6 +7935,7 @@ function productionJobRow(j,i,total){
       '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
       '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
+      (!scheduled?'<button class="bulk-job-send" onclick="sendProductionResultToBulk(\''+esc(j.id)+'\',this)">⚡ Postagem em lote</button>':'')+
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
     '</div>';
   }else if(["failed","cancelled"].includes(j.status)){
