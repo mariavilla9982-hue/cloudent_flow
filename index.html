@@ -7866,23 +7866,24 @@ function toggleAllReadyProduction(checked){
   productionPage();
 }
 async function deleteSelectedProductionJobs(){
-  const selected=[...productionSelectedJobs].map(id=>(productionData?.jobs||[]).find(j=>String(j.id)===String(id))).filter(j=>j&&j.status==="ready");
+  const selected=[...productionSelectedJobs]
+    .map(id=>(productionData?.jobs||[]).find(j=>String(j.id)===String(id)))
+    .filter(j=>j&&j.status==="ready");
   if(!selected.length){toast("Selecione pelo menos um vídeo.","warn");return}
-  const safe=selected.filter(j=>!!j.meta?.scheduled);
-  const protectedJobs=selected.filter(j=>!j.meta?.scheduled);
-  if(!safe.length){toast("Os selecionados ainda não estão no calendário. Mande para o calendário antes de limpar os arquivos.","warn");return}
-  const extra=protectedJobs.length?"\n\n"+protectedJobs.length+" vídeo(s) sem calendário serão protegidos e NÃO serão apagados.":"";
-  if(!confirm("Limpar arquivos de produção de "+safe.length+" vídeo(s)?\n\nO vídeo final do Calendário será preservado. Originais, frames, thumbnails e arquivos temporários da Produção IA serão removidos."+extra))return;
+  if(!confirm("Excluir TODOS os "+selected.length+" selecionados da Produção IA?\n\nSe algum deles já estiver no Calendário, o vídeo final usado na postagem será preservado. Os arquivos de produção serão removidos para liberar espaço."))return;
   let ok=0,fail=0;
-  for(const j of safe){
+  const failedIds=[];
+  for(const j of selected){
     try{
       await cloudFetch("?action=production-job",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id})});
-      productionSelectedJobs.delete(String(j.id));ok++;
-    }catch(e){fail++}
+      productionSelectedJobs.delete(String(j.id));
+      ok++;
+    }catch(e){fail++;failedIds.push(String(j.id))}
   }
+  productionSelectedJobs=new Set(failedIds);
   await loadProductionData(true).catch(()=>{});
   productionPage();
-  toast(ok+" limpo(s) · vídeo do calendário preservado"+(protectedJobs.length?" · "+protectedJobs.length+" protegido(s)":"")+(fail?" · "+fail+" falharam":""),fail?"warn":"ok");
+  toast(ok+" de "+selected.length+" selecionado(s) excluído(s)"+(fail?" · "+fail+" falharam e continuam marcados":""),fail?"warn":"ok");
 }
 async function deleteProductionJob(id,button=null){
   if(!confirm("Excluir este job e seus arquivos de produção? Se o resultado já estiver no calendário, o vídeo agendado será preservado."))return;
