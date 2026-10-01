@@ -3452,7 +3452,7 @@ body,.app,.main,.page{box-sizing:border-box}
 .sr-periods button.active{background:#f4f4f4!important;color:#050505!important;border-color:#f4f4f4!important}
 .sr-stat,.sr-operation,.sr-next,.sr-account-card{background:#080808!important;border-color:#292929!important}
 .sr-stat{position:relative;overflow:hidden;border-bottom-color:#292929!important}
-.sr-stat strong{color:#f3f3f3!important}
+.sr-stat strong{color:#f3f3f3!important}.sr-stat small{display:block;margin-top:8px;color:#666!important;font-size:9px!important;font-weight:500!important}
 .sr-stat:after{
   content:"";position:absolute;left:-35%;right:auto;bottom:0;width:35%;height:2px;border-radius:999px;
   background:#8a8a8a;animation:ctfStatusSweep 4.4s ease-in-out infinite
@@ -3704,6 +3704,7 @@ let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30, metricSeries="views";
 let dashboardPeriod="month", dashboardHideNames=false;
+let dashboardScheduleRows=[];
 let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
 let xWarmupSelectedAccountId=null;
 let trialPendingDate=null,trialPendingSlot=null,trialDraftFile=null,trialDraftSlot=null,trialDraftSuggestedTime=null;
@@ -3859,6 +3860,7 @@ async function initCloud(){
 
   await Promise.allSettled([
     withTimeout(syncFromBackend(),4500,"calendário"),
+    withTimeout(loadDashboardScheduleRows(),6500,"histórico do dashboard"),
     withTimeout(loadStorageBackendStatus(),4500,"armazenamento"),
     withTimeout(loadInstagramStatus(false),4500,"status do Instagram"),
     withTimeout(loadInstagramWebSessionStatus(),4500,"sessão web Instagram"),
@@ -4445,6 +4447,27 @@ function queueResourcePath(){
   start.setHours(0,0,0,0);
   return "?resource=queue&from="+encodeURIComponent(start.toISOString());
 }
+async function loadDashboardScheduleRows(){
+  if(!cloudSession)return;
+  try{
+    const rows=await cloudFetch("?resource=queue&from="+encodeURIComponent("2020-01-01T00:00:00.000Z"));
+    dashboardScheduleRows=(Array.isArray(rows)?rows:[]).map(row=>{
+      const v=row.videos||{};
+      return {
+        scheduleId:row.id,
+        videoId:row.video_id,
+        name:v.file_name||"Vídeo",
+        scheduledAt:row.scheduled_at,
+        publishedAt:row.published_at||null,
+        status:row.status||"scheduled",
+        smartMode:row.smart_mode||"manual",
+        platform:row.platform||"instagram"
+      };
+    });
+  }catch(e){
+    console.warn("Dashboard history unavailable:",e);
+  }
+}
 async function syncFromBackend(){
   if(!cloudSession)return;
   const q=await cloudFetch(queueResourcePath());
@@ -4687,7 +4710,7 @@ async function refreshLiveData(showFeedback=false){
   try{
     const activityOpen=$("#activityPanelHost")?.classList.contains("open");
     const fullAutomation=currentPage==="automation"||currentPage==="smartTimes";
-    const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(),syncFromBackend()];
+    const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(),syncFromBackend(),loadDashboardScheduleRows()];
     // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
     if(activityOpen||(currentPage==="settings"&&settingsTab==="logs"))tasks.push(loadServerLogs());
     if(currentPage==="production")tasks.push(loadProductionData());
@@ -5240,7 +5263,7 @@ function toggleDashboardNames(){
 }
 function overview(){
   if(cloudLoading){$("#overview").innerHTML=loadingShell("Carregando sua operação");return}
-  const scheduled=allScheduled();
+  const scheduled=dashboardScheduleRows.length?dashboardScheduleRows:allScheduled();
   const filtered=scheduled.filter(x=>{
     const status=getStatus(x);
     const reference=status==="publicado"?(x.publishedAt||x.scheduledAt):x.scheduledAt;
@@ -5268,6 +5291,13 @@ function overview(){
   const today=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase();
   const next=future.slice(0,8);
   const periodCaption=dashboardPeriodCaption(dashboardPeriod);
+  const periodNoun=dashboardPeriod==="today"?"hoje":dashboardPeriod==="7d"?"nos próximos 7 dias":dashboardPeriod==="month"?"neste mês":dashboardPeriod==="year"?"neste ano":"no histórico";
+  const cardLabels={
+    total:dashboardPeriod==="today"?"PROGRAMADOS HOJE":"POSTS "+periodNoun.toUpperCase(),
+    scheduled:dashboardPeriod==="today"?"A PUBLICAR HOJE":"A PUBLICAR",
+    published:dashboardPeriod==="today"?"PUBLICADOS HOJE":"PUBLICADOS",
+    error:dashboardPeriod==="today"?"ERROS HOJE":"ERROS"
+  };
 
   $("#overview").innerHTML=`
     <div class="sr-dashboard-top">
@@ -5292,10 +5322,10 @@ function overview(){
     </div>
 
     <div class="sr-stat-grid">
-      <div class="sr-stat"><span>TOTAL</span><strong>${counts.total}</strong></div>
-      <div class="sr-stat blue"><span>AGENDADOS</span><strong>${counts.scheduled}</strong></div>
-      <div class="sr-stat green"><span>PUBLICADOS</span><strong>${counts.published}</strong></div>
-      <div class="sr-stat red"><span>ERROS</span><strong>${counts.error}</strong></div>
+      <div class="sr-stat"><span>${cardLabels.total}</span><strong>${counts.total}</strong><small>${counts.scheduled} restantes · ${counts.published} publicados</small></div>
+      <div class="sr-stat blue"><span>${cardLabels.scheduled}</span><strong>${counts.scheduled}</strong><small>pendentes no período</small></div>
+      <div class="sr-stat green"><span>${cardLabels.published}</span><strong>${counts.published}</strong><small>publicações concluídas</small></div>
+      <div class="sr-stat red"><span>${cardLabels.error}</span><strong>${counts.error}</strong><small>falhas de publicação</small></div>
     </div>
 
     <div class="sr-operation">
