@@ -3345,6 +3345,8 @@ body.auth-checking .auth-boot{display:block!important}
 
 
 .production-job-select,.production-select-all{display:inline-flex;align-items:center;gap:5px;font-size:7px;color:#8f98a6;cursor:pointer;user-select:none}.production-job-select{grid-column:1/-1;padding:3px 1px}.production-job-select input,.production-select-all input{accent-color:#ff3f7f;width:13px;height:13px;cursor:pointer}.production-queue-head-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.production-queue-head-actions button:disabled{opacity:.4;cursor:not-allowed}
+
+.production-job-select{position:relative;border:1px solid #242b35!important;border-radius:9px;padding:7px 9px!important;background:#0b0e13;transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease}.production-job-select:hover{transform:translateY(-1px);border-color:#4b3140!important;background:#110d12}.production-job-select.selected{border-color:#7b3150!important;background:#1a0d13;box-shadow:0 0 0 1px rgba(255,63,127,.08)}.production-job-select input{position:absolute;opacity:0;pointer-events:none}.production-checkmark{width:17px;height:17px;border-radius:5px;border:1px solid #3a424e;display:grid;place-items:center;color:transparent;background:#0a0d11;transition:all .16s ease}.production-job-select.selected .production-checkmark{background:#ff3f7f;border-color:#ff3f7f;color:#fff;transform:scale(1.05)}.production-select-all{padding:7px 9px;border:1px solid #252c36;border-radius:8px;background:#0b0e13;transition:.16s ease}.production-select-all:hover{border-color:#4b3140;background:#110d12}.production-queue-head-actions .danger:not(:disabled){box-shadow:0 6px 18px rgba(255,70,90,.08);transition:transform .16s ease,box-shadow .16s ease}.production-queue-head-actions .danger:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(255,70,90,.14)}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -4759,7 +4761,10 @@ function weekDates(){
   const start=new Date(ensureCalendarWindowStart()+"T00:00:00");
   return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})
 }
-function calendarBasePostsPerDay(){return Math.max(1,Math.min(10,Number(automationData?.settings?.posts_per_day||state.postsPerDay||5)))}
+function calendarBasePostsPerDay(date=null){
+  if(date&&typeof calendarDayVolume==="function")return calendarDayVolume(date);
+  return Math.max(1,Math.min(15,Number(automationData?.settings?.posts_per_day||state.postsPerDay||5)));
+}
 function slotData(date,slot){return state.slots[keyFor(date,slot)]||null}
 function filledCount(date){return dateSlots(date).length}
 function allScheduled(){return Object.values(state.slots).filter(Boolean).sort((a,b)=>new Date(a.scheduledAt)-new Date(b.scheduledAt))}
@@ -4789,7 +4794,7 @@ function validateSchedule(date,time,ignoreKey=null){
 }
 
 function firstValidDefaultSlot(date,ignoreKey=null){
-  for(let i=0;i<calendarBasePostsPerDay();i++){
+  for(let i=0;i<calendarBasePostsPerDay(date);i++){
     const k=keyFor(date,i);
     if(!state.slots[k] || k===ignoreKey){
       const time=state.defaultTimes[i]||"12:00";
@@ -7642,9 +7647,9 @@ function actionButtonBusy(button,busy,label=""){
   }
 }
 function productionCalendarCapacity(){
-  const base=calendarBasePostsPerDay();
   return weekDates().map(d=>{
     const date=localISO(d);
+    const base=calendarBasePostsPerDay(date);
     const used=filledCount(date);
     const baseUsed=Math.min(base,used);
     return {
@@ -7682,7 +7687,7 @@ function openProductionCalendarOverview(){
         '<span>'+esc(x.label)+'</span><b>'+x.free+(x.free===1?" vaga":" vagas")+'</b><small>'+x.number+' · '+x.used+'/'+x.base+'</small>'+
       '</button>'
     ).join("")+'</div>'+
-    '<div class="production-calendar-overview-note"><span>●</span> O limite base atual é '+calendarBasePostsPerDay()+' vídeos por dia. Extras manuais continuam disponíveis no calendário.</div>'+
+    '<div class="production-calendar-overview-note"><span>●</span> Cada dia respeita automaticamente o formato escolhido no calendário: 5 ou 15 vídeos.</div>'+
   '</div></div>';
 }
 function goFromProductionToCalendar(date){
@@ -7961,7 +7966,7 @@ function productionJobRow(j,i,total){
   if(j.status==="ready"){
     const scheduled=!!j.meta?.scheduled;
     action='<div class="production-ready-actions">'+
-      '<label class="production-job-select" title="Selecionar para excluir"><input type="checkbox" '+(productionSelectedJobs.has(String(j.id))?'checked':'')+' onchange="toggleProductionJobSelection(\''+esc(j.id)+'\',this.checked)"> Selecionar</label>'+
+      '<label class="production-job-select '+(productionSelectedJobs.has(String(j.id))?'selected':'')+'" title="Selecionar para excluir"><input type="checkbox" '+(productionSelectedJobs.has(String(j.id))?'checked':'')+' onchange="toggleProductionJobSelection(\''+esc(j.id)+'\',this.checked)"><span class="production-checkmark">✓</span><span>Selecionar</span></label>'+
       '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
       '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
@@ -8114,7 +8119,7 @@ function productionPage(){
         '<div class="production-note">Adicione quantos pares quiser. Depois use “Executar fila” para disparar na hora.</div>'+
       '</div>'+
     '</div>'+
-    '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><div class="production-queue-head-actions">'+(jobs.some(j=>j.status==="ready")?'<label class="production-select-all"><input type="checkbox" onchange="toggleAllReadyProduction(this.checked)"> Selecionar prontos</label><button class="btn btn-sm danger" id="productionDeleteSelected" onclick="deleteSelectedProductionJobs()" '+(productionSelectedJobs.size?'':'disabled')+'>Excluir selecionados ('+productionSelectedJobs.size+')</button><button class="btn btn-sm" onclick="clearCompletedProductionJobs()">🧹 Limpar concluídos</button>':'')+'</div></div><div class="production-queue">'+rows+'</div></div>';
+    '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><div class="production-queue-head-actions">'+(jobs.some(j=>j.status==="ready")?'<label class="production-select-all"><input type="checkbox" onchange="toggleAllReadyProduction(this.checked)"> Selecionar prontos</label><button class="btn btn-sm danger" id="productionDeleteSelected" onclick="deleteSelectedProductionJobs()" '+(productionSelectedJobs.size?'':'disabled')+'>🗑 Excluir selecionados ('+productionSelectedJobs.size+')</button><button class="btn btn-sm" onclick="clearCompletedProductionJobs()">🧹 Limpar concluídos</button>':'')+'</div></div><div class="production-queue">'+rows+'</div></div>';
   ensureProductionTicker();
   setTimeout(()=>{
     syncProductionElapsed();
