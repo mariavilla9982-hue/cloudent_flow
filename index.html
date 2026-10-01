@@ -3507,6 +3507,44 @@ body,.app,.main,.page{box-sizing:border-box}
 .sr-live-label:before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;background:#f2f2f2;box-shadow:0 0 0 3px rgba(255,255,255,.045);vertical-align:1px;animation:ctfLivePulse 1.8s ease-in-out infinite}
 @keyframes ctfLivePulse{0%,100%{opacity:.35;transform:scale(.86)}50%{opacity:1;transform:scale(1.06)}}
 @media(prefers-reduced-motion:reduce){.sr-live-label:before{animation:none!important}}
+
+/* ===== Sidebar layout correction: expand without covering the page ===== */
+@media(min-width:761px){
+  .app.sidebar-collapsed.sidebar-hover-open{
+    grid-template-columns:240px minmax(0,1fr)!important;
+  }
+  .sidebar{
+    position:sticky!important;
+    top:0!important;
+    height:100vh!important;
+    max-height:100vh!important;
+    overflow:hidden!important;
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  .sidebar .brand{flex:0 0 auto!important}
+  .sidebar .nav{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding-bottom:74px!important;
+    scrollbar-width:thin;
+    scrollbar-color:#2a2a2a transparent;
+  }
+  .sidebar .nav::-webkit-scrollbar{width:5px}
+  .sidebar .nav::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:999px}
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact,
+  .app.sidebar-collapsed .sidebar.compact.hover-open{
+    width:240px!important;
+    min-width:240px!important;
+    max-width:240px!important;
+    box-shadow:none!important;
+  }
+  .app.sidebar-collapsed.sidebar-hover-open .main{
+    min-width:0!important;
+  }
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -4810,7 +4848,10 @@ function applySidebarState(){
   sidebar.classList.toggle("compact",!sidebarPinned);
   sidebar.classList.toggle("pinned",sidebarPinned);
   sidebar.classList.remove("unpinned");
-  if(sidebarPinned)sidebar.classList.remove("hover-open");
+  if(sidebarPinned){
+    sidebar.classList.remove("hover-open");
+    app.classList.remove("sidebar-hover-open");
+  }
   if(btn){
     btn.innerHTML=sidebarPinned
       ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 5 3 3v1h-6v7l-1 2-1-2v-7H5v-1l3-3 1-5Z"></path></svg>'
@@ -4827,20 +4868,24 @@ function toggleSidebarPin(){
   applySidebarState();
 }
 function bindSidebarHover(){
-  const sidebar=document.querySelector(".sidebar");
-  if(!sidebar||sidebar.dataset.hoverBound==="1")return;
+  const sidebar=document.querySelector(".sidebar"),app=document.querySelector(".app");
+  if(!sidebar||!app||sidebar.dataset.hoverBound==="1")return;
   sidebar.dataset.hoverBound="1";
   sidebar.addEventListener("mouseenter",()=>{
     if(window.innerWidth<=760||sidebarPinned)return;
     sidebar.classList.add("hover-open");
+    app.classList.add("sidebar-hover-open");
   });
   sidebar.addEventListener("mouseleave",()=>{
     if(window.innerWidth<=760||sidebarPinned)return;
     sidebar.classList.remove("hover-open");
+    app.classList.remove("sidebar-hover-open");
   });
   window.addEventListener("resize",()=>{
-    if(window.innerWidth<=760)sidebar.classList.remove("hover-open");
-    else toggleMobileMore(false);
+    if(window.innerWidth<=760){
+      sidebar.classList.remove("hover-open");
+      app.classList.remove("sidebar-hover-open");
+    }else toggleMobileMore(false);
     renderMobileNav();
   });
 }
