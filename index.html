@@ -3794,6 +3794,31 @@ body,.app,.main,.page{box-sizing:border-box}
     margin:0!important;
   }
 }
+
+/* ===== Sidebar/content seam hotfix =====
+   Remove the fake black gutter that appeared in both compact and pinned sidebar modes. */
+@media(min-width:761px){
+  .main{
+    padding-left:10px!important;
+    padding-right:10px!important;
+  }
+  .app.sidebar-collapsed .main,
+  .app:not(.sidebar-collapsed) .main{
+    padding-left:10px!important;
+  }
+  .page{
+    margin-left:0!important;
+    margin-right:0!important;
+  }
+  .topbar.saas-topbar{
+    margin-left:0!important;
+    margin-right:0!important;
+  }
+  #overview{
+    margin-left:0!important;
+    padding-left:0!important;
+  }
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
