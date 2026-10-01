@@ -3819,6 +3819,24 @@ body,.app,.main,.page{box-sizing:border-box}
     padding-left:0!important;
   }
 }
+
+/* ===== Sidebar scroll behavior fix: do not follow viewport ===== */
+@media(min-width:761px){
+  .sidebar,
+  .app.sidebar-collapsed .sidebar.compact,
+  .app:not(.sidebar-collapsed) .sidebar{
+    position:relative!important;
+    top:auto!important;
+    height:auto!important;
+    min-height:100vh!important;
+    max-height:none!important;
+    align-self:stretch!important;
+  }
+  .sidebar .nav{
+    overflow-y:visible!important;
+    max-height:none!important;
+  }
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
