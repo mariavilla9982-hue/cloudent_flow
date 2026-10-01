@@ -3325,6 +3325,14 @@ body.auth-checking .auth-boot{display:block!important}
 #instagramWebSessionCard .integration-help summary{cursor:pointer;color:#a6afbd;font-size:9px;font-weight:800}
 #instagramWebSessionCard .integration-help p{margin:8px 0 0;line-height:1.55}
 #instagramWebSessionCard code{font:8px ui-monospace,SFMono-Regular,Menlo,monospace;color:#c8b7ff}
+
+/* ===== Calendar 5 / 15 videos per-day mode ===== */
+.day-volume-switch{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:0 0 8px;padding:3px;border:1px solid #242a34;border-radius:8px;background:#090b0f}
+.day-volume-switch button{border:0;border-radius:6px;padding:5px 4px;background:transparent;color:#697382;font-size:7px;font-weight:900;cursor:pointer}
+.day-volume-switch button.active{background:#19121a;color:#ff78a8;box-shadow:inset 0 0 0 1px #4b2636}
+.day-period-group{display:grid;gap:7px;margin-top:7px}.day-period-head{display:flex;align-items:center;justify-content:space-between;padding:3px 1px;color:#707988;font-size:7px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.day-period-head b{color:#aab1bd;font-size:7px}
+.day-period-group+.day-period-group{padding-top:6px;border-top:1px solid #191e26}
+
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -3587,6 +3595,7 @@ const state={
   postsPerDay:5,
   defaultTimes:normalizedDefaultTimes,
   minGap:saved.minGap||60,
+  dayVolumeModes:saved.dayVolumeModes||{},
   logs:saved.logs||[{t:new Date().toISOString(),type:"ok",m:"CloudentFlow carregado."}],
   performance:saved.performance||{"09:00":67,"12:00":81,"15:00":72,"18:00":96,"21:00":120},
   smartSamples:saved.smartSamples||defaultSmartSamples(),
@@ -4739,7 +4748,7 @@ function validateSchedule(date,time,ignoreKey=null){
   const mins=minutesOf(time);
   if(!Number.isFinite(mins)) return {ok:false,msg:"Horário inválido."};
   const items=dateSlots(date,ignoreKey);
-  if(items.length>=12) return {ok:false,msg:"Limite de 12 vídeos manuais por dia atingido."};
+  if(items.length>=15) return {ok:false,msg:"Limite de 15 vídeos por dia atingido."};
   for(const item of items){
     const other=minutesOf(item.time);
     if(other===mins) return {ok:false,msg:`Já existe um vídeo às ${time}.`};
@@ -5791,26 +5800,38 @@ function ensureCalendarMetricsTicker(){
   },30000);
 }
 
+function calendarDayVolume(date){return Number(state.dayVolumeModes?.[date])===15?15:5}
+function setCalendarDayVolume(date,mode){
+  const next=Number(mode)===15?15:5;
+  state.dayVolumeModes=state.dayVolumeModes||{};
+  state.dayVolumeModes[date]=next;
+  save();calendarPage();
+  toast(next===15?"Modo 15 vídeos: 5 manhã · 5 tarde · 5 noite.":"Modo 5 vídeos ativado.","ok");
+}
+function dayVolumeSwitch(date,mode){
+  return '<div class="day-volume-switch"><button class="'+(mode===5?"active":"")+'" onclick="setCalendarDayVolume(\''+date+'\',5)">5 vídeos</button><button class="'+(mode===15?"active":"")+'" onclick="setCalendarDayVolume(\''+date+'\',15)">15 vídeos</button></div>';
+}
 function dayColumn(d,label){
-  const iso=localISO(d),count=filledCount(iso),base=calendarBasePostsPerDay();
-  const extras=dateSlots(iso)
-    .map(x=>Number(String(x.key).split("#")[1]))
-    .filter(i=>Number.isFinite(i)&&i>=base)
-    .sort((a,b)=>a-b);
-  const countLabel=count<=base?count+"/"+base:count+" posts";
+  const iso=localISO(d),count=filledCount(iso),mode=calendarDayVolume(iso);
+  const countLabel=count+"/"+mode;
+  const slots=mode===15
+    ? [["Manhã",0,5],["Tarde",5,10],["Noite",10,15]].map(([name,a,b])=>{
+        const filled=Array.from({length:b-a},(_,j)=>slotData(iso,a+j)).filter(Boolean).length;
+        return '<div class="day-period-group"><div class="day-period-head"><span>'+name+'</span><b>'+filled+'/5</b></div>'+
+          Array.from({length:b-a},(_,j)=>renderSlot(iso,a+j)).join("")+'</div>';
+      }).join("")
+    : Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("");
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
-    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count ${count>base?"extra":""}">${countLabel}</div></div>
+    <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count">${countLabel}</div></div>
+    ${dayVolumeSwitch(iso,mode)}
     <div class="calendar-day-live-host">${calendarDayMetricSummary(iso)}</div>
     <div class="calendar-day-progress-host" data-day="${iso}">${calendarDayProgress(iso)}</div>
-    <div class="day-slots">
-      ${Array.from({length:base},(_,i)=>renderSlot(iso,i)).join("")}
-      ${extras.map(i=>renderSlot(iso,i)).join("")}
-    </div>
+    <div class="day-slots">${slots}</div>
     <button class="calendar-day-add-more" onclick="openScheduleModal('${iso}',true)"><span>＋</span> Adicionar outro vídeo</button>
   </div>`;
 }
 
-function slotPeriodLabel(i){const base=calendarBasePostsPerDay();return i<2?"Manhã":i<base?"Tarde":"Extra"}
+function slotPeriodLabel(i){const mode=15;return i<5?"Manhã":i<10?"Tarde":i<15?"Noite":"Extra"}
 function calendarPretrialBadge(x){
   const p=x?.pretrial;
   if(!p)return '<span class="badge pretrial-badge pending">◈ Trial -20m</span>';
@@ -5823,8 +5844,8 @@ function calendarPretrialBadge(x){
   return '<span class="badge pretrial-badge pending">◈ Trial '+hh+'</span>';
 }
 function renderSlot(date,i){
-  const base=calendarBasePostsPerDay();
-  const x=slotData(date,i),time=x?.time||state.defaultTimes[i]||"";
+  const base=calendarDayVolume(date);
+  const x=slotData(date,i),time=x?.time||calendarValidatedTime(date,i,base);
   if(!x){
     if(i>=base)return "";
     return `<button class="slot empty ui31-empty-slot" onclick="pickForSlot('${date}',${i})"><span class="slot-plus">＋</span><span><b>${slotPeriodLabel(i)} · posição ${i+1}</b><small>${time}</small></span></button>`;
@@ -5944,6 +5965,18 @@ function smartSchedulerEnabled(){
   return automationData?.settings?.automation?.autoOptimizeCalendar!==false &&
     automationData?.settings?.smart_scheduler?.enabled!==false;
 }
+function calendarValidatedTime(date,index,mode=calendarDayVolume(date)){
+  if(mode!==15)return state.defaultTimes[index]||smartChoiceForSlot(date,index).time||"12:00";
+  const windows=index<5?[360,720]:index<10?[720,1020]:[1020,1430];
+  const recs=smartRecommendationsForDate(date)
+    .map(r=>({time:String(r.recommended_time||"").slice(0,5),rank:Number(r.rank||99),confidence:Number(r.confidence||0)}))
+    .filter(r=>{const m=minutesOf(r.time);return Number.isFinite(m)&&m>=windows[0]&&m<windows[1]})
+    .sort((a,b)=>a.rank-b.rank||b.confidence-a.confidence);
+  const pos=index%5;
+  if(recs[pos])return recs[pos].time;
+  const fallback=index<5?["06:30","07:45","09:00","10:15","11:30"]:index<10?["12:30","14:00","15:30","16:45","18:00"]:["18:30","19:30","20:30","21:30","22:30"];
+  return fallback[pos];
+}
 function smartRecommendationsForDate(date){
   const dow=new Date(date+"T12:00:00").getDay();
   return (automationData?.recommendations||[])
@@ -5953,7 +5986,7 @@ function smartRecommendationsForDate(date){
 function smartChoiceForSlot(date,preferredIndex=0){
   const recs=smartRecommendationsForDate(date);
   if(!recs.length)return {
-    time:state.defaultTimes[preferredIndex]||"12:00",
+    time:calendarValidatedTime(date,preferredIndex,calendarDayVolume(date)),
     strategy:"tested",
     recommendation:null
   };
@@ -5966,7 +5999,7 @@ function smartChoiceForSlot(date,preferredIndex=0){
       recommendation:r
     };
   }
-  return {time:state.defaultTimes[preferredIndex]||"12:00",strategy:"tested",recommendation:null};
+  return {time:calendarValidatedTime(date,preferredIndex,calendarDayVolume(date)),strategy:"tested",recommendation:null};
 }
 function bestAvailableSmartTime(date,preferredIndex=0){
   return smartChoiceForSlot(date,preferredIndex).time;
@@ -6012,7 +6045,7 @@ async function handleQuickSlotVideo(input){
   }
 }
 function firstFreeSlot(date){
-  for(let i=0;i<12;i++)if(!slotData(date,i))return i;
+  for(let i=0;i<15;i++)if(!slotData(date,i))return i;
   return -1;
 }
 
