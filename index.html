@@ -5619,7 +5619,6 @@ function calendarPage(){
         <div><span>Ocupação base</span><b>${baseFilled}/${baseCapacity}</b></div>
         <div><span>Extras manuais</span><b>${extraFilled}</b></div>
         <div><span>Posts/dia</span><b>${basePosts}</b></div>
-        <div><span>Intervalo mínimo</span><b>${gap} min</b></div>
         <div class="calendar-mode-chip ${stable?"stable":""}"><span>Estratégia</span><b>${stable?"Estável · 2 manhã + 3 tarde":"A/B ativo · 2 manhã · 3 tarde · até 19:00"}</b></div>
       </div>
 
@@ -7175,7 +7174,6 @@ function automationPage(){
         <div class="ui31-toggle-row"><div><b>Reorganizar calendário</b><span>Ajusta somente posts fora da janela de bloqueio.</span></div><label class="modern-toggle"><input id="autoOptimize" type="checkbox" ${cfg.autoOptimizeCalendar!==false?"checked":""}><span></span></label></div>
         <div class="ui31-rule-grid">
           <div class="field"><label>Bloquear posts próximos</label><div class="input-suffix"><input id="autoLock" type="number" value="${cfg.lockWindowMinutes||120}"><span>min</span></div></div>
-          <div class="field"><label>Intervalo mínimo</label><div class="input-suffix"><input id="autoGap" type="number" value="${a.settings?.min_gap_minutes||60}"><span>min</span></div></div>
           <div class="field"><label>Posts por dia</label><input id="autoPosts" type="number" value="${a.settings?.posts_per_day||5}" readonly></div>
           <div class="field"><label>Janela analisada</label><div class="input-suffix"><input id="autoLookback" type="number" value="${smart.lookbackDays||60}"><span>dias</span></div></div>
           <div class="field"><label>Mínimo de amostras</label><input id="autoSamples" type="number" value="${smart.minSamples||3}"></div>
@@ -9152,7 +9150,7 @@ function settings(){
         ${user?`<div class="ui3-account"><b>${esc(user.email||"Conta conectada")}</b><span>Sincronização com o backend ativa.</span><button class="btn danger btn-sm" onclick="signOutCloud()">Sair</button></div>`:`<div class="auth-card"><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><div class="toolbar"><button class="btn primary" onclick="signInCloud()">Entrar</button><button class="btn" onclick="signUpCloud()">Criar conta</button></div></div>`}
       </div>
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Workspace</span><h3>Preferências principais</h3></div></div>
-        <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||5} · 2 manhã / 3 tarde</b></div><div><span>Intervalo mínimo</span><b>${a.settings?.min_gap_minutes||60} min</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
+        <div class="ui3-info-rows"><div><span>Posts por dia</span><b>${a.settings?.posts_per_day||5} · 2 manhã / 3 tarde</b></div><div><span>Fuso</span><b>${a.settings?.timezone||"America/Recife"}</b></div></div>
       </div>
       <div class="card ui3-panel app-install-card">
         <div class="ui3-panel-head"><div><span>Celular</span><h3>CloudentFlow App</h3></div><span class="status-pill ok">PWA</span></div>
