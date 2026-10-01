@@ -3545,6 +3545,75 @@ body,.app,.main,.page{box-sizing:border-box}
     min-width:0!important;
   }
 }
+
+/* ===== Sidebar final stabilization: compact rail + pin to expand ===== */
+@media(min-width:761px){
+  .app.sidebar-collapsed,
+  .app.sidebar-collapsed.sidebar-hover-open{
+    grid-template-columns:72px minmax(0,1fr)!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact,
+  .app.sidebar-collapsed .sidebar.compact:hover,
+  .app.sidebar-collapsed .sidebar.compact.hover-open{
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    padding-left:9px!important;
+    padding-right:9px!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact:hover .brand-name,
+  .app.sidebar-collapsed .sidebar.compact:hover .workspace-switch,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav-label,
+  .app.sidebar-collapsed .sidebar.compact:hover .nav button b,
+  .app.sidebar-collapsed .sidebar.compact:hover .account-copy,
+  .app.sidebar-collapsed .sidebar.compact:hover .account-chevron{
+    display:none!important;
+    opacity:0!important;
+    max-width:0!important;
+    pointer-events:none!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact:hover .nav{
+    margin-top:51px!important;
+    width:100%!important;
+    display:grid!important;
+    gap:5px!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact:hover .nav-group{
+    display:grid!important;
+    gap:5px!important;
+    margin:0!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact:hover .nav button{
+    width:50px!important;
+    min-width:50px!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact:hover .sidebar-foot{
+    left:9px!important;
+    right:9px!important;
+  }
+  .app.sidebar-collapsed .sidebar.compact:hover .account-chip{
+    width:50px!important;
+    height:42px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  .app:not(.sidebar-collapsed){
+    grid-template-columns:240px minmax(0,1fr)!important;
+  }
+  .app:not(.sidebar-collapsed) .sidebar{
+    width:240px!important;
+    min-width:240px!important;
+    max-width:240px!important;
+  }
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -4871,21 +4940,13 @@ function bindSidebarHover(){
   const sidebar=document.querySelector(".sidebar"),app=document.querySelector(".app");
   if(!sidebar||!app||sidebar.dataset.hoverBound==="1")return;
   sidebar.dataset.hoverBound="1";
-  sidebar.addEventListener("mouseenter",()=>{
-    if(window.innerWidth<=760||sidebarPinned)return;
-    sidebar.classList.add("hover-open");
-    app.classList.add("sidebar-hover-open");
-  });
-  sidebar.addEventListener("mouseleave",()=>{
-    if(window.innerWidth<=760||sidebarPinned)return;
+  // Sidebar compacta fica compacta. Abrir inteira agora é só pelo botão de fixar.
+  sidebar.classList.remove("hover-open");
+  app.classList.remove("sidebar-hover-open");
+  window.addEventListener("resize",()=>{
     sidebar.classList.remove("hover-open");
     app.classList.remove("sidebar-hover-open");
-  });
-  window.addEventListener("resize",()=>{
-    if(window.innerWidth<=760){
-      sidebar.classList.remove("hover-open");
-      app.classList.remove("sidebar-hover-open");
-    }else toggleMobileMore(false);
+    if(window.innerWidth>760)toggleMobileMore(false);
     renderMobileNav();
   });
 }
