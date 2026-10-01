@@ -3343,6 +3343,8 @@ body.auth-checking .auth-boot{display:block!important}
 .bulk-queue-list{display:grid;gap:7px}.bulk-row{display:grid;grid-template-columns:34px minmax(120px,1fr) 110px 110px;gap:8px;align-items:center;padding:9px;border:1px solid #20252e;border-radius:9px;background:#090b0f}.bulk-num{width:28px;height:28px;display:grid;place-items:center;border-radius:7px;background:#15101d;color:#b99ae7;font-size:8px;font-weight:900}.bulk-copy b,.bulk-copy small{display:block}.bulk-copy b{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bulk-copy small{font-size:7px;color:#66707d;margin-top:2px}.bulk-stage{padding:6px 7px;border:1px solid #272d36;border-radius:7px}.bulk-stage span,.bulk-stage b{display:block}.bulk-stage span{font-size:6px;color:#626b78;text-transform:uppercase}.bulk-stage b{font-size:7.5px;margin-top:2px}.bulk-stage.done{border-color:#244633;color:#68d99a}.bulk-stage.active{border-color:#49345f;color:#c3a5ef;background:#100c16}
 @media(max-width:900px){.bulk-publish-layout{grid-template-columns:1fr}.bulk-row{grid-template-columns:30px 1fr}.bulk-stage{grid-column:auto}}
 
+
+.production-job-select,.production-select-all{display:inline-flex;align-items:center;gap:5px;font-size:7px;color:#8f98a6;cursor:pointer;user-select:none}.production-job-select{grid-column:1/-1;padding:3px 1px}.production-job-select input,.production-select-all input{accent-color:#ff3f7f;width:13px;height:13px;cursor:pointer}.production-queue-head-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.production-queue-head-actions button:disabled{opacity:.4;cursor:not-allowed}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090d">
@@ -7837,6 +7839,31 @@ async function removeProductionResultFromCalendar(id,button=null){
   }
 }
 
+function toggleProductionJobSelection(id,checked){
+  id=String(id);if(checked)productionSelectedJobs.add(id);else productionSelectedJobs.delete(id);
+  if(currentPage==="production")productionPage();
+}
+function toggleAllReadyProduction(checked){
+  const ready=(productionData?.jobs||[]).filter(j=>j.status==="ready");
+  ready.forEach(j=>checked?productionSelectedJobs.add(String(j.id)):productionSelectedJobs.delete(String(j.id)));
+  productionPage();
+}
+async function deleteSelectedProductionJobs(){
+  const ids=[...productionSelectedJobs].filter(id=>(productionData?.jobs||[]).some(j=>String(j.id)===id&&j.status==="ready"));
+  if(!ids.length){toast("Selecione pelo menos um vídeo.","warn");return}
+  if(!confirm("Excluir "+ids.length+" job(s) selecionado(s)?\n\nVídeos já enviados ao calendário continuam preservados."))return;
+  let ok=0,fail=0;
+  for(const id of ids){
+    try{
+      await cloudFetch("?action=production-job",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+      productionSelectedJobs.delete(id);ok++;
+    }catch(e){fail++}
+  }
+  if(productionData?.jobs)productionData.jobs=productionData.jobs.filter(j=>!ids.includes(String(j.id))||productionSelectedJobs.has(String(j.id)));
+  await loadProductionData(false).catch(()=>{});
+  productionPage();
+  toast(ok+" excluído(s)"+(fail?" · "+fail+" falharam":""),fail?"warn":"ok");
+}
 async function deleteProductionJob(id,button=null){
   if(!confirm("Excluir este job e seus arquivos de produção? Se o resultado já estiver no calendário, o vídeo agendado será preservado."))return;
   actionButtonBusy(button,true,"Excluindo…");
@@ -7932,6 +7959,7 @@ function productionJobRow(j,i,total){
   if(j.status==="ready"){
     const scheduled=!!j.meta?.scheduled;
     action='<div class="production-ready-actions">'+
+      '<label class="production-job-select" title="Selecionar para excluir"><input type="checkbox" '+(productionSelectedJobs.has(String(j.id))?'checked':'')+' onchange="toggleProductionJobSelection(\''+esc(j.id)+'\',this.checked)"> Selecionar</label>'+
       '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
       '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
@@ -8084,7 +8112,7 @@ function productionPage(){
         '<div class="production-note">Adicione quantos pares quiser. Depois use “Executar fila” para disparar na hora.</div>'+
       '</div>'+
     '</div>'+
-    '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><div class="production-queue-head-actions"><small class="muted">Acompanhamento automático</small>'+(jobs.some(j=>j.status==="ready")?'<button class="btn btn-sm" onclick="clearCompletedProductionJobs()">🧹 Limpar concluídos</button>':'')+'</div></div><div class="production-queue">'+rows+'</div></div>';
+    '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><div class="production-queue-head-actions">'+(jobs.some(j=>j.status==="ready")?'<label class="production-select-all"><input type="checkbox" onchange="toggleAllReadyProduction(this.checked)"> Selecionar prontos</label><button class="btn btn-sm danger" id="productionDeleteSelected" onclick="deleteSelectedProductionJobs()" '+(productionSelectedJobs.size?'':'disabled')+'>Excluir selecionados ('+productionSelectedJobs.size+')</button><button class="btn btn-sm" onclick="clearCompletedProductionJobs()">🧹 Limpar concluídos</button>':'')+'</div></div><div class="production-queue">'+rows+'</div></div>';
   ensureProductionTicker();
   setTimeout(()=>{
     syncProductionElapsed();
