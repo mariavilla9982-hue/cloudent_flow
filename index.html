@@ -5397,12 +5397,13 @@ async function handleBulkVideoPicker(input){
   if(bulkPublishUploading){toast("Já existe um envio em andamento.","warn");return}
   bulkPublishUploading=true;bulkPublishProgress={done:0,total:files.length,current:files[0].name};bulkPublishPage();
   // +2 min gives the first upload time to finish; after that there is one publication every minute.
-  const firstNormal=Date.now()+2*60_000;
   let failed=0;
+  let nextNormalAt=Date.now()+2*60_000;
   for(let i=0;i<files.length;i++){
     const file=files[i];bulkPublishProgress.current=file.name;bulkPublishPage();
     try{
-      const normalAt=new Date(firstNormal+i*2*60_000).toISOString();
+      const normalAt=new Date(Math.max(nextNormalAt,Date.now()+2*60_000)).toISOString();
+      nextNormalAt=Date.parse(normalAt)+2*60_000;
       const res=await uploadScheduledVideoDirect(file,{scheduledAt:normalAt,caption:"",smartMode:"bulk_1m",smartStrategy:"manual",platform:"instagram"});
       if(res?.video?.id)await runMediaCleaner("video",res.video.id,{quiet:true});
       bulkPublishProgress.done++;
