@@ -5193,19 +5193,42 @@ function showInternalPage(id,title){
   const subtitle=$("#pageSubtitle");if(subtitle)subtitle.textContent="Detalhes e contexto da sua operação.";
 }
 
+function dashboardPeriodRange(period){
+  if(period==="all")return null;
+  const now=new Date();
+  let start=new Date(now),end=new Date(now);
+  start.setHours(0,0,0,0);
+  if(period==="today"){
+    end=new Date(start);end.setDate(end.getDate()+1);
+  }else if(period==="7d"){
+    end=new Date(start);end.setDate(end.getDate()+7);
+  }else if(period==="month"){
+    start=new Date(now.getFullYear(),now.getMonth(),1);
+    end=new Date(now.getFullYear(),now.getMonth()+1,1);
+  }else if(period==="year"){
+    start=new Date(now.getFullYear(),0,1);
+    end=new Date(now.getFullYear()+1,0,1);
+  }else return null;
+  return {start,end};
+}
 function dashboardDateInPeriod(value,period){
   if(period==="all")return true;
   const d=new Date(value||0);if(Number.isNaN(d.getTime()))return false;
-  const now=new Date();
-  if(period==="today")return localISO(d)===localISO(now);
+  const range=dashboardPeriodRange(period);if(!range)return true;
+  return d>=range.start&&d<range.end;
+}
+function dashboardPeriodCaption(period){
+  const range=dashboardPeriodRange(period);
+  if(period==="all"||!range)return "Todo o histórico";
+  const fmt=d=>d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+  if(period==="today")return range.start.toLocaleDateString("pt-BR");
   if(period==="7d"){
-    const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-6);
-    const end=new Date(now);end.setHours(23,59,59,999);
-    return d>=start&&d<=end;
+    const last=new Date(range.end);last.setDate(last.getDate()-1);
+    return fmt(range.start)+" → "+fmt(last);
   }
-  if(period==="month")return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
-  if(period==="year")return d.getFullYear()===now.getFullYear();
-  return true;
+  if(period==="month")return range.start.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  if(period==="year")return String(range.start.getFullYear());
+  return "";
 }
 function setDashboardPeriod(period){
   dashboardPeriod=["today","7d","month","year","all"].includes(period)?period:"month";
@@ -5218,10 +5241,21 @@ function toggleDashboardNames(){
 function overview(){
   if(cloudLoading){$("#overview").innerHTML=loadingShell("Carregando sua operação");return}
   const scheduled=allScheduled();
-  const filtered=scheduled.filter(x=>dashboardDateInPeriod(x.publishedAt||x.scheduledAt,dashboardPeriod));
+  const filtered=scheduled.filter(x=>{
+    const status=getStatus(x);
+    const reference=status==="publicado"?(x.publishedAt||x.scheduledAt):x.scheduledAt;
+    return dashboardDateInPeriod(reference,dashboardPeriod);
+  });
   const now=Date.now();
-  const future=scheduled.filter(x=>new Date(x.scheduledAt).getTime()>=now && !["publicado","erro"].includes(getStatus(x)));
-  const totals=liveInstagramMetrics.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0)}),{views:0,reach:0,likes:0});
+  const future=scheduled.filter(x=>
+    new Date(x.scheduledAt).getTime()>=now &&
+    !["publicado","erro","cancelado"].includes(getStatus(x)) &&
+    dashboardDateInPeriod(x.scheduledAt,dashboardPeriod)
+  );
+  const metricRows=dashboardPeriod==="all"
+    ? liveInstagramMetrics
+    : liveInstagramMetrics.filter(m=>dashboardDateInPeriod(m.timestamp,dashboardPeriod));
+  const totals=metricRows.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0)}),{views:0,reach:0,likes:0});
   const counts={
     total:filtered.length,
     scheduled:filtered.filter(x=>["agendado","fila","publicando"].includes(getStatus(x))).length,
@@ -5233,7 +5267,7 @@ function overview(){
   const greetingName=dashboardHideNames?"Cloudent":String(instagramIntegration?.account_label||"Cloudent").replace(/^@/,"").split(/[._]/)[0];
   const today=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase();
   const next=future.slice(0,8);
-  const labels={today:"hoje","7d":"7 dias",month:"mês",year:"ano",all:"tudo"};
+  const periodCaption=dashboardPeriodCaption(dashboardPeriod);
 
   $("#overview").innerHTML=`
     <div class="sr-dashboard-top">
@@ -5250,11 +5284,11 @@ function overview(){
 
     <div class="sr-periods">
       <button class="${dashboardPeriod==="today"?"active":""}" onclick="setDashboardPeriod('today')">Hoje</button>
-      <button class="${dashboardPeriod==="7d"?"active":""}" onclick="setDashboardPeriod('7d')">7 dias</button>
+      <button class="${dashboardPeriod==="7d"?"active":""}" onclick="setDashboardPeriod('7d')">Próximos 7 dias</button>
       <button class="${dashboardPeriod==="month"?"active":""}" onclick="setDashboardPeriod('month')">Mês</button>
       <button class="${dashboardPeriod==="year"?"active":""}" onclick="setDashboardPeriod('year')">Ano</button>
       <button class="${dashboardPeriod==="all"?"active":""}" onclick="setDashboardPeriod('all')">Tudo</button>
-      <span>período: ${labels[dashboardPeriod]}</span>
+      <span>${esc(periodCaption)}</span>
     </div>
 
     <div class="sr-stat-grid">
