@@ -7738,9 +7738,11 @@ async function sendProductionResultToBulk(id,button=null){
       body:JSON.stringify({id,scheduled_at:normalAt,caption:"",smart_mode:"bulk_1m",smart_strategy:"manual"})
     });
     job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:normalAt,bulk_1m:true};
+    await Promise.allSettled([loadBulkPublishRows(),loadProductionData(false)]);
+    showPage("bulkPublish");
     await loadBulkPublishRows().catch(()=>{});
-    if(currentPage==="production")productionPage();
-    toast("Vídeo enviado para Postagem em lote · Trial → 1 min → Reel normal.","ok");
+    if(currentPage==="bulkPublish")bulkPublishPage();
+    toast("Vídeo enviado para a fila. Trial → 1 min → Reel normal.","ok");
   }catch(e){actionButtonBusy(button,false);toast(friendlyCloudentError(e?.message||"erro"),"err")}
 }
 function openProductionScheduleModal(id,number){
@@ -7935,7 +7937,7 @@ function productionJobRow(j,i,total){
       '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
       '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
-      (!scheduled?'<button class="bulk-job-send" onclick="sendProductionResultToBulk(\''+esc(j.id)+'\',this)">⚡ Postagem em lote</button>':'')+
+      (!scheduled?'<button class="bulk-job-send" onclick="sendProductionResultToBulk(\''+esc(j.id)+'\',this)">⚡ Mandar para lote</button>':'')+
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
     '</div>';
   }else if(["failed","cancelled"].includes(j.status)){
