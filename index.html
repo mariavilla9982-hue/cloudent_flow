@@ -3502,6 +3502,11 @@ body,.app,.main,.page{box-sizing:border-box}
   .sr-account-card:before{animation:none!important}
   .sr-account-card,.sr-account-icon,.sr-account-metrics b{transition:none!important}
 }
+
+.sr-live-label{display:block;margin-top:5px;color:#7f7f7f!important;font-size:8px!important;letter-spacing:.01em}
+.sr-live-label:before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;background:#f2f2f2;box-shadow:0 0 0 3px rgba(255,255,255,.045);vertical-align:1px;animation:ctfLivePulse 1.8s ease-in-out infinite}
+@keyframes ctfLivePulse{0%,100%{opacity:.35;transform:scale(.86)}50%{opacity:1;transform:scale(1.06)}}
+@media(prefers-reduced-motion:reduce){.sr-live-label:before{animation:none!important}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -3731,6 +3736,7 @@ let sidebarPinned=localStorage.getItem(SIDEBAR_PIN_KEY)!=="false";
 let currentPage="overview", pendingTarget=null, db=null, settingsTab="general", metricsPeriod=30, metricSeries="views";
 let dashboardPeriod="month", dashboardHideNames=false;
 let dashboardScheduleRows=[];
+let dashboardLiveUpdatedAt=0,dashboardLiveSyncInFlight=false;
 let frameExtractorResults=[], frameExtractorLinksText="", frameExtractorBusy=false;
 let xWarmupSelectedAccountId=null;
 let trialPendingDate=null,trialPendingSlot=null,trialDraftFile=null,trialDraftSlot=null,trialDraftSuggestedTime=null;
@@ -3904,7 +3910,7 @@ async function loadDeferredCloudData(){
   try{
     // Atividade/logs ficam sob demanda. Evita uma chamada pesada logo no boot.
     await Promise.allSettled([
-      withTimeout(loadInstagramMetricsStored(),12000,"métricas")
+      withTimeout(syncDashboardLiveMetrics(true),18000,"métricas ao vivo")
     ]);
     renderAll();
   }catch{}
@@ -4328,6 +4334,34 @@ async function loadInstagramMetricsStored(){
     console.warn("Stored Instagram metrics unavailable:",e);
   }
 }
+
+async function syncDashboardLiveMetrics(force=false){
+  if(!cloudSession||!instagramIntegration?.enabled||dashboardLiveSyncInFlight)return;
+  const now=Date.now();
+  if(!force&&now-dashboardLiveUpdatedAt<55000)return;
+  dashboardLiveSyncInFlight=true;
+  try{
+    // Atualiza apenas a mídia de hoje na Meta para manter a Dashboard leve e próxima do tempo real.
+    await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=1",{method:"POST"});
+    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=120",{method:"GET"});
+    liveInstagramMetrics=stored.media||[];
+    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
+    dashboardLiveUpdatedAt=Date.now();
+  }catch(e){
+    console.warn("Live dashboard metrics unavailable:",e);
+    // Mesmo se a Meta falhar, tenta ao menos buscar o último snapshot salvo.
+    await loadInstagramMetricsStored().catch(()=>{});
+  }finally{
+    dashboardLiveSyncInFlight=false;
+  }
+}
+function dashboardLiveAgeLabel(){
+  if(!dashboardLiveUpdatedAt)return "Sincronizando métricas…";
+  const sec=Math.max(0,Math.floor((Date.now()-dashboardLiveUpdatedAt)/1000));
+  if(sec<10)return "Ao vivo · atualizado agora";
+  if(sec<60)return "Ao vivo · há "+sec+"s";
+  return "Ao vivo · há "+Math.floor(sec/60)+" min";
+}
 function mergeInstagramIntoSmartSamples(media=[]){
   if(media.length)state.smartSamples=state.smartSamples.filter(s=>s.source!=="demo");
   for(const m of media){
@@ -4737,6 +4771,7 @@ async function refreshLiveData(showFeedback=false){
     const activityOpen=$("#activityPanelHost")?.classList.contains("open");
     const fullAutomation=currentPage==="automation"||currentPage==="smartTimes";
     const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(),syncFromBackend(),loadDashboardScheduleRows()];
+    if(currentPage==="overview")tasks.push(syncDashboardLiveMetrics(false));
     // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
     if(activityOpen||(currentPage==="settings"&&settingsTab==="logs"))tasks.push(loadServerLogs());
     if(currentPage==="production")tasks.push(loadProductionData());
@@ -5333,7 +5368,7 @@ function overview(){
     <div class="sr-dashboard-head">
       <div><h2>Dashboard</h2><p>Visão geral das postagens</p></div>
       <div class="sr-head-actions">
-        <button onclick="refreshLiveData(true)">↻ Atualizar dados</button>
+        <button onclick="syncDashboardLiveMetrics(true).then(()=>refreshLiveData(true))">↻ Atualizar ao vivo</button>
         <button onclick="showPage('settings')">Ajuda</button>
       </div>
     </div>
@@ -5361,7 +5396,7 @@ function overview(){
       </div>
       <div class="sr-account-card">
         <div class="sr-account-icon">◎</div>
-        <div><b>${esc(account)}</b><span>${instagramIntegration?.enabled?"Conta conectada · operação ativa":"Instagram não conectado"}</span></div>
+        <div><b>${esc(account)}</b><span>${instagramIntegration?.enabled?"Conta conectada · operação ativa":"Instagram não conectado"}</span><small class="sr-live-label">${instagramIntegration?.enabled?esc(dashboardLiveAgeLabel()):"Sem sincronização"}</small></div>
         <div class="sr-account-metrics">
           <span>Views <b>${totals.views.toLocaleString("pt-BR")}</b></span>
           <span>Alcance <b>${totals.reach.toLocaleString("pt-BR")}</b></span>
