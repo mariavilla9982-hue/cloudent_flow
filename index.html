@@ -9212,6 +9212,7 @@ function faceSwapJobRow(job,index,total){
   }else if(["failed","cancelled"].includes(productionStatus)){
     actions.push('<button class="primary" onclick="retryFaceSwapMotion(\''+esc(job.id)+'\',this)">↻ Refazer Motion</button>');
   }else if(productionStatus==="ready"){
+    actions.push('<button onclick="previewFaceSwapResult(\''+esc(job.id)+'\')">Ver Face Swap</button>');
     actions.push('<button class="primary" onclick="previewFaceSwapMotion(\''+esc(job.id)+'\')">▶ Ver vídeo final</button>');
     actions.push('<button onclick="downloadProductionResult(\''+esc(job.production_job_id)+'\','+n+')">↓ Baixar</button>');
   }else if(job.status==="ready"&&!job.production_job_id){
