@@ -1624,7 +1624,18 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .face-swap-flow>div:not(:last-child)::after{content:"→";position:absolute;right:-9px;top:27px;z-index:2;color:#555d69;font-size:13px}
 .face-swap-flow small,.face-swap-flow b,.face-swap-flow span{display:block}.face-swap-flow small{font-size:7px;letter-spacing:.08em;color:#666f7d;font-weight:900}.face-swap-flow b{font-size:9px;margin:5px 0}.face-swap-flow span{font-size:7px;color:#747d8b}
 .face-swap-flow .fixed{border-color:#4a2b3a;background:#130e13}.face-swap-flow .fixed b{color:#ff7aa9}
-.face-swap-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr);gap:12px}
+.face-swap-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.face-swap-livebar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;border:1px solid #20252e;border-radius:12px;overflow:hidden;background:#20252e}
+.face-swap-livebar>div{background:#0c0f14;padding:11px 13px;min-width:0}
+.face-swap-livebar small,.face-swap-livebar b,.face-swap-livebar span{display:block}
+.face-swap-livebar small{font-size:6.5px;letter-spacing:.08em;color:#626b78;font-weight:900}
+.face-swap-livebar b{font-size:9px;margin:4px 0 2px;color:#d9dee6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.face-swap-livebar span{font-size:7px;color:#727b88}
+.face-swap-livebar .accent b{color:#ff74a5}
+.face-swap-livebar .ok b{color:#65d99a}
+.face-swap-quick-actions{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.face-swap-quick-actions button{border:1px solid #2a3039;background:#11151b;color:#cbd1da;border-radius:8px;padding:7px 9px;font-size:7px;cursor:pointer}
+.face-swap-quick-actions button:hover{border-color:#5e3347;color:#ff82ae}
 .face-swap-card{padding:16px}.face-swap-drop{display:grid;place-items:center;min-height:180px;border:1px dashed #3a404b;border-radius:14px;background:#090b0f;text-align:center;cursor:pointer;padding:20px;transition:.18s}
 .face-swap-drop:hover{border-color:#85405d;background:#120d12}.face-swap-drop>span{width:48px;height:48px;border-radius:14px;background:#1c1017;color:#ff629a;display:grid;place-items:center;font-size:22px;margin-bottom:10px}
 .face-swap-drop b{font-size:11px}.face-swap-drop small{font-size:8px;color:#717987;margin-top:5px;line-height:1.5}
@@ -1639,8 +1650,8 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .face-swap-mini-flow{display:flex;gap:4px;flex-wrap:wrap}.face-swap-mini-flow span{font-size:6.5px;padding:3px 5px;border-radius:6px;background:#13171d;color:#626c79}.face-swap-mini-flow span.done{background:#102019;color:#64cf94}.face-swap-mini-flow span.active{background:#24131d;color:#ff7ca9}
 .face-swap-job-actions{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap}.face-swap-job-actions button{border:1px solid #2a3039;background:#11151b;color:#c9ced7;border-radius:7px;padding:7px 8px;font-size:7px;cursor:pointer}.face-swap-job-actions button:hover{border-color:#65324a;color:#ff8ab2}.face-swap-job-actions .primary{background:#ff3f7f;border-color:#ff3f7f;color:#fff}.face-swap-job-actions .danger{color:#ff8087}
 .face-swap-empty{padding:36px;text-align:center;color:#717a87}.face-swap-empty b,.face-swap-empty span{display:block}.face-swap-empty b{font-size:10px;color:#bac0ca;margin-bottom:4px}.face-swap-empty span{font-size:8px}
-@media(max-width:900px){.face-swap-grid{grid-template-columns:1fr}.face-swap-flow{grid-template-columns:1fr}.face-swap-flow>div:not(:last-child)::after{content:"↓";right:auto;left:50%;top:auto;bottom:-12px}.face-swap-job{grid-template-columns:36px minmax(0,1fr)}.face-swap-job-state,.face-swap-job-actions{grid-column:1/-1}.face-swap-job-actions{justify-content:flex-start}}
-@media(max-width:760px){.face-swap-hero{grid-template-columns:1fr;padding:14px}.face-swap-hero-actions{justify-content:flex-start}.face-swap-card{padding:12px}.face-swap-drop{min-height:150px}.face-swap-flow{gap:10px}.face-swap-job{padding:10px}.face-swap-job-actions button{min-height:34px}}
+@media(max-width:900px){.face-swap-grid{grid-template-columns:1fr}.face-swap-livebar{grid-template-columns:1fr 1fr}.face-swap-job{grid-template-columns:36px minmax(0,1fr)}.face-swap-job-state,.face-swap-job-actions{grid-column:1/-1}.face-swap-job-actions{justify-content:flex-start}}
+@media(max-width:760px){.face-swap-hero{grid-template-columns:1fr;padding:14px}.face-swap-hero-actions{justify-content:flex-start}.face-swap-card{padding:12px}.face-swap-drop{min-height:150px}.face-swap-livebar{grid-template-columns:1fr 1fr}.face-swap-job{padding:10px}.face-swap-job-actions button{min-height:34px}}
 
 /* ===== Produção IA / RunningHub ===== */
 .production-head-actions{display:flex;gap:8px;align-items:center}.production-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.production-stats>div{background:#0c0f14;border:1px solid #20252e;border-radius:12px;padding:14px}.production-stats small,.production-stats b,.production-stats span{display:block}.production-stats small{font-size:8px;font-weight:900;letter-spacing:.08em;color:#687180}.production-stats b{font-size:23px;margin:4px 0}.production-stats span{font-size:8px;color:#6d7583}
@@ -8962,7 +8973,9 @@ async function previewFaceSwapResult(id){
 }
 function faceSwapJobRow(job,index,total){
   const st=faceSwapStatusMeta(job.status);
-  const n=total-index;
+  const safeTotal=Number.isFinite(Number(total))?Number(total):0;
+  const safeIndex=Number.isFinite(Number(index))?Number(index):0;
+  const n=Math.max(1,safeTotal-safeIndex);
   const steps=faceSwapJobSteps(job);
   const actions=[];
   if(job.status==="ready"){
@@ -9025,30 +9038,21 @@ function faceSwapPage(){
           '<label class="face-swap-auto '+(faceSwapAuto?"on":"")+'"><input type="checkbox" '+(faceSwapAuto?"checked":"")+' onchange="setFaceSwapAuto(this.checked)"> AUTOMÁTICO '+(faceSwapAuto?"ON":"OFF")+'</label>'+
         '</div>'+
       '</div>'+
-      '<div class="face-swap-flow">'+
-        '<div><small>01 · ENTRADA</small><b>Vídeo</b><span>Upload do arquivo original</span></div>'+
-        '<div><small>02 · LOCAL</small><b>Primeiro frame</b><span>Extraído automaticamente</span></div>'+
-        '<div class="fixed"><small>03 · WORKFLOW</small><b>Face Swap</b><span>Node #23 fixo + frame no #17</span></div>'+
-        '<div><small>04 · SAÍDA</small><b>Node #240</b><span>Imagem final do Face Swap</span></div>'+
-        '<div><small>05 · AUTOMÁTICO</small><b>Produção IA</b><span>Vídeo + imagem → motion</span></div>'+
+      '<div class="face-swap-livebar">'+
+        '<div class="'+(faceSwapAuto?"accent":"")+'"><small>MODO</small><b>'+(faceSwapAuto?"Automático":"Manual")+'</b><span>'+(faceSwapAuto?"Face Swap → motion sozinho":"Revisão antes do motion")+'</span></div>'+
+        '<div class="'+((faceSwapData?.runninghub?.total_active||0)>0?"accent":"ok")+'"><small>RUNNINGHUB</small><b>'+((faceSwapData?.runninghub?.total_active||0)>0?"Ocupado":"Livre")+'</b><span>'+(faceSwapData?.runninghub?.total_active||0)+' / '+(faceSwapData?.runninghub?.concurrency||1)+' tarefa ativa</span></div>'+
+        '<div><small>MOTION NA FILA</small><b>'+(faceSwapData?.runninghub?.production_waiting||0)+'</b><span>aguardando Produção IA</span></div>'+
+        '<div><small>ÚLTIMO JOB</small><b>'+(jobs[0]?faceSwapStatusMeta(jobs[0].status)[0]:"Nenhum")+'</b><span>'+(jobs[0]?esc(jobs[0].original_file_name||"Vídeo"):"Envie o primeiro vídeo")+'</span></div>'+
       '</div>'+
       '<div class="face-swap-grid">'+
         '<div class="card face-swap-card">'+
-          '<div class="ui3-panel-head"><div><span>ENTRADA</span><h3>Adicionar vídeos</h3></div><span class="status-pill '+(faceSwapAuto?"green":"gray")+'">'+(faceSwapAuto?"Vai direto ao motion":"Para após a imagem")+'</span></div>'+
+          '<div class="ui3-panel-head"><div><span>ENTRADA</span><h3>Adicionar vídeos</h3></div><div class="face-swap-quick-actions"><button onclick="showPage(\'production\')">Abrir Produção IA</button></div></div>'+
           '<label class="face-swap-drop">'+
             '<input type="file" accept="video/*" multiple hidden onchange="handleFaceSwapVideos(this)">'+
             '<span>＋</span><b>'+ (faceSwapUploading?"Processando uploads…":"Selecionar vídeos") +'</b>'+
-            '<small>Você só envia o vídeo. O primeiro frame é criado sozinho antes de entrar no RunningHub.</small>'+
+            '<small>Envie o vídeo e pronto. O CloudentFlow extrai o frame, faz o Face Swap e '+(faceSwapAuto?"manda para o motion automaticamente.":"para na imagem para você revisar.")+'</small>'+
           '</label>'+
-          (faceSwapUploading?'<div class="face-swap-uploading"><b>'+esc(faceSwapUploadProgress.current||"Processando")+'</b><small>'+faceSwapUploadProgress.done+' de '+faceSwapUploadProgress.total+' concluído(s)</small></div>':'')+
-        '</div>'+
-        '<div class="card face-swap-card">'+
-          '<div class="ui3-panel-head"><div><span>CONFIGURAÇÃO FIXA</span><h3>Workflow de Face Swap</h3></div></div>'+
-          '<div class="face-swap-info-list">'+
-            '<div><span>23</span><div><b>Folha da personagem fixa</b><small>Usa exatamente a imagem já salva no node #23. Não faz upload a cada vídeo.</small></div></div>'+
-            '<div><span>17</span><div><b>Primeiro frame variável</b><small>O CloudentFlow substitui somente este node em cada job.</small></div></div>'+
-            '<div><span>240</span><div><b>Resultado</b><small>A imagem pronta vira automaticamente o frame da Produção IA.</small></div></div>'+
-          '</div>'+
+          (faceSwapUploading?'<div class="face-swap-uploading"><b>'+esc(faceSwapUploadProgress.current||"Processando")+'</b><small>'+Number(faceSwapUploadProgress.done||0)+' de '+Number(faceSwapUploadProgress.total||0)+' concluído(s)</small></div>':'')+
         '</div>'+
       '</div>'+
       '<div class="production-stats">'+
