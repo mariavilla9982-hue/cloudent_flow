@@ -8458,18 +8458,28 @@ function productionPreviewMarkup(job,kind){
     '<span class="production-media-icon">▶</span><span class="production-thumb-label">ORIGINAL</span></span>';
 }
 
-async function downloadProductionResult(id,number){
+async function downloadProductionResult(id,number,retry=true){
   try{
+    if(!cloudSession)throw new Error("Faça login no CloudentFlow primeiro.");
     const name="Video final "+number+".mp4";
-    const r=await cloudFetch("?resource=production-download&id="+encodeURIComponent(id)+"&name="+encodeURIComponent(name));
-    if(!r?.url)throw new Error("Não consegui preparar o download.");
+    const headers={Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
+    const res=await fetch(EDGE_URL+"?resource=production-download&id="+encodeURIComponent(id)+"&name="+encodeURIComponent(name),{headers});
+    if(res.status===401&&retry&&await refreshCloudSession())return downloadProductionResult(id,number,false);
+    if(!res.ok){
+      let data=null;try{data=await res.json()}catch{}
+      throw new Error(responseErrorMessage(data,res.status));
+    }
+    const blob=await res.blob();
+    if(!blob.size)throw new Error("O arquivo final veio vazio.");
+    const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
-    a.href=r.url;
-    a.rel="noopener";
+    a.href=url;
+    a.download=name;
     a.style.display="none";
     document.body.appendChild(a);
     a.click();
     a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
   }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
 }
 async function sendProductionResultToBulk(id,button=null){
