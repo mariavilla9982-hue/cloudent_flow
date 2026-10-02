@@ -1611,6 +1611,37 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 }
 
 
+
+/* ===== Face Swap ===== */
+.face-swap-shell{display:grid;gap:12px}
+.face-swap-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;padding:18px;border:1px solid #252a34;border-radius:16px;background:linear-gradient(135deg,#101117 0%,#15101a 55%,#10131a 100%)}
+.face-swap-hero .ui3-eyebrow{color:#ff6ca3}.face-swap-hero h2{font-size:20px;margin:4px 0 6px}.face-swap-hero p{font-size:9px;color:#7f8794;max-width:680px;line-height:1.6}
+.face-swap-hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.face-swap-auto{display:flex;align-items:center;gap:8px;border:1px solid #303641;background:#0b0d12;border-radius:10px;padding:8px 10px;font-size:8px;font-weight:900;cursor:pointer}
+.face-swap-auto input{accent-color:#ff4b8a}.face-swap-auto.on{border-color:#603047;background:#190f15;color:#ff8ab2}
+.face-swap-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.face-swap-flow>div{position:relative;padding:13px;border:1px solid #202631;background:#0c0f14;border-radius:12px;min-height:76px}
+.face-swap-flow>div:not(:last-child)::after{content:"→";position:absolute;right:-9px;top:27px;z-index:2;color:#555d69;font-size:13px}
+.face-swap-flow small,.face-swap-flow b,.face-swap-flow span{display:block}.face-swap-flow small{font-size:7px;letter-spacing:.08em;color:#666f7d;font-weight:900}.face-swap-flow b{font-size:9px;margin:5px 0}.face-swap-flow span{font-size:7px;color:#747d8b}
+.face-swap-flow .fixed{border-color:#4a2b3a;background:#130e13}.face-swap-flow .fixed b{color:#ff7aa9}
+.face-swap-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr);gap:12px}
+.face-swap-card{padding:16px}.face-swap-drop{display:grid;place-items:center;min-height:180px;border:1px dashed #3a404b;border-radius:14px;background:#090b0f;text-align:center;cursor:pointer;padding:20px;transition:.18s}
+.face-swap-drop:hover{border-color:#85405d;background:#120d12}.face-swap-drop>span{width:48px;height:48px;border-radius:14px;background:#1c1017;color:#ff629a;display:grid;place-items:center;font-size:22px;margin-bottom:10px}
+.face-swap-drop b{font-size:11px}.face-swap-drop small{font-size:8px;color:#717987;margin-top:5px;line-height:1.5}
+.face-swap-uploading{margin-top:10px;padding:10px;border:1px solid #242b35;border-radius:10px;background:#0e1116}.face-swap-uploading b,.face-swap-uploading small{display:block}.face-swap-uploading b{font-size:9px}.face-swap-uploading small{font-size:7px;color:#717a87;margin-top:3px}
+.face-swap-info-list{display:grid;gap:8px;margin-top:12px}.face-swap-info-list>div{display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;align-items:center;padding:10px;border:1px solid #20252e;border-radius:10px;background:#0b0e13}
+.face-swap-info-list>div>span{width:30px;height:30px;border-radius:9px;background:#17101a;color:#ff78aa;display:grid;place-items:center;font-size:10px}.face-swap-info-list b,.face-swap-info-list small{display:block}.face-swap-info-list b{font-size:9px}.face-swap-info-list small{font-size:7px;color:#6f7886;margin-top:2px}
+.face-swap-jobs{display:grid;gap:8px}.face-swap-job{display:grid;grid-template-columns:42px minmax(130px,1fr) minmax(250px,1.2fr) auto;gap:10px;align-items:center;padding:11px;border:1px solid #1d222a;border-radius:12px;background:#0b0e13}
+.face-swap-job-num{width:34px;height:34px;border-radius:10px;background:#17101a;color:#ff72a6;display:grid;place-items:center;font-size:9px;font-weight:900}
+.face-swap-job-main b,.face-swap-job-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.face-swap-job-main b{font-size:9px}.face-swap-job-main small{font-size:7px;color:#68717e;margin-top:3px}
+.face-swap-job-state{min-width:0}.face-swap-state-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.face-swap-status{font-size:7px;font-weight:900;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:#171b22;color:#9ca6b4}.face-swap-status.running{background:#29131d;color:#ff83ae}.face-swap-status.ready{background:#102319;color:#64dc99}.face-swap-status.failed{background:#281215;color:#ff7c83}.face-swap-status.queued{background:#17142a;color:#aaa0ff}
+.face-swap-progress{height:4px;background:#171b22;border-radius:999px;overflow:hidden;margin:7px 0 5px}.face-swap-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff4584,#9a67ff);transition:.25s}
+.face-swap-mini-flow{display:flex;gap:4px;flex-wrap:wrap}.face-swap-mini-flow span{font-size:6.5px;padding:3px 5px;border-radius:6px;background:#13171d;color:#626c79}.face-swap-mini-flow span.done{background:#102019;color:#64cf94}.face-swap-mini-flow span.active{background:#24131d;color:#ff7ca9}
+.face-swap-job-actions{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap}.face-swap-job-actions button{border:1px solid #2a3039;background:#11151b;color:#c9ced7;border-radius:7px;padding:7px 8px;font-size:7px;cursor:pointer}.face-swap-job-actions button:hover{border-color:#65324a;color:#ff8ab2}.face-swap-job-actions .primary{background:#ff3f7f;border-color:#ff3f7f;color:#fff}.face-swap-job-actions .danger{color:#ff8087}
+.face-swap-empty{padding:36px;text-align:center;color:#717a87}.face-swap-empty b,.face-swap-empty span{display:block}.face-swap-empty b{font-size:10px;color:#bac0ca;margin-bottom:4px}.face-swap-empty span{font-size:8px}
+@media(max-width:900px){.face-swap-grid{grid-template-columns:1fr}.face-swap-flow{grid-template-columns:1fr}.face-swap-flow>div:not(:last-child)::after{content:"↓";right:auto;left:50%;top:auto;bottom:-12px}.face-swap-job{grid-template-columns:36px minmax(0,1fr)}.face-swap-job-state,.face-swap-job-actions{grid-column:1/-1}.face-swap-job-actions{justify-content:flex-start}}
+@media(max-width:760px){.face-swap-hero{grid-template-columns:1fr;padding:14px}.face-swap-hero-actions{justify-content:flex-start}.face-swap-card{padding:12px}.face-swap-drop{min-height:150px}.face-swap-flow{gap:10px}.face-swap-job{padding:10px}.face-swap-job-actions button{min-height:34px}}
+
 /* ===== Produção IA / RunningHub ===== */
 .production-head-actions{display:flex;gap:8px;align-items:center}.production-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.production-stats>div{background:#0c0f14;border:1px solid #20252e;border-radius:12px;padding:14px}.production-stats small,.production-stats b,.production-stats span{display:block}.production-stats small{font-size:8px;font-weight:900;letter-spacing:.08em;color:#687180}.production-stats b{font-size:23px;margin:4px 0}.production-stats span{font-size:8px;color:#6d7583}
 .production-main-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(310px,.65fr);gap:12px;margin-bottom:12px}.production-upload-card,.production-config-card,.production-queue-card{padding:16px}.production-step{font-size:9px;font-weight:900;color:#ff669b;background:#1a1016;border:1px solid #462538;border-radius:999px;padding:4px 8px}
@@ -3985,6 +4016,7 @@ body,.app,.main,.page{box-sizing:border-box}
   <section id="calendar" class="page hidden"></section>
   <section id="trialReels" class="page hidden"></section>
   <section id="bulkPublish" class="page hidden"></section>
+  <section id="faceSwap" class="page hidden"></section>
   <section id="production" class="page hidden"></section>
   <section id="frameExtractor" class="page hidden"></section>
   <section id="xStudio" class="page hidden"></section>
@@ -4014,6 +4046,7 @@ const navItems=[
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
   ["bulkPublish","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 5h14v14H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M3 8V3h5M21 16v5h-5\"></path></svg>","Postagem em lote"],
+  ["faceSwap","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 4.5a5 5 0 0 0 0 10\"></path><path d=\"M15.5 19.5a5 5 0 0 0 0-10\"></path><circle cx=\"9\" cy=\"9\" r=\"1\"></circle><circle cx=\"15\" cy=\"15\" r=\"1\"></circle><path d=\"M6 18c2.2 2 9.8 2 12 0\"></path><path d=\"M17 4l2 2-2 2M7 20l-2-2 2-2\"></path></svg>","Face Swap"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
   ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrator de frames"],
   ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X"],
@@ -4038,6 +4071,7 @@ const pageSubtitles={
   calendar:"Planeje e distribua sua operação de conteúdo.",
   trialReels:"Teste novos horários sem misturar o aprendizado principal.",
   bulkPublish:"Envie vários vídeos; cada um passa por Trial e depois Reel normal.",
+  faceSwap:"Do vídeo ao frame, Face Swap e Produção IA em uma única fila.",
   production:"Transforme vídeo + frame em uma fila de produção contínua.",
   frameExtractor:"Extraia o primeiro frame e organize referências rapidamente.",
   xStudio:"Gerencie a operação do canal X.",
@@ -4049,6 +4083,9 @@ const pageSubtitles={
   settings:"Gerencie integrações, conta e preferências do workspace."
 };
 let cloudSession=null, backendOnline=false, storageBackend={configured:false,provider:"supabase",bucket:null,endpoint:null,account_hint:null}, instagramIntegration=null, instagramWebSession={configured:false,mode:"browser_session"}, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
+let faceSwapData=null,faceSwapUploading=false,faceSwapUploadProgress={done:0,total:0,current:""},faceSwapTicker=null,faceSwapLastSignature="";
+const FACE_SWAP_AUTO_KEY="cloudentflow-face-swap-auto";
+let faceSwapAuto=localStorage.getItem(FACE_SWAP_AUTO_KEY)!=="false";
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
 // UI-only selection state. Never touches jobs until the user explicitly confirms deletion.
 let productionSelectedJobs=new Set();
@@ -5213,7 +5250,7 @@ function renderMobileNav(){
       '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
 }
 function mobileMoreItems(){
-  return ["trialReels","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+  return ["trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
 }
 function toggleMobileMore(force){
   const host=$("#mobileMoreHost");if(!host)return;
@@ -5252,7 +5289,7 @@ function syncMobileChrome(){
 function nav(){
   const groups=[
     {label:"Planejamento",pages:["overview","calendar","trialReels","bulkPublish"]},
-    {label:"Produção",pages:["production","frameExtractor"]},
+    {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
     {label:"Canais",pages:["xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
@@ -5295,6 +5332,7 @@ function showPage(id){
   toggleMobileMore(false);
   renderMobileNav();
   renderAll();
+  if(id==="faceSwap"&&cloudSession){loadFaceSwapData().then(()=>faceSwapPage()).catch(e=>toast(e.message,"err"))}
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
   if((id==="automation"||id==="smartTimes")&&cloudSession){
@@ -8770,6 +8808,261 @@ function productionPage(){
 }
 
 
+
+async function loadFaceSwapData(){
+  if(!cloudSession){faceSwapData=null;return}
+  faceSwapData=await cloudFetch("?resource=face-swap");
+  const sig=JSON.stringify((faceSwapData?.jobs||[]).map(j=>[
+    j.id,j.status,j.progress,j.production_job_id,j.last_error,j.updated_at
+  ]));
+  faceSwapLastSignature=sig;
+}
+function setFaceSwapAuto(value){
+  faceSwapAuto=!!value;
+  localStorage.setItem(FACE_SWAP_AUTO_KEY,faceSwapAuto?"true":"false");
+  if(currentPage==="faceSwap")faceSwapPage();
+}
+function faceSwapStatusMeta(status){
+  return ({
+    waiting:["Aguardando","waiting"],
+    uploading:["Preparando","queued"],
+    queued:["Na fila","queued"],
+    running:["Face Swap","running"],
+    ready:["Pronto","ready"],
+    failed:["Erro","failed"],
+    cancelled:["Cancelado","failed"]
+  })[status]||[status||"Aguardando","waiting"];
+}
+function faceSwapJobSteps(job){
+  const faceDone=job.status==="ready"||!!job.result_storage_path||!!job.production_job_id;
+  const faceActive=["uploading","queued","running"].includes(job.status);
+  const productionDone=!!job.production_job_id;
+  return [
+    ["Frame",true,false],
+    ["Face Swap",faceDone,faceActive],
+    ["Produção IA",productionDone,faceDone&&!productionDone&&job.auto_send===true],
+    ["Motion",false,productionDone],
+    ["Final",false,false]
+  ];
+}
+async function uploadFaceSwapJobDirect(video,frame,autoSend){
+  const ticket=await cloudFetch("?action=face-swap-upload-ticket",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      video_file_name:video.name,video_mime_type:video.type||"video/mp4",video_size_bytes:video.size,
+      frame_file_name:frame.name,frame_mime_type:frame.type||"image/jpeg",frame_size_bytes:frame.size,
+      auto_send:autoSend
+    })
+  });
+  if(ticket?.fallback){
+    const fd=new FormData();
+    fd.append("video",video);
+    fd.append("frame",frame);
+    fd.append("auto_send",autoSend?"true":"false");
+    return await cloudFetch("?action=face-swap-upload",{method:"POST",body:fd});
+  }
+  const put=async(part,blob)=>{
+    const r=await fetch(part.upload_url,{
+      method:"PUT",headers:{"Content-Type":part.content_type||blob.type||"application/octet-stream"},body:blob
+    });
+    if(!r.ok)throw new Error("Upload do Face Swap falhou · HTTP "+r.status);
+  };
+  await Promise.all([put(ticket.video,video),put(ticket.frame,frame)]);
+  return await cloudFetch("?action=face-swap-upload-complete",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      job_id:ticket.job_id,
+      video_path:ticket.video.path,
+      frame_path:ticket.frame.path,
+      video_file_name:video.name,video_mime_type:video.type||"video/mp4",video_size_bytes:video.size,
+      frame_file_name:frame.name,frame_mime_type:frame.type||"image/jpeg",frame_size_bytes:frame.size,
+      auto_send:autoSend
+    })
+  });
+}
+async function handleFaceSwapVideos(input){
+  if(faceSwapUploading)return;
+  const files=[...(input?.files||[])].filter(f=>String(f.type||"").startsWith("video/"));
+  if(input)input.value="";
+  if(!files.length){toast("Selecione pelo menos um vídeo.","err");return}
+  if(!faceSwapData?.workflow?.configured){toast("O workflow de Face Swap ainda não está configurado.","err");return}
+  faceSwapUploading=true;
+  faceSwapUploadProgress={done:0,total:files.length,current:"Preparando"};
+  faceSwapPage();
+  let ok=0,fail=0;
+  for(let i=0;i<files.length;i++){
+    const video=files[i];
+    let objectUrl="";
+    try{
+      faceSwapUploadProgress.current="Extraindo frame · "+(i+1)+"/"+files.length;
+      faceSwapPage();
+      objectUrl=URL.createObjectURL(video);
+      const frameBlob=await extractFirstFrameBlob(objectUrl);
+      const frame=new File([frameBlob],"first-frame-"+(i+1)+".jpg",{type:"image/jpeg"});
+      faceSwapUploadProgress.current="Enviando · "+(i+1)+"/"+files.length;
+      faceSwapPage();
+      await uploadFaceSwapJobDirect(video,frame,faceSwapAuto);
+      ok++;
+    }catch(e){
+      fail++;
+      console.error("Face Swap upload:",e);
+      toast((video.name||"Vídeo")+": "+friendlyCloudentError(e?.message||String(e)),"err");
+    }finally{
+      if(objectUrl){try{URL.revokeObjectURL(objectUrl)}catch{}}
+      faceSwapUploadProgress.done=i+1;
+    }
+  }
+  faceSwapUploading=false;
+  faceSwapUploadProgress={done:0,total:0,current:""};
+  await loadFaceSwapData().catch(()=>{});
+  faceSwapPage();
+  if(ok)toast(ok+" vídeo"+(ok===1?" enviado":"s enviados")+" para Face Swap."+(faceSwapAuto?" Automático ligado.":""),"ok");
+  if(fail&&!ok)toast("Nenhum vídeo entrou na fila.","err");
+}
+async function faceSwapAction(id,operation,button=null){
+  if(button)actionButtonBusy(button,true,operation==="send-production"?"Enviando…":operation==="retry"?"Tentando…":"Aguarde…");
+  try{
+    await cloudFetch("?action=face-swap-job",{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id,operation})
+    });
+    await loadFaceSwapData();
+    if(currentPage==="faceSwap")faceSwapPage();
+    if(operation==="send-production")toast("Enviado para Produção IA.","ok");
+    else if(operation==="retry")toast("Face Swap reenfileirado.","ok");
+  }catch(e){
+    if(button)actionButtonBusy(button,false);
+    toast(friendlyCloudentError(e?.message||String(e)),"err");
+  }
+}
+async function deleteFaceSwapJob(id){
+  if(!confirm("Excluir este item do Face Swap? Se ele já foi enviado para Produção IA, os arquivos necessários serão preservados."))return;
+  try{
+    await cloudFetch("?action=face-swap-job",{
+      method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})
+    });
+    await loadFaceSwapData();
+    faceSwapPage();
+    toast("Item removido do Face Swap.","ok");
+  }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
+}
+async function previewFaceSwapResult(id){
+  try{
+    const r=await cloudFetch("?resource=face-swap-preview&id="+encodeURIComponent(id)+"&kind=result");
+    if(!r?.url)throw new Error("Imagem ainda não disponível.");
+    $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()">'+
+      '<div class="modal-box production-preview-box">'+
+        '<div class="modal-head"><div><b>Resultado Face Swap</b><div class="muted">Imagem enviada para o motion quando o Automático está ligado.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
+        '<img src="'+esc(r.url)+'" alt="Resultado Face Swap" style="display:block;max-width:100%;max-height:72vh;margin:0 auto;border-radius:12px;background:#08090c">'+
+      '</div></div>';
+  }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
+}
+function faceSwapJobRow(job,index,total){
+  const st=faceSwapStatusMeta(job.status);
+  const n=total-index;
+  const steps=faceSwapJobSteps(job);
+  const actions=[];
+  if(job.status==="ready"){
+    actions.push('<button onclick="previewFaceSwapResult(\''+esc(job.id)+'\')">Ver imagem</button>');
+    if(job.production_job_id){
+      actions.push('<button class="primary" onclick="showPage(\'production\')">Produção IA ✓</button>');
+    }else{
+      actions.push('<button class="primary" onclick="faceSwapAction(\''+esc(job.id)+'\',\'send-production\',this)">Enviar para Produção IA</button>');
+    }
+    actions.push('<button class="danger" onclick="deleteFaceSwapJob(\''+esc(job.id)+'\')">Excluir</button>');
+  }else if(["failed","cancelled"].includes(job.status)){
+    actions.push('<button onclick="faceSwapAction(\''+esc(job.id)+'\',\'retry\',this)">↻ Tentar de novo</button>');
+    actions.push('<button class="danger" onclick="deleteFaceSwapJob(\''+esc(job.id)+'\')">Excluir</button>');
+  }else if(job.status==="waiting"){
+    actions.push('<button onclick="faceSwapAction(\''+esc(job.id)+'\',\'run\',this)">▶ Executar agora</button>');
+  }
+  const err=job.last_error?'<small style="color:#df7f87;margin-top:4px">'+esc(friendlyCloudentError(job.last_error))+'</small>':"";
+  return '<div class="face-swap-job">'+
+    '<div class="face-swap-job-num">#'+n+'</div>'+
+    '<div class="face-swap-job-main"><b>'+esc(job.original_file_name||("Vídeo "+n))+'</b><small>'+fmtSize(Number(job.original_size_bytes||0))+' · '+(job.auto_send?"Automático":"Manual")+'</small>'+err+'</div>'+
+    '<div class="face-swap-job-state">'+
+      '<div class="face-swap-state-head"><span class="face-swap-status '+st[1]+'">'+st[0]+'</span><small style="font-size:7px;color:#68717e">'+Math.max(0,Math.min(100,Number(job.progress||0)))+'%</small></div>'+
+      '<div class="face-swap-progress"><i style="width:'+Math.max(0,Math.min(100,Number(job.progress||0)))+'%"></i></div>'+
+      '<div class="face-swap-mini-flow">'+steps.map(s=>'<span class="'+(s[1]?"done":s[2]?"active":"")+'">'+(s[1]?"✓ ":"")+s[0]+'</span>').join("")+'</div>'+
+    '</div>'+
+    '<div class="face-swap-job-actions">'+actions.join("")+'</div>'+
+  '</div>';
+}
+function ensureFaceSwapTicker(){
+  if(faceSwapTicker)return;
+  faceSwapTicker=setInterval(async()=>{
+    if(currentPage!=="faceSwap"||!cloudSession||document.hidden)return;
+    try{
+      const next=await cloudFetch("?resource=face-swap");
+      const sig=JSON.stringify((next?.jobs||[]).map(j=>[j.id,j.status,j.progress,j.production_job_id,j.last_error,j.updated_at]));
+      faceSwapData=next;
+      if(sig!==faceSwapLastSignature){
+        faceSwapLastSignature=sig;
+        faceSwapPage();
+      }
+    }catch{}
+  },10000);
+}
+function faceSwapPage(){
+  const root=$("#faceSwap");if(!root)return;
+  const jobs=faceSwapData?.jobs||[];
+  const wf=faceSwapData?.workflow||{};
+  const waiting=jobs.filter(j=>j.status==="waiting").length;
+  const active=jobs.filter(j=>["uploading","queued","running"].includes(j.status)).length;
+  const ready=jobs.filter(j=>j.status==="ready").length;
+  const failed=jobs.filter(j=>j.status==="failed").length;
+  const workerOnline=faceSwapData?.worker?.online===true;
+  root.innerHTML=
+    '<div class="face-swap-shell">'+
+      '<div class="face-swap-hero">'+
+        '<div><span class="ui3-eyebrow">PIPELINE · RUNNINGHUB</span><h2>Face Swap</h2><p>Você coloca o vídeo. O CloudentFlow extrai o primeiro frame, roda o Face Swap com a folha fixa do node #23 e, no modo automático, entrega o resultado direto para a Produção IA copiar o motion.</p></div>'+
+        '<div class="face-swap-hero-actions">'+
+          '<span class="status-pill '+(wf.configured?"green":"red")+'">'+(wf.configured?"Workflow conectado":"Configuração pendente")+'</span>'+
+          '<span class="status-pill '+(workerOnline?"green":"yellow")+'">'+(workerOnline?"Worker online":"Worker aguardando")+'</span>'+
+          '<label class="face-swap-auto '+(faceSwapAuto?"on":"")+'"><input type="checkbox" '+(faceSwapAuto?"checked":"")+' onchange="setFaceSwapAuto(this.checked)"> AUTOMÁTICO '+(faceSwapAuto?"ON":"OFF")+'</label>'+
+        '</div>'+
+      '</div>'+
+      '<div class="face-swap-flow">'+
+        '<div><small>01 · ENTRADA</small><b>Vídeo</b><span>Upload do arquivo original</span></div>'+
+        '<div><small>02 · LOCAL</small><b>Primeiro frame</b><span>Extraído automaticamente</span></div>'+
+        '<div class="fixed"><small>03 · WORKFLOW</small><b>Face Swap</b><span>Node #23 fixo + frame no #17</span></div>'+
+        '<div><small>04 · SAÍDA</small><b>Node #240</b><span>Imagem final do Face Swap</span></div>'+
+        '<div><small>05 · AUTOMÁTICO</small><b>Produção IA</b><span>Vídeo + imagem → motion</span></div>'+
+      '</div>'+
+      '<div class="face-swap-grid">'+
+        '<div class="card face-swap-card">'+
+          '<div class="ui3-panel-head"><div><span>ENTRADA</span><h3>Adicionar vídeos</h3></div><span class="status-pill '+(faceSwapAuto?"green":"gray")+'">'+(faceSwapAuto?"Vai direto ao motion":"Para após a imagem")+'</span></div>'+
+          '<label class="face-swap-drop">'+
+            '<input type="file" accept="video/*" multiple hidden onchange="handleFaceSwapVideos(this)">'+
+            '<span>＋</span><b>'+ (faceSwapUploading?"Processando uploads…":"Selecionar vídeos") +'</b>'+
+            '<small>Você só envia o vídeo. O primeiro frame é criado sozinho antes de entrar no RunningHub.</small>'+
+          '</label>'+
+          (faceSwapUploading?'<div class="face-swap-uploading"><b>'+esc(faceSwapUploadProgress.current||"Processando")+'</b><small>'+faceSwapUploadProgress.done+' de '+faceSwapUploadProgress.total+' concluído(s)</small></div>':'')+
+        '</div>'+
+        '<div class="card face-swap-card">'+
+          '<div class="ui3-panel-head"><div><span>CONFIGURAÇÃO FIXA</span><h3>Workflow de Face Swap</h3></div></div>'+
+          '<div class="face-swap-info-list">'+
+            '<div><span>23</span><div><b>Folha da personagem fixa</b><small>Usa exatamente a imagem já salva no node #23. Não faz upload a cada vídeo.</small></div></div>'+
+            '<div><span>17</span><div><b>Primeiro frame variável</b><small>O CloudentFlow substitui somente este node em cada job.</small></div></div>'+
+            '<div><span>240</span><div><b>Resultado</b><small>A imagem pronta vira automaticamente o frame da Produção IA.</small></div></div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="production-stats">'+
+        '<div><small>AGUARDANDO</small><b>'+waiting+'</b><span>na fila</span></div>'+
+        '<div><small>PROCESSANDO</small><b>'+active+'</b><span>Face Swap agora</span></div>'+
+        '<div><small>PRONTOS</small><b>'+ready+'</b><span>imagem concluída</span></div>'+
+        '<div><small>ERROS</small><b>'+failed+'</b><span>podem ser reenviados</span></div>'+
+      '</div>'+
+      '<div class="card face-swap-card">'+
+        '<div class="ui3-panel-head"><div><span>FILA</span><h3>'+jobs.length+' job'+(jobs.length===1?"":"s")+'</h3></div><button class="btn btn-sm" onclick="loadFaceSwapData().then(faceSwapPage)">↻ Atualizar</button></div>'+
+        '<div class="face-swap-jobs">'+(jobs.length?jobs.map(faceSwapJobRow).join(""):'<div class="face-swap-empty"><b>Nenhum vídeo no Face Swap.</b><span>Envie um vídeo acima e o restante do pipeline começa sozinho.</span></div>')+'</div>'+
+      '</div>'+
+    '</div>';
+  ensureFaceSwapTicker();
+}
+
+
 function updateFrameExtractorText(value){frameExtractorLinksText=value}
 function frameLinks(){
   return [...new Set(String(frameExtractorLinksText||"").split(/\s+/).map(x=>x.trim()).filter(Boolean))];
@@ -10037,6 +10330,7 @@ function renderAll(){
     calendar:calendarPage,
     trialReels:trialReelsPage,
     bulkPublish:bulkPublishPage,
+    faceSwap:faceSwapPage,
     production:productionPage,
     frameExtractor:frameExtractorPage,
     xStudio:xStudioPage,
