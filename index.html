@@ -9059,7 +9059,7 @@ function faceSwapPage(){
       '</div>'+
       '<div class="card face-swap-card">'+
         '<div class="ui3-panel-head"><div><span>FILA</span><h3>'+jobs.length+' job'+(jobs.length===1?"":"s")+'</h3></div><button class="btn btn-sm" onclick="loadFaceSwapData().then(faceSwapPage)">↻ Atualizar</button></div>'+
-        '<div class="face-swap-jobs">'+(jobs.length?jobs.map(faceSwapJobRow).join(""):'<div class="face-swap-empty"><b>Nenhum vídeo no Face Swap.</b><span>Envie um vídeo acima e o restante do pipeline começa sozinho.</span></div>')+'</div>'+
+        '<div class="face-swap-jobs">'+(jobs.length?jobs.map((job,index)=>faceSwapJobRow(job,index,jobs.length)).join(""):'<div class="face-swap-empty"><b>Nenhum vídeo no Face Swap.</b><span>Envie um vídeo acima e o restante do pipeline começa sozinho.</span></div>')+'</div>'+
       '</div>'+
     '</div>';
   ensureFaceSwapTicker();
