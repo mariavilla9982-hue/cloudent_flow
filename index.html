@@ -8460,16 +8460,17 @@ function productionPreviewMarkup(job,kind){
 
 async function downloadProductionResult(id,number){
   try{
-    const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind=result");
-    const res=await fetch(r.url);
-    if(!res.ok)throw new Error("Não consegui baixar o vídeo.");
-    const blob=await res.blob();
-    const url=URL.createObjectURL(blob);
+    const name="Video final "+number+".mp4";
+    const r=await cloudFetch("?resource=production-download&id="+encodeURIComponent(id)+"&name="+encodeURIComponent(name));
+    if(!r?.url)throw new Error("Não consegui preparar o download.");
     const a=document.createElement("a");
-    a.href=url;a.download="Video final "+number+".mp4";
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1500);
-  }catch(e){toast(e.message,"err")}
+    a.href=r.url;
+    a.rel="noopener";
+    a.style.display="none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
 }
 async function sendProductionResultToBulk(id,button=null){
   if(!cloudSession)return;
@@ -9174,6 +9175,7 @@ function faceSwapJobRow(job,index,total){
     actions.push('<button class="primary" onclick="retryFaceSwapMotion(\''+esc(job.id)+'\',this)">↻ Refazer Motion</button>');
   }else if(productionStatus==="ready"){
     actions.push('<button class="primary" onclick="previewFaceSwapMotion(\''+esc(job.id)+'\')">▶ Ver vídeo final</button>');
+    actions.push('<button onclick="downloadProductionResult(\''+esc(job.production_job_id)+'\','+n+')">↓ Baixar</button>');
   }else if(job.status==="ready"&&!job.production_job_id){
     actions.push('<button onclick="previewFaceSwapResult(\''+esc(job.id)+'\')">Ver Face Swap</button>');
     actions.push('<button class="primary" onclick="faceSwapAction(\''+esc(job.id)+'\',\'send-production\',this)">Enviar ao Motion</button>');
