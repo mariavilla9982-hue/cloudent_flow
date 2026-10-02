@@ -1646,7 +1646,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .face-swap-job-num{width:34px;height:34px;border-radius:10px;background:#17101a;color:#ff72a6;display:grid;place-items:center;font-size:9px;font-weight:900}
 .face-swap-job-main b,.face-swap-job-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.face-swap-job-main b{font-size:9px}.face-swap-job-main small{font-size:7px;color:#68717e;margin-top:3px}
 .face-swap-job-state{min-width:0}.face-swap-state-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.face-swap-status{font-size:7px;font-weight:900;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:#171b22;color:#9ca6b4}.face-swap-status.running{background:#29131d;color:#ff83ae}.face-swap-status.ready{background:#102319;color:#64dc99}.face-swap-status.failed{background:#281215;color:#ff7c83}.face-swap-status.queued{background:#17142a;color:#aaa0ff}
-.face-swap-progress{height:4px;background:#171b22;border-radius:999px;overflow:hidden;margin:7px 0 5px}.face-swap-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff4584,#9a67ff);transition:.25s}
+.face-swap-progress{height:4px;background:#171b22;border-radius:999px;overflow:hidden;margin:7px 0 5px;position:relative}.face-swap-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff4584,#9a67ff);transition:.25s}.face-swap-progress.indeterminate i{width:38%!important;position:absolute;left:-38%;animation:faceSwapIndeterminate 1.25s ease-in-out infinite}@keyframes faceSwapIndeterminate{0%{left:-38%}55%{left:48%}100%{left:100%}}
 .face-swap-mini-flow{display:flex;gap:4px;flex-wrap:wrap}.face-swap-mini-flow span{font-size:6.5px;padding:3px 5px;border-radius:6px;background:#13171d;color:#626c79}.face-swap-mini-flow span.done{background:#102019;color:#64cf94}.face-swap-mini-flow span.active{background:#24131d;color:#ff7ca9}
 .face-swap-job-actions{display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap}.face-swap-job-actions button{border:1px solid #2a3039;background:#11151b;color:#c9ced7;border-radius:7px;padding:7px 8px;font-size:7px;cursor:pointer}.face-swap-job-actions button:hover{border-color:#65324a;color:#ff8ab2}.face-swap-job-actions .primary{background:#ff3f7f;border-color:#ff3f7f;color:#fff}.face-swap-job-actions .danger{color:#ff8087}
 .face-swap-empty{padding:36px;text-align:center;color:#717a87}.face-swap-empty b,.face-swap-empty span{display:block}.face-swap-empty b{font-size:10px;color:#bac0ca;margin-bottom:4px}.face-swap-empty span{font-size:8px}
@@ -8971,6 +8971,17 @@ async function previewFaceSwapResult(id){
       '</div></div>';
   }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
 }
+function faceSwapElapsedText(startedAt){
+  if(!startedAt)return "Processando no RunningHub";
+  const ms=Math.max(0,Date.now()-new Date(startedAt).getTime());
+  const total=Math.floor(ms/1000),min=Math.floor(total/60),sec=total%60;
+  return min>0?"Em execução · "+min+"m "+String(sec).padStart(2,"0")+"s":"Em execução · "+sec+"s";
+}
+function syncFaceSwapElapsed(){
+  document.querySelectorAll("[data-face-swap-started]").forEach(el=>{
+    el.textContent=faceSwapElapsedText(el.dataset.faceSwapStarted);
+  });
+}
 function faceSwapJobRow(job,index,total){
   const st=faceSwapStatusMeta(job.status);
   const safeTotal=Number.isFinite(Number(total))?Number(total):0;
@@ -8997,8 +9008,12 @@ function faceSwapJobRow(job,index,total){
     '<div class="face-swap-job-num">#'+n+'</div>'+
     '<div class="face-swap-job-main"><b>'+esc(job.original_file_name||("Vídeo "+n))+'</b><small>'+fmtSize(Number(job.original_size_bytes||0))+' · '+(job.auto_send?"Automático":"Manual")+'</small>'+err+'</div>'+
     '<div class="face-swap-job-state">'+
-      '<div class="face-swap-state-head"><span class="face-swap-status '+st[1]+'">'+st[0]+'</span><small style="font-size:7px;color:#68717e">'+Math.max(0,Math.min(100,Number(job.progress||0)))+'%</small></div>'+
-      '<div class="face-swap-progress"><i style="width:'+Math.max(0,Math.min(100,Number(job.progress||0)))+'%"></i></div>'+
+      '<div class="face-swap-state-head"><span class="face-swap-status '+st[1]+'">'+st[0]+'</span>'+
+        (job.status==="running"
+          ?'<small data-face-swap-started="'+esc(job.started_at||"")+'" style="font-size:7px;color:#68717e">'+faceSwapElapsedText(job.started_at)+'</small>'
+          :'<small style="font-size:7px;color:#68717e">'+(job.status==="ready"?"100%":job.status==="queued"?"Aguardando vaga":job.status==="waiting"?"Pendente":Math.max(0,Math.min(100,Number(job.progress||0)))+"%")+'</small>')+
+      '</div>'+
+      '<div class="face-swap-progress '+(job.status==="running"?"indeterminate":"")+'"><i style="width:'+(job.status==="running"?38:Math.max(0,Math.min(100,Number(job.progress||0))))+'%"></i></div>'+
       '<div class="face-swap-mini-flow">'+steps.map(s=>'<span class="'+(s[1]?"done":s[2]?"active":"")+'">'+(s[1]?"✓ ":"")+s[0]+'</span>').join("")+'</div>'+
     '</div>'+
     '<div class="face-swap-job-actions">'+actions.join("")+'</div>'+
@@ -9015,6 +9030,8 @@ function ensureFaceSwapTicker(){
       if(sig!==faceSwapLastSignature){
         faceSwapLastSignature=sig;
         faceSwapPage();
+      }else{
+        syncFaceSwapElapsed();
       }
     }catch{}
   },10000);
