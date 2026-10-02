@@ -1642,8 +1642,15 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .face-swap-uploading{margin-top:10px;padding:10px;border:1px solid #242b35;border-radius:10px;background:#0e1116}.face-swap-uploading b,.face-swap-uploading small{display:block}.face-swap-uploading b{font-size:9px}.face-swap-uploading small{font-size:7px;color:#717a87;margin-top:3px}
 .face-swap-info-list{display:grid;gap:8px;margin-top:12px}.face-swap-info-list>div{display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;align-items:center;padding:10px;border:1px solid #20252e;border-radius:10px;background:#0b0e13}
 .face-swap-info-list>div>span{width:30px;height:30px;border-radius:9px;background:#17101a;color:#ff78aa;display:grid;place-items:center;font-size:10px}.face-swap-info-list b,.face-swap-info-list small{display:block}.face-swap-info-list b{font-size:9px}.face-swap-info-list small{font-size:7px;color:#6f7886;margin-top:2px}
-.face-swap-jobs{display:grid;gap:8px}.face-swap-job{display:grid;grid-template-columns:42px minmax(130px,1fr) minmax(250px,1.2fr) auto;gap:10px;align-items:center;padding:11px;border:1px solid #1d222a;border-radius:12px;background:#0b0e13}
-.face-swap-job-num{width:34px;height:34px;border-radius:10px;background:#17101a;color:#ff72a6;display:grid;place-items:center;font-size:9px;font-weight:900}
+.face-swap-jobs{display:grid;gap:8px}.face-swap-job{display:grid;grid-template-columns:52px minmax(130px,1fr) minmax(250px,1.2fr) auto;gap:10px;align-items:center;padding:11px;border:1px solid #1d222a;border-radius:12px;background:#0b0e13}
+.face-swap-job-num{width:34px;height:34px;border-radius:10px;background:#17101a;color:#a98cff;display:grid;place-items:center;font-size:9px;font-weight:900}
+.face-swap-frame-thumb{position:relative;width:48px;height:62px;padding:0;border:1px solid #2a3140;border-radius:9px;overflow:hidden;background:#0c1016;display:block;cursor:pointer}
+.face-swap-frame-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.face-swap-frame-thumb .placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#7c5cff;font-size:14px;background:linear-gradient(145deg,#10131c,#0a0d13)}
+.face-swap-frame-thumb em{position:absolute;left:3px;bottom:3px;font-style:normal;font-size:6px;font-weight:900;padding:2px 4px;border-radius:4px;background:rgba(5,7,11,.82);color:#d8dcff}
+.face-swap-job-cost{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:7px;font-weight:850;color:#d9be67}
+.face-swap-job-cost.money{color:#8ddfd8}
+.face-swap-job-cost.muted{color:#687180}
 .face-swap-job-main b,.face-swap-job-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.face-swap-job-main b{font-size:9px}.face-swap-job-main small{font-size:7px;color:#68717e;margin-top:3px}
 .face-swap-job-state{min-width:0}.face-swap-state-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.face-swap-status{font-size:7px;font-weight:900;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:#171b22;color:#9ca6b4}.face-swap-status.running{background:#29131d;color:#ff83ae}.face-swap-status.ready{background:#102319;color:#64dc99}.face-swap-status.failed{background:#281215;color:#ff7c83}.face-swap-status.queued{background:#17142a;color:#aaa0ff}
 .face-swap-progress{height:4px;background:#171b22;border-radius:999px;overflow:hidden;margin:7px 0 5px;position:relative}.face-swap-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff4584,#9a67ff);transition:.25s}.face-swap-progress.indeterminate i{width:38%!important;position:absolute;left:-38%;animation:faceSwapIndeterminate 1.25s ease-in-out infinite}@keyframes faceSwapIndeterminate{0%{left:-38%}55%{left:48%}100%{left:100%}}
@@ -3879,6 +3886,45 @@ body,.app,.main,.page{box-sizing:border-box}
     max-height:none!important;
   }
 }
+
+/* ===== CloudentFlow palette correction — violet + teal, no pink accent ===== */
+:root{
+  --accent:#7c5cff!important;
+  --accent-soft:rgba(124,92,255,.12)!important;
+  --pink:#7c5cff!important;
+  --pink2:#36d6c8!important;
+  --saas-violet:#7c5cff!important;
+  --saas-pink:#36d6c8!important;
+}
+body{background:radial-gradient(circle at 78% -10%,rgba(124,92,255,.12),transparent 28%),radial-gradient(circle at 22% 0,rgba(54,214,200,.05),transparent 24%),#080b12!important}
+.btn.primary{background:#7c5cff!important;border-color:#7c5cff!important;box-shadow:none!important}
+.btn.primary:hover{background:#8b70ff!important;border-color:#8b70ff!important}
+input:focus,select:focus,textarea:focus{border-color:#6651c8!important;box-shadow:0 0 0 3px rgba(124,92,255,.08)!important}
+input[type="checkbox"]{accent-color:#7c5cff}
+.nav button.active{box-shadow:inset 2px 0 #7c5cff!important}
+.nav button.active .nav-icon,.brand-accent{color:#9a84ff!important}
+.face-swap-hero{background:linear-gradient(135deg,#0c1018 0%,#111225 58%,#0c1519 100%)!important}
+.face-swap-hero .ui3-eyebrow{color:#9e8bff!important}
+.face-swap-auto input{accent-color:#7c5cff!important}
+.face-swap-auto.on{border-color:#4f4385!important;background:#121124!important;color:#b7a8ff!important}
+.face-swap-livebar .accent b{color:#a999ff!important}
+.face-swap-quick-actions button:hover{border-color:#554a86!important;color:#b9acff!important}
+.face-swap-drop:hover{border-color:#6254a8!important;background:#0e101b!important}
+.face-swap-drop>span{background:#151329!important;color:#9f8cff!important}
+.face-swap-status.running{background:#18162d!important;color:#aa9cff!important}
+.face-swap-status.queued{background:#15182c!important;color:#91a8ff!important}
+.face-swap-progress i{background:linear-gradient(90deg,#7c5cff,#36d6c8)!important}
+.face-swap-mini-flow span.active{background:#17152c!important;color:#aa9cff!important}
+.face-swap-job-actions button:hover{border-color:#554a86!important;color:#b9acff!important}
+.face-swap-job-actions .primary{background:#7c5cff!important;border-color:#7c5cff!important}
+.production-step{color:#a999ff!important;background:#141329!important;border-color:#373061!important}
+.production-drop:hover,.production-drop.selected{border-color:#5a4ca0!important;background:#0d0f19!important}
+.production-drop-icon{background:#151329!important;color:#9d88ff!important}
+.production-media-cell>span{background:#151329!important;color:#9d88ff!important}
+.production-status.running{background:#17152c!important;color:#a999ff!important}
+.production-progress i{background:linear-gradient(90deg,#7c5cff,#36d6c8)!important}
+.production-job-actions button:hover{border-color:#554a86!important;color:#b9acff!important}
+.production-job.is-live{background:linear-gradient(90deg,rgba(124,92,255,.035),transparent 46%)!important}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -4095,6 +4141,7 @@ const pageSubtitles={
 };
 let cloudSession=null, backendOnline=false, storageBackend={configured:false,provider:"supabase",bucket:null,endpoint:null,account_hint:null}, instagramIntegration=null, instagramWebSession={configured:false,mode:"browser_session"}, platformAccounts=[], liveInstagramMetrics=[], automationWorkerStatus=null, automationData=null, serverLogs=[], followerStats=null, followerChanged=false, productionData=null, productionUploading=false, systemHealthData=null, trialReelsData=[], trialReelsMeta={settings:{},recommendations:[]}, xWarmupData={settings:{},plan:[],accounts:[],connection:{enabled:false}}, xIntegrationConfig={configured:false,callback_url:"",connected_accounts:0,scopes:[]}, notificationsData={settings:{},items:[],unread:0,subscriptions:0,worker:null,loaded:false};
 let faceSwapData=null,faceSwapUploading=false,faceSwapUploadProgress={done:0,total:0,current:""},faceSwapTicker=null,faceSwapLastSignature="";
+const faceSwapFrameUrlCache=new Map();
 const FACE_SWAP_AUTO_KEY="cloudentflow-face-swap-auto";
 let faceSwapAuto=localStorage.getItem(FACE_SWAP_AUTO_KEY)!=="false";
 let productionDraft={video:null,frame:null,videoUrl:null,frameUrl:null};
@@ -8982,6 +9029,55 @@ async function previewFaceSwapResult(id){
       '</div></div>';
   }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
 }
+async function getFaceSwapFrameUrl(id){
+  const key=String(id);
+  const cached=faceSwapFrameUrlCache.get(key);
+  if(cached&&cached.expires>Date.now()+60000)return cached.url;
+  const r=await cloudFetch("?resource=face-swap-preview&id="+encodeURIComponent(id)+"&kind=frame");
+  if(!r?.url)return null;
+  faceSwapFrameUrlCache.set(key,{url:r.url,expires:Date.now()+50*60*1000});
+  return r.url;
+}
+async function loadFaceSwapFrameThumb(el){
+  if(!el||el.dataset.loaded==="1"||el.dataset.loading==="1")return;
+  const id=el.dataset.faceSwapFrameId;if(!id)return;
+  el.dataset.loading="1";
+  try{
+    const url=await getFaceSwapFrameUrl(id);
+    if(url){
+      const img=document.createElement("img");
+      img.src=url;img.alt="Primeiro frame";img.loading="lazy";img.decoding="async";
+      const ph=el.querySelector(".placeholder");if(ph)ph.replaceWith(img);else el.prepend(img);
+      el.dataset.loaded="1";
+    }
+  }catch{}finally{delete el.dataset.loading}
+}
+function setupFaceSwapFrameThumbs(){
+  document.querySelectorAll("[data-face-swap-frame-id]").forEach(loadFaceSwapFrameThumb);
+}
+async function previewFaceSwapFrame(id){
+  try{
+    const r=await cloudFetch("?resource=face-swap-preview&id="+encodeURIComponent(id)+"&kind=frame");
+    if(!r?.url)throw new Error("Frame ainda não disponível.");
+    $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()">'+
+      '<div class="modal-box production-preview-box">'+
+        '<div class="modal-head"><div><b>Primeiro frame extraído</b><div class="muted">Este foi o frame enviado para o Face Swap.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
+        '<img src="'+esc(r.url)+'" alt="Primeiro frame" style="display:block;max-width:100%;max-height:72vh;margin:0 auto;border-radius:12px;background:#08090c">'+
+      '</div></div>';
+  }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
+}
+function faceSwapCostMarkup(job){
+  const credits=Number(job?.credits_used);
+  const base=Number(job?.runninghub_cost_money);
+  const third=Number(job?.runninghub_third_party_cost_money);
+  const hasCredits=job?.credits_used!==null&&job?.credits_used!==undefined&&Number.isFinite(credits);
+  const hasMoney=(job?.runninghub_cost_money!==null&&job?.runninghub_cost_money!==undefined&&Number.isFinite(base))||
+    (job?.runninghub_third_party_cost_money!==null&&job?.runninghub_third_party_cost_money!==undefined&&Number.isFinite(third));
+  if(hasCredits&&hasMoney)return '<span class="face-swap-job-cost">◉ '+credits.toLocaleString("pt-BR")+' créditos</span><span class="face-swap-job-cost money">¥ '+formatRhMoney((Number.isFinite(base)?base:0)+(Number.isFinite(third)?third:0))+'</span>';
+  if(hasCredits)return '<span class="face-swap-job-cost">◉ '+credits.toLocaleString("pt-BR")+' créditos usados</span>';
+  if(hasMoney)return '<span class="face-swap-job-cost money">¥ '+formatRhMoney((Number.isFinite(base)?base:0)+(Number.isFinite(third)?third:0))+' custo real</span>';
+  return job?.status==="ready"?'<span class="face-swap-job-cost muted">custo sendo sincronizado…</span>':"";
+}
 function faceSwapElapsedText(startedAt){
   if(!startedAt)return "Processando no RunningHub";
   const ms=Math.max(0,Date.now()-new Date(startedAt).getTime());
@@ -9016,8 +9112,8 @@ function faceSwapJobRow(job,index,total){
   }
   const err=job.last_error?'<small style="color:#df7f87;margin-top:4px">'+esc(friendlyCloudentError(job.last_error))+'</small>':"";
   return '<div class="face-swap-job">'+
-    '<div class="face-swap-job-num">#'+n+'</div>'+
-    '<div class="face-swap-job-main"><b>'+esc(job.original_file_name||("Vídeo "+n))+'</b><small>'+fmtSize(Number(job.original_size_bytes||0))+' · '+(job.auto_send?"Automático":"Manual")+'</small>'+err+'</div>'+
+    '<button class="face-swap-frame-thumb" data-face-swap-frame-id="'+esc(job.id)+'" onclick="previewFaceSwapFrame(\''+esc(job.id)+'\')" title="Ver primeiro frame"><span class="placeholder">▧</span><em>#'+n+'</em></button>'+
+    '<div class="face-swap-job-main"><b>'+esc(job.original_file_name||("Vídeo "+n))+'</b><small>'+fmtSize(Number(job.original_size_bytes||0))+' · '+(job.auto_send?"Automático":"Manual")+'</small>'+err+faceSwapCostMarkup(job)+'</div>'+
     '<div class="face-swap-job-state">'+
       '<div class="face-swap-state-head"><span class="face-swap-status '+st[1]+'">'+st[0]+'</span>'+
         (job.status==="running"
@@ -9095,6 +9191,7 @@ function faceSwapPage(){
       '</div>'+
     '</div>';
   ensureFaceSwapTicker();
+  setTimeout(setupFaceSwapFrameThumbs,0);
 }
 
 
