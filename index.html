@@ -8938,7 +8938,12 @@ function faceSwapPipelineState(job){
   if(job.status==="ready"&&job.production_job_id)return {label:"Motion aguardando",cls:"queued",detail:"Face Swap pronto; aguardando vaga no RunningHub."};
   if(job.status==="ready")return {label:"Face Swap pronto",cls:"ready",detail:job.auto_send?"Preparando envio para o Motion.":"Revise a imagem antes de enviar ao Motion."};
   if(["uploading","queued","running"].includes(String(job.status||"")))return {label:"Face Swap em execução",cls:"running",detail:"Gerando o frame com a personagem."};
-  return {label:"Aguardando",cls:"queued",detail:"Job na fila."};
+  if(job.status==="waiting"){
+    const busy=Number(faceSwapData?.runninghub?.total_active||0)>=Number(faceSwapData?.runninghub?.concurrency||1);
+    if(job.meta?.manual_run&&busy)return {label:"Na fila",cls:"queued",detail:"RunningHub ocupado. Inicia assim que a vaga liberar."};
+    if(job.meta?.manual_run)return {label:"Execução solicitada",cls:"queued",detail:"Aguardando o worker iniciar o Face Swap."};
+  }
+  return {label:"Aguardando",cls:"queued",detail:"Job pronto para executar."};
 }
 async function uploadFaceSwapJobDirect(video,frame,autoSend){
   const ticket=await cloudFetch("?action=face-swap-upload-ticket",{
@@ -9015,9 +9020,9 @@ async function handleFaceSwapVideos(input){
   if(fail&&!ok)toast("Nenhum vídeo entrou na fila.","err");
 }
 async function faceSwapAction(id,operation,button=null){
-  if(button)actionButtonBusy(button,true,operation==="send-production"?"Enviando…":operation==="retry"?"Tentando…":"Aguarde…");
+  if(button)actionButtonBusy(button,true,operation==="send-production"?"Enviando…":operation==="retry"?"Tentando…":"Colocando na fila…");
   try{
-    await cloudFetch("?action=face-swap-job",{
+    const result=await cloudFetch("?action=face-swap-job",{
       method:"PATCH",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({id,operation})
     });
@@ -9025,8 +9030,13 @@ async function faceSwapAction(id,operation,button=null){
     if(currentPage==="faceSwap")faceSwapPage();
     if(operation==="send-production")toast("Enviado para Produção IA.","ok");
     else if(operation==="retry")toast("Face Swap reenfileirado.","ok");
+    else if(operation==="run"){
+      const busy=Number(faceSwapData?.runninghub?.total_active||0)>=Number(faceSwapData?.runninghub?.concurrency||1);
+      toast(busy?"Entrou na fila. O RunningHub está ocupado com a tarefa atual.":"Execução solicitada. O Face Swap vai iniciar agora.","ok");
+    }
+    return result;
   }catch(e){
-    if(button)actionButtonBusy(button,false);
+    if(button&&document.body.contains(button))actionButtonBusy(button,false);
     toast(friendlyCloudentError(e?.message||String(e)),"err");
   }
 }
@@ -9151,7 +9161,14 @@ function faceSwapJobRow(job,index,total){
   const steps=faceSwapJobSteps(job),state=faceSwapPipelineState(job);
   const productionStatus=String(job.production?.status||"");
   const actions=[];
-  if(["failed","cancelled"].includes(String(job.status||""))){
+  if(job.status==="waiting"){
+    const busy=Number(faceSwapData?.runninghub?.total_active||0)>=Number(faceSwapData?.runninghub?.concurrency||1);
+    if(job.meta?.manual_run){
+      actions.push('<button disabled title="'+(busy?"RunningHub ocupado; começa automaticamente ao liberar.":"Execução já solicitada.")+'">'+(busy?"Na fila":"Iniciando…")+'</button>');
+    }else{
+      actions.push('<button class="primary" onclick="faceSwapAction(\''+esc(job.id)+'\',\'run\',this)">▶ Executar</button>');
+    }
+  }else if(["failed","cancelled"].includes(String(job.status||""))){
     actions.push('<button class="primary" onclick="faceSwapAction(\''+esc(job.id)+'\',\'retry\',this)">↻ Refazer Face Swap</button>');
   }else if(["failed","cancelled"].includes(productionStatus)){
     actions.push('<button class="primary" onclick="retryFaceSwapMotion(\''+esc(job.id)+'\',this)">↻ Refazer Motion</button>');
