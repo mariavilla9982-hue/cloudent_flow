@@ -8813,7 +8813,7 @@ async function loadFaceSwapData(){
   if(!cloudSession){faceSwapData=null;return}
   faceSwapData=await cloudFetch("?resource=face-swap");
   const sig=JSON.stringify((faceSwapData?.jobs||[]).map(j=>[
-    j.id,j.status,j.progress,j.production_job_id,j.last_error,j.updated_at
+    j.id,j.status,j.progress,j.production_job_id,j.production?.status,j.production?.progress,j.last_error,j.updated_at
   ]));
   faceSwapLastSignature=sig;
 }
@@ -8836,13 +8836,16 @@ function faceSwapStatusMeta(status){
 function faceSwapJobSteps(job){
   const faceDone=job.status==="ready"||!!job.result_storage_path||!!job.production_job_id;
   const faceActive=["uploading","queued","running"].includes(job.status);
-  const productionDone=!!job.production_job_id;
+  const productionLinked=!!job.production_job_id;
+  const productionStatus=String(job.production?.status||"");
+  const motionDone=productionStatus==="ready";
+  const motionActive=productionLinked&&["waiting","uploading","queued","running"].includes(productionStatus);
   return [
     ["Frame",true,false],
     ["Face Swap",faceDone,faceActive],
-    ["Produção IA",productionDone,faceDone&&!productionDone&&job.auto_send===true],
-    ["Motion",false,productionDone],
-    ["Final",false,false]
+    ["Produção IA",productionLinked,faceDone&&!productionLinked&&job.auto_send===true],
+    ["Motion",motionDone,motionActive],
+    ["Final",motionDone,false]
   ];
 }
 async function uploadFaceSwapJobDirect(video,frame,autoSend){
@@ -8994,7 +8997,7 @@ function ensureFaceSwapTicker(){
     if(currentPage!=="faceSwap"||!cloudSession||document.hidden)return;
     try{
       const next=await cloudFetch("?resource=face-swap");
-      const sig=JSON.stringify((next?.jobs||[]).map(j=>[j.id,j.status,j.progress,j.production_job_id,j.last_error,j.updated_at]));
+      const sig=JSON.stringify((next?.jobs||[]).map(j=>[j.id,j.status,j.progress,j.production_job_id,j.production?.status,j.production?.progress,j.last_error,j.updated_at]));
       faceSwapData=next;
       if(sig!==faceSwapLastSignature){
         faceSwapLastSignature=sig;
