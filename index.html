@@ -3936,6 +3936,20 @@ input[type="checkbox"]{accent-color:#fff!important}
 @media(max-width:1050px){.face-swap-job-v2{grid-template-columns:1fr!important}.face-swap-job-actions{justify-content:flex-start!important}}
 @media(max-width:760px){.face-swap-pipeline-media{grid-template-columns:repeat(3,minmax(0,1fr))}.face-swap-stage-media{width:100%;height:104px}}
 
+
+/* Face Swap pipeline bar — stage based, never fake percentage */
+.face-swap-progress.pipeline{height:5px;margin:8px 0 6px;background:#1a1a1a;border:1px solid #242424;position:relative;overflow:hidden}
+.face-swap-progress.pipeline>i{background:linear-gradient(90deg,#f5f5f5,#8a8a8a)!important}
+.face-swap-progress.pipeline.indeterminate-stage>b{
+  position:absolute;top:0;bottom:0;width:54px;transform:translateX(-50%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);
+  animation:faceSwapStageSweep 1.15s ease-in-out infinite;
+}
+@keyframes faceSwapStageSweep{
+  0%{transform:translateX(-50%) translateX(-38px);opacity:.25}
+  50%{opacity:1}
+  100%{transform:translateX(-50%) translateX(38px);opacity:.25}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -9193,6 +9207,26 @@ function syncFaceSwapElapsed(){
     el.textContent=faceSwapElapsedText(el.dataset.faceSwapStarted);
   });
 }
+function faceSwapPipelineBar(job){
+  const productionStatus=String(job?.production?.status||"");
+  const faceReady=job?.status==="ready"||!!job?.result_storage_path||!!job?.production_job_id;
+  const faceActive=["uploading","queued","running"].includes(String(job?.status||""));
+  const motionReady=productionStatus==="ready";
+  const motionActive=["waiting","uploading","queued","running"].includes(productionStatus);
+
+  let width=25;
+  let active=false;
+  if(faceReady)width=50;
+  if(motionActive){width=50;active=true}
+  if(motionReady)width=100;
+  if(faceActive){width=25;active=true}
+
+  return '<div class="face-swap-progress pipeline '+(active?"indeterminate-stage":"")+'">'+
+    '<i style="width:'+width+'%"></i>'+
+    (active?'<b style="left:'+width+'%"></b>':'')+
+  '</div>';
+}
+
 function faceSwapJobRow(job,index,total){
   const safeTotal=Number.isFinite(Number(total))?Number(total):0;
   const safeIndex=Number.isFinite(Number(index))?Number(index):0;
@@ -9239,6 +9273,7 @@ function faceSwapJobRow(job,index,total){
     '<div class="face-swap-job-main"><b>'+esc(job.original_file_name||("Vídeo "+n))+'</b><small>'+fmtSize(Number(job.original_size_bytes||0))+' · '+(job.auto_send?"Automático":"Manual")+'</small>'+faceSwapCostMarkup(job)+detailError+'</div>'+
     '<div class="face-swap-job-state">'+
       '<div class="face-swap-state-head"><span class="face-swap-status '+state.cls+'">'+esc(state.label)+'</span><small>'+esc(state.detail)+'</small></div>'+
+      faceSwapPipelineBar(job)+
       '<div class="face-swap-mini-flow">'+steps.map(s=>'<span class="'+(s.failed?"failed":s.done?"done":s.active?"active":"")+'">'+(s.failed?"! ":s.done?"✓ ":"")+s.label+'</span>').join("")+'</div>'+
       '<div class="face-swap-cost-split">'+
         '<span>Face Swap <b>'+(job.credits_used??"—")+'</b></span>'+
