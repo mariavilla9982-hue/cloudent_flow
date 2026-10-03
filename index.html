@@ -6090,7 +6090,8 @@ function trialHistoryForWeek(){
   return (trialReelsData||[]).filter(x=>x?.scheduled_at&&days.has(trialCardDayForRow(x)));
 }
 function trialTimesForDate(date){
-  const weekday=new Date(date+"T12:00:00").getDay();
+  const publicationDay=trialPublicationDay(date);
+  const weekday=new Date(publicationDay+"T12:00:00").getDay();
   const recs=(trialReelsMeta?.recommendations||[])
     .filter(r=>Number(r.weekday)===weekday)
     .sort((a,b)=>Number(a.rank)-Number(b.rank))
