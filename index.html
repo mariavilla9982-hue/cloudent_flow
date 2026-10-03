@@ -6283,19 +6283,36 @@ function pickTrialForDay(date,slotIndex=null){
   input.click();
 }
 
+function futureTrialTarget(date,slot){
+  const original=String(date||"");
+  const start=new Date(original+"T12:00:00");
+  if(Number.isNaN(start.getTime()))return {date:original,time:trialDefaultTime(original,slot),adjusted:false};
+  for(let offset=0;offset<14;offset++){
+    const d=new Date(start);d.setDate(start.getDate()+offset);
+    const candidate=localISO(d);
+    const time=trialDefaultTime(candidate,slot);
+    const [h,m]=time.split(":").map(Number);
+    const at=new Date(candidate+"T00:00:00");at.setHours(h,m,0,0);
+    if(at.getTime()>Date.now()+60_000 && trialRowsForDate(candidate).length<TRIALS_PER_NIGHT && !trialRowForSlot(candidate,slot)){
+      return {date:candidate,time,adjusted:candidate!==original};
+    }
+  }
+  return {date:original,time:trialDefaultTime(original,slot),adjusted:false};
+}
 function handleTrialVideoPicker(input){
-  const file=input?.files?.[0],date=trialPendingDate,slot=trialPendingSlot;
+  const file=input?.files?.[0],requestedDate=trialPendingDate,slot=trialPendingSlot;
   trialPendingDate=null;trialPendingSlot=null;
-  if(!file||!date||slot===null)return;
+  if(!file||!requestedDate||slot===null)return;
+  const target=futureTrialTarget(requestedDate,slot);
+  const date=target.date,time=target.time;
   trialDraftFile=file;trialDraftSlot=slot;
-  const time=trialDefaultTime(date,slot);
   trialDraftSuggestedTime=time;
   $("#modalHost").innerHTML='<div class="modal trial-schedule-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal-box trial-schedule-modal">'+
     '<div class="modal-head"><div><b>Agendar Reel teste '+(slot+1)+'</b><div class="muted">'+esc(date)+' · madrugada</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
     '<div class="trial-modal-scroll">'+
       '<div class="trial-modal-file"><span>VÍDEO</span><b>'+esc(file.name)+'</b><small>'+fmtSize(file.size)+'</small></div>'+
       '<div class="formgrid"><div class="field"><label>Dia</label><input id="trialDay" type="date" value="'+esc(date)+'" readonly></div>'+
-      '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">Autoajuste sugeriu '+time+'. Se alterar, este slot fica manual.</small></div>'+
+      '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">'+(target.adjusted?"A madrugada escolhida já passou. Ajustei automaticamente para "+date+" às "+time+".":"Autoajuste sugeriu "+time+". Se alterar, este slot fica manual.")+'</small></div>'+
       '<div class="field full"><label>Legenda</label><textarea id="trialCaption" placeholder="Opcional"></textarea></div></div>'+
       '<div class="trial-modal-rule"><b>Aprendizado separado</b><span>Este Reel alimenta apenas o aprendizado da madrugada e não altera o Smart Scheduler dos Reels normais.</span></div>'+
     '</div>'+
