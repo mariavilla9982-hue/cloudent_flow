@@ -2388,7 +2388,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .trial-reels-scroll{overflow-x:auto;padding-bottom:4px}.trial-week-grid{display:grid;grid-template-columns:repeat(7,minmax(155px,1fr));gap:7px;min-width:1130px}.trial-day{border:1px solid #222222;border-radius:10px;background:#0a0a0a;padding:8px}.trial-day-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}.trial-day-head b{font-size:8.5px;text-transform:capitalize}.trial-day-head span{font-size:7px;color:#7f7f7f;border:1px solid #2a2a2a;border-radius:999px;padding:2px 5px}
 .trial-day-list{display:grid;gap:6px;min-height:48px}.trial-empty{display:grid;place-items:center;min-height:48px;border:1px dashed #282828;border-radius:7px;color:#555d69;font-size:7px}.trial-add{width:100%;border:1px dashed #363636;border-radius:7px;background:#0c0c0c;color:#a6a6a6;font-size:7.5px;font-weight:900;padding:7px;margin-top:7px}.trial-add:hover{border-color:#6f6f6f;background:#121212;color:#cbcbcb}
 .trial-reel-card{padding:8px;border:1px solid #2b2b2b;border-left:2px solid #7f7f7f;border-radius:8px;background:#0e0e0e;min-width:0}.trial-reel-card.processing{border-left-color:#e7b957}.trial-reel-card.published{border-left-color:#55d995}.trial-reel-card.failed{border-left-color:#ff7078}.trial-reel-top{display:flex;align-items:center;gap:5px}.trial-status-dot{width:5px;height:5px;border-radius:50%;background:#7f7f7f}.trial-reel-card.processing .trial-status-dot{background:#e7b957;animation:calendarStatusPulse 1.1s ease-in-out infinite}.trial-reel-card.published .trial-status-dot{background:#55d995}.trial-reel-card.failed .trial-status-dot{background:#ff7078}.trial-reel-top b{font-size:9px}.trial-reel-top em{margin-left:auto;font-size:6px;color:#7d8795;font-style:normal;text-transform:uppercase;font-weight:900}.trial-reel-card>strong{display:block;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px}.trial-reel-card>small{display:block;font-size:6.5px;color:#626b78;margin-top:2px}.trial-reel-metrics{color:#7fdba4!important}.trial-error{font-size:6.5px;color:#ff8b91;line-height:1.3;margin:5px 0 0}.trial-reel-actions{display:flex;gap:4px;margin-top:7px}.trial-reel-actions button{border:0;background:#181818;color:#aab1bd;border-radius:5px;padding:4px 5px;font-size:6.5px}.trial-reel-actions button:hover{color:#fff;background:#202020}.trial-reel-actions .danger-link{color:#ff7f87}
-.trial-schedule-modal{width:min(520px,94vw)}.trial-modal-file{display:grid;grid-template-columns:55px 1fr auto;gap:8px;align-items:center;padding:9px 10px;border:1px solid #292929;border-radius:9px;background:#0c0c0c;margin:10px 0}.trial-modal-file span{font-size:7px;color:#6a6a6a;font-weight:950}.trial-modal-file b{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trial-modal-file small{font-size:7px;color:#6e7784}.trial-modal-rule{padding:9px;border:1px solid #2a2a2a;border-radius:8px;background:#0e0e0e;margin:10px 0}.trial-modal-rule b,.trial-modal-rule span{display:block}.trial-modal-rule b{font-size:8px;color:#aeaeae}.trial-modal-rule span{font-size:7px;color:#766e80;margin-top:2px}
+.trial-schedule-modal{width:min(520px,94vw);max-height:calc(100dvh - 28px);display:flex;flex-direction:column;overflow:hidden}.trial-schedule-modal .modal-head{flex:0 0 auto}.trial-modal-scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:2px;scrollbar-width:thin}.trial-modal-actions{flex:0 0 auto;padding-top:10px;margin-top:2px;border-top:1px solid #242424;background:#0f0f0f}.trial-modal-actions #trialScheduleBtn{width:100%;min-height:46px;font-size:10px}.trial-schedule-backdrop{overflow:hidden}.trial-modal-file{display:grid;grid-template-columns:55px 1fr auto;gap:8px;align-items:center;padding:9px 10px;border:1px solid #292929;border-radius:9px;background:#0c0c0c;margin:10px 0}.trial-modal-file span{font-size:7px;color:#6a6a6a;font-weight:950}.trial-modal-file b{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trial-modal-file small{font-size:7px;color:#6e7784}.trial-modal-rule{padding:9px;border:1px solid #2a2a2a;border-radius:8px;background:#0e0e0e;margin:10px 0}.trial-modal-rule b,.trial-modal-rule span{display:block}.trial-modal-rule b{font-size:8px;color:#aeaeae}.trial-modal-rule span{font-size:7px;color:#766e80;margin-top:2px}
 
 .trial-limit{margin-top:7px;padding:7px;border:1px solid #272727;border-radius:7px;background:#0b0b0b;color:#756d80;font-size:7px;font-weight:900;text-align:center}
 
@@ -3978,6 +3978,40 @@ input[type="checkbox"]{accent-color:#fff!important}
   0%{transform:translateX(-50%) translateX(-38px);opacity:.25}
   50%{opacity:1}
   100%{transform:translateX(-50%) translateX(38px);opacity:.25}
+}
+
+/* ===== Trial schedule modal viewport safety ===== */
+@media(max-height:700px){
+  .trial-schedule-backdrop{padding:6px!important;align-items:center!important}
+  .trial-schedule-modal{max-height:calc(100dvh - 12px)!important;padding:11px 12px!important;border-radius:14px!important}
+  .trial-schedule-modal .modal-head{margin-bottom:6px!important}
+  .trial-schedule-modal .modal-head b{font-size:13px}
+  .trial-schedule-modal .modal-head .muted{font-size:11px}
+  .trial-schedule-modal .modal-head .btn{padding:8px 11px}
+  .trial-modal-file{margin:5px 0 7px!important;padding:7px 9px!important}
+  .trial-schedule-modal .formgrid{gap:7px!important}
+  .trial-schedule-modal .field label{margin-bottom:4px}
+  .trial-schedule-modal .field input{min-height:38px!important;padding:8px 10px!important}
+  .trial-schedule-modal .field textarea{min-height:58px!important;max-height:92px!important;padding:8px 10px!important}
+  .trial-modal-rule{margin:7px 0!important;padding:7px 8px!important}
+  .trial-modal-actions{padding-top:8px!important}
+  .trial-modal-actions #trialScheduleBtn{min-height:42px!important}
+}
+@media(max-width:760px){
+  .modal-box.trial-schedule-modal{
+    max-height:calc(100dvh - 8px)!important;
+    overflow:hidden!important;
+    display:flex!important;
+    flex-direction:column!important;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom))!important
+  }
+  .trial-schedule-modal .trial-modal-scroll{overflow-y:auto!important;min-height:0!important}
+  .trial-schedule-modal .trial-modal-actions{
+    position:relative!important;
+    bottom:auto!important;
+    background:#0f0f0f!important;
+    z-index:4!important
+  }
 }
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -6256,14 +6290,16 @@ function handleTrialVideoPicker(input){
   trialDraftFile=file;trialDraftSlot=slot;
   const time=trialDefaultTime(date,slot);
   trialDraftSuggestedTime=time;
-  $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box trial-schedule-modal">'+
+  $("#modalHost").innerHTML='<div class="modal trial-schedule-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal-box trial-schedule-modal">'+
     '<div class="modal-head"><div><b>Agendar Reel teste '+(slot+1)+'</b><div class="muted">'+esc(date)+' · madrugada</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
-    '<div class="trial-modal-file"><span>VÍDEO</span><b>'+esc(file.name)+'</b><small>'+fmtSize(file.size)+'</small></div>'+
-    '<div class="formgrid"><div class="field"><label>Dia</label><input id="trialDay" type="date" value="'+esc(date)+'" readonly></div>'+
-    '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">Autoajuste sugeriu '+time+'. Se alterar, este slot fica manual.</small></div>'+
-    '<div class="field full"><label>Legenda</label><textarea id="trialCaption" placeholder="Opcional"></textarea></div></div>'+
-    '<div class="trial-modal-rule"><b>Aprendizado separado</b><span>Este Reel alimenta apenas o aprendizado da madrugada e não altera o Smart Scheduler dos Reels normais.</span></div>'+
-    '<button class="btn primary" id="trialScheduleBtn" onclick="scheduleTrialDraft()">Agendar Reel teste</button>'+
+    '<div class="trial-modal-scroll">'+
+      '<div class="trial-modal-file"><span>VÍDEO</span><b>'+esc(file.name)+'</b><small>'+fmtSize(file.size)+'</small></div>'+
+      '<div class="formgrid"><div class="field"><label>Dia</label><input id="trialDay" type="date" value="'+esc(date)+'" readonly></div>'+
+      '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">Autoajuste sugeriu '+time+'. Se alterar, este slot fica manual.</small></div>'+
+      '<div class="field full"><label>Legenda</label><textarea id="trialCaption" placeholder="Opcional"></textarea></div></div>'+
+      '<div class="trial-modal-rule"><b>Aprendizado separado</b><span>Este Reel alimenta apenas o aprendizado da madrugada e não altera o Smart Scheduler dos Reels normais.</span></div>'+
+    '</div>'+
+    '<div class="trial-modal-actions"><button class="btn primary" id="trialScheduleBtn" onclick="scheduleTrialDraft()">Agendar Reel teste</button></div>'+
   '</div></div>';
 }
 
