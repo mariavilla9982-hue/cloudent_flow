@@ -1643,7 +1643,8 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .face-swap-card{padding:16px}.face-swap-drop{display:grid;place-items:center;min-height:180px;border:1px dashed #404040;border-radius:14px;background:#0b0b0b;text-align:center;cursor:pointer;padding:20px;transition:.18s}
 .face-swap-drop:hover{border-color:#515151;background:#0e0e0e}.face-swap-drop>span{width:48px;height:48px;border-radius:14px;background:#131313;color:#878787;display:grid;place-items:center;font-size:22px;margin-bottom:10px}
 .face-swap-drop b{font-size:11px}.face-swap-drop small{font-size:8px;color:#717987;margin-top:5px;line-height:1.5}
-.face-swap-uploading{margin-top:10px;padding:10px;border:1px solid #2a2a2a;border-radius:10px;background:#111111}.face-swap-uploading b,.face-swap-uploading small{display:block}.face-swap-uploading b{font-size:9px}.face-swap-uploading small{font-size:7px;color:#717a87;margin-top:3px}
+.face-swap-uploading{margin-top:10px;padding:10px;border:1px solid #2a2a2a;border-radius:10px;background:#111111}
+.face-swap-upload-progress{height:5px;background:#1b1b1b;border-radius:999px;overflow:hidden;margin-top:8px}.face-swap-upload-progress i{display:block;height:100%;background:#e9e9e9;border-radius:inherit;transition:width .18s ease}.face-swap-uploading b,.face-swap-uploading small{display:block}.face-swap-uploading b{font-size:9px}.face-swap-uploading small{font-size:7px;color:#717a87;margin-top:3px}
 .face-swap-info-list{display:grid;gap:8px;margin-top:12px}.face-swap-info-list>div{display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;align-items:center;padding:10px;border:1px solid #252525;border-radius:10px;background:#0e0e0e}
 .face-swap-info-list>div>span{width:30px;height:30px;border-radius:9px;background:#121212;color:#989898;display:grid;place-items:center;font-size:10px}.face-swap-info-list b,.face-swap-info-list small{display:block}.face-swap-info-list b{font-size:9px}.face-swap-info-list small{font-size:7px;color:#6f7886;margin-top:2px}
 .face-swap-jobs{display:grid;gap:8px}.face-swap-job{display:grid;grid-template-columns:52px minmax(130px,1fr) minmax(250px,1.2fr) auto;gap:10px;align-items:center;padding:11px;border:1px solid #222222;border-radius:12px;background:#0e0e0e}
@@ -9022,6 +9023,35 @@ function faceSwapPipelineState(job){
   }
   return {label:"Aguardando",cls:"queued",detail:"Job pronto para executar."};
 }
+function syncFaceSwapUploadProgressUi(){
+  const label=document.getElementById("faceSwapUploadLabel");
+  const meta=document.getElementById("faceSwapUploadMeta");
+  const bar=document.getElementById("faceSwapUploadBar");
+  const pct=Math.max(0,Math.min(100,Math.round(Number(faceSwapUploadProgress.percent||0))));
+  if(label)label.textContent=faceSwapUploadProgress.current||"Processando";
+  if(meta)meta.textContent=(pct?pct+"% enviado · ":"")+Number(faceSwapUploadProgress.done||0)+" de "+Number(faceSwapUploadProgress.total||0)+" concluído(s)";
+  if(bar)bar.style.width=pct+"%";
+}
+function uploadFaceSwapPart(part,blob,onProgress){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open("PUT",part.upload_url,true);
+    xhr.timeout=10*60*1000;
+    const type=part.content_type||blob.type||"application/octet-stream";
+    if(type)xhr.setRequestHeader("Content-Type",type);
+    xhr.upload.onprogress=(event)=>{
+      if(event.lengthComputable&&typeof onProgress==="function")onProgress(event.loaded,event.total);
+    };
+    xhr.onload=()=>{
+      if(xhr.status>=200&&xhr.status<300)resolve();
+      else reject(new Error("Upload do Face Swap falhou · HTTP "+xhr.status));
+    };
+    xhr.onerror=()=>reject(new Error("A conexão caiu durante o upload do Face Swap."));
+    xhr.ontimeout=()=>reject(new Error("O upload demorou mais de 10 minutos e foi interrompido."));
+    xhr.onabort=()=>reject(new Error("Upload do Face Swap cancelado."));
+    xhr.send(blob);
+  });
+}
 async function uploadFaceSwapJobDirect(video,frame,autoSend){
   const ticket=await cloudFetch("?action=face-swap-upload-ticket",{
     method:"POST",headers:{"Content-Type":"application/json"},
@@ -9038,14 +9068,24 @@ async function uploadFaceSwapJobDirect(video,frame,autoSend){
     fd.append("auto_send",autoSend?"true":"false");
     return await cloudFetch("?action=face-swap-upload",{method:"POST",body:fd});
   }
-  const put=async(part,blob)=>{
-    const r=await fetch(part.upload_url,{
-      method:"PUT",headers:{"Content-Type":part.content_type||blob.type||"application/octet-stream"},body:blob
-    });
-    if(!r.ok)throw new Error("Upload do Face Swap falhou · HTTP "+r.status);
+  const totalBytes=Math.max(1,Number(video.size||0)+Number(frame.size||0));
+  let videoLoaded=0,frameLoaded=0,lastPct=-1;
+  const updateProgress=()=>{
+    const pct=Math.max(0,Math.min(99,Math.round(((videoLoaded+frameLoaded)/totalBytes)*100)));
+    if(pct===lastPct)return;
+    lastPct=pct;
+    faceSwapUploadProgress.percent=pct;
+    faceSwapUploadProgress.current="Enviando · "+pct+"%";
+    syncFaceSwapUploadProgressUi();
   };
-  await Promise.all([put(ticket.video,video),put(ticket.frame,frame)]);
-  return await cloudFetch("?action=face-swap-upload-complete",{
+  await Promise.all([
+    uploadFaceSwapPart(ticket.video,video,(loaded)=>{videoLoaded=loaded;updateProgress()}),
+    uploadFaceSwapPart(ticket.frame,frame,(loaded)=>{frameLoaded=loaded;updateProgress()})
+  ]);
+  faceSwapUploadProgress.percent=100;
+  faceSwapUploadProgress.current="Upload concluído · registrando job…";
+  syncFaceSwapUploadProgressUi();
+  const completed=await cloudFetch("?action=face-swap-upload-complete",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
       job_id:ticket.job_id,
@@ -9056,6 +9096,9 @@ async function uploadFaceSwapJobDirect(video,frame,autoSend){
       auto_send:autoSend
     })
   });
+  faceSwapUploadProgress.current="Entrou na fila · iniciando Face Swap…";
+  syncFaceSwapUploadProgressUi();
+  return completed;
 }
 async function handleFaceSwapVideos(input){
   if(faceSwapUploading)return;
@@ -9064,7 +9107,7 @@ async function handleFaceSwapVideos(input){
   if(!files.length){toast("Selecione pelo menos um vídeo.","err");return}
   if(!faceSwapData?.workflow?.configured){toast("O workflow de Face Swap ainda não está configurado.","err");return}
   faceSwapUploading=true;
-  faceSwapUploadProgress={done:0,total:files.length,current:"Preparando"};
+  faceSwapUploadProgress={done:0,total:files.length,current:"Preparando",percent:0};
   faceSwapPage();
   let ok=0,fail=0;
   for(let i=0;i<files.length;i++){
@@ -9072,12 +9115,14 @@ async function handleFaceSwapVideos(input){
     let objectUrl="";
     try{
       faceSwapUploadProgress.current="Extraindo frame · "+(i+1)+"/"+files.length;
-      faceSwapPage();
+      faceSwapUploadProgress.percent=0;
+      syncFaceSwapUploadProgressUi();
       objectUrl=URL.createObjectURL(video);
       const frameBlob=await extractFirstFrameBlob(objectUrl);
       const frame=new File([frameBlob],"first-frame-"+(i+1)+".jpg",{type:"image/jpeg"});
-      faceSwapUploadProgress.current="Enviando · "+(i+1)+"/"+files.length;
-      faceSwapPage();
+      faceSwapUploadProgress.current="Preparando envio · "+(i+1)+"/"+files.length;
+      faceSwapUploadProgress.percent=0;
+      syncFaceSwapUploadProgressUi();
       await uploadFaceSwapJobDirect(video,frame,faceSwapAuto);
       ok++;
     }catch(e){
@@ -9090,7 +9135,7 @@ async function handleFaceSwapVideos(input){
     }
   }
   faceSwapUploading=false;
-  faceSwapUploadProgress={done:0,total:0,current:""};
+  faceSwapUploadProgress={done:0,total:0,current:"",percent:0};
   await loadFaceSwapData().catch(()=>{});
   faceSwapPage();
   if(ok)toast(ok+" vídeo"+(ok===1?" enviado":"s enviados")+" para Face Swap."+(faceSwapAuto?" Automático ligado.":""),"ok");
@@ -9362,7 +9407,7 @@ function faceSwapPage(){
             '<span>＋</span><b>'+ (faceSwapUploading?"Processando uploads…":"Selecionar vídeos") +'</b>'+
             '<small>Envie o vídeo e pronto. O CloudentFlow extrai o frame, faz o Face Swap e '+(faceSwapAuto?"manda para o motion automaticamente.":"para na imagem para você revisar.")+'</small>'+
           '</label>'+
-          (faceSwapUploading?'<div class="face-swap-uploading"><b>'+esc(faceSwapUploadProgress.current||"Processando")+'</b><small>'+Number(faceSwapUploadProgress.done||0)+' de '+Number(faceSwapUploadProgress.total||0)+' concluído(s)</small></div>':'')+
+          (faceSwapUploading?'<div class="face-swap-uploading"><b id="faceSwapUploadLabel">'+esc(faceSwapUploadProgress.current||"Processando")+'</b><small id="faceSwapUploadMeta">'+Number(faceSwapUploadProgress.done||0)+' de '+Number(faceSwapUploadProgress.total||0)+' concluído(s)</small><div class="face-swap-upload-progress"><i id="faceSwapUploadBar" style="width:'+Math.max(0,Math.min(100,Number(faceSwapUploadProgress.percent||0)))+'%"></i></div></div>':'')+
         '</div>'+
       '</div>'+
       '<div class="production-stats">'+
