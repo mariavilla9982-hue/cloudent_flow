@@ -4013,6 +4013,74 @@ input[type="checkbox"]{accent-color:#fff!important}
     z-index:4!important
   }
 }
+
+/* ===== Reels Teste upload UX v3 ===== */
+.trial-upload-state{display:grid;gap:5px;min-width:140px}
+.trial-upload-state>span{font-size:7px;color:#737b87;font-weight:800}
+.trial-upload-state>div{height:4px;border-radius:999px;background:#202020;overflow:hidden}
+.trial-upload-state i{display:block;width:0;height:100%;border-radius:inherit;background:#e8e8e8;transition:width .16s ease}
+.trial-modal-actions{display:grid;grid-template-columns:minmax(120px,.42fr) minmax(220px,1fr);gap:10px;align-items:center}
+body.trial-modal-open{overflow:hidden!important}
+@media(max-width:900px){
+  body.trial-modal-open .mobile-bottom-nav,
+  body.trial-modal-open .mobile-appbar{display:none!important}
+  .trial-schedule-backdrop{
+    padding:0!important;align-items:stretch!important;justify-items:stretch!important;
+    background:#070707!important
+  }
+  .modal-box.trial-schedule-modal{
+    width:100vw!important;height:100dvh!important;max-width:none!important;max-height:100dvh!important;
+    border:0!important;border-radius:0!important;margin:0!important;
+    padding:calc(12px + env(safe-area-inset-top)) 14px calc(12px + env(safe-area-inset-bottom))!important;
+    display:flex!important;flex-direction:column!important
+  }
+  .trial-schedule-modal .modal-head{
+    position:sticky;top:0;z-index:5;background:#0f0f0f;
+    padding-bottom:8px!important;margin-bottom:2px!important
+  }
+  .trial-schedule-modal .modal-head b{font-size:16px!important}
+  .trial-schedule-modal .modal-head .muted{font-size:10px!important;margin-top:1px}
+  .trial-schedule-modal .modal-head .btn{min-height:38px;padding:8px 12px!important}
+  .trial-modal-scroll{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;padding:2px 1px 10px!important}
+  .trial-modal-file{margin:7px 0 10px!important;padding:9px 10px!important}
+  .trial-schedule-modal .formgrid{grid-template-columns:1fr 1fr!important;gap:9px!important}
+  .trial-schedule-modal .formgrid .full{grid-column:1/-1!important}
+  .trial-schedule-modal .field label{font-size:10px!important;margin-bottom:5px!important}
+  .trial-schedule-modal .field input{width:100%!important;min-height:44px!important;padding:9px 10px!important}
+  .trial-schedule-modal .field textarea{min-height:72px!important;max-height:110px!important;padding:9px 10px!important}
+  .trial-auto-hint{font-size:7px!important;line-height:1.3!important}
+  .trial-modal-rule{margin:8px 0 0!important;padding:8px 9px!important}
+  .trial-modal-rule span{font-size:7px!important}
+  .trial-modal-actions{
+    flex:0 0 auto!important;grid-template-columns:1fr!important;gap:7px!important;
+    margin:0!important;padding:10px 0 0!important;border-top:1px solid #242424!important;
+    background:#0f0f0f!important
+  }
+  .trial-upload-state{grid-template-columns:auto 1fr;align-items:center;gap:8px}
+  .trial-upload-state>div{height:5px}
+  .trial-modal-actions #trialScheduleBtn{width:100%!important;min-height:48px!important;font-size:11px!important}
+}
+@media(max-width:359px){
+  .trial-schedule-modal .formgrid{grid-template-columns:1fr!important}
+  .trial-schedule-modal .formgrid .full{grid-column:auto!important}
+}
+@media(max-height:650px) and (pointer:coarse){
+  body.trial-modal-open .mobile-bottom-nav,
+  body.trial-modal-open .mobile-appbar{display:none!important}
+  .trial-schedule-backdrop{padding:0!important;align-items:stretch!important}
+  .modal-box.trial-schedule-modal{
+    width:100vw!important;height:100dvh!important;max-width:none!important;max-height:100dvh!important;
+    border:0!important;border-radius:0!important;padding:8px 14px!important
+  }
+  .trial-schedule-modal .modal-head{margin-bottom:2px!important;padding-bottom:5px!important}
+  .trial-modal-file{margin:3px 0 6px!important;padding:6px 9px!important}
+  .trial-schedule-modal .formgrid{grid-template-columns:1fr 1fr 1.35fr!important;gap:8px!important}
+  .trial-schedule-modal .formgrid .full{grid-column:auto!important}
+  .trial-schedule-modal .field textarea{min-height:44px!important;height:44px!important}
+  .trial-modal-rule{display:none!important}
+  .trial-modal-actions{grid-template-columns:minmax(150px,.45fr) minmax(260px,1fr)!important;padding-top:6px!important}
+  .trial-modal-actions #trialScheduleBtn{min-height:40px!important}
+}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -6299,10 +6367,16 @@ function futureTrialTarget(date,slot){
   }
   return {date:original,time:trialDefaultTime(original,slot),adjusted:false};
 }
-function handleTrialVideoPicker(input){
+async function handleTrialVideoPicker(input){
   const file=input?.files?.[0],requestedDate=trialPendingDate,slot=trialPendingSlot;
   trialPendingDate=null;trialPendingSlot=null;
   if(!file||!requestedDate||slot===null)return;
+  await loadTrialReels().catch(()=>{});
+  if(trialRowForSlot(requestedDate,slot)){
+    updateTrialReelsBlock();
+    toast("Esse Reel teste já foi agendado. Atualizei a tela.","ok");
+    return;
+  }
   const target=futureTrialTarget(requestedDate,slot);
   const date=target.date,time=target.time;
   trialDraftFile=file;trialDraftSlot=slot;
@@ -6316,8 +6390,31 @@ function handleTrialVideoPicker(input){
       '<div class="field full"><label>Legenda</label><textarea id="trialCaption" placeholder="Opcional"></textarea></div></div>'+
       '<div class="trial-modal-rule"><b>Aprendizado separado</b><span>Este Reel alimenta apenas o aprendizado da madrugada e não altera o Smart Scheduler dos Reels normais.</span></div>'+
     '</div>'+
-    '<div class="trial-modal-actions"><button class="btn primary" id="trialScheduleBtn" onclick="scheduleTrialDraft()">Agendar Reel teste</button></div>'+
+    '<div class="trial-modal-actions"><div class="trial-upload-state" id="trialUploadState"><span id="trialUploadText">Pronto para enviar</span><div><i id="trialUploadBar"></i></div></div><button class="btn primary" id="trialScheduleBtn" onclick="scheduleTrialDraft()">Agendar Reel teste</button></div>'+
   '</div></div>';
+  document.body.classList.add("trial-modal-open");
+}
+
+function setTrialUploadProgress(percent,label){
+  const pct=Math.max(0,Math.min(100,Math.round(Number(percent||0))));
+  const text=$("#trialUploadText"),bar=$("#trialUploadBar");
+  if(text)text.textContent=label||("Enviando · "+pct+"%");
+  if(bar)bar.style.width=pct+"%";
+}
+function uploadTrialPart(part,file,onProgress){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open("PUT",part.upload_url,true);
+    xhr.timeout=10*60*1000;
+    const type=part.content_type||file.type||"video/mp4";
+    if(type)xhr.setRequestHeader("Content-Type",type);
+    xhr.upload.onprogress=(e)=>{if(e.lengthComputable&&typeof onProgress==="function")onProgress(e.loaded,e.total)};
+    xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error("Falha ao enviar o Reel teste · HTTP "+xhr.status));
+    xhr.onerror=()=>reject(new Error("A conexão caiu durante o envio do Reel teste."));
+    xhr.ontimeout=()=>reject(new Error("O envio demorou demais. Tente novamente."));
+    xhr.onabort=()=>reject(new Error("Envio cancelado."));
+    xhr.send(file);
+  });
 }
 
 async function uploadTrialVideoDirect(file,{scheduledAt,trialDay,slotIndex,autoTime,caption=""}){
@@ -6329,15 +6426,20 @@ async function uploadTrialVideoDirect(file,{scheduledAt,trialDay,slotIndex,autoT
     })
   });
   if(ticket?.fallback){
+    setTrialUploadProgress(10,"Enviando vídeo…");
     const fd=new FormData();
     fd.append("file",file);fd.append("scheduled_at",scheduledAt);fd.append("trial_day",trialDay);
     fd.append("slot_index",String(slotIndex));fd.append("auto_time",String(autoTime));fd.append("caption",caption);
-    return await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
+    const result=await cloudFetch("?action=trial-upload",{method:"POST",body:fd});
+    setTrialUploadProgress(100,"Agendado ✓");
+    return result;
   }
-  const put=await fetch(ticket.upload_url,{
-    method:"PUT",headers:{"Content-Type":ticket.content_type||file.type||"video/mp4"},body:file
+  setTrialUploadProgress(0,"Preparando envio…");
+  await uploadTrialPart(ticket,file,(loaded,total)=>{
+    const pct=total?Math.min(99,loaded/total*100):0;
+    setTrialUploadProgress(pct,"Enviando · "+Math.round(pct)+"%");
   });
-  if(!put.ok)throw new Error("O upload do Reel teste para o Backblaze B2 falhou ("+put.status+"). Confira o CORS do bucket.");
+  setTrialUploadProgress(100,"Upload concluído · salvando…");
   return await cloudFetch("?action=trial-upload-complete",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -6356,18 +6458,18 @@ async function scheduleTrialDraft(){
   if(h<0||h>5){toast("Use um horário entre 00:00 e 05:59.","err");return}
   const at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
   if(at.getTime()<Date.now()-10*60_000){toast("Escolha um horário futuro.","err");return}
-  const btn=$("#trialScheduleBtn");if(btn){btn.disabled=true;btn.textContent="Enviando…"}
+  const btn=$("#trialScheduleBtn");if(btn){btn.disabled=true;btn.textContent="Preparando…"}setTrialUploadProgress(0,"Preparando…");
   try{
     const autoTime=time===trialDraftSuggestedTime;
     const uploaded=await uploadTrialVideoDirect(file,{
       scheduledAt:at.toISOString(),trialDay:day,slotIndex:Number(trialDraftSlot??0),autoTime,caption
     });
-    const clean=uploaded?.item?.id?await runMediaCleaner("trial",uploaded.item.id,{quiet:true}):{status:"skipped"};
+    setTrialUploadProgress(100,"Agendado ✓");
+    if(btn)btn.textContent="Agendado ✓";
     trialDraftFile=null;trialDraftSlot=null;trialDraftSuggestedTime=null;
-    await loadTrialReels();
     closeModal();
-    updateTrialReelsBlock();
-    toast("Reel teste agendado para "+time+(autoTime?" · Autoajuste ativo.":" · Horário manual.")+(clean?.status==="ready"?" · Media Cleaner ✓":clean?.status==="skipped"?" · Arquivo original mantido":""),"ok");
+    toast("Reel teste agendado para "+time+" · limpeza roda em segundo plano.","ok");
+    loadTrialReels().then(updateTrialReelsBlock).catch(()=>{});
   }catch(e){
     toast(e.message||"Falha ao agendar Reel teste.","err");
     if(btn){btn.disabled=false;btn.textContent="Agendar Reel teste"}
@@ -7293,6 +7395,7 @@ function closeModal(){
   }
   if(m?.dataset.url)URL.revokeObjectURL(m.dataset.url);
   $("#modalHost").innerHTML="";
+  document.body.classList.remove("trial-modal-open");
 }
 let dragInfo=null;
 function dragSlot(e,date,slot){dragInfo={date,slot};e.dataTransfer.setData("text/plain","slot")}
