@@ -47,7 +47,7 @@ def _allowed_signed_source_url(value):
             return False
         if host == "dxrhvudvutmgrmfkmzxo.supabase.co":
             return True
-        return host.endswith(".r2.cloudflarestorage.com")
+        return host.endswith(".r2.cloudflarestorage.com") or host.endswith(".backblazeb2.com")
     except Exception:
         return False
 
