@@ -4081,6 +4081,12 @@ body.trial-modal-open{overflow:hidden!important}
   .trial-modal-actions{grid-template-columns:minmax(150px,.45fr) minmax(260px,1fr)!important;padding-top:6px!important}
   .trial-modal-actions #trialScheduleBtn{min-height:40px!important}
 }
+
+.trial-inline-expired{
+  opacity:.42!important;cursor:not-allowed!important;pointer-events:none!important;
+  border-style:dashed!important;background:#090909!important
+}
+.trial-inline-expired .slot-plus{font-size:12px!important}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -6055,6 +6061,16 @@ const TRIAL_NIGHT_TIMES=["00:30","02:00","03:30","05:00"];
 function trialDefaultTime(date,slotIndex=0){
   return trialTimesForDate(date)[Math.max(0,Math.min(TRIALS_PER_NIGHT-1,Number(slotIndex)||0))]||TRIAL_NIGHT_TIMES[0];
 }
+function trialSlotDateTime(date,slotIndex=0,timeOverride=null){
+  const time=String(timeOverride||trialDefaultTime(date,slotIndex));
+  const [h,m]=time.split(":").map(Number);
+  const at=new Date(date+"T00:00:00");
+  at.setHours(h,m,0,0);
+  return at;
+}
+function trialSlotIsPast(date,slotIndex=0){
+  return trialSlotDateTime(date,slotIndex).getTime()<=Date.now()+30_000;
+}
 function trialHistoryForWeek(){
   const days=new Set(weekDates().map(localISO));
   return (trialReelsData||[]).filter(x=>x?.scheduled_at&&days.has(localISO(new Date(x.scheduled_at))));
@@ -6137,6 +6153,10 @@ function trialReelCard(row){
 function trialInlineSlot(date,index,row=null){
   const autoTime=trialTimesForDate(date)[index]||TRIAL_NIGHT_TIMES[index];
   if(!row){
+    if(trialSlotIsPast(date,index)){
+      return '<div class="slot empty ui31-empty-slot trial-inline-empty trial-inline-expired" aria-disabled="true">'+
+        '<span class="slot-plus">—</span><span><b>Reel teste '+(index+1)+'</b><small>'+autoTime+' · encerrado</small></span></div>';
+    }
     return '<button class="slot empty ui31-empty-slot trial-inline-empty" onclick="pickTrialForDay(\''+date+'\','+index+')">'+
       '<span class="slot-plus">＋</span><span><b>Reel teste '+(index+1)+'</b><small>'+autoTime+'</small></span></button>';
   }
@@ -6341,9 +6361,10 @@ function pickTrialForDay(date,slotIndex=null){
   if(used.length>=TRIALS_PER_NIGHT){toast("Essa madrugada já tem "+TRIALS_PER_NIGHT+" Reels teste.","err");return}
   let slot=slotIndex===null?0:Number(slotIndex);
   if(slotIndex===null){
-    for(let i=0;i<TRIALS_PER_NIGHT;i++){if(!trialRowForSlot(date,i)){slot=i;break}}
+    for(let i=0;i<TRIALS_PER_NIGHT;i++){if(!trialRowForSlot(date,i)&&!trialSlotIsPast(date,i)){slot=i;break}}
   }
   if(trialRowForSlot(date,slot)){toast("Esse bloco já está ocupado.","err");return}
+  if(trialSlotIsPast(date,slot)){toast("Esse horário já passou. Escolha um slot futuro.","err");return}
   trialPendingDate=date;trialPendingSlot=slot;
   const input=$("#trialVideoPicker");
   if(!input)return;
@@ -6352,20 +6373,8 @@ function pickTrialForDay(date,slotIndex=null){
 }
 
 function futureTrialTarget(date,slot){
-  const original=String(date||"");
-  const start=new Date(original+"T12:00:00");
-  if(Number.isNaN(start.getTime()))return {date:original,time:trialDefaultTime(original,slot),adjusted:false};
-  for(let offset=0;offset<14;offset++){
-    const d=new Date(start);d.setDate(start.getDate()+offset);
-    const candidate=localISO(d);
-    const time=trialDefaultTime(candidate,slot);
-    const [h,m]=time.split(":").map(Number);
-    const at=new Date(candidate+"T00:00:00");at.setHours(h,m,0,0);
-    if(at.getTime()>Date.now()+60_000 && trialRowsForDate(candidate).length<TRIALS_PER_NIGHT && !trialRowForSlot(candidate,slot)){
-      return {date:candidate,time,adjusted:candidate!==original};
-    }
-  }
-  return {date:original,time:trialDefaultTime(original,slot),adjusted:false};
+  const exactDate=String(date||"");
+  return {date:exactDate,time:trialDefaultTime(exactDate,slot),adjusted:false};
 }
 async function handleTrialVideoPicker(input){
   const file=input?.files?.[0],requestedDate=trialPendingDate,slot=trialPendingSlot;
@@ -6386,7 +6395,7 @@ async function handleTrialVideoPicker(input){
     '<div class="trial-modal-scroll">'+
       '<div class="trial-modal-file"><span>VÍDEO</span><b>'+esc(file.name)+'</b><small>'+fmtSize(file.size)+'</small></div>'+
       '<div class="formgrid"><div class="field"><label>Dia</label><input id="trialDay" type="date" value="'+esc(date)+'" readonly></div>'+
-      '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">'+(target.adjusted?"A madrugada escolhida já passou. Ajustei automaticamente para "+date+" às "+time+".":"Autoajuste sugeriu "+time+". Se alterar, este slot fica manual.")+'</small></div>'+
+      '<div class="field"><label>Horário da madrugada</label><input id="trialTime" type="time" min="00:00" max="05:59" value="'+time+'"><small class="trial-auto-hint">Será agendado exatamente para '+date+' às '+time+'. Se alterar o horário, ele fica manual.</small></div>'+
       '<div class="field full"><label>Legenda</label><textarea id="trialCaption" placeholder="Opcional"></textarea></div></div>'+
       '<div class="trial-modal-rule"><b>Aprendizado separado</b><span>Este Reel alimenta apenas o aprendizado da madrugada e não altera o Smart Scheduler dos Reels normais.</span></div>'+
     '</div>'+
@@ -6457,7 +6466,7 @@ async function scheduleTrialDraft(){
   const [h,m]=time.split(":").map(Number);
   if(h<0||h>5){toast("Use um horário entre 00:00 e 05:59.","err");return}
   const at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
-  if(at.getTime()<Date.now()-10*60_000){toast("Escolha um horário futuro.","err");return}
+  if(at.getTime()<=Date.now()+30_000){toast("Esse horário já passou ou está perto demais. Escolha um horário futuro.","err");return}
   const btn=$("#trialScheduleBtn");if(btn){btn.disabled=true;btn.textContent="Preparando…"}setTrialUploadProgress(0,"Preparando…");
   try{
     const autoTime=time===trialDraftSuggestedTime;
