@@ -1,22 +1,112 @@
-const CACHE="cloudentflow-pwa-v3";
-const STATIC=["/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
+const CACHE="cloudentflow-pwa-v4";
+const APP_SHELL="/";
+const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
+const NAVIGATION_NETWORK_BUDGET_MS=650;
+
+function isCacheable(response){
+  return Boolean(response&&response.ok&&(response.type==="basic"||response.type==="default"));
+}
+
+async function putInCache(request,response){
+  if(!isCacheable(response))return;
+  const cache=await caches.open(CACHE);
+  await cache.put(request,response.clone());
+}
+
+function delay(ms,value=null){
+  return new Promise(resolve=>setTimeout(()=>resolve(value),ms));
+}
 
 self.addEventListener("install",event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(STATIC)).catch(()=>null));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache=>cache.addAll(STATIC))
+      .catch(()=>null)
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate",event=>{
-  event.waitUntil(
-    caches.keys()
-      .then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))
-      .then(()=>self.clients.claim())
-  );
+  event.waitUntil((async()=>{
+    const keys=await caches.keys();
+    await Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)));
+    if(self.registration.navigationPreload){
+      try{await self.registration.navigationPreload.enable()}catch{}
+    }
+    await self.clients.claim();
+  })());
 });
 
+async function handleNavigation(event){
+  const request=event.request;
+  const cache=await caches.open(CACHE);
+  const cached=await cache.match(APP_SHELL);
+
+  const networkPromise=(async()=>{
+    try{
+      let response=null;
+      try{response=await event.preloadResponse}catch{}
+      if(!response)response=await fetch(request);
+      if(isCacheable(response))await cache.put(APP_SHELL,response.clone());
+      return response;
+    }catch{
+      return null;
+    }
+  })();
+
+  if(!cached){
+    return (await networkPromise)||Response.error();
+  }
+
+  const fastNetwork=await Promise.race([
+    networkPromise,
+    delay(NAVIGATION_NETWORK_BUDGET_MS)
+  ]);
+
+  if(fastNetwork)return fastNetwork;
+
+  event.waitUntil(networkPromise.catch(()=>null));
+  return cached;
+}
+
+async function staleWhileRevalidate(event){
+  const request=event.request;
+  const cache=await caches.open(CACHE);
+  const cached=await cache.match(request);
+
+  const networkPromise=fetch(request)
+    .then(async response=>{
+      if(isCacheable(response))await cache.put(request,response.clone());
+      return response;
+    })
+    .catch(()=>null);
+
+  if(cached){
+    event.waitUntil(networkPromise.catch(()=>null));
+    return cached;
+  }
+
+  return (await networkPromise)||Response.error();
+}
+
 self.addEventListener("fetch",event=>{
-  if(event.request.method!=="GET")return;
-  event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));
+  const request=event.request;
+  if(request.method!=="GET")return;
+
+  let url;
+  try{url=new URL(request.url)}catch{return}
+
+  // API, autenticação e dados remotos nunca passam pelo cache da PWA.
+  if(url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;
+
+  if(request.mode==="navigate"||request.destination==="document"){
+    event.respondWith(handleNavigation(event));
+    return;
+  }
+
+  if(["style","script","image","font","manifest"].includes(request.destination)){
+    event.respondWith(staleWhileRevalidate(event));
+  }
 });
 
 self.addEventListener("push",event=>{
