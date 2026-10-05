@@ -4093,6 +4093,12 @@ body.trial-modal-open{overflow:hidden!important}
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" href="/cloudent-icon.svg" type="image/svg+xml">
+<style>
+.face-swap-character-card{margin-bottom:16px}
+.face-swap-character-preview{display:block;width:min(100%,420px);max-height:315px;object-fit:contain;border:1px solid var(--border,#333);border-radius:12px;margin:0 0 12px;background:#eee}
+.face-swap-character-card .face-swap-quick-actions{display:flex;flex-wrap:wrap;gap:8px}
+.face-swap-character-card .face-swap-quick-actions button{min-height:44px;white-space:normal}
+</style>
 </head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
@@ -9554,6 +9560,24 @@ function ensureFaceSwapTicker(){
     }catch{}
   },10000);
 }
+let faceSwapCharacterSaving=false;
+async function changeFaceSwapCharacter(input,original=false){
+  if(faceSwapCharacterSaving||faceSwapUploading)return;
+  const file=input?.files?.[0];
+  if(!original&&!file)return;
+  if(file&&(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>10*1024*1024)){
+    toast("Escolha PNG, JPG ou WebP de até 10 MB.","err");input.value="";return;
+  }
+  faceSwapCharacterSaving=true;faceSwapPage();
+  try{
+    const form=new FormData();
+    if(original)form.append("mode","workflow");else form.append("character",file);
+    await cloudFetch("?action=face-swap-character",{method:"POST",body:form});
+    await loadFaceSwapData();
+    toast("Folha salva. Os próximos vídeos usarão essa personagem.");
+  }catch(error){toast(error.message||"Não foi possível trocar a folha.","err");}
+  finally{faceSwapCharacterSaving=false;faceSwapPage();}
+}
 function faceSwapPage(){
   const root=$("#faceSwap");if(!root)return;
   const jobs=faceSwapData?.jobs||[];
@@ -9566,7 +9590,7 @@ function faceSwapPage(){
   root.innerHTML=
     '<div class="face-swap-shell">'+
       '<div class="face-swap-hero">'+
-        '<div><span class="ui3-eyebrow">PIPELINE · RUNNINGHUB</span><h2>Face Swap</h2><p>Você coloca o vídeo. O CloudentFlow extrai o primeiro frame, roda o Face Swap com a folha fixa do node #23 e, no modo automático, entrega o resultado direto para a Produção IA copiar o motion.</p></div>'+
+        '<div><span class="ui3-eyebrow">PIPELINE · RUNNINGHUB</span><h2>Face Swap</h2><p>Você coloca o vídeo. O CloudentFlow extrai o primeiro frame, roda o Face Swap com a folha de personagem selecionada e, no modo automático, entrega o resultado direto para a Produção IA copiar o motion.</p></div>'+
         '<div class="face-swap-hero-actions">'+
           '<span class="status-pill '+(wf.configured?"green":"red")+'">'+(wf.configured?"Workflow conectado":"Configuração pendente")+'</span>'+
           '<span class="status-pill '+(workerOnline?"green":"yellow")+'">'+(workerOnline?"Worker online":"Worker aguardando")+'</span>'+
@@ -9579,11 +9603,20 @@ function faceSwapPage(){
         '<div><small>MOTION NA FILA</small><b>'+(faceSwapData?.runninghub?.production_waiting||0)+'</b><span>aguardando Produção IA</span></div>'+
         '<div><small>ÚLTIMO JOB</small><b>'+(jobs[0]?faceSwapStatusMeta(jobs[0].status)[0]:"Nenhum")+'</b><span>'+(jobs[0]?esc(jobs[0].original_file_name||"Vídeo"):"Envie o primeiro vídeo")+'</span></div>'+
       '</div>'+
+      '<div class="card face-swap-card face-swap-character-card">'+
+        '<div class="ui3-panel-head"><div><span>PERSONAGEM</span><h3>Folha de personagem</h3></div></div>'+
+        (wf.character?.preview_url?'<img class="face-swap-character-preview" src="'+esc(wf.character.preview_url)+'" alt="Folha de personagem selecionada">':'')+
+        '<b>'+esc(wf.character?.file_name||"Carregando folha…")+'</b>'+
+        '<p class="muted">A troca vale para os próximos vídeos. Os que já estão na fila mantêm a folha usada no envio.</p>'+
+        '<div class="face-swap-quick-actions"><button class="primary" '+((faceSwapCharacterSaving||faceSwapUploading)?'disabled':'')+' onclick="document.getElementById(\'faceSwapCharacterFile\').click()">'+(faceSwapCharacterSaving?'Salvando folha…':'Trocar folha de personagem')+'</button>'+
+        '<input id="faceSwapCharacterFile" type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="changeFaceSwapCharacter(this)">'+
+        '<button '+((faceSwapCharacterSaving||faceSwapUploading)?'disabled':'')+' onclick="changeFaceSwapCharacter(null,true)">Usar folha original</button></div>'+
+      '</div>'+
       '<div class="face-swap-grid">'+
         '<div class="card face-swap-card">'+
           '<div class="ui3-panel-head"><div><span>ENTRADA</span><h3>Adicionar vídeos</h3></div><div class="face-swap-quick-actions"><button onclick="showPage(\'production\')">Abrir Produção IA</button></div></div>'+
           '<label class="face-swap-drop">'+
-            '<input type="file" accept="video/*" multiple hidden onchange="handleFaceSwapVideos(this)">'+
+            '<input type="file" accept="video/*" multiple hidden '+(faceSwapCharacterSaving?'disabled':'')+' onchange="handleFaceSwapVideos(this)">'+
             '<span>＋</span><b>'+ (faceSwapUploading?"Processando uploads…":"Selecionar vídeos") +'</b>'+
             '<small>Envie o vídeo e pronto. O CloudentFlow extrai o frame, faz o Face Swap e '+(faceSwapAuto?"manda para o motion automaticamente.":"para na imagem para você revisar.")+'</small>'+
           '</label>'+
