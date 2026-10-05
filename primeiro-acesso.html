@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>Primeiro acesso · CloudentFlow</title>
+  <style>
+    :root{color-scheme:dark;--bg:#050505;--panel:#0d0d0d;--line:#252525;--muted:#8c8c8c;--text:#f5f5f5;--soft:#151515;--danger:#ff6b6b;--ok:#9fe6b3}
+    *{box-sizing:border-box}html,body{min-height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% -20%,#1b1b1b 0,transparent 38%),#050505}
+    .shell{width:min(100%,420px)}
+    .brand{display:flex;align-items:center;gap:12px;margin:0 0 22px}.mark{width:36px;height:36px;border:1px solid #333;border-radius:11px;display:grid;place-items:center;background:#111;font-weight:800}.brand b{font-size:18px;letter-spacing:-.4px}.brand span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+    .card{border:1px solid var(--line);background:rgba(13,13,13,.96);border-radius:20px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.38)}
+    h1{font-size:24px;letter-spacing:-.8px;margin:0 0 8px}.lead{margin:0 0 24px;color:var(--muted);font-size:14px;line-height:1.5}
+    label{display:block;font-size:12px;font-weight:700;margin:16px 0 7px;color:#d8d8d8}.field{width:100%;border:1px solid #2b2b2b;background:#090909;color:#fff;border-radius:12px;padding:13px 14px;font:inherit;outline:none;transition:.18s border-color,.18s background}.field:focus{border-color:#666;background:#0b0b0b}.field[readonly]{color:#bbb}
+    .row{position:relative}.toggle{position:absolute;right:9px;bottom:8px;border:0;background:#181818;color:#cfcfcf;border-radius:8px;padding:7px 9px;font-size:11px;cursor:pointer}
+    .hint{font-size:11px;color:#777;margin:7px 0 0}.btn{width:100%;margin-top:22px;border:1px solid #f0f0f0;background:#f2f2f2;color:#050505;border-radius:12px;padding:13px 16px;font-weight:800;font-size:14px;cursor:pointer;transition:.18s transform,.18s opacity}.btn:active{transform:scale(.985)}.btn:disabled{opacity:.48;cursor:wait}
+    .status{display:none;margin-top:15px;border:1px solid var(--line);border-radius:12px;padding:12px 13px;font-size:13px;line-height:1.45;background:#0a0a0a}.status.show{display:block}.status.err{border-color:#4c2525;color:#ffc1c1}.status.ok{border-color:#23442d;color:#c9f7d5}
+    .back{display:block;text-align:center;color:#969696;text-decoration:none;margin:18px 0 0;font-size:13px}.back:hover{color:white}.security{display:flex;gap:8px;align-items:flex-start;margin-top:18px;color:#777;font-size:11px;line-height:1.45}.security i{font-style:normal;color:#aaa}
+    @media(max-width:480px){body{padding:18px}.card{padding:21px;border-radius:18px}h1{font-size:22px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand"><div class="mark">C</div><div><b>CloudentFlow</b><span>Acesso de membro</span></div></div>
+    <section class="card">
+      <h1>Primeiro acesso</h1>
+      <p class="lead">Crie sua senha usando o convite enviado pelo administrador. Este cadastro libera somente o perfil de membro.</p>
+      <form id="form" autocomplete="off">
+        <label for="email">E-mail convidado</label>
+        <input class="field" id="email" type="email" inputmode="email" autocomplete="email" required>
+        <div class="row">
+          <label for="password">Nova senha</label>
+          <input class="field" id="password" type="password" autocomplete="new-password" minlength="8" required>
+          <button class="toggle" type="button" data-target="password">Mostrar</button>
+        </div>
+        <p class="hint">Use pelo menos 8 caracteres.</p>
+        <div class="row">
+          <label for="confirm">Confirmar senha</label>
+          <input class="field" id="confirm" type="password" autocomplete="new-password" minlength="8" required>
+          <button class="toggle" type="button" data-target="confirm">Mostrar</button>
+        </div>
+        <button class="btn" id="submit" type="submit">Criar acesso de membro</button>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </form>
+      <div class="security"><i>◈</i><span>O link é individual e expira. Ele não concede permissão de administrador.</span></div>
+    </section>
+    <a class="back" href="/">← Voltar para o login</a>
+  </main>
+<script>
+(() => {
+  const SUPABASE_URL = "https://dxrhvudvutmgrmfkmzxo.supabase.co";
+  const PUBLISHABLE_KEY = "sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI";
+  const params = new URLSearchParams(location.search);
+  const inviteToken = params.get("token") || "";
+  const invitedEmail = (params.get("email") || "").trim().toLowerCase();
+  const email = document.getElementById("email");
+  const password = document.getElementById("password");
+  const confirm = document.getElementById("confirm");
+  const form = document.getElementById("form");
+  const submit = document.getElementById("submit");
+  const status = document.getElementById("status");
+
+  if (invitedEmail) { email.value = invitedEmail; email.readOnly = true; }
+  if (!inviteToken) show("Este link de primeiro acesso está incompleto ou inválido. Peça um novo convite ao administrador.", "err");
+
+  document.querySelectorAll(".toggle").forEach(btn => btn.addEventListener("click", () => {
+    const input = document.getElementById(btn.dataset.target);
+    const showPass = input.type === "password";
+    input.type = showPass ? "text" : "password";
+    btn.textContent = showPass ? "Ocultar" : "Mostrar";
+  }));
+
+  function show(message, kind="") {
+    status.className = "status show " + kind;
+    status.textContent = message;
+  }
+
+  function friendly(code) {
+    const map = {
+      invalid_invite: "Convite inválido.",
+      invite_not_valid: "Este convite é inválido, expirou ou já foi usado.",
+      invite_already_used: "Este convite já foi utilizado.",
+      account_already_exists: "Já existe uma conta com esse e-mail. Volte ao login e entre normalmente.",
+      password_too_short: "A senha precisa ter pelo menos 8 caracteres.",
+      invalid_email: "Confira o e-mail informado.",
+      account_creation_failed: "Não foi possível criar a conta agora.",
+      member_assignment_failed: "A conta não foi liberada como membro. Tente novamente ou fale com o administrador."
+    };
+    return map[code] || "Não foi possível concluir o primeiro acesso. Tente novamente.";
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!inviteToken) return show("Este link não contém um convite válido.", "err");
+    const normalizedEmail = email.value.trim().toLowerCase();
+    if (!normalizedEmail) return show("Informe o e-mail.", "err");
+    if (password.value.length < 8) return show("A senha precisa ter pelo menos 8 caracteres.", "err");
+    if (password.value !== confirm.value) return show("As duas senhas não são iguais.", "err");
+
+    submit.disabled = true;
+    submit.textContent = "Criando acesso…";
+    show("Validando convite e criando seu perfil de membro…");
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/cloudent-member-signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": PUBLISHABLE_KEY
+        },
+        body: JSON.stringify({ email: normalizedEmail, password: password.value, invite_token: inviteToken })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "signup_failed");
+      show("Acesso criado. Agora você pode entrar no CloudentFlow com este e-mail e a senha que acabou de definir.", "ok");
+      submit.textContent = "Ir para o login";
+      submit.disabled = false;
+      form.onsubmit = (e) => { e.preventDefault(); location.href = "/"; };
+    } catch (error) {
+      show(friendly(error.message), "err");
+      submit.disabled = false;
+      submit.textContent = "Criar acesso de membro";
+    }
+  });
+})();
+</script>
+</body>
+</html>
