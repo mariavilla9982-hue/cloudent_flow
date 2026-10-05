@@ -1,20 +1,9 @@
-const CACHE="cloudentflow-pwa-v4";
+const CACHE="cloudentflow-pwa-v5";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
-const NAVIGATION_NETWORK_BUDGET_MS=650;
 
 function isCacheable(response){
   return Boolean(response&&response.ok&&(response.type==="basic"||response.type==="default"));
-}
-
-async function putInCache(request,response){
-  if(!isCacheable(response))return;
-  const cache=await caches.open(CACHE);
-  await cache.put(request,response.clone());
-}
-
-function delay(ms,value=null){
-  return new Promise(resolve=>setTimeout(()=>resolve(value),ms));
 }
 
 self.addEventListener("install",event=>{
@@ -54,19 +43,15 @@ async function handleNavigation(event){
     }
   })();
 
-  if(!cached){
-    return (await networkPromise)||Response.error();
+  // O HTML do app é estático; sessão e dados são carregados pelas APIs depois.
+  // Depois da primeira visita, abrir/recarregar usa o shell local imediatamente
+  // e atualiza a cópia em background, removendo espera de rede da UI.
+  if(cached){
+    event.waitUntil(networkPromise.catch(()=>null));
+    return cached;
   }
 
-  const fastNetwork=await Promise.race([
-    networkPromise,
-    delay(NAVIGATION_NETWORK_BUDGET_MS)
-  ]);
-
-  if(fastNetwork)return fastNetwork;
-
-  event.waitUntil(networkPromise.catch(()=>null));
-  return cached;
+  return (await networkPromise)||Response.error();
 }
 
 async function staleWhileRevalidate(event){
