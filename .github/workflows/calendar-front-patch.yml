@@ -1,0 +1,137 @@
+name: Calendar front patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/calendar-front-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-calendar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch only calendar front
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path('index.html')
+          s = path.read_text(encoding='utf-8')
+          marker = 'CF_CALENDAR_ACCOUNTS_PATCH_V1'
+          if marker in s:
+              print('Calendar patch already applied.')
+              sys.exit(0)
+
+          css = r'''
+          /* CF_CALENDAR_ACCOUNTS_PATCH_V1 */
+          .calendar-account-switcher{display:flex;align-items:center;gap:10px;overflow-x:auto;padding:4px 2px 12px;margin:2px 0 2px;scrollbar-width:none}
+          .calendar-account-switcher::-webkit-scrollbar{display:none}
+          .calendar-account-switcher>span{flex:0 0 auto;color:#7f8798;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-right:2px}
+          .calendar-account-chip{flex:0 0 auto;display:flex;align-items:center;gap:9px;min-height:44px;padding:6px 12px 6px 7px;border:1px solid #292929;border-radius:999px;background:#101010;color:#aeb4c1;transition:.16s ease}
+          .calendar-account-chip:hover{border-color:#464646;background:#151515;color:#fff;transform:translateY(-1px)}
+          .calendar-account-chip.active{border-color:#ededed;background:#f2f2f2;color:#090909;box-shadow:0 8px 26px rgba(0,0,0,.26)}
+          .calendar-account-chip img,.calendar-account-avatar{width:31px;height:31px;border-radius:50%;object-fit:cover;background:#1d1d1d;border:1px solid #343434;display:grid;place-items:center;font-size:12px;font-weight:950}
+          .calendar-account-chip.active img,.calendar-account-chip.active .calendar-account-avatar{border-color:#cfcfcf;background:#dedede;color:#111}
+          .calendar-account-chip div{display:grid;line-height:1.1;text-align:left}
+          .calendar-account-chip b{font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .calendar-account-chip small{font-size:10px;opacity:.62;margin-top:3px}
+          @media(max-width:760px){.calendar-account-switcher{margin-left:-2px;margin-right:-2px;padding-bottom:10px}.calendar-account-chip{min-height:42px;padding-right:10px}.calendar-account-chip b{max-width:112px}}
+          '''
+          s = s.replace('</style>', css + '\n</style>', 1)
+
+          helper = r'''
+          /* CF_CALENDAR_ACCOUNTS_PATCH_V1 */
+          const CALENDAR_ACCOUNT_KEY="cloudentflow-calendar-account";
+          let calendarActiveAccountId=localStorage.getItem(CALENDAR_ACCOUNT_KEY)||"";
+          function calendarAccountId(a){return String(a?.id||a?.platform_account_id||a?.external_account_id||a?.account_label||"")}
+          function calendarInstagramAccounts(){
+            return (platformAccounts||[]).filter(a=>String(a?.platform||"").toLowerCase()==="instagram"&&a?.enabled!==false);
+          }
+          function calendarEnsureAccount(){
+            const accounts=calendarInstagramAccounts();
+            if(!accounts.length)return "";
+            if(!accounts.some(a=>calendarAccountId(a)===String(calendarActiveAccountId||""))){
+              calendarActiveAccountId=calendarAccountId(accounts[0]);
+              localStorage.setItem(CALENDAR_ACCOUNT_KEY,calendarActiveAccountId);
+            }
+            return calendarActiveAccountId;
+          }
+          function calendarRowAccountId(row){return String(row?.platform_account_id||row?.platformAccountId||"")}
+          function calendarFilterQueueRows(rows){
+            rows=Array.isArray(rows)?rows:[];
+            const accounts=calendarInstagramAccounts();
+            const active=calendarEnsureAccount();
+            if(!active||accounts.length<=1)return rows;
+            const primary=calendarAccountId(accounts[0]);
+            return rows.filter(row=>{
+              if(String(row?.platform||"instagram").toLowerCase()!=="instagram")return false;
+              const rowId=calendarRowAccountId(row);
+              return rowId?rowId===active:active===primary;
+            });
+          }
+          function calendarAccountSwitcher(){
+            const accounts=calendarInstagramAccounts();
+            if(!accounts.length)return "";
+            const active=calendarEnsureAccount();
+            return '<div class="calendar-account-switcher"><span>Conta</span>'+accounts.map(a=>{
+              const id=calendarAccountId(a),label=String(a.account_label||a.username||"Instagram"),photo=String(a?.config?.profile_picture_url||a?.profile_picture_url||"").trim();
+              const avatar=photo?'<img src="'+esc(photo)+'" alt="" referrerpolicy="no-referrer">':'<span class="calendar-account-avatar">'+esc(label.slice(0,1).toUpperCase())+'</span>';
+              return '<button class="calendar-account-chip '+(id===active?'active':'')+'" onclick="selectCalendarAccount(\''+esc(id)+'\')">'+avatar+'<div><b>@'+esc(label.replace(/^@/,''))+'</b><small>'+(a.enabled===false?'Pausada':'Calendário')+'</small></div></button>';
+            }).join('')+'</div>';
+          }
+          async function selectCalendarAccount(id){
+            id=String(id||"");
+            if(!id||id===calendarActiveAccountId)return;
+            calendarActiveAccountId=id;
+            localStorage.setItem(CALENDAR_ACCOUNT_KEY,id);
+            try{
+              if(cloudSession)await syncFromBackend();
+              if(currentPage==="calendar")calendarPage();
+            }catch(e){toast(e?.message||"Não consegui trocar o calendário.","err")}
+          }
+          '''
+          needle = 'async function syncFromBackend(){'
+          if needle not in s:
+              raise SystemExit('syncFromBackend marker not found')
+          s = s.replace(needle, helper + '\n' + needle, 1)
+
+          old = '  const q=await cloudFetch(queueResourcePath());'
+          new = '  const q=calendarFilterQueueRows(await cloudFetch(queueResourcePath()));'
+          if old not in s:
+              raise SystemExit('queue load marker not found')
+          s = s.replace(old, new, 1)
+
+          old = 'platform:row.platform||"instagram",smartMode:'
+          new = 'platform:row.platform||"instagram",platformAccountId:row.platform_account_id||null,smartMode:'
+          if old in s:
+              s = s.replace(old, new, 1)
+
+          old = 'function calendarPage(){\n  const dates='
+          new = 'function calendarPage(){\n  calendarEnsureAccount();\n  if(calendarInstagramAccounts().length>1&&!window.__cfCalendarAccountHydrated){window.__cfCalendarAccountHydrated=true;setTimeout(()=>syncFromBackend().then(()=>{if(currentPage==="calendar")calendarPage()}).catch(()=>{}),0)}\n  const dates='
+          if old not in s:
+              raise SystemExit('calendarPage marker not found')
+          s = s.replace(old, new, 1)
+
+          start = s.index('function calendarPage(){')
+          target = '<div class="calendar-control-card">'
+          pos = s.index(target, start)
+          s = s[:pos] + '${calendarAccountSwitcher()}\n    ' + s[pos:]
+
+          path.write_text(s, encoding='utf-8')
+          print('Calendar multi-account front patch applied.')
+          PY
+      - name: Commit calendar patch and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "cloudentflow-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html
+          git rm .github/workflows/calendar-front-patch.yml
+          git commit -m "Add per-account calendar switcher"
+          git push
