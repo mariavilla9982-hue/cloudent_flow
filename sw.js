@@ -1,9 +1,30 @@
-const CACHE="cloudentflow-pwa-v5";
+const CACHE="cloudentflow-pwa-v6";
 const APP_SHELL="/";
-const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
+const CALENDAR_CONNECT_PATCH="/calendar-connect-patch.js";
+const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg",CALENDAR_CONNECT_PATCH];
 
 function isCacheable(response){
   return Boolean(response&&response.ok&&(response.type==="basic"||response.type==="default"));
+}
+
+async function injectCalendarPatch(response){
+  if(!response||!response.ok)return response;
+  const type=response.headers.get("content-type")||"";
+  if(!type.includes("text/html"))return response;
+  try{
+    let html=await response.text();
+    if(!html.includes("calendar-connect-patch.js")){
+      const tag='<script src="/calendar-connect-patch.js?v=2"></script>';
+      html=html.includes("</body>")?html.replace("</body>",tag+"</body>"):html+tag;
+    }
+    const headers=new Headers(response.headers);
+    headers.delete("content-length");
+    headers.delete("content-encoding");
+    headers.delete("transfer-encoding");
+    return new Response(html,{status:response.status,statusText:response.statusText,headers});
+  }catch{
+    return response;
+  }
 }
 
 self.addEventListener("install",event=>{
@@ -43,15 +64,13 @@ async function handleNavigation(event){
     }
   })();
 
-  // O HTML do app é estático; sessão e dados são carregados pelas APIs depois.
-  // Depois da primeira visita, abrir/recarregar usa o shell local imediatamente
-  // e atualiza a cópia em background, removendo espera de rede da UI.
   if(cached){
     event.waitUntil(networkPromise.catch(()=>null));
-    return cached;
+    return injectCalendarPatch(cached);
   }
 
-  return (await networkPromise)||Response.error();
+  const response=(await networkPromise)||Response.error();
+  return injectCalendarPatch(response);
 }
 
 async function staleWhileRevalidate(event){
@@ -81,7 +100,6 @@ self.addEventListener("fetch",event=>{
   let url;
   try{url=new URL(request.url)}catch{return}
 
-  // API, autenticação e dados remotos nunca passam pelo cache da PWA.
   if(url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;
 
   if(request.mode==="navigate"||request.destination==="document"){
