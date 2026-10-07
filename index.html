@@ -4314,7 +4314,7 @@ const pageSubtitles={
   faceSwap:"Do vídeo ao frame, Face Swap e Produção IA em uma única fila.",
   production:"Transforme vídeo + frame em uma fila de produção contínua.",
   frameExtractor:"Extraia o primeiro frame e organize referências rapidamente.",
-  xStudio:"Gerencie a operação do canal X.",
+  xStudio:"Publique vídeos automaticamente em uma conta X.",
   tiktokStudio:"Prepare e acompanhe sua operação no TikTok.",
   metrics:"Entenda desempenho, alcance e evolução do conteúdo.",
   smartTimes:"Use dados reais para decidir quando publicar.",
@@ -4515,7 +4515,7 @@ async function initCloud(){
     withTimeout(loadFollowerStats(30),4500,"seguidores"),
     withTimeout(loadPlatformAccounts(),4500,"contas"),
     withTimeout(loadTrialReels(),4500,"Trial Reels"),
-    withTimeout(loadXWarmup(),4500,"aquecimento X"),
+    withTimeout(loadXPostingStatus(),4500,"postagem X"),
     withTimeout(loadXIntegrationConfig(),4500,"integração X"),
     withTimeout(loadNotifications(),4500,"notificações")
   ]);
@@ -4837,7 +4837,7 @@ async function handleXOAuthReturn(){
   const connected=params.get("x_connected"),error=params.get("x_error");
   if(!connected&&!error)return;
   try{
-    await Promise.all([loadXIntegrationConfig(),loadPlatformAccounts(),loadXWarmup(),loadAutomationStatus()]);
+    await Promise.all([loadXIntegrationConfig(),loadPlatformAccounts(),loadXPostingStatus()]);
     showPage("xStudio");
     if(connected==="1"){const username=params.get("x_username");toast("Conta X conectada"+(username?" · @"+username:"")+".","ok")}
     else toast("Falha ao conectar o X: "+String(error||"erro desconhecido"),"err");
@@ -5667,7 +5667,7 @@ function showPage(id){
   }
   if(id==="bulkPublish"&&cloudSession){loadBulkPublishRows().then(()=>{if(currentPage==="bulkPublish")bulkPublishPage()}).catch(()=>{});}
   if(id==="xStudio"&&cloudSession){
-    Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus(),loadXWarmup(),loadXIntegrationConfig()]).then(()=>renderAll());
+    Promise.allSettled([loadXPostingStatus(),loadXIntegrationConfig()]).then(()=>{if(currentPage==="xStudio")xStudioPage()});
   }else if(id==="tiktokStudio"&&cloudSession){
     Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus()]).then(()=>renderAll());
   }
@@ -10492,7 +10492,107 @@ function platformStudioPage(platform){
       </div>
     </div>`;
 }
-function xStudioPage(){platformStudioPage("x")}
+
+const X_POSTING_URL=SUPABASE_URL+"/functions/v1/cloudent-x-publish-worker";
+let xPostingData=null,xPostingError="",xPostingBusy=false,xPostingLoading=false,xPostingDraft={caption:"",interval:120,start:""},xPostingLoaded=false;
+let xPostingFile=null,xPostingPoll=null;
+async function xPostingRequest(action,body){
+ return edgeFetch(X_POSTING_URL+"?action="+action,body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+}
+async function loadXPostingStatus(){
+ if(!cloudSession){xPostingData=null;xPostingLoaded=false;return}
+ if(xPostingLoading)return;
+ xPostingLoading=true;
+ try{
+  xPostingData=await xPostingRequest("status");xPostingError="";
+  if(!xPostingLoaded){xPostingDraft.interval=xPostingData.config?.interval_minutes||120;xPostingLoaded=true;}
+ }catch(e){xPostingError=e.message;}
+ finally{xPostingLoading=false;}
+}
+async function refreshXPosting(){
+ await loadXPostingStatus();if(currentPage==="xStudio"&&!xPostingBusy)xStudioPage();
+}
+function xPostingCaptionCount(el){
+ xPostingDraft.caption=el.value;
+ const count=$("#xPostCaptionCount");if(count)count.textContent=Array.from(el.value.trim()).length+"/280";
+}
+function xPostingPickFile(el){
+ xPostingFile=el.files?.[0]||null;
+ const name=$("#xPostingFileName");if(name)name.textContent=xPostingFile?xPostingFile.name+" · "+(xPostingFile.size/1048576).toFixed(1)+" MB":"Nenhum vídeo selecionado";
+}
+async function addXPostingVideo(){
+ if(!cloudSession){focusCloudLogin();return}
+ if(xPostingBusy)return;
+ const file=xPostingFile,caption=xPostingDraft.caption.trim();
+ if(!file){toast("Selecione um vídeo.","err");return}
+ if(!caption||Array.from(caption).length>280){toast("Defina uma legenda de até 280 caracteres.","err");return}
+ const mime=file.type||(/\.mov$/i.test(file.name)?"video/quicktime":"video/mp4");
+ if(!["video/mp4","video/quicktime"].includes(mime)||file.size>512*1024*1024||file.size<=0){toast("Envie um MP4 ou MOV de até 512 MB.","err");return}
+ xPostingBusy=true;
+ const button=$("#xAddPost");if(button){button.disabled=true;button.textContent="Enviando vídeo…";}
+ try{
+  const ticket=await xPostingRequest("upload-ticket",{file_name:file.name,mime_type:mime,size_bytes:file.size});
+  await new Promise((resolve,reject)=>{
+   const xhr=new XMLHttpRequest();xhr.open("PUT",ticket.upload_url);xhr.setRequestHeader("Content-Type",mime);
+   xhr.upload.onprogress=e=>{if(e.lengthComputable&&button)button.textContent="Enviando "+Math.round(e.loaded/e.total*100)+"%";};
+   xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error("Falha ao enviar vídeo ("+xhr.status+")."));
+   xhr.onerror=()=>reject(new Error("O envio falhou. Confira sua conexão e tente novamente."));xhr.send(file);
+  });
+  await xPostingRequest("upload-complete",{provider:ticket.provider,object_path:ticket.object_path,file_name:file.name,mime_type:mime,size_bytes:file.size,caption});
+  xPostingFile=null;xPostingDraft.caption="";await loadXPostingStatus();toast("Vídeo adicionado à fila do X.","ok");
+ }catch(e){toast(e.message,"err")}
+ finally{xPostingBusy=false;if(currentPage==="xStudio")xStudioPage();}
+}
+async function saveXPosting(enabled){
+ if(!cloudSession){focusCloudLogin();return}if(xPostingBusy)return;
+ xPostingDraft.interval=Number($("#xPostingInterval")?.value||xPostingDraft.interval);
+ xPostingDraft.start=$("#xPostingStart")?.value||"";
+ const interval=xPostingDraft.interval;
+ if(!Number.isInteger(interval)||interval<5||interval>10080){toast("Intervalo mínimo: 5 minutos.","err");return}
+ const start=xPostingDraft.start?new Date(xPostingDraft.start):new Date();
+ if(Number.isNaN(start.getTime())){toast("Escolha um início válido.","err");return}
+ xPostingBusy=true;
+ try{await xPostingRequest("save-config",{enabled,interval_minutes:interval,next_publish_at:start.toISOString()});await loadXPostingStatus();toast(enabled?"Postagem automática iniciada.":"Fila pausada.","ok");}
+ catch(e){toast(e.message,"err")}
+ finally{xPostingBusy=false;xStudioPage();}
+}
+async function editXPostingCaption(id){
+ const el=document.getElementById("xCaption-"+id);if(!el)return;
+ try{await xPostingRequest("edit-caption",{id,caption:el.value});await loadXPostingStatus();toast("Legenda salva.","ok");xStudioPage();}
+ catch(e){toast(e.message,"err")}
+}
+async function xPostingAction(action,id){
+ try{await xPostingRequest(action,{id});await loadXPostingStatus();toast(action==="skip"?"Postagem removida da fila.":"Postagem voltou à fila.","ok");xStudioPage();}
+ catch(e){toast(e.message,"err")}
+}
+function xStudioPage(){
+ const root=$("#xStudio");if(!root)return;
+ // Keep the in-progress file and caption while uploading or refreshing other pages.
+ if(xPostingBusy&&root.querySelector("#xAddPost"))return;
+ const data=cloudSession?xPostingData:null,account=data?.x?.account,cfg=data?.config||{},counts=data?.counts||{};
+ const active=cfg.enabled===true;
+ const rows=(data?.posts||[]).filter(p=>p.status!=="skipped");
+ const queued=rows.filter(p=>p.status==="queued"||p.status==="processing").sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+ const history=rows.filter(p=>p.status!=="queued"&&p.status!=="processing");
+ const labels={queued:"Na fila",processing:"Enviando",published:"Publicado",failed:"Falhou"};
+ root.innerHTML=`
+ <div class="channel-page channel-x">
+  <div class="channel-hero"><div class="channel-hero-main"><div class="channel-brand-mark">X</div><div><span class="ui3-eyebrow">POSTAGEM AUTOMÁTICA</span><div class="channel-title-row"><h2>X Studio</h2><span class="channel-stage-pill ${active?"ready":""}">${active?"Automação ativa":"Fila pausada"}</span></div><p>Uma conta, vídeos em sequência e uma legenda para cada postagem.</p></div></div><div class="channel-hero-actions"><button class="btn" onclick="refreshXPosting()">Atualizar</button>${!account?`<button class="btn primary" onclick="connectXOfficial()">Conectar conta X</button>`:""}</div></div>
+  ${xPostingError?`<div class="card" style="color:#ff9b9b">${esc(xPostingError)}</div>`:""}
+  ${!cloudSession?`<div class="card"><p>Entre no CloudentFlow para organizar sua fila do X.</p><button class="btn primary" onclick="focusCloudLogin()">Entrar</button></div>`:""}
+  <div class="channel-stat-grid"><div class="channel-stat-card"><small>CONTA X</small><b style="font-size:20px">${esc(account?.username?"@"+account.username:account?.label||"Não conectada")}</b><span>${account?"Conta única da automação":"Conecte a conta que vai publicar"}</span></div><div class="channel-stat-card"><small>NA FILA</small><b>${counts.queued||0}</b><span>${counts.processing?"1 vídeo sendo enviado":"Ordem de envio dos vídeos"}</span></div><div class="channel-stat-card"><small>PUBLICADOS</small><b>${counts.published||0}</b><span>Histórico da conta</span></div><div class="channel-stat-card"><small>PRÓXIMO ENVIO</small><b style="font-size:18px">${active&&cfg.next_publish_at?esc(new Date(cfg.next_publish_at).toLocaleString("pt-BR")):"Pausado"}</b><span>Horário local · intervalo entre posts</span></div></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px">
+   <div class="card"><h3>Adicionar postagem</h3><p>Envie um vídeo e escreva a legenda dele.</p><label class="btn" style="display:inline-block;cursor:pointer">Selecionar vídeo<input id="xPostingVideo" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" style="display:none" onchange="xPostingPickFile(this)"></label><p id="xPostingFileName" style="overflow-wrap:anywhere">${esc(xPostingFile?xPostingFile.name:"Nenhum vídeo selecionado")}</p><label for="xPostCaption">Legenda desta postagem</label><textarea id="xPostCaption" rows="4" style="width:100%;box-sizing:border-box;margin-top:8px" placeholder="Escreva a legenda, hashtags ou link…" oninput="xPostingCaptionCount(this)">${esc(xPostingDraft.caption)}</textarea><small id="xPostCaptionCount">${Array.from(xPostingDraft.caption.trim()).length}/280</small><p style="font-size:12px">MP4 ou MOV · até 512 MB</p><button id="xAddPost" class="btn primary" onclick="addXPostingVideo()" ${!cloudSession?"disabled":""}>Adicionar à fila</button></div>
+   <div class="card"><h3>Ritmo de postagem</h3><p>O primeiro vídeo sai no início escolhido. Os próximos seguem o intervalo após cada publicação.</p><label for="xPostingInterval">Intervalo entre posts (minutos)</label><input id="xPostingInterval" type="number" min="5" max="10080" value="${xPostingDraft.interval}" style="width:100%;box-sizing:border-box;margin:8px 0 16px" oninput="xPostingDraft.interval=Number(this.value)"><label for="xPostingStart">Início da fila (horário local)</label><input id="xPostingStart" type="datetime-local" value="${esc(xPostingDraft.start)}" style="width:100%;box-sizing:border-box;margin:8px 0 16px" oninput="xPostingDraft.start=this.value"><small>Deixe vazio para começar agora. A fila é conferida a cada minuto.</small><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px"><button class="btn primary" onclick="saveXPosting(true)" ${!account?"disabled":""}>${active?"Salvar e continuar":"Iniciar postagem automática"}</button><button class="btn" onclick="saveXPosting(false)" ${!active?"disabled":""}>Pausar fila</button></div>${cfg.last_error?`<p style="color:#ff9b9b">${esc(cfg.last_error)}</p>`:""}<p style="font-size:12px">Pausar interrompe os próximos envios. Um vídeo que já está sendo enviado pode concluir.</p></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h3>Fila e histórico</h3>${!rows.length?"<p>A fila está vazia. Adicione seu primeiro vídeo acima.</p>":[...queued,...history].map((p,i)=>`<div style="border-top:1px solid var(--border,#303040);padding:16px 0"><div style="display:flex;justify-content:space-between;gap:12px"><strong style="overflow-wrap:anywhere">${p.status==="queued"?i+1+". ":""}${esc(p.drive_file_name)}</strong><span>${labels[p.status]||esc(p.status)}</span></div><textarea id="xCaption-${p.id}" rows="3" style="width:100%;box-sizing:border-box;margin:10px 0" ${["queued","failed"].includes(p.status)?"":"disabled"}>${esc(p.post_text||"")}</textarea><div style="display:flex;gap:8px;flex-wrap:wrap">${["queued","failed"].includes(p.status)?`<button class="btn" onclick="editXPostingCaption('${p.id}')">Salvar legenda</button><button class="btn" onclick="xPostingAction('skip','${p.id}')">Retirar da fila</button>`:""}${p.status==="failed"&&!p.meta?.publish_uncertain?`<button class="btn" onclick="xPostingAction('retry','${p.id}')">Tentar novamente</button>`:""}${p.x_post_id?`<a class="btn" href="https://x.com/i/status/${encodeURIComponent(p.x_post_id)}" target="_blank" rel="noopener">Ver postagem</a>`:""}</div>${p.last_error?`<p style="color:#ff9b9b">${esc(p.last_error)}</p>`:""}${p.meta?.publish_uncertain?"<p>Confira a conta X antes de tentar publicar esse vídeo outra vez.</p>":""}</div>`).join("")}</div>
+ </div>`;
+ if(currentPage==="xStudio"&&!xPostingPoll)xPostingPoll=setInterval(()=>{
+  if(currentPage!=="xStudio"){clearInterval(xPostingPoll);xPostingPoll=null;return;}
+  if(!xPostingBusy&&!root.contains(document.activeElement))refreshXPosting();
+ },30000);
+}
+
 function tiktokStudioPage(){platformStudioPage("tiktok")}
 
 function setSettingsTab(tab){
