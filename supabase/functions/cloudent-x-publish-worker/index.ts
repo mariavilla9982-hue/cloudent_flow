@@ -66,6 +66,15 @@ async function uploadReadUrl(admin:any,provider:string,path:string){
  if(provider==="r2"){const cfg=await getCloudentR2Config(admin);if(!cfg)throw new HttpError("Armazenamento não configurado.",409);return r2PresignedUrl(cfg,"GET",path,3600);}
  const {data,error}=await admin.storage.from("videos").createSignedUrl(path,3600);if(error||!data?.signedUrl)throw error||new Error("signed_url_failed");return data.signedUrl;
 }
+async function uploadedVideoMatches(source:string,size:number){
+ // The URL is signed for GET. Read just one byte to verify the object and its full size.
+ const r=await fetch(source,{method:"GET",headers:{Range:"bytes=0-0"}});
+ const range=String(r.headers.get("content-range")||"").match(/^bytes 0-0\/(\d+)$/i);
+ const valid=r.status===206&&!!range&&Number(range[1])===size;
+ await r.body?.cancel();
+ return valid;
+}
+
 async function uploadRange(source:string,start:number,end:number){
  const r=await fetch(source,{headers:{Range:`bytes=${start}-${end}`}});
  if(r.status!==206) {await r.body?.cancel();throw new HttpError("Armazenamento não retornou o trecho solicitado do vídeo.",502);}
@@ -498,8 +507,8 @@ Deno.serve(async(req:Request)=>{
       if(!new RegExp("^"+userId+"/x-uploads/[0-9a-f-]{36}\\.(mp4|mov)$").test(path)||!["r2","supabase"].includes(provider))return json({error:"invalid_upload_path"},403);
       const text=captionValue(body.caption),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
       if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video"},400);
-      const source=await uploadReadUrl(admin,provider,path),head=await fetch(source,{method:"HEAD"});
-      if(!head.ok||Number(head.headers.get("content-length"))!==size)return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
+      const source=await uploadReadUrl(admin,provider,path);
+      if(!await uploadedVideoMatches(source,size))return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
       const x=await resolveXAccount(admin,userId,{});
       const row={user_id:userId,platform_account_id:x?.id||null,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,meta:{source:"upload",storage_provider:provider,storage_path:path}};
       const {data,error}=await admin.from("x_drive_posts").insert(row).select("id").single();if(error){if(error.code==="23505")return json({ok:true,already_queued:true});throw error;}
