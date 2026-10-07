@@ -5017,38 +5017,39 @@ function focusCloudLogin(){
 }
 async function connectInstagram(){
   if(!cloudSession){focusCloudLogin();return}
-  const token=$("#instagramToken")?.value?.trim();
-  if(!token){toast("Cole seu token do Instagram.","warn");return}
   const btn=$("#connectInstagramBtn");
-  if(btn){btn.disabled=true;btn.textContent="Conectando e testando..."}
+  if(btn){btn.disabled=true;btn.textContent="Abrindo Instagram…"}
   try{
-    const r=await edgeFetch(IG_CONNECT_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({credential:token})
+    const r=await edgeFetch(SUPABASE_URL+"/functions/v1/instagram-oauth",{
+      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})
     });
-    instagramIntegration={
-      provider:"instagram",enabled:true,
-      account_label:r.profile?.username||r.profile?.name||"Instagram",
-      external_account_id:r.profile?.id||"",
-      config:{status:"connected",account_type:r.profile?.account_type||null,api_mode:r.mode||"instagram_login",profile_picture_url:r.profile?.profile_picture_url||null},
-      last_verified_at:new Date().toISOString()
-    };
-    if($("#instagramToken"))$("#instagramToken").value="";
-    await loadPlatformAccounts();
-    const metrics=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
-    liveInstagramMetrics=metrics.media||[];
-    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
-    state.logs.unshift({
-      t:new Date().toISOString(),type:"ok",
-      m:"Instagram conectado e "+(metrics.count||0)+" vídeo(s) recentes sincronizado(s)."
-    });
-    state.logs=state.logs.slice(0,100);save();
-    showPage("metrics");
+    const authUrl=new URL(r?.url||"");
+    if(authUrl.origin!=="https://www.instagram.com"||authUrl.pathname!=="/oauth/authorize")throw new Error("O servidor retornou um endereço de login inválido.");
+    window.location.assign(authUrl.toString());
   }catch(e){
-    toast("Falha ao conectar/testar Instagram: "+friendlyCloudentError(e.message),"err");
-    state.logs.unshift({t:new Date().toISOString(),type:"err",m:"Instagram: "+e.message});
-    state.logs=state.logs.slice(0,100);save();renderAll();
+    toast("Falha ao abrir o login do Instagram: "+friendlyCloudentError(e.message),"err");
+    if(btn){btn.disabled=false;btn.textContent="Conectar Instagram"}
+  }
+}
+async function handleInstagramOAuthReturn(){
+  const url=new URL(window.location.href);
+  const status=url.searchParams.get("instagram_oauth");
+  if(!status)return;
+  if(status==="success"&&!cloudSession)return;
+  try{
+    settingsTab="integrations";
+    if(status==="success"){
+      await Promise.allSettled([loadInstagramStatus(false),loadPlatformAccounts()]);
+      showPage("settings");
+      toast("Instagram conectado pelo login oficial.","ok");
+    }else{
+      showPage("settings");
+      const messages={invalid_state:"O login expirou. Clique em Conectar Instagram novamente.",missing_code:"O Instagram não retornou a autorização.",oauth_not_configured:"O login do Instagram ainda não está configurado.",forbidden:"Somente o administrador pode conectar contas.",account_limit:"O limite é de 3 contas do Instagram.",connect_failed:"Não foi possível concluir a conexão. Tente novamente."};
+      toast(status==="cancelled"?"Autorização do Instagram cancelada.":(messages[url.searchParams.get("reason")]||"Não foi possível conectar o Instagram."),status==="cancelled"?"warn":"err");
+    }
+  }finally{
+    ["instagram_oauth","reason","username","account_id"].forEach(key=>url.searchParams.delete(key));
+    history.replaceState(null,"",url.pathname+url.search+url.hash);
   }
 }
 async function syncInstagramToday(){
@@ -10779,7 +10780,7 @@ function settings(){
   }else if(settingsTab==="integrations"){
     body=`<div class="ui3-settings-grid">
       <div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Instagram</span><h3>${ig?.enabled?"@"+esc(ig.account_label||"Instagram"):"Conectar conta"}</h3></div><span class="status-pill ${ig?.enabled?"ok":"warn"}">${ig?.enabled?"Conectado":"Pendente"}</span></div>
-        ${ig?.enabled?`<p class="muted">Publicação e métricas autorizadas.</p><div class="toolbar"><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas</button></div>`:`<div class="auth-card"><p class="muted">Cole seu Instagram User Access Token.</p><input id="instagramToken" type="password" autocomplete="off" placeholder="Access Token"><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>`}
+        ${ig?.enabled?`<p class="muted">Publicação e métricas autorizadas.</p><div class="toolbar"><button class="btn" id="connectInstagramBtn" onclick="connectInstagram()">Conectar outra conta</button><button class="btn" onclick="loadInstagramStatus().then(renderAll)">Revalidar</button><button class="btn primary" onclick="syncInstagramToday()">Sincronizar métricas</button></div>`:`<div class="auth-card"><p class="muted">Conecte sua conta profissional pelo login oficial do Instagram.</p><button class="btn primary" id="connectInstagramBtn" onclick="connectInstagram()">Conectar Instagram</button></div>`}
       </div>
 
       <div class="card ui3-panel" id="instagramWebSessionCard">
@@ -11034,6 +11035,7 @@ async function init(){
     renderAll();
   }
 
+  await handleInstagramOAuthReturn().catch(err=>console.warn("Instagram OAuth return:",err));
   await handleXOAuthReturn().catch(err=>console.warn("X OAuth return:",err));
 
   const runDeferred=()=>loadDeferredCloudData();
