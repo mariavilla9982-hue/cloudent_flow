@@ -1,7 +1,6 @@
-const CACHE="cloudentflow-pwa-v7";
+const CACHE="cloudentflow-pwa-v8";
 const APP_SHELL="/";
-const CALENDAR_CONNECT_PATCH="/calendar-connect-patch.js";
-const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg",CALENDAR_CONNECT_PATCH];
+const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
 function isCacheable(response){
   return Boolean(response&&response.ok&&(response.type==="basic"||response.type==="default"));
@@ -13,10 +12,10 @@ async function injectCalendarPatch(response){
   if(!type.includes("text/html"))return response;
   try{
     let html=await response.text();
-    if(!html.includes("calendar-connect-patch.js")){
-      const tag='<script src="/calendar-connect-patch.js?v=3"></script>';
-      html=html.includes("</body>")?html.replace("</body>",tag+"</body>"):html+tag;
-    }
+    const tag='<script src="/calendar-connect-patch.js?v=4"></script>';
+    const oldPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
+    if(oldPatch.test(html))html=html.replace(oldPatch,tag);
+    else html=html.includes("</body>")?html.replace("</body>",tag+"</body>"):html+tag;
     const headers=new Headers(response.headers);
     headers.delete("content-length");
     headers.delete("content-encoding");
@@ -56,7 +55,7 @@ async function handleNavigation(event){
     try{
       let response=null;
       try{response=await event.preloadResponse}catch{}
-      if(!response)response=await fetch(request);
+      if(!response)response=await fetch(request,{cache:"no-store"});
       if(isCacheable(response))await cache.put(APP_SHELL,response.clone());
       return response;
     }catch{
@@ -101,6 +100,11 @@ self.addEventListener("fetch",event=>{
   try{url=new URL(request.url)}catch{return}
 
   if(url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;
+
+  if(url.pathname==="/calendar-connect-patch.js"){
+    event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>Response.error()));
+    return;
+  }
 
   if(request.mode==="navigate"||request.destination==="document"){
     event.respondWith(handleNavigation(event));
