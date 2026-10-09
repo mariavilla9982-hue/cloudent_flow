@@ -10825,7 +10825,7 @@ async function xAddToIntervalQueue(){const date=xComposeDate;xComposeDate="";awa
 function xDetailMarkup(){
  const p=xAllPosts().find(p=>p.id===xSelectedPost);
  if(!p)return `<aside class="x-detail-panel x-detail-empty"><span class="x-play-mark">▷</span><h3>Sua próxima publicação</h3><p>Selecione um vídeo para ver o preview e editar a legenda e o horário.</p><button class="x-primary-btn" onclick="xOpenComposer()">＋ Agendar vídeo</button></aside>`;
- const draft=xDetailDraft?.id===p.id?xDetailDraft:{caption:p.post_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()},editable=xEditable(p),cached=xPreviewCache.get(p.id);
+ const draft=xEditable(p)&&xDetailDraft?.id===p.id?xDetailDraft:{caption:p.post_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()},editable=xEditable(p),cached=xPreviewCache.get(p.id);
  return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>Detalhes da publicação</h3><button class="x-icon-btn" aria-label="Fechar" onclick="xCloseDetail()">×</button></div><div class="x-detail-preview"><video id="xDetailVideo" controls playsinline preload="none" ${cached&&cached.expires>Date.now()?`src="${esc(cached.url)}"`:"hidden"}></video><button id="xPreviewButton" onclick="xLoadPreview('${p.id}')" ${cached&&cached.expires>Date.now()?"hidden":""}>▷ Ver preview</button></div>
  <strong class="x-detail-name">${esc(p.drive_file_name)}</strong><label for="xDetailCaption">Legenda</label><textarea id="xDetailCaption" rows="4" ${!editable?"disabled":""} oninput="xDetailDraft.caption=this.value;document.getElementById('xDetailCount').textContent=Array.from(this.value.trim()).length+' / 280'">${esc(draft.caption)}</textarea><small id="xDetailCount" class="x-char-count">${Array.from(draft.caption.trim()).length} / 280</small>
  <label for="xDetailDate">Data e horário</label><input id="xDetailDate" type="datetime-local" value="${esc(draft.date)}" oninput="xDetailDraft.date=this.value" ${!editable?"disabled":""}><small>Horário de Brasília</small><div class="x-detail-status"><span>Status</span><span class="x-status ${p.status}">${xStatusLabels[p.status]||p.status}</span></div>
@@ -10860,7 +10860,7 @@ function xStudioPage(){
  <div class="x-studio-content">${xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xQueueMarkup(xStudioTab==="overview")}${xComposeOpen?xComposerMarkup():xDetailMarkup()}</div></div>`;
  if(currentPage==="xStudio"&&!xPostingPoll)xPostingPoll=setInterval(()=>{
   if(currentPage!=="xStudio"){clearInterval(xPostingPoll);xPostingPoll=null;return;}
-  if(!xPostingBusy&&!root.contains(document.activeElement))refreshXPosting();
+  if(!xPostingBusy&&!(root.contains(document.activeElement)&&document.activeElement.matches("input,textarea,select")))refreshXPosting();
  },30000);
 }
 
