@@ -57,6 +57,12 @@ async function r2PresignedUrl(config:CloudentR2Config,method:string,key:string,e
   return signed.url.toString();
 }
 
+function scheduleValue(value:any){
+ if(value===undefined||value===null||value==="")return null;
+ const date=new Date(value);
+ if(!Number.isFinite(date.getTime())||date.getTime()<=Date.now())throw new HttpError("Escolha uma data e um horário futuros.",400);
+ return date.toISOString();
+}
 function captionValue(value:any){
  const text=String(value||"").trim();
  if(!text||!twitterText.parseTweet(text).valid)throw new HttpError("Defina uma legenda de até 280 caracteres.",400);
@@ -388,20 +394,29 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
   }
 }
 
-async function statusPayload(admin:any,userId:string,master:string){
+async function statusPayload(admin:any,userId:string,master:string,url:URL){
   const [gInt,xInt,connRes,cfgRes,postsRes,accountsRes]=await Promise.all([
-    integration(admin,"google_drive"),integration(admin,"x"),admin.from("google_drive_connections").select("id,account_email,account_name,folder_id,folder_name,folder_web_url,connected_at,last_verified_at").eq("user_id",userId).maybeSingle(),admin.from("x_publish_configs").select("*").eq("user_id",userId).maybeSingle(),admin.from("x_drive_posts").select("id,drive_file_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,updated_at",{count:"exact"}).eq("user_id",userId).order("created_at",{ascending:false}).limit(80),admin.from("platform_accounts").select("id,external_account_id,account_label,enabled,config,created_at").eq("platform","x").eq("enabled",true).order("created_at",{ascending:true})
+    integration(admin,"google_drive"),integration(admin,"x"),admin.from("google_drive_connections").select("id,account_email,account_name,folder_id,folder_name,folder_web_url,connected_at,last_verified_at").eq("user_id",userId).maybeSingle(),admin.from("x_publish_configs").select("*").eq("user_id",userId).maybeSingle(),admin.from("x_drive_posts").select("id,drive_file_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,updated_at",{count:"exact"}).eq("user_id",userId).order("created_at",{ascending:false}).limit(80),admin.from("platform_accounts").select("id,external_account_id,account_label,enabled,config,created_at").eq("platform","x").eq("enabled",true).order("created_at",{ascending:true})
   ]);
   if(connRes.error)throw connRes.error;if(cfgRes.error)throw cfgRes.error;if(postsRes.error)throw postsRes.error;if(accountsRes.error)throw accountsRes.error;
   const cfg:any=cfgRes.data||{user_id:userId,enabled:false,caption:"",link_url:"",interval_minutes:120,timezone:"America/Recife"};
   const owned=(accountsRes.data||[]).filter((x:any)=>String(x?.config?.owner_user_id||"")===userId);
   const active=owned.find((x:any)=>x.id===cfg.platform_account_id)||owned[0]||null;
   const rows=postsRes.data||[];
+  const from=new Date(url.searchParams.get("from")||Date.now()-7*86400000);
+  const to=new Date(url.searchParams.get("to")||Date.now()+35*86400000);
+  if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to<=from||to.getTime()-from.getTime()>43*86400000)throw new HttpError("Período de calendário inválido.",400);
+  const {data:calendar,error:calendarError}=await admin.from("x_drive_posts").select("id,drive_file_name,drive_size_bytes,status,post_text,scheduled_at,x_post_id,published_at,last_error,meta,created_at,attempts").eq("user_id",userId).gte("scheduled_at",from.toISOString()).lt("scheduled_at",to.toISOString()).neq("status","skipped").order("scheduled_at").limit(1000);
+  if(calendarError)throw calendarError;
+  const {data:nextPosts,error:nextError}=await admin.from("x_drive_posts").select("scheduled_at").eq("user_id",userId).eq("status","queued").not("scheduled_at","is",null).order("scheduled_at").limit(1);
+  if(nextError)throw nextError;
   const counts={queued:0,processing:0,published:0,failed:0,total:Number(postsRes.count||0)} as any;
   await Promise.all(["queued","processing","published","failed"].map(async status=>{
     const {count,error}=await admin.from("x_drive_posts").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("status",status);
     if(error)throw error;counts[status]=Number(count||0);
   }));
+  const {count:intervalCount,error:intervalError}=await admin.from("x_drive_posts").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("status","queued").is("scheduled_at",null);
+  if(intervalError)throw intervalError;counts.interval_queued=Number(intervalCount||0);
   const gcfg:any=gInt?.config||{};const xcfg:any=xInt?.config||{};
   const callback=`${Deno.env.get("SUPABASE_URL")}/functions/v1/cloudent-x-publish-worker?action=google-callback`;
   return {
@@ -410,7 +425,7 @@ async function statusPayload(admin:any,userId:string,master:string){
     x:{app_configured:Boolean(xcfg.clientIdCipher&&xcfg.clientSecretCipher),connected:Boolean(active),account:active?{id:active.id,label:active.account_label,username:active?.config?.username||null,external_id:active.external_account_id}:null},
     config:cfg,
     counts,
-    posts:rows
+    posts:rows,calendar_posts:calendar||[],next_scheduled_at:nextPosts?.[0]?.scheduled_at||null
   };
 }
 
@@ -424,8 +439,8 @@ async function runWorker(admin:any,master:string){
     const userId=String(cfg.user_id);
     try{
       const sync={files:0};
-      const due=!cfg.next_publish_at||new Date(cfg.next_publish_at).getTime()<=Date.now();
-      let pub:any=null;if(due)pub=await publishOne(admin,userId,cfg,master,workerId);
+      // The atomic claim checks both calendar due dates and the FIFO interval.
+      let pub:any=await publishOne(admin,userId,cfg,master,workerId);
       results.push({user_id:userId,synced:sync.files,publish:pub||"not_due"});
     }catch(e){
       const message=cleanError(e);await admin.from("x_publish_configs").update({last_worker_at:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()}).eq("user_id",userId);
@@ -470,7 +485,7 @@ Deno.serve(async(req:Request)=>{
     }
 
     const user=await requireUser(admin,req);const userId=String(user.id);
-    if(action==="status")return json(await statusPayload(admin,userId,master));
+    if(action==="status")return json(await statusPayload(admin,userId,master,url));
     const body=await parseBody(req);
 
     if(action==="google-configure"){
@@ -492,6 +507,24 @@ Deno.serve(async(req:Request)=>{
     }
     if(action==="sync")return json({ok:true,...await syncFolder(admin,userId,master)});
 
+    if(action==="preview"){
+      const {data:p,error}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
+      if(error)throw error;if(!p)return json({error:"not_found"},404);
+      const path=String(p.meta?.storage_path||"");
+      if(p.meta?.source!=="upload"||!path.startsWith(userId+"/x-uploads/"))return json({error:"preview_unavailable",user_message:"Preview indisponível para este vídeo."},409);
+      return json({ok:true,url:await uploadReadUrl(admin,String(p.meta.storage_provider||"supabase"),path)});
+    }
+    if(action==="schedule"){
+      const scheduled=scheduleValue(body.scheduled_at);if(!scheduled)return json({error:"missing_schedule"},400);
+      const caption=captionValue(body.caption);
+      const {data:p,error:pe}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
+      if(pe)throw pe;if(!p)return json({error:"not_found"},404);
+      if(p.meta?.publish_uncertain)return json({error:"publish_uncertain",user_message:"Confira a publicação na conta X antes de reagendar."},409);
+      const {data,error}=await admin.from("x_drive_posts").update({scheduled_at:scheduled,post_text:caption,next_attempt_at:scheduled,updated_at:new Date().toISOString()}).eq("id",String(body.id||"")).eq("user_id",userId).in("status",["queued","failed"]).select("id").maybeSingle();
+      if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Já existe um vídeo nesse horário. Escolha outra vaga."},409);throw error;}
+      if(!data)return json({error:"post_locked",user_message:"Essa postagem já está sendo enviada ou foi finalizada."},409);
+      return json({ok:true});
+    }
     if(action==="upload-ticket"){
       if(req.method!=="POST")return json({error:"method_not_allowed"},405);
       const size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
@@ -505,13 +538,18 @@ Deno.serve(async(req:Request)=>{
     if(action==="upload-complete"){
       const path=String(body.object_path||""),provider=String(body.provider||"");
       if(!new RegExp("^"+userId+"/x-uploads/[0-9a-f-]{36}\\.(mp4|mov)$").test(path)||!["r2","supabase"].includes(provider))return json({error:"invalid_upload_path"},403);
+      const scheduled=scheduleValue(body.scheduled_at);
       const text=captionValue(body.caption),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
       if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video"},400);
       const source=await uploadReadUrl(admin,provider,path);
       if(!await uploadedVideoMatches(source,size))return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
       const x=await resolveXAccount(admin,userId,{});
-      const row={user_id:userId,platform_account_id:x?.id||null,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,meta:{source:"upload",storage_provider:provider,storage_path:path}};
-      const {data,error}=await admin.from("x_drive_posts").insert(row).select("id").single();if(error){if(error.code==="23505")return json({ok:true,already_queued:true});throw error;}
+      const row={user_id:userId,platform_account_id:x?.id||null,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path}};
+      const {data,error}=await admin.from("x_drive_posts").insert(row).select("id").single();if(error){if(error.code==="23505"){
+        const {data:existing}=await admin.from("x_drive_posts").select("id").eq("user_id",userId).eq("drive_file_id","upload:"+path).maybeSingle();
+        if(existing)return json({ok:true,id:existing.id,already_queued:true});
+        return json({error:"slot_taken",user_message:"Já existe um vídeo nesse horário. Escolha outra vaga."},409);
+      }throw error;}
       return json({ok:true,id:data.id});
     }
     if(action==="edit-caption"||action==="skip"){
@@ -527,7 +565,9 @@ Deno.serve(async(req:Request)=>{
       const now=new Date().toISOString();
       const next=body.next_publish_at?new Date(body.next_publish_at):new Date();
       if(Number.isNaN(next.getTime()))return json({error:"invalid_start"},400);
-      const row={user_id:userId,platform_account_id:x?.id||null,enabled,caption:"",link_url:"",interval_minutes:interval,timezone:String(body.timezone||"America/Recife"),next_publish_at:enabled?next.toISOString():null,last_error:null,updated_at:now};
+      const slots=body.daily_slots===undefined?undefined:Array.isArray(body.daily_slots)?[...new Set(body.daily_slots.map(String))].sort():[];
+      if(slots&&(!slots.length||slots.length>15||slots.some((t:any)=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))))return json({error:"invalid_slots",user_message:"Defina entre 1 e 15 horários no formato HH:MM."},400);
+      const row={...(slots?{daily_slots:slots}:{}),user_id:userId,platform_account_id:x?.id||null,enabled,caption:"",link_url:"",interval_minutes:interval,timezone:String(body.timezone||"America/Recife"),next_publish_at:enabled?next.toISOString():null,last_error:null,updated_at:now};
       const {error}=await admin.from("x_publish_configs").upsert(row,{onConflict:"user_id"});if(error)throw error;
       if(enabled)bg(fetch(`${supabaseUrl}/functions/v1/cloudent-x-publish-worker?action=worker`,{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":master},body:"{}"}));
       return json({ok:true,config:row});
@@ -542,7 +582,7 @@ Deno.serve(async(req:Request)=>{
       const {data:p,error:e}=await admin.from("x_drive_posts").select("id,status,meta").eq("id",id).eq("user_id",userId).maybeSingle();if(e)throw e;if(!p)return json({error:"not_found"},404);
       if(p.status!=="failed")return json({error:"post_not_failed"},409);
       if(Boolean(p?.meta?.publish_uncertain))return json({error:"publish_uncertain",user_message:"Esse envio pode já ter virado post no X. Confira a conta antes de forçar uma repetição."},409);
-      const {error:u}=await admin.from("x_drive_posts").update({status:"queued",next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,meta:{...(p.meta||{}),publish_uncertain:false},updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",userId);if(u)throw u;
+      const {error:u}=await admin.from("x_drive_posts").update({status:"queued",attempts:0,next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,meta:{...(p.meta||{}),publish_uncertain:false},updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",userId).eq("status","failed");if(u)throw u;
       return json({ok:true});
     }
     return json({error:"not_found"},404);
@@ -552,3 +592,4 @@ Deno.serve(async(req:Request)=>{
     return json({ok:false,error:message,user_message:message},status>=400&&status<600?status:500);
   }
 });
+
