@@ -8052,7 +8052,7 @@ function reelDetailPage(){
 }
 
 function openReelPreview(id){
-  const m=liveInstagramMetrics.find(x=>String(x.id||x.record_id||x.ig_media_id)===String(id))||currentReelDetail?.media;if(!m)return;
+  const m=liveInstagramMetrics.find(x=>[x.id,x.record_id,x.ig_media_id].some(key=>key!=null&&String(key)===String(id)))||(currentReelDetail?.media?{...currentReelDetail.media,...(currentReelDetail.snapshots||[]).slice(-1)[0]}:null);if(!m)return;
   const media=m.media_url
     ?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls autoplay muted loop playsinline></video>`
     :m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}" alt="">`:`<div class="reel-no-media">Preview indisponível</div>`;
