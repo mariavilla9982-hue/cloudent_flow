@@ -4752,8 +4752,8 @@ async function loadNotifications(full=false){
   try{
     const r=await cloudFetch("?resource=notifications"+(full?"":"&compact=1"));
     notificationsData={
-      settings:r.settings||{},
-      items:r.items||[],
+      settings:full?(r.settings||{}):(notificationsData.settings||{}),
+      items:full?(r.items||[]):(notificationsData.items||[]),
       unread:Number(r.unread||0),
       subscriptions:Number(r.subscriptions||0),
       worker:r.worker||null,
@@ -4882,7 +4882,7 @@ function notificationsMarkup(){
       <div>
         <span class="ui3-eyebrow">ALERTAS 24/7</span>
         <h3>Notificações do CloudentFlow</h3>
-        <p>Receba no celular somente quando alguma parte do CloudentFlow der erro.</p>
+        <p>Resumo diário às 6h, contas sem Stories ativos e falhas detectadas no CloudentFlow.</p>
       </div>
       <div class="push-hero-actions">
         <span class="status-pill ${enabled?"ok":"warn"}">${enabled?"Ativas neste dispositivo":"Ativação pendente"}</span>
@@ -4895,6 +4895,13 @@ function notificationsMarkup(){
       <div class="card"><small>DISPOSITIVOS</small><b>${Number(d.subscriptions||0)}</b><span>com push ativo</span></div>
       <div class="card"><small>NÃO LIDAS</small><b>${Number(d.unread||0)}</b><span>alertas no histórico</span></div>
       <div class="card"><small>WORKER</small><b>${workerOnline?"ONLINE":"—"}</b><span>${workerOnline?"checando a cada minuto":"aguardando heartbeat"}</span></div>
+    </div>
+
+    <div class="card ui3-panel">
+      <div class="ui3-panel-head"><div><span>PATCH 1.0</span><h3>Notificações automáticas</h3></div></div>
+      <p><b>06:00 · Horário de Brasília</b> — total de posts com horário marcado para o dia, separado por conta.</p>
+      <p><b>Stories</b> — checagem a cada 15 minutos. Um alerta quando uma conta ficar sem Stories ativos. Falhas de acesso recebem um aviso separado.</p>
+      <p><b>Falhas</b> — avisos de erros registrados e serviços sem sinal de funcionamento. Alertas repetidos são agrupados.</p>
     </div>
 
     <div class="card push-controls">
@@ -4911,8 +4918,8 @@ function notificationsMarkup(){
       <div class="push-list">
         ${items.length?items.map(n=>`<div class="push-row ${esc(n.severity||"info")}">
           <span class="push-dot"></span>
-          <div><b>${esc(n.title||"CloudentFlow")}</b><p>${esc(n.body||"")}</p><small>${new Date(n.created_at).toLocaleString("pt-BR")} · ${n.status==="read"?"Lida":n.status==="sent"?"Enviada":n.status==="processing"?"Enviando":"Pendente"}</small></div>
-        </div>`).join(""):'<div class="ui3-empty">Nenhum erro registrado ainda.</div>'}
+          <div><b>${esc(n.title||"CloudentFlow")}</b><p>${esc(n.body||"")}</p><small>${new Date(n.created_at).toLocaleString("pt-BR")} · ${n.status==="read"?"Lida":n.status==="sent"?"Enviada":n.status==="processing"?"Enviando":n.status==="failed"?"Não enviada":"Pendente"}</small></div>
+        </div>`).join(""):'<div class="ui3-empty">Nenhuma notificação registrada ainda.</div>'}
       </div>
     </div>
   </div>`;
