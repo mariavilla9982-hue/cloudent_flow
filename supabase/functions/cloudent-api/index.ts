@@ -1594,21 +1594,28 @@ Deno.serve(async (req: Request) => {
 
       const isUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
       let mediaQuery=admin.from("instagram_media")
-        .select("id,ig_media_id,media_type,media_product_type,caption,permalink,thumbnail_url,media_url,posted_at,like_count,comments_count,raw,created_at,updated_at");
+        .select("id,ig_media_id,media_type,media_product_type,caption,permalink,thumbnail_url,media_url,posted_at,like_count,comments_count,raw,created_at,updated_at,platform_account_id");
       mediaQuery=isUuid?mediaQuery.eq("id",id):mediaQuery.eq("ig_media_id",id);
       const {data:media,error:mediaError}=await mediaQuery.maybeSingle();
       if(mediaError)throw mediaError;
       if(!media)return json({error:"reel_not_found"},404);
+      const {data:account,error:accountError}=await admin.from("platform_accounts").select("id,account_label,config").eq("id",media.platform_account_id).maybeSingle();
+      if(accountError)throw accountError;
+      const {data:member,error:memberError}=await admin.from("app_members").select("role,enabled").eq("user_id",userData.user.id).maybeSingle();
+      if(memberError)throw memberError;
+      if(!account||!member?.enabled||(member.role!=="admin"&&account.config?.owner_user_id!==userData.user.id))return json({error:"reel_not_found"},404);
+      media.account_label=account.account_label;
+
 
       const [{data:snapshots,error:snapError},{data:schedule,error:scheduleError}]=await Promise.all([
         admin.from("metrics_snapshots")
           .select("id,schedule_id,collected_at,views,reach,likes,comments,shares,saves,raw")
           .eq("instagram_media_record_id",media.id)
-          .order("collected_at",{ascending:true}),
+          .is("raw->>insights_error",null).order("collected_at",{ascending:true}),
         admin.from("schedules")
           .select("id,video_id,scheduled_at,published_at,status,smart_mode,smart_strategy,platform")
           .eq("instagram_media_id",media.ig_media_id)
-          .maybeSingle()
+          .order("published_at",{ascending:false}).limit(1).maybeSingle()
       ]);
       if(snapError)throw snapError;
       if(scheduleError)throw scheduleError;
