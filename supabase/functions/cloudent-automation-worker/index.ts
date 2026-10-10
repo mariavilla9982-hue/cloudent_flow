@@ -40,7 +40,7 @@ async function deleteVideoStorage(admin:any,provider:any,paths:string[]){
 }
 
 
-import {metricContext,metricGraph,storeMetric,metricCutoff} from "./metrics-core.ts";
+import {metricContext,metricGraph,storeMetric,metricCutoff,metricInsights} from "./metrics-core.ts";
 const H={"Content-Type":"application/json"};
 const out=(x:any,s=200)=>new Response(JSON.stringify(x),{status:s,headers:H});
 
@@ -56,20 +56,7 @@ function metricMap(insights:any){
   return m;
 }
 async function fetchInsights(base:string,id:string,token:string){
-  const sets=[
-    "views,reach,saved,shares,total_interactions",
-    "plays,reach,saved,shares,total_interactions",
-    "views,reach,saved,shares",
-    "plays,reach,saved,shares",
-    "reach,saved,shares",
-    "reach"
-  ];
-  let last:any=null;
-  for(const set of sets){
-    try{return await graph(base,id+"/insights?metric="+set,token)}
-    catch(e){last=e}
-  }
-  throw last;
+  return (await metricInsights(base,id,token)).data;
 }
 function parts(d:Date,tz:string){
   const p=new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short",hour12:false}).formatToParts(d);
@@ -291,6 +278,7 @@ Deno.serve(async(req:Request)=>{
         let raw:any={data:[]},insightError:string|null=null;
         try{raw=await fetchInsights(base,String(mediaId),token)}
         catch(e){insightError=e instanceof Error?e.message:String(e)}
+        if(insightError)throw new Error(insightError);
         const mm=metricMap(raw);
 
         const {data:mediaRow,error:me}=await admin.from("instagram_media").upsert({
