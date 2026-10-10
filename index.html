@@ -5018,13 +5018,17 @@ async function loadSystemHealth(){
 
 async function loadFollowerStats(days=30){
   if(!cloudSession){followerStats=null;return}
+  const version=++followerLoadVersion;
   try{
     const previous=Number(followerStats?.current?.followers_count??NaN);
-    const next=await edgeFetch(IG_FOLLOWERS_STATUS_URL+"?days="+days,{method:"GET"});
+    const account=metricsAccountId;
+    const next=await edgeFetch(IG_FOLLOWERS_STATUS_URL+"?days="+Math.max(days,metricsPeriod)+metricsAccountQuery(),{method:"GET"});
+    if(version!==followerLoadVersion||(account!==metricsAccountId&&account))return;
     const current=Number(next?.current?.followers_count??NaN);
     followerChanged=Number.isFinite(previous)&&Number.isFinite(current)&&previous!==current;
     followerStats=next;
   }catch(e){
+    if(version!==followerLoadVersion)return;
     followerStats={current:null,daily:[],worker:null,error:e.message};
     console.warn("Follower status unavailable:",e);
   }
@@ -5035,7 +5039,7 @@ async function loadInstagramStatus(loadMetrics=true){
   try{
     const r=await edgeFetch(IG_STATUS_URL);
     instagramIntegration=r.integration||null;
-    if(loadMetrics&&instagramIntegration?.enabled)await loadInstagramMetricsStored();
+    if(loadMetrics)await loadInstagramMetricsStored();
   }catch(e){
     console.warn("Instagram status unavailable:",e);
   }
@@ -5075,14 +5079,13 @@ async function removeInstagramWebSession(button=null){
   finally{if(button&&document.body.contains(button))actionButtonBusy(button,false)}
 }
 async function loadInstagramMetricsStored(){
-  if(!cloudSession||!instagramIntegration?.enabled)return;
+  if(!cloudSession)return;
+  const version=++metricsLoadVersion,account=metricsAccountId;
   try{
-    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=120",{method:"GET"});
-    liveInstagramMetrics=stored.media||[];
-    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
-  }catch(e){
-    console.warn("Stored Instagram metrics unavailable:",e);
-  }
+    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=120"+metricsAccountQuery(),{method:"GET"});
+    if(version!==metricsLoadVersion||account!==metricsAccountId)return;
+    metricsAccountId=stored.account_id||metricsAccountId;liveInstagramMetrics=stored.media||[];metricsLastCollectedAt=stored.last_collected_at||null;metricsDataError="";
+  }catch(e){if(version===metricsLoadVersion){metricsDataError=e.message;console.warn("Stored Instagram metrics unavailable:",e)}}
 }
 
 async function syncDashboardLiveMetrics(force=false){
@@ -5090,12 +5093,13 @@ async function syncDashboardLiveMetrics(force=false){
   const now=Date.now();
   if(!force&&now-dashboardLiveUpdatedAt<55000)return;
   dashboardLiveSyncInFlight=true;
+  const account=metricsAccountId;
   try{
     // Atualiza apenas a mídia de hoje na Meta para manter a Dashboard leve e próxima do tempo real.
-    await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=1",{method:"POST"});
-    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=120",{method:"GET"});
-    liveInstagramMetrics=stored.media||[];
-    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
+    await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=1"+metricsAccountQuery(),{method:"POST"});
+    const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=120"+metricsAccountQuery(),{method:"GET"});
+    if(account!==metricsAccountId)return;
+    liveInstagramMetrics=stored.media||[];metricsLastCollectedAt=stored.last_collected_at||null;
     dashboardLiveUpdatedAt=Date.now();
   }catch(e){
     console.warn("Live dashboard metrics unavailable:",e);
@@ -5115,7 +5119,7 @@ function dashboardLiveAgeLabel(){
 function mergeInstagramIntoSmartSamples(media=[]){
   if(media.length)state.smartSamples=state.smartSamples.filter(s=>s.source!=="demo");
   for(const m of media){
-    if(!m?.timestamp)return;
+    if(!m?.timestamp)continue;
     const d=new Date(m.timestamp);
     const id="instagram-"+String(m.id||m.record_id||m.timestamp);
     const existing=state.smartSamples.findIndex(s=>s.id===id);
@@ -5189,21 +5193,23 @@ async function handleInstagramOAuthReturn(){
   }
 }
 async function syncInstagramToday(){
-  if(!cloudSession){toast("Entre no CloudentFlow primeiro.","warn");showPage("settings");return}
+  if(!cloudSession){toast("Entre no CloudentFlow primeiro.","warn");return}
+  if(metricsSyncInFlight)return;
+  metricsSyncInFlight=true;metricsDataError="";metrics();
+  const account=metricsAccountId;let after="",synced=0,errors=[];
   try{
-    const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Recife&days=30",{method:"POST"});
-    liveInstagramMetrics=r.media||[];
-    mergeInstagramIntoSmartSamples(liveInstagramMetrics);
-    state.logs.unshift({
-      t:new Date().toISOString(),type:"ok",
-      m:"Métricas reais sincronizadas: "+(r.count||0)+" vídeo(s) dos últimos 30 dias."
-    });
-    state.logs=state.logs.slice(0,100);save();
-  }catch(e){
-    toast("Não consegui buscar as métricas: "+friendlyCloudentError(e.message),"err");
-    state.logs.unshift({t:new Date().toISOString(),type:"err",m:"Falha ao sincronizar métricas: "+e.message});
-    state.logs=state.logs.slice(0,100);save();
-  }finally{renderAll()}
+    do{
+      const r=await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=120"+metricsAccountQuery()+(after?"&after="+encodeURIComponent(after):""),{method:"POST"});
+      if(account&&account!==metricsAccountId)return;
+      metricsAccountId=r.account_id||metricsAccountId;synced+=Number(r.synced||0);errors.push(...(r.errors||[]));
+      liveInstagramMetrics=r.media||[];metricsLastCollectedAt=r.last_collected_at||null;
+      after=r.next_cursor||"";if(currentPage==="metrics")metrics();
+    }while(after);
+    await loadFollowerStats(metricsPeriod);
+    if(errors.length){metricsDataError=errors.length+" Reel(s) não puderam ser atualizados. "+errors[0].error;toast(metricsDataError,"warn")}
+    else toast("Métricas atualizadas: "+synced+" Reel(s).","ok");
+  }catch(e){metricsDataError=e.message;toast("Falha na sincronização: "+friendlyCloudentError(e.message),"err")}
+  finally{metricsSyncInFlight=false;renderAll()}
 }
 function igMetricCard(label,value,sub=""){
   return `<div class="smart-stat"><div class="muted">${label}</div><div class="value">${Number(value||0).toLocaleString("pt-BR")}</div><div class="note">${sub}</div></div>`;
@@ -5249,7 +5255,7 @@ async function signOutCloud(){
   if(cloudSession?.access_token){
     try{await fetch(SUPABASE_URL+"/auth/v1/logout",{method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token}})}catch{}
   }
-  persistCloudSession(null);backendOnline=false;instagramIntegration=null;platformAccounts=[];liveInstagramMetrics=[];automationData=null;followerStats=null;
+  persistCloudSession(null);metricsAccountId="";metricsDataError="";metricsLastCollectedAt=null;metricsLoadVersion++;followerLoadVersion++;backendOnline=false;instagramIntegration=null;platformAccounts=[];liveInstagramMetrics=[];automationData=null;followerStats=null;
   syncAuthGate();renderAll()
 }
 
@@ -5607,6 +5613,7 @@ async function refreshLiveData(showFeedback=false){
     const fullAutomation=currentPage==="automation"||currentPage==="smartTimes";
     const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(currentPage==="settings"&&settingsTab==="notifications"),syncFromBackend(),loadDashboardScheduleRows()];
     if(currentPage==="overview")tasks.push(syncDashboardLiveMetrics(false));
+    if(currentPage==="metrics")tasks.push(loadInstagramMetricsStored());
     // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
     if(activityOpen||(currentPage==="settings"&&settingsTab==="logs"))tasks.push(loadServerLogs());
     if(currentPage==="production")tasks.push(loadProductionData());
@@ -7843,14 +7850,27 @@ async function confirmEditSchedule(oldDate,oldSlot,button=null){
     if(button&&document.body.contains(button))actionButtonBusy(button,false);
   }
 }
-function setMetricsPeriod(days){metricsPeriod=days;metrics()}
+let followerLoadVersion=0,metricsAccountId="",metricsDataError="",metricsLastCollectedAt=null,metricsLoading=false,metricsSyncInFlight=false,metricsLoadVersion=0;
+function metricsAccount(){return calendarInstagramAccounts().find(a=>a.id===metricsAccountId)||calendarInstagramAccounts()[0]||null}
+function metricsAccountQuery(){return metricsAccountId?"&account_id="+encodeURIComponent(metricsAccountId):""}
+function metricsDateKey(value){const d=new Date(value);if(!Number.isFinite(d.getTime()))return null;const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d);const g=t=>parts.find(x=>x.type===t)?.value||"";return g("year")+"-"+g("month")+"-"+g("day")}
+function metricsPeriodRange(days,now=Date.now()){
+ const today=new Date(metricsDateKey(now)+"T03:00:00Z").getTime();
+ return {start:today-(days-1)*86400000,end:today+86400000,previousStart:today-(days*2-1)*86400000};
+}
+async function switchMetricsAccount(id){
+ if(metricsSyncInFlight||!calendarInstagramAccounts().some(a=>a.id===id))return;
+ metricsAccountId=id;metricsDataError="";metricsLastCollectedAt=null;liveInstagramMetrics=[];followerStats=null;metricsLoading=true;metrics();
+ try{await Promise.all([loadInstagramMetricsStored(),loadFollowerStats(metricsPeriod)])}finally{metricsLoading=false;if(currentPage==="metrics")metrics()}
+}
+function setMetricsPeriod(days){metricsPeriod=[7,30,60].includes(Number(days))?Number(days):30;metrics();loadFollowerStats(metricsPeriod).then(()=>{if(currentPage==="metrics")metrics()})}
 function setMetricSeries(metric){metricSeries=metric;metrics()}
 
 function aggregateMetricsByDay(rows){
   const map=new Map();
   for(const m of rows){
     const d=new Date(m.timestamp);
-    const key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    const key=metricsDateKey(m.timestamp);if(!key)continue;
     const cur=map.get(key)||{date:key,views:0,reach:0,likes:0,saves:0,count:0};
     cur.views+=+m.views||0;cur.reach+=+m.reach||0;cur.likes+=+m.likes||0;cur.saves+=+m.saves||0;cur.count++;
     map.set(key,cur);
@@ -7868,7 +7888,7 @@ function analyticsChart(rows,metric="views"){
   const best=[...data].sort((a,b)=>Number(b[metric]||0)-Number(a[metric]||0))[0];
   return `<div class="analytics-bar-board">
     <div class="analytics-bar-summary">
-      <div><small>MÉDIA / DIA</small><b>${avg.toLocaleString("pt-BR")}</b><span>${label}</span></div>
+      <div><small>MÉDIA / DIA COM REELS</small><b>${avg.toLocaleString("pt-BR")}</b><span>${label}</span></div>
       <div><small>MELHOR DIA</small><b>${Number(best?.[metric]||0).toLocaleString("pt-BR")}</b><span>${best?new Date(best.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—"}</span></div>
       <div><small>JANELA VISÍVEL</small><b>${data.length}</b><span>${all.length>14?"últimos 14 dias":"dias com dados"}</span></div>
     </div>
@@ -7922,15 +7942,15 @@ function followerLiveSummary(){
   const hasCurrent=currentRaw!==null&&currentRaw!==undefined&&Number.isFinite(Number(currentRaw));
   const current=hasCurrent?Number(currentRaw):null;
   const daily=followerStats?.daily||[];
-  const today=daily[daily.length-1];
-  const net=Number(today?.net_change||0);
+  const today=daily.find(x=>x.day===metricsDateKey(Date.now()));
+  const net=today?Number(today.net_change||0):null;
   const checked=followerStats?.current?.last_checked_at;
-  const workerOnline=!!followerStats?.worker?.online;
+  const workerOnline=!!followerStats?.worker?.online&&!!checked&&new Date(checked).getTime()>Date.now()-12*60*1000;
   const error=followerStats?.error||"";
   return `<div class="follower-live-summary">
     <div><small>SEGUIDORES AGORA</small><strong class="${followerChanged?"follower-count-bump":""}">${current!==null?current.toLocaleString("pt-BR"):"—"}</strong><span>@${esc(followerStats?.account_label||instagramIntegration?.account_label||"Instagram")}</span></div>
-    <div class="follower-today ${net>=0?"positive":"negative"}"><small>HOJE</small><b>${net>=0?"+":""}${net}</b><span>desde o primeiro registro do dia</span></div>
-    <div class="follower-live-state"><i class="${workerOnline?"on":""}"></i><div><b>${workerOnline?"Monitorando ao vivo":error?"Falha ao carregar":"Atualizando"}</b><span>${error?esc(error):(checked?"checado "+relativeTime(checked):"aguardando primeira leitura")}</span></div></div>
+    <div class="follower-today ${net>=0?"positive":"negative"}"><small>HOJE</small><b>${net===null?"—":(net>=0?"+":"")+net}</b><span>desde o primeiro registro do dia</span></div>
+    <div class="follower-live-state"><i class="${workerOnline?"on":""}"></i><div><b>${error?"Falha na coleta":workerOnline?"Coleta automática a cada 5 min":"Leitura desatualizada"}</b><span>${error?esc(error):(checked?"checado "+relativeTime(checked):"aguardando primeira leitura")}</span></div></div>
   </div>`;
 }
 
@@ -8014,7 +8034,7 @@ function reelDetailPage(){
     <div class="reel-detail-layout">
       <div class="card reel-detail-media">
         ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" controls playsinline></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">Preview indisponível</div>'}
-        <div><b>@${esc(instagramIntegration?.account_label||"Instagram")}</b><p>${esc(m.caption||"Sem legenda")}</p></div>
+        <div><b>@${esc(m.account_label||metricsAccount()?.account_label||instagramIntegration?.account_label||"Instagram")}</b><p>${esc(m.caption||"Sem legenda")}</p></div>
       </div>
       <div class="reel-detail-main">
         <div class="ui3-kpis reel-detail-kpis">
@@ -8042,7 +8062,7 @@ function openReelPreview(id){
       <div class="reel-topbar"><b>Reels</b><span>•••</span></div>
       ${media}
       <div class="reel-overlay">
-        <b>@${esc(instagramIntegration?.account_label||"Instagram")}</b>
+        <b>@${esc(metricsAccount()?.account_label||instagramIntegration?.account_label||"Instagram")}</b>
         <span>${esc((m.caption||"Sem legenda").slice(0,160))}</span>
         <small>▶ ${(+m.views||0).toLocaleString("pt-BR")} · ♥ ${(+m.likes||0).toLocaleString("pt-BR")} · ◎ ${(+m.reach||0).toLocaleString("pt-BR")}</small>
       </div>
@@ -8066,9 +8086,10 @@ function metricsComparisonPanel(rows,ranking){
 
 function metrics(){
   if(cloudLoading){$("#metrics").innerHTML=loadingShell("Carregando métricas");return}
-  const now=Date.now(),cutoff=now-metricsPeriod*86400000,prevCutoff=now-metricsPeriod*2*86400000;
-  const rows=liveInstagramMetrics.filter(m=>new Date(m.timestamp).getTime()>=cutoff);
-  const previous=liveInstagramMetrics.filter(m=>{const t=new Date(m.timestamp).getTime();return t>=prevCutoff&&t<cutoff});
+  const range=metricsPeriodRange(metricsPeriod);
+  const eligible=liveInstagramMetrics.filter(m=>m.media_product_type==="REELS"&&(!metricsAccountId||!m.platform_account_id||m.platform_account_id===metricsAccountId));
+  const rows=eligible.filter(m=>{const t=new Date(m.timestamp).getTime();return t>=range.start&&t<range.end});
+  const previous=eligible.filter(m=>{const t=new Date(m.timestamp).getTime();return t>=range.previousStart&&t<range.start});
   const total=rows.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0),saves:a.saves+(+m.saves||0)}),{views:0,reach:0,likes:0,saves:0});
   const prevTotal=previous.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0)}),{views:0,reach:0,likes:0});
   const avg=rows.length?Math.round(total.views/rows.length):0;
@@ -8081,24 +8102,29 @@ function metrics(){
 
   $("#metrics").innerHTML=`
     <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance do Instagram</h2><p>Seguidores ao vivo e desempenho real dos seus Reels.</p></div>
+      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance do Instagram</h2><p>Por data de publicação · métricas acumuladas dos Reels · horário de Brasília.</p></div>
       <div class="toolbar metric-filter">
         <button class="btn ${metricsPeriod===7?"active-filter":""}" onclick="setMetricsPeriod(7)">7d</button>
         <button class="btn ${metricsPeriod===30?"active-filter":""}" onclick="setMetricsPeriod(30)">30d</button>
         <button class="btn ${metricsPeriod===60?"active-filter":""}" onclick="setMetricsPeriod(60)">60d</button>
-        <button class="btn primary" onclick="syncInstagramToday()">↻ Sincronizar</button>
+        <button class="btn primary" onclick="syncInstagramToday()" ${metricsSyncInFlight?"disabled":""}>${metricsSyncInFlight?"Sincronizando…":"↻ Sincronizar"}</button>
       </div>
     </div>
+    <div class="card toolbar" style="margin-bottom:16px;flex-wrap:wrap">
+      <label>Conta <select onchange="switchMetricsAccount(this.value)" ${metricsSyncInFlight?"disabled":""}>${calendarInstagramAccounts().map(a=>`<option value="${esc(a.id)}" ${a.id===metricsAccountId?"selected":""}>@${esc(a.account_label||"Instagram")}</option>`).join("")}</select></label>
+      <span class="muted">${metricsLoading?"Carregando conta…":metricsLastCollectedAt?"Última coleta: "+new Date(metricsLastCollectedAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"}):"Aguardando coleta de métricas"}</span>
+    </div>
+    ${metricsDataError?`<div class="card"><b>Falha ao atualizar métricas</b><p>${esc(friendlyCloudentError(metricsDataError))}</p><small>Os dados exibidos são a última leitura salva.</small></div>`:""}
     <div class="ui3-kpis">
-      <div class="ui3-kpi"><span>Visualizações</span><strong>${total.views.toLocaleString("pt-BR")}</strong><small>${metricsPeriod} dias</small></div>
-      <div class="ui3-kpi"><span>Alcance</span><strong>${total.reach.toLocaleString("pt-BR")}</strong><small>contas alcançadas</small></div>
+      <div class="ui3-kpi"><span>Visualizações</span><strong>${total.views.toLocaleString("pt-BR")}</strong><small>Reels publicados em ${metricsPeriod} dias</small></div>
+      <div class="ui3-kpi"><span>Alcance</span><strong>${total.reach.toLocaleString("pt-BR")}</strong><small>soma do alcance por Reel</small></div>
       <div class="ui3-kpi"><span>Média por Reel</span><strong>${avg.toLocaleString("pt-BR")}</strong><small>${rows.length} Reels</small></div>
       <div class="ui3-kpi"><span>Curtidas</span><strong>${total.likes.toLocaleString("pt-BR")}</strong><small>engajamento</small></div>
     </div>
 
     <div class="card analytics-useful-card">
       <div class="analytics-useful-head">
-        <div><span>DESEMPENHO</span><h3>${metricLabel} por dia</h3></div>
+        <div><span>DESEMPENHO</span><h3>${metricLabel} por data de publicação</h3></div>
         <div class="metric-series-tabs">
           <button class="${metricSeries==="views"?"active":""}" onclick="setMetricSeries('views')">Views</button>
           <button class="${metricSeries==="reach"?"active":""}" onclick="setMetricSeries('reach')">Alcance</button>
@@ -8107,7 +8133,7 @@ function metrics(){
       </div>
       <div class="analytics-useful-summary">
         <div><span>Total</span><b>${currentMetric.toLocaleString("pt-BR")}</b></div>
-        <div><span>Média/dia</span><b>${daily.length?Math.round(currentMetric/daily.length).toLocaleString("pt-BR"):"0"}</b></div>
+        <div><span>Média/dia com Reels</span><b>${daily.length?Math.round(currentMetric/daily.length).toLocaleString("pt-BR"):"0"}</b></div>
         <div><span>Melhor dia</span><b>${bestDay?new Date(bestDay.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—"}</b></div>
         <div><span>vs. período anterior</span><b class="${delta===null?"neutral":delta>=0?"positive":"negative"}">${delta===null?"—":(delta>=0?"+":"")+delta.toFixed(1).replace(".",",")+"%"}</b></div>
       </div>
@@ -8135,9 +8161,9 @@ function metrics(){
         <div class="reels-instagram-grid">${ranking.slice(0,6).map(m=>`
           <button class="reel-instagram-card" onclick="openReelAnalytics('${esc(String(m.id||m.record_id))}')">
             <div class="reel-media-layer">
-              ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" muted loop playsinline autoplay preload="metadata"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">▶</div>'}
+              ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" muted loop playsinline preload="none"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">▶</div>'}
               <div class="reel-card-top"><span>REEL</span><b>⋮</b></div>
-              <div class="reel-card-bottom"><b>@${esc(instagramIntegration?.account_label||"Instagram")}</b><span>▶ ${(+m.views||0).toLocaleString("pt-BR")} views</span></div>
+              <div class="reel-card-bottom"><b>@${esc(metricsAccount()?.account_label||instagramIntegration?.account_label||"Instagram")}</b><span>▶ ${(+m.views||0).toLocaleString("pt-BR")} views</span></div>
             </div>
           </button>`).join("")||'<div class="ui3-empty">Sincronize para carregar os previews.</div>'}</div>
       </div>
