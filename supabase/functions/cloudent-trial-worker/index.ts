@@ -103,6 +103,12 @@ function normalizeGraduationStrategy(value:any){
 function trialParamUnsupported(message:string){
   return /trial_params|graduation_strategy|unknown parameter|unexpected parameter|invalid parameter.*trial|unsupported.*trial|gradua.*(desconhe|unknown|invalid)/i.test(message);
 }
+function trialFailureReason(error:any){
+  const message=error instanceof Error?error.message:String(error||"");
+  if(Number(error?.payload?.code)===190||/Error validating access token|session has been invalidated|invalid.*access token|access token.*expired/i.test(message))return "instagram_reconnect_required";
+  if(/requisito de seguidores|follower.*(requirement|threshold)|not eligible.*trial|ineleg.*reels.*teste/i.test(message))return "trial_not_eligible";
+  return null;
+}
 
 
 type InstagramRoute={accountId:string;igId:string;token:string;base:string;label:string};
@@ -292,16 +298,18 @@ Deno.serve(async(req:Request)=>{
         results.push({id:job.id,state:"published",instagram_media_id:mediaId});
       }catch(e:any){
         const message=e instanceof Error?e.message:String(e);
-        const finalAttempt=Number(job.attempt_count)>=Number(job.max_attempts);
+        const failureReason=trialFailureReason(e);
+        const finalAttempt=!!failureReason||Number(job.attempt_count)>=Number(job.max_attempts);
         await admin.from("reel_test_publications").update({
           status:finalAttempt?"failed":"scheduled",
           next_attempt_at:finalAttempt?null:new Date(Date.now()+retryDelay(Number(job.attempt_count))).toISOString(),
           locked_at:null,locked_by:null,last_error:message,
+          meta:{...(job.meta||{}),failure_reason:failureReason,retry_blocked:!!failureReason},
           updated_at:new Date().toISOString()
         }).eq("id",job.id);
         await admin.from("activity_logs").insert({
           level:"error",event_type:"trial_reel_publish_error",message,
-          meta:{trial_publication_id:job.id,attempt:job.attempt_count}
+          meta:{trial_publication_id:job.id,attempt:job.attempt_count,failure_reason:failureReason,requires_user_action:!!failureReason}
         });
         results.push({id:job.id,state:finalAttempt?"failed":"retry",error:message});
       }

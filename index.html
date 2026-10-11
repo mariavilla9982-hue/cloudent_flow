@@ -5155,13 +5155,13 @@ function focusCloudLogin(){
     if(email)email.focus();
   },80);
 }
-async function connectInstagram(){
+async function connectInstagram(platformAccountId=null){
   if(!cloudSession){focusCloudLogin();return}
   const btn=$("#connectInstagramBtn");
   if(btn){btn.disabled=true;btn.textContent="Abrindo Instagram…"}
   try{
     const r=await edgeFetch(SUPABASE_URL+"/functions/v1/instagram-oauth",{
-      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})
+      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:platformAccountId})
     });
     const authUrl=new URL(r?.url||"");
     if(authUrl.origin!=="https://www.instagram.com"||authUrl.pathname!=="/oauth/authorize")throw new Error("O servidor retornou um endereço de login inválido.");
@@ -7176,6 +7176,14 @@ function calendarPretrialBadge(x){
   if(!p)return '<span class="badge pretrial-badge pending">◈ Trial -20m</span>';
   const s=String(p.status||"scheduled");
   if(s==="published")return '<span class="badge pretrial-badge done">◈ Trial ✓</span>';
+  const reason=String(p.meta?.failure_reason||"");
+  const error=String(p.last_error||"");
+  if(reason==="instagram_reconnect_required"||/Error validating access token|session has been invalidated|invalid.*access token|access token.*expired/i.test(error)){
+    const action="event.stopPropagation();connectInstagram("+JSON.stringify(x.platformAccountId||p.meta?.platform_account_id||null)+")";
+    return '<button type="button" class="badge pretrial-badge error" onclick="'+esc(action)+'" title="Entre na mesma conta do Instagram para restaurar a autorização e retomar este Trial.">◈ Reconectar Instagram</button>';
+  }
+  if(reason==="trial_not_eligible"||/requisito de seguidores|follower.*(requirement|threshold)|not eligible.*trial/i.test(error))return '<span class="badge pretrial-badge pending" title="O Instagram recusou Reels de teste por requisito de seguidores. O Reel normal continua separado.">◈ Trial indisponível</span>';
+  if(/Reel normal já publicado|Agendamento normal não está mais ativo|Pré-Trial automático desativado/i.test(error))return '<span class="badge pretrial-badge pending" title="'+esc(error)+'">◈ Trial encerrado</span>';
   if(s==="processing"||s==="container_created"||s==="publishing")return '<span class="badge pretrial-badge working">◈ Trial publicando</span>';
   if(s==="failed")return '<span class="badge pretrial-badge error" title="'+esc(p.last_error||"Falha no Trial")+'">◈ Trial erro</span>';
   const when=p.scheduled_at?new Date(p.scheduled_at):null;

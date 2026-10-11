@@ -368,7 +368,7 @@ Deno.serve(async (req: Request) => {
         const [{data:snapshots,error:snapError},{data:pretrials,error:pretrialError}]=await Promise.all([
           admin.rpc("get_recent_schedule_metrics",{p_schedule_ids:ids,p_limit:6}),
           admin.from("reel_test_publications")
-            .select("id,linked_schedule_id,scheduled_at,status,published_at,published_as_trial,instagram_media_id,last_error,attempt_count,max_attempts")
+            .select("id,linked_schedule_id,scheduled_at,status,published_at,published_as_trial,instagram_media_id,last_error,attempt_count,max_attempts,meta")
             .eq("trial_kind","prepost")
             .in("linked_schedule_id",ids)
         ]);
@@ -917,7 +917,7 @@ Deno.serve(async (req: Request) => {
       if(!id)return json({error:"id_required"},400);
 
       const {data:row,error:readError}=await admin.from("reel_test_publications")
-        .select("id,status,scheduled_at").eq("id",id).eq("user_id",userData.user.id).maybeSingle();
+        .select("id,status,scheduled_at,meta").eq("id",id).eq("user_id",userData.user.id).maybeSingle();
       if(readError)throw readError;
       if(!row)return json({error:"trial_reel_not_found"},404);
       if(row.status==="published")return json({error:"trial_reel_already_published"},409);
@@ -927,6 +927,7 @@ Deno.serve(async (req: Request) => {
         status:"scheduled",
         container_id:null,
         attempt_count:0,
+        meta:{...(row.meta||{}),failure_reason:null,retry_blocked:false},
         next_attempt_at:next,
         locked_at:null,
         locked_by:null,
