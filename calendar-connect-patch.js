@@ -31,6 +31,14 @@
 
   const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
 
+  function reconnectMarkup(accounts,active){
+    const account=accounts.find(a=>calendarAccountId(a)===active);
+    if(!account)return "";
+    const label=String(account.account_label||account.username||"Instagram").replace(/^@/,"");
+    const action="startCalendarInstagramOAuth("+JSON.stringify(active)+")";
+    return '<button type="button" id="calendarReconnectInstagramBtn" class="btn" '+(calendarAccountSwitching?'disabled ':'')+'onclick="'+escapeHtml(action)+'" title="Renovar a autorização de @'+escapeHtml(label)+'">↻ Reconectar conta</button>';
+  }
+
   try{
     calendarAccountSwitcher=function(context="calendar"){
       const accounts=calendarInstagramAccounts();
@@ -50,7 +58,7 @@
       const add=accounts.length<3
         ?'<button class="calendar-connect-chip" onclick="openCalendarInstagramConnect()">＋ Conectar conta</button>'
         :'<button class="calendar-connect-chip" disabled title="Limite atual atingido">3 / 3 contas</button>';
-      return '<div class="calendar-account-switcher"><span>Contas</span>'+chips+add+calendarReconnectButton()+'</div>';
+      return '<div class="calendar-account-switcher"><span>Contas</span>'+chips+add+reconnectMarkup(accounts,active)+'</div>';
     };
   }catch(err){
     console.error("CloudentFlow calendar account switcher patch failed",err);
@@ -87,32 +95,35 @@
     }
   };
 
-  async function oauthStartRequest(retry=true){
+  async function oauthStartRequest(accountId=null,retry=true){
     if(!cloudSession)throw new Error("Entre no CloudentFlow primeiro.");
     const res=await fetch(OAUTH_URL,{
       method:"POST",
       headers:{"Content-Type":"application/json",Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY},
-      body:JSON.stringify({action:"start"})
+      body:JSON.stringify({action:"start",platform_account_id:accountId})
     });
-    if(res.status===401&&retry&&typeof refreshCloudSession==="function"&&await refreshCloudSession())return oauthStartRequest(false);
+    if(res.status===401&&retry&&typeof refreshCloudSession==="function"&&await refreshCloudSession())return oauthStartRequest(accountId,false);
     let data=null;try{data=await res.json()}catch{}
     if(!res.ok)throw new Error(data?.user_message||data?.message||data?.error||("Erro "+res.status));
     return data;
   }
 
-  window.startCalendarInstagramOAuth=async function(){
+  window.startCalendarInstagramOAuth=async function(accountId=null){
     if(!cloudSession){focusCloudLogin();return}
-    const btn=document.getElementById("calendarConnectInstagramBtn");
+    if(accountId&&!calendarInstagramAccounts().some(a=>calendarAccountId(a)===accountId)){toast("Essa conta não está disponível.","err");return}
+    const btn=document.getElementById(accountId?"calendarReconnectInstagramBtn":"calendarConnectInstagramBtn");
     if(btn){btn.disabled=true;btn.textContent="Abrindo Instagram..."}
     try{
-      const r=await oauthStartRequest();
+      const r=await oauthStartRequest(accountId);
       if(!r?.url)throw new Error("O Instagram não retornou a tela de login.");
       sessionStorage.setItem("cf_instagram_oauth_pending","1");
-      window.location.assign(r.url);
+      const authUrl=new URL(r.url);
+      if(authUrl.origin!=="https://www.instagram.com"||authUrl.pathname!=="/oauth/authorize")throw new Error("O servidor retornou um endereço de login inválido.");
+      window.location.assign(authUrl.toString());
     }catch(err){
       const msg=err?.message||"Não consegui abrir o login do Instagram.";
       toast(msg,"err");
-      if(btn){btn.disabled=false;btn.textContent="Continuar com Instagram"}
+      if(btn){btn.disabled=false;btn.textContent=accountId?"↻ Reconectar conta":"Continuar com Instagram"}
     }
   };
 
