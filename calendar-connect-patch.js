@@ -50,7 +50,7 @@
       const add=accounts.length<3
         ?'<button class="calendar-connect-chip" onclick="openCalendarInstagramConnect()">＋ Conectar conta</button>'
         :'<button class="calendar-connect-chip" disabled title="Limite atual atingido">3 / 3 contas</button>';
-      return '<div class="calendar-account-switcher"><span>Contas</span>'+chips+add+'</div>';
+      return '<div class="calendar-account-switcher"><span>Contas</span>'+chips+add+calendarReconnectButton()+'</div>';
     };
   }catch(err){
     console.error("CloudentFlow calendar account switcher patch failed",err);

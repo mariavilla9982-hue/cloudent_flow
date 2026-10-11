@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v11";
+const CACHE="cloudentflow-pwa-v12";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -12,7 +12,7 @@ async function injectCalendarPatch(response){
   if(!type.includes("text/html"))return response;
   try{
     let html=await response.text();
-    const tag='<script src="/calendar-connect-patch.js?v=5"></script>';
+    const tag='<script src="/calendar-connect-patch.js?v=6"></script>';
     const oldPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     if(oldPatch.test(html))html=html.replace(oldPatch,tag);
     else html=html.includes("</body>")?html.replace("</body>",tag+"</body>"):html+tag;

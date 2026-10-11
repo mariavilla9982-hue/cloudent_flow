@@ -5332,6 +5332,14 @@ function calendarAccountCapacity(accountId,dates=weekDates(),queueRows=null){
     return {date,dateObj:d,base,used,free:Math.max(0,base-used),label:d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".",""),number:String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")};
   });
 }
+function calendarReconnectButton(){
+  const id=calendarEnsureAccount();
+  const account=calendarInstagramAccounts().find(a=>calendarAccountId(a)===id);
+  if(!account)return "";
+  const label=String(account.account_label||account.username||"Instagram").replace(/^@/,"");
+  const action="connectInstagram("+JSON.stringify(id)+")";
+  return '<button type="button" class="btn" '+(calendarAccountSwitching?'disabled ':'')+'onclick="'+esc(action)+'" title="Renovar a autorização de @'+esc(label)+'">↻ Reconectar conta</button>';
+}
 function calendarAccountSwitcher(context="calendar"){
   const accounts=calendarInstagramAccounts();
   if(!accounts.length)return "";
@@ -5343,7 +5351,7 @@ function calendarAccountSwitcher(context="calendar"){
     const free=rows?rows.reduce((n,x)=>n+x.free,0):null;
     const action="selectCalendarAccount("+JSON.stringify(id)+","+JSON.stringify(context)+")";
     return '<button type="button" aria-pressed="'+(id===active)+'" '+(calendarAccountSwitching?'disabled ':'')+'class="calendar-account-chip '+(id===active?'active':'')+'" onclick="'+esc(action)+'">'+avatar+'<div><b>@'+esc(label.replace(/^@/,''))+'</b><small>'+(free===null?'Carregando vagas…':free+' vagas · 7 dias')+'</small></div></button>';
-  }).join('')+'</div>';
+  }).join('')+calendarReconnectButton()+'</div>';
 }
 async function selectCalendarAccount(id,context="calendar"){
   id=String(id||"");
