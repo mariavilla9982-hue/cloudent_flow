@@ -214,12 +214,13 @@ async function wakeNotificationWorker(admin:any,supabaseUrl:string){
 
 async function resolveCalendarInstagramAccount(admin:any,requestedId:any){
   const requested=String(requestedId||"").trim();
+  if(!requested)throw Object.assign(new Error("Selecione explicitamente a conta do Instagram para agendar."),{status:400});
   let query=admin.from("platform_accounts").select("id").eq("platform","instagram").eq("enabled",true);
-  query=requested?query.eq("id",requested):query.order("created_at",{ascending:true}).limit(1);
+  query=query.eq("id",requested);
   const {data:account,error}=await query.maybeSingle();
   if(error)throw error;
-  if(requested&&!account)throw new Error("A conta selecionada do Instagram não está disponível.");
-  return account?.id||null;
+  if(!account)throw Object.assign(new Error("A conta selecionada do Instagram não está disponível."),{status:400});
+  return account.id;
 }
 
 Deno.serve(async (req: Request) => {
@@ -344,8 +345,8 @@ Deno.serve(async (req: Request) => {
       const fromParam=String(url.searchParams.get("from")||"").trim();
       const compactQueue=url.searchParams.get("compact")==="1";
       const queueSelect=compactQueue
-        ?"id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,published_at,videos(id,file_name)"
-        :"id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
+        ?"id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
+        :"id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
       let queueQuery=admin
         .from("schedules")
         .select(queueSelect)
@@ -4205,8 +4206,11 @@ Deno.serve(async (req: Request) => {
       }
 
       const { data: current, error: currentError } = await admin
-        .from("schedules").select("id,video_id,scheduled_at,status").eq("id", id).single();
+        .from("schedules").select("id,video_id,scheduled_at,status,platform,platform_account_id").eq("id", id).single();
       if (currentError) throw currentError;
+      if(body.platform_account_id!==undefined&&String(body.platform_account_id)!==String(current.platform_account_id)){
+        return json({error:"schedule_account_mismatch",user_message:"Este vídeo pertence a outra conta. Atualize o calendário antes de editar."},409);
+      }
 
       if (Object.keys(schedulePatch).length) {
         const { error } = await admin.from("schedules").update(schedulePatch).eq("id", id);
@@ -4220,7 +4224,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: updated, error: updatedError } = await admin
         .from("schedules")
-        .select("id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,videos(file_name,caption,storage_path,size_bytes,mime_type)")
+        .select("id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,videos(file_name,caption,storage_path,size_bytes,mime_type)")
         .eq("id", id).single();
       if (updatedError) throw updatedError;
 
@@ -4233,7 +4237,9 @@ Deno.serve(async (req: Request) => {
 
         if (updated.status === "scheduled") {
           await admin.from("job_queue").insert({
-            job_type: "publish_reel",
+            job_type: updated.platform==="x"?"publish_x_video":"publish_reel",
+            platform: updated.platform,
+            platform_account_id: updated.platform_account_id,
             schedule_id: id,
             run_at: updated.scheduled_at,
             payload: { schedule_id: id }
@@ -4271,6 +4277,10 @@ Deno.serve(async (req: Request) => {
     return json({ error: "route_not_found" }, 404);
   } catch (error) {
     const message = readableError(error);
+    if((error as any)?.status===400)return json({ok:false,error:message},400);
+    if((error as any)?.code==="23505"&&message.includes("schedules_unique_slot")){
+      return json({ok:false,error:"schedule_slot_occupied",user_message:"Essa conta já tem um vídeo nesse horário. Escolha outro horário."},409);
+    }
     try {
       await admin.from("activity_logs").insert({
         level: "error",

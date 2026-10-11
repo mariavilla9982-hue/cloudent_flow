@@ -4633,6 +4633,7 @@ async function initCloud(){
   await withTimeout(testBackend(),4000,"conexão com servidor").catch(()=>{backendOnline=false});
   if(!backendOnline)return;
 
+  await withTimeout(loadPlatformAccounts(),4500,"contas");
   await Promise.allSettled([
     withTimeout(syncFromBackend(),4500,"calendário"),
     withTimeout(loadDashboardScheduleRows(),6500,"histórico do dashboard"),
@@ -4641,7 +4642,6 @@ async function initCloud(){
     withTimeout(loadInstagramWebSessionStatus(),4500,"sessão web Instagram"),
     withTimeout(loadAutomationStatus(),4500,"automação"),
     withTimeout(loadFollowerStats(30),4500,"seguidores"),
-    withTimeout(loadPlatformAccounts(),4500,"contas"),
     withTimeout(loadTrialReels(),4500,"Trial Reels"),
     withTimeout(loadXPostingStatus(),4500,"postagem X"),
     withTimeout(loadXIntegrationConfig(),4500,"integração X"),
@@ -5291,7 +5291,7 @@ const CALENDAR_ACCOUNT_KEY="cloudentflow-calendar-account";
 let calendarActiveAccountId=localStorage.getItem(CALENDAR_ACCOUNT_KEY)||"";
 let calendarAllQueueRows=null;
 let calendarAccountSwitching=false;
-function calendarAccountId(a){return String(a?.id||a?.platform_account_id||a?.external_account_id||a?.account_label||"")}
+function calendarAccountId(a){return String(a?.id||a?.platform_account_id||"")}
 function calendarInstagramAccounts(){
   return (platformAccounts||[]).filter(a=>String(a?.platform||"").toLowerCase()==="instagram"&&a?.enabled!==false);
 }
@@ -5299,6 +5299,7 @@ function calendarEnsureAccount(){
   const accounts=calendarInstagramAccounts();
   if(!accounts.length)return "";
   if(!accounts.some(a=>calendarAccountId(a)===String(calendarActiveAccountId||""))){
+    if(calendarActiveAccountId)return "";
     calendarActiveAccountId=calendarAccountId(accounts[0]);
     localStorage.setItem(CALENDAR_ACCOUNT_KEY,calendarActiveAccountId);
   }
@@ -5307,19 +5308,16 @@ function calendarEnsureAccount(){
 function calendarRowAccountId(row){return String(row?.platform_account_id||row?.platformAccountId||"")}
 function calendarFilterQueueRows(rows){
   rows=Array.isArray(rows)?rows:[];
-  const accounts=calendarInstagramAccounts();
   const active=calendarEnsureAccount();
-  if(!active||accounts.length<=1)return rows;
-  const primary=calendarAccountId(accounts[0]);
+  if(!active)return [];
   return rows.filter(row=>{
     if(String(row?.platform||"instagram").toLowerCase()!=="instagram")return false;
     const rowId=calendarRowAccountId(row);
-    return rowId?rowId===active:active===primary;
+    return rowId===active;
   });
 }
 function calendarAccountCapacity(accountId,dates=weekDates()){
   const active=calendarEnsureAccount();
-  const primary=calendarAccountId(calendarInstagramAccounts()[0]);
   const rows=accountId===active?Object.values(state.slots).filter(Boolean):calendarAllQueueRows;
   if(!Array.isArray(rows))return null;
   return dates.map(d=>{
@@ -5327,7 +5325,7 @@ function calendarAccountCapacity(accountId,dates=weekDates()){
     const used=rows.filter(row=>{
       if(String(row.platform||"instagram").toLowerCase()!=="instagram"||row.status==="cancelled")return false;
       const id=calendarRowAccountId(row);
-      if(id?id!==accountId:accountId!==primary)return false;
+      if(!id||id!==accountId)return false;
       const at=row.scheduled_at||row.scheduledAt;
       return at&&localISO(new Date(at))===date;
     }).length;
@@ -5357,6 +5355,8 @@ async function selectCalendarAccount(id,context="calendar"){
     const rows=cloudSession?await cloudFetch(queueResourcePath()):null;
     calendarActiveAccountId=id;
     localStorage.setItem(CALENDAR_ACCOUNT_KEY,id);
+    closeModal();
+    state.slots={};
     if(rows)await syncFromBackend(rows);
     if(currentPage==="calendar")calendarPage();
   }catch(e){toast(e?.message||"Não consegui trocar o calendário.","err")}
@@ -6538,7 +6538,7 @@ async function loadBulkPublishRows(){
   try{
     const from=new Date(Date.now()-24*3600000).toISOString();
     const rows=await cloudFetch("?resource=queue&from="+encodeURIComponent(from));
-    bulkPublishRows=(Array.isArray(rows)?rows:[]).filter(x=>x.smart_mode==="bulk_1m").slice(-100).reverse();
+    bulkPublishRows=calendarFilterQueueRows(rows).filter(x=>x.smart_mode==="bulk_1m").slice(-100).reverse();
   }catch(e){console.warn("bulk queue",e)}
 }
 function bulkEvents(){
@@ -6585,6 +6585,7 @@ function bulkPublishPage(){
   updateBulkCountdownDom();
 }
 async function handleBulkVideoPicker(input){
+  const accountId=calendarEnsureAccount();
   const files=[...(input?.files||[])].filter(f=>f.type.startsWith("video/")||/\.(mp4|mov|m4v|webm)$/i.test(f.name));
   if(!files.length)return;
   if(bulkPublishUploading){toast("Já existe um envio em andamento.","warn");return}
@@ -6597,7 +6598,7 @@ async function handleBulkVideoPicker(input){
     try{
       const normalAt=new Date(Math.max(nextNormalAt,Date.now()+2*60_000)).toISOString();
       nextNormalAt=Date.parse(normalAt)+2*60_000;
-      const res=await uploadScheduledVideoDirect(file,{scheduledAt:normalAt,caption:"",smartMode:"bulk_1m",smartStrategy:"manual",platform:"instagram"});
+      const res=await uploadScheduledVideoDirect(file,{scheduledAt:normalAt,caption:"",smartMode:"bulk_1m",smartStrategy:"manual",platform:"instagram",platformAccountId:accountId});
       if(res?.video?.id)await runMediaCleaner("video",res.video.id,{quiet:true});
       bulkPublishProgress.done++;
     }catch(e){failed++;console.error("bulk upload",e);toast("Falha em "+file.name+": "+friendlyCloudentError(e?.message||"erro"),"err")}
@@ -7454,8 +7455,8 @@ async function runMediaCleaner(entityType,id,{quiet=false}={}){
   }
 }
 
-async function uploadScheduledVideoDirect(file,{scheduledAt,caption="",smartMode="auto",smartStrategy="tested",platform="instagram"}){
-  const platformAccountId=platform==="instagram"?calendarEnsureAccount():null;
+async function uploadScheduledVideoDirect(file,{scheduledAt,caption="",smartMode="auto",smartStrategy="tested",platform="instagram",platformAccountId=platform==="instagram"?calendarEnsureAccount():null}){
+  if(platform==="instagram"&&!platformAccountId)throw new Error("Selecione uma conta do Instagram para agendar.");
   const ticket=await cloudFetch("?action=upload-ticket",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -7486,6 +7487,7 @@ async function uploadScheduledVideoDirect(file,{scheduledAt,caption="",smartMode
 }
 
 async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto",smartStrategy=null){
+  const accountId=calendarEnsureAccount();
   const choice=smartMode==="auto"?smartChoiceForSlot(date,slot):null;
   const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
   const strategy=smartStrategy||(smartMode==="auto"?(choice?.strategy||"tested"):"manual");
@@ -7494,11 +7496,13 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   if(state.slots[keyFor(date,slot)]){toast("Essa posição já está ocupada.","warn");return false}
   if(!cloudSession){toast("Entre na sua conta do CloudentFlow para salvar vídeos no calendário.","warn");showPage("settings");return false}
   const [h,m]=t.split(":").map(Number),at=new Date(date+"T00:00:00");at.setHours(h,m,0,0);
-  const res=await uploadScheduledVideoDirect(file,{scheduledAt:at.toISOString(),caption,smartMode,smartStrategy:strategy,platform:"instagram"});
+  const res=await uploadScheduledVideoDirect(file,{scheduledAt:at.toISOString(),caption,smartMode,smartStrategy:strategy,platform:"instagram",platformAccountId:accountId});
   const schedule=res.schedule,video=res.video;
   const clean=await runMediaCleaner("video",video.id,{quiet:true});
   const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
-  state.slots[keyFor(date,slot)]={cloud:true,platform:"instagram",platformAccountId:schedule.platform_account_id||video.platform_account_id||calendarEnsureAccount(),scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,thumbnailPath:clean?.thumbnail_path||video.thumbnail_storage_path||"",coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption:video.caption||caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
+  if(calendarEnsureAccount()!==accountId){await syncFromBackend();return true;}
+  if(String(schedule.platform_account_id)!==accountId)throw new Error("O agendamento retornou uma conta diferente da selecionada.");
+  state.slots[keyFor(date,slot)]={cloud:true,platform:"instagram",platformAccountId:schedule.platform_account_id,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,thumbnailPath:clean?.thumbnail_path||video.thumbnail_storage_path||"",coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption:video.caption||caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
   save();
   if(clean?.status==="ready")log(`${file.name} com metadados removidos e agendado para ${date} às ${t}.`,"ok");
   else log(`${file.name} agendado para ${date} às ${t}; Media Cleaner: ${clean?.status||"pendente"}.`,clean?.status==="skipped"?"warn":"ok");
@@ -9009,6 +9013,7 @@ async function downloadProductionResult(id,number,retry=true){
 }
 async function sendProductionResultToBulk(id,button=null){
   if(!cloudSession)return;
+  const accountId=calendarEnsureAccount();
   const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
   if(!job||job.status!=="ready"||!job.result_video_id){toast("Esse vídeo ainda não está pronto.","err");return}
   actionButtonBusy(button,true,"Enviando…");
@@ -9017,12 +9022,12 @@ async function sendProductionResultToBulk(id,button=null){
     if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
     // In bulk_1m the DB pretrial trigger creates the Trial exactly 1 minute before the normal Reel.
     const rows=await cloudFetch("?resource=queue&from="+encodeURIComponent(new Date(Date.now()-3600000).toISOString())).catch(()=>[]);
-    const bulk=(Array.isArray(rows)?rows:[]).filter(x=>x.smart_mode==="bulk_1m"&&["scheduled","queued","processing"].includes(String(x.status||"")));
+    const bulk=(Array.isArray(rows)?rows:[]).filter(x=>calendarRowAccountId(x)===accountId&&x.smart_mode==="bulk_1m"&&["scheduled","queued","processing"].includes(String(x.status||"")));
     const latest=bulk.reduce((max,x)=>Math.max(max,Date.parse(x.scheduled_at)||0),0);
     const normalAt=new Date(Math.max(Date.now()+2*60_000,latest?latest+2*60_000:0)).toISOString();
     const result=await cloudFetch("?action=production-schedule",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id,scheduled_at:normalAt,caption:"",smart_mode:"bulk_1m",smart_strategy:"manual"})
+      body:JSON.stringify({id,scheduled_at:normalAt,caption:"",smart_mode:"bulk_1m",smart_strategy:"manual",platform_account_id:accountId})
     });
     job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:normalAt,bulk_1m:true};
     if(productionData?.jobs)productionData.jobs=productionData.jobs.filter(x=>String(x.id)!==String(id));
@@ -9070,6 +9075,7 @@ function openProductionScheduleModal(id,number){
   '</div></div>';
 }
 async function scheduleProductionResult(id,button=null){
+  const accountId=calendarEnsureAccount();
   const day=$("#productionScheduleDay")?.value,time=$("#productionScheduleTime")?.value,caption=$("#productionScheduleCaption")?.value||"";
   if(!day||!time){toast("Escolha dia e horário.","err");return}
   const capacity=productionCalendarCapacity().find(x=>x.date===day);
@@ -9089,7 +9095,7 @@ async function scheduleProductionResult(id,button=null){
     const result=await cloudFetch("?action=production-schedule",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual",platform_account_id:calendarEnsureAccount()})
+      body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual",platform_account_id:accountId})
     });
     if(job){
       job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:at.toISOString()};

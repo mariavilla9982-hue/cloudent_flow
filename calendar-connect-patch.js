@@ -32,7 +32,7 @@
   const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
 
   try{
-    calendarAccountSwitcher=function(){
+    calendarAccountSwitcher=function(context="calendar"){
       const accounts=calendarInstagramAccounts();
       const active=calendarEnsureAccount();
       const chips=accounts.map(a=>{
@@ -42,7 +42,10 @@
         const avatar=photo
           ?'<img src="'+escapeHtml(photo)+'" alt="" referrerpolicy="no-referrer">'
           :'<span class="calendar-account-avatar">'+escapeHtml(label.slice(0,1).toUpperCase())+'</span>';
-        return '<button class="calendar-account-chip '+(id===active?'active':'')+'" onclick="selectCalendarAccount(\''+escapeHtml(id)+'\')">'+avatar+'<div><b>@'+escapeHtml(label.replace(/^@/,''))+'</b><small>'+(a.enabled===false?'Pausada':'Calendário')+'</small></div></button>';
+        const action="selectCalendarAccount("+JSON.stringify(id)+","+JSON.stringify(context)+")";
+        const capacity=calendarAccountCapacity(id);
+        const free=capacity?capacity.reduce((n,row)=>n+row.free,0):null;
+        return '<button type="button" aria-pressed="'+(id===active)+'" '+(calendarAccountSwitching?'disabled ':'')+'class="calendar-account-chip '+(id===active?'active':'')+'" onclick="'+escapeHtml(action)+'">'+avatar+'<div><b>@'+escapeHtml(label.replace(/^@/,''))+'</b><small>'+(free===null?'Carregando vagas…':free+' vagas · 7 dias')+'</small></div></button>';
       }).join('');
       const add=accounts.length<3
         ?'<button class="calendar-connect-chip" onclick="openCalendarInstagramConnect()">＋ Conectar conta</button>'
