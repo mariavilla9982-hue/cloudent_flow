@@ -201,6 +201,30 @@ def _profile_from_ytdlp(username):
     }
 
 
+def _merge_items(primary, extra):
+    by_code = {str(x.get("shortcode")): dict(x) for x in (primary or []) if x.get("shortcode")}
+    order = [str(x.get("shortcode")) for x in (primary or []) if x.get("shortcode")]
+    for incoming in extra or []:
+        code = str(incoming.get("shortcode") or "")
+        if not code:
+            continue
+        if code not in by_code:
+            by_code[code] = dict(incoming)
+            order.append(code)
+            continue
+        current = by_code[code]
+        if incoming.get("type") == "reels":
+            current["type"] = "reels"
+            current["is_video"] = True
+            current["permalink"] = incoming.get("permalink") or current.get("permalink")
+        for key in ("caption", "cover_url"):
+            if not current.get(key) and incoming.get(key): current[key] = incoming[key]
+        for key in ("views", "likes", "comments", "timestamp"):
+            if int(incoming.get(key) or 0) > int(current.get(key) or 0): current[key] = incoming[key]
+        current["is_video"] = bool(current.get("is_video") or incoming.get("is_video"))
+    return [by_code[c] for c in order if c in by_code][:MAX_ITEMS]
+
+
 def _metric(item, has_views):
     if has_views:
         return max(0, int(item.get("views") or 0))
@@ -236,26 +260,33 @@ def _viral_only(items):
 
 def _analyze(username):
     errors = []
-    data = None
+    web = None
+    ytdlp = None
     try:
-        data = _profile_from_web(username)
+        web = _profile_from_web(username)
     except Exception as exc:
-        errors.append(str(exc))
-    if not data or not data.get("items"):
+        errors.append("web:" + str(exc))
+
+    web_items = (web or {}).get("items") or []
+    needs_enrichment = (not web_items or not any(x.get("type") == "reels" for x in web_items) or not any(x.get("caption") for x in web_items))
+    if needs_enrichment:
         try:
-            data = _profile_from_ytdlp(username)
+            ytdlp = _profile_from_ytdlp(username)
         except Exception as exc:
-            errors.append(str(exc))
-    if not data:
+            errors.append("yt:" + str(exc))
+
+    if not web and not ytdlp:
         raise RuntimeError(errors[-1] if errors else "profile_unavailable")
 
-    items = data.get("items") or []
+    items = _merge_items(web_items, (ytdlp or {}).get("items") or [])
+    profile = (web or ytdlp or {}).get("profile") or {"username": username}
     reels = _viral_only([x for x in items if x.get("type") == "reels"])
     posts = _viral_only([x for x in items if x.get("type") == "posts"])
+    source = "+".join(x for x in ["instagram_web_profile" if web else "", "yt_dlp_profile" if ytdlp else ""] if x)
     return {
         "ok": True,
-        "profile": data.get("profile") or {"username": username},
-        "source": data.get("source"),
+        "profile": profile,
+        "source": source,
         "reels": reels,
         "posts": posts,
         "highlights": [],
