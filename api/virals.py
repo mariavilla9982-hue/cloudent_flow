@@ -12,6 +12,7 @@ from curl_cffi import requests as curl_requests
 UA = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151 Mobile Safari/537.36"
 IG_APP_ID = "936619743392459"
 IG_ASBD_ID = "129477"
+CLIPS_DOC_ID = "27234427476213202"
 MAX_ITEMS = 60
 
 
@@ -30,7 +31,8 @@ def _username(value):
     raw = str(value or "").strip()
     if not raw:
         return ""
-    if raw.startswith("@"): raw = raw[1:]
+    if raw.startswith("@"):
+        raw = raw[1:]
     if "://" in raw:
         try:
             parsed = urllib.parse.urlparse(raw)
@@ -143,11 +145,13 @@ def _profile_from_web(username):
     for edge in timeline:
         item = _media_from_node((edge or {}).get("node") or {})
         if item and item["shortcode"] not in seen:
-            seen.add(item["shortcode"]); items.append(item)
+            seen.add(item["shortcode"])
+            items.append(item)
     for edge in legacy_reels:
         item = _media_from_node((edge or {}).get("node") or {}, "reels")
         if item and item["shortcode"] not in seen:
-            seen.add(item["shortcode"]); items.append(item)
+            seen.add(item["shortcode"])
+            items.append(item)
 
     return {
         "user_id": str(user.get("id") or ""),
@@ -164,33 +168,92 @@ def _profile_from_web(username):
     }
 
 
+def _parse_clips_graphql(payload):
+    connection = ((payload or {}).get("data") or {}).get("xdt_api__v1__clips__user__connection_v2") or {}
+    rows = []
+    seen = set()
+    for edge in connection.get("edges") or []:
+        media = ((edge or {}).get("node") or {}).get("media") or {}
+        item = _media_from_node(media, "reels")
+        if item and item["shortcode"] not in seen:
+            seen.add(item["shortcode"])
+            rows.append(item)
+    return rows[:MAX_ITEMS]
+
+
 def _reels_from_clips(username, user_id):
     if not user_id:
         return []
-    form = {"target_user_id": str(user_id), "page_size": "36", "max_id": ""}
-    last = None
+
+    errors = []
+    session = curl_requests.Session(impersonate="chrome")
+    csrf = ""
+    try:
+        warm_headers = {
+            "User-Agent": UA,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.7,en;q=0.6",
+        }
+        session.get("https://www.instagram.com/", headers=warm_headers, timeout=15, allow_redirects=True)
+        csrf = str(session.cookies.get("csrftoken") or "")
+    except Exception as exc:
+        errors.append("warm:" + str(exc))
+
+    headers = _headers(username)
+    if csrf:
+        headers["X-CSRFToken"] = csrf
+
+    variables = {
+        "data": {
+            "include_feed_video": True,
+            "page_size": 36,
+            "target_user_id": str(user_id),
+        }
+    }
+    form = {
+        "doc_id": CLIPS_DOC_ID,
+        "variables": json.dumps(variables, separators=(",", ":")),
+    }
+    try:
+        res = session.post(
+            "https://www.instagram.com/graphql/query",
+            headers=headers,
+            data=form,
+            timeout=20,
+            allow_redirects=True,
+        )
+        if res.status_code == 200:
+            rows = _parse_clips_graphql(res.json())
+            if rows:
+                return rows
+            errors.append("graphql_empty")
+        else:
+            errors.append(f"graphql_http_{res.status_code}")
+    except Exception as exc:
+        errors.append("graphql:" + str(exc))
+
+    legacy_form = {"target_user_id": str(user_id), "page_size": "36", "max_id": ""}
     for url in ("https://www.instagram.com/api/v1/clips/user/", "https://i.instagram.com/api/v1/clips/user/"):
         try:
-            res = curl_requests.post(url, headers=_headers(username), data=form, impersonate="chrome", timeout=18, allow_redirects=True)
-            last = f"clips_http_{res.status_code}"
+            res = session.post(url, headers=headers, data=legacy_form, timeout=18, allow_redirects=True)
             if res.status_code != 200:
+                errors.append(f"legacy_http_{res.status_code}")
                 continue
             payload = res.json()
-            rows = payload.get("items") or payload.get("clips") or []
+            source_rows = payload.get("items") or payload.get("clips") or []
             out = []
             seen = set()
-            for row in rows:
+            for row in source_rows:
                 media = (row or {}).get("media") or (row or {}).get("clip") or row or {}
                 item = _media_from_node(media, "reels")
                 if item and item["shortcode"] not in seen:
-                    seen.add(item["shortcode"]); out.append(item)
+                    seen.add(item["shortcode"])
+                    out.append(item)
             if out:
                 return out[:MAX_ITEMS]
         except Exception as exc:
-            last = str(exc)
-    if last:
-        raise RuntimeError(last)
-    return []
+            errors.append("legacy:" + str(exc))
+    raise RuntimeError(";".join(errors[-4:]) or "clips_unavailable")
 
 
 def _profile_from_ytdlp(username):
@@ -203,31 +266,44 @@ def _profile_from_ytdlp(username):
         "socket_timeout": 18,
         "retries": 1,
         "extract_flat": False,
-        "http_headers": {"User-Agent": UA, "Referer": "https://www.instagram.com/", "Accept-Language": "pt-BR,pt;q=0.9"},
+        "http_headers": {
+            "User-Agent": UA,
+            "Referer": "https://www.instagram.com/",
+            "Accept-Language": "pt-BR,pt;q=0.9",
+        },
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(profile_url, download=False)
     items = []
     seen = set()
     for entry in list((info or {}).get("entries") or [])[:MAX_ITEMS]:
-        if not entry: continue
+        if not entry:
+            continue
         page = str(entry.get("webpage_url") or entry.get("original_url") or entry.get("url") or "")
         m = re.search(r"/(reel|reels|p)/([A-Za-z0-9_-]+)", page)
         code = (m.group(2) if m else str(entry.get("display_id") or entry.get("id") or "")).strip()
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", code) or code in seen: continue
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", code) or code in seen:
+            continue
         seen.add(code)
         kind = "reels" if (m and m.group(1) in {"reel", "reels"}) else "posts"
         items.append({
-            "id": str(entry.get("id") or code), "shortcode": code, "type": kind,
+            "id": str(entry.get("id") or code),
+            "shortcode": code,
+            "type": kind,
             "is_video": str(entry.get("vcodec") or "none") != "none" or kind == "reels",
             "permalink": f"https://www.instagram.com/reel/{code}/" if kind == "reels" else f"https://www.instagram.com/p/{code}/",
             "cover_url": str(entry.get("thumbnail") or ""),
             "caption": str(entry.get("description") or entry.get("title") or "").strip(),
             "views": int(entry.get("view_count") or entry.get("play_count") or 0),
-            "likes": int(entry.get("like_count") or 0), "comments": int(entry.get("comment_count") or 0),
+            "likes": int(entry.get("like_count") or 0),
+            "comments": int(entry.get("comment_count") or 0),
             "timestamp": int(entry.get("timestamp") or 0),
         })
-    return {"profile": {"username": username, "full_name": "", "profile_pic_url": "", "followers": 0, "is_private": False, "is_verified": False}, "items": items, "source": "yt_dlp_profile"}
+    return {
+        "profile": {"username": username, "full_name": "", "profile_pic_url": "", "followers": 0, "is_private": False, "is_verified": False},
+        "items": items,
+        "source": "yt_dlp_profile",
+    }
 
 
 def _merge_items(primary, extra):
@@ -235,16 +311,23 @@ def _merge_items(primary, extra):
     order = [str(x.get("shortcode")) for x in (primary or []) if x.get("shortcode")]
     for incoming in extra or []:
         code = str(incoming.get("shortcode") or "")
-        if not code: continue
+        if not code:
+            continue
         if code not in by_code:
-            by_code[code] = dict(incoming); order.append(code); continue
+            by_code[code] = dict(incoming)
+            order.append(code)
+            continue
         current = by_code[code]
         if incoming.get("type") == "reels":
-            current["type"] = "reels"; current["is_video"] = True; current["permalink"] = incoming.get("permalink") or current.get("permalink")
+            current["type"] = "reels"
+            current["is_video"] = True
+            current["permalink"] = incoming.get("permalink") or current.get("permalink")
         for key in ("caption", "cover_url"):
-            if not current.get(key) and incoming.get(key): current[key] = incoming[key]
+            if not current.get(key) and incoming.get(key):
+                current[key] = incoming[key]
         for key in ("views", "likes", "comments", "timestamp"):
-            if int(incoming.get(key) or 0) > int(current.get(key) or 0): current[key] = incoming[key]
+            if int(incoming.get(key) or 0) > int(current.get(key) or 0):
+                current[key] = incoming[key]
         current["is_video"] = bool(current.get("is_video") or incoming.get("is_video"))
     return [by_code[c] for c in order if c in by_code][:MAX_ITEMS]
 
@@ -256,20 +339,27 @@ def _metric(item, has_views):
 
 
 def _viral_only(items):
-    if not items: return []
+    if not items:
+        return []
     has_views = any(int(x.get("views") or 0) > 0 for x in items)
     positives = [_metric(x, has_views) for x in items if _metric(x, has_views) > 0]
     baseline = statistics.median(positives) if positives else 0
     ranked = []
     for item in items:
-        raw = _metric(item, has_views); ratio = (raw / baseline) if baseline else 0
-        row = dict(item); row["viral_score"] = round(ratio, 2) if baseline else 0; row["ranking_metric"] = "views" if has_views else "engagement"; row["ranking_value"] = raw
+        raw = _metric(item, has_views)
+        ratio = (raw / baseline) if baseline else 0
+        row = dict(item)
+        row["viral_score"] = round(ratio, 2) if baseline else 0
+        row["ranking_metric"] = "views" if has_views else "engagement"
+        row["ranking_value"] = raw
         ranked.append(row)
     ranked.sort(key=lambda x: (x["ranking_value"], int(x.get("timestamp") or 0)), reverse=True)
     keep = min(10, max(3, math.ceil(len(ranked) * 0.30)))
     selected = [x for i, x in enumerate(ranked) if i < keep and (x["viral_score"] >= 1.35 or i < 3)]
-    if not selected: selected = ranked[:min(3, len(ranked))]
-    for index, item in enumerate(selected, 1): item["rank"] = index
+    if not selected:
+        selected = ranked[:min(3, len(ranked))]
+    for index, item in enumerate(selected, 1):
+        item["rank"] = index
     return selected
 
 
@@ -305,16 +395,27 @@ def _analyze(username):
     reels = _viral_only([x for x in items if x.get("type") == "reels"])
     posts = _viral_only([x for x in items if x.get("type") == "posts"])
     sources = []
-    if web: sources.append("instagram_web_profile")
-    if reel_items: sources.append("instagram_clips")
-    if ytdlp: sources.append("yt_dlp_profile")
+    if web:
+        sources.append("instagram_web_profile")
+    if reel_items:
+        sources.append("instagram_graphql_clips")
+    if ytdlp:
+        sources.append("yt_dlp_profile")
     return {
-        "ok": True, "profile": profile, "source": "+".join(sources), "reels": reels, "posts": posts, "highlights": [],
+        "ok": True,
+        "profile": profile,
+        "source": "+".join(sources),
+        "reels": reels,
+        "posts": posts,
+        "highlights": [],
         "availability": {
-            "reels": True, "posts": True, "highlights": False,
-            "highlights_reason": "O Instagram não expõe métricas públicas de visualização/curtidas dos Destaques de perfis externos; por isso o CloudentFlow não inventa um ranking viral."
+            "reels": True,
+            "posts": True,
+            "highlights": False,
+            "highlights_reason": "O Instagram não expõe métricas públicas de visualização/curtidas dos Destaques de perfis externos; por isso o CloudentFlow não inventa um ranking viral.",
         },
-        "scanned": len(items), "errors": errors[-3:],
+        "scanned": len(items),
+        "errors": errors[-3:],
     }
 
 
@@ -333,7 +434,11 @@ def _serve_profile(handler, value):
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
-        self.send_response(204); self.send_header("Access-Control-Allow-Origin", "*"); self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS"); self.send_header("Access-Control-Allow-Headers", "Content-Type"); self.end_headers()
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def do_GET(self):
         try:
