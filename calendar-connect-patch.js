@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__cfCloudentRuntimeBootstrapV1)return;
-  window.__cfCloudentRuntimeBootstrapV1=true;
+  if(window.__cfCloudentRuntimeBootstrapV2)return;
+  window.__cfCloudentRuntimeBootstrapV2=true;
 
   const loadScript=(src,key)=>{
     if(document.querySelector('script[data-cloudent-runtime="'+key+'"]'))return;
@@ -12,10 +12,7 @@
     document.head.appendChild(script);
   };
 
-  // Este arquivo já é carregado diretamente pelo app em todas as instalações.
-  // Mantemos o conector do calendário no core e usamos o mesmo ponto de entrada
-  // para garantir que a aba Virais exista mesmo quando o PWA estiver com um
-  // app-shell antigo no cache.
   loadScript('/calendar-connect-core.js?v=8','calendar-core');
-  loadScript('/virals-patch.js?v=2','virals');
+  loadScript('/virals-patch.js?v=3','virals');
+  loadScript('/virals-foryou-patch.js?v=1','virals-foryou');
 })();
