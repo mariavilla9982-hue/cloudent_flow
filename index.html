@@ -9964,7 +9964,7 @@ function faceSwapPage(){
         '<div class="card face-swap-card">'+
           '<div class="ui3-panel-head"><div><span>ENTRADA</span><h3>Adicionar vídeos</h3></div><div class="face-swap-quick-actions"><button onclick="showPage(\'production\')">Abrir Produção IA</button></div></div>'+
           '<label class="face-swap-drop">'+
-            '<input type="file" accept="video/*" multiple hidden '+(faceSwapCharacterSaving?'disabled':'')+' onchange="handleFaceSwapVideos(this)">'+
+            '<input type="file" accept="video/*" multiple hidden onchange="handleFaceSwapVideos(this)">'+
             '<span>＋</span><b>'+ (faceSwapUploading?"Processando uploads…":"Selecionar vídeos") +'</b>'+
             '<small>Envie o vídeo e pronto. O CloudentFlow extrai o frame, faz o Face Swap e '+(faceSwapAuto?"manda para o motion automaticamente.":"para na imagem para você revisar.")+'</small>'+
           '</label>'+
