@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v24";
+const CACHE="cloudentflow-pwa-v23";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -19,7 +19,7 @@ async function injectCalendarPatch(response){
     const forYouTag='<script src="/virals-foryou-patch.js?v=1"></script>';
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=2"></script>';
-    const faceSwapCharacterClickHotfixTag='<script src="/face-swap-character-click-hotfix.js?v=2"></script>';
+    const faceSwapCharacterClickHotfixTag='<script src="/face-swap-character-click-hotfix.js?v=1"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
