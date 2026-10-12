@@ -45,6 +45,9 @@
     .foryou-status-main b{display:block;color:#e2e2e5;font-size:10px;margin-bottom:2px}
     .foryou-status-main small{display:block;color:#66666e;font-size:8px;line-height:1.45}
     .foryou-progress{text-align:right;flex:0 0 auto}.foryou-progress b{display:block;color:#f2f2f3;font-size:16px;line-height:1}.foryou-progress small{display:block;color:#66666e;font-size:8px;margin-top:4px}
+    .foryou-connect-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px;border:1px solid #2b2b2b;border-radius:14px;background:#0c0c0c;margin-bottom:10px}
+    .foryou-connect-copy{min-width:0}.foryou-connect-copy b{display:block;color:#efeff1;font-size:10px;margin-bottom:3px}.foryou-connect-copy span{display:block;color:#707078;font-size:8px;line-height:1.5}
+    .foryou-connect-btn{flex:0 0 auto;min-height:42px;padding:0 14px;border:1px solid #ededed;border-radius:11px;background:#ededed;color:#090909;font-size:9px;font-weight:950;cursor:pointer}
     .foryou-warning{padding:14px;border:1px solid #3a3120;border-radius:14px;background:#17130b;color:#a89b7b;font-size:9px;line-height:1.6;margin-bottom:10px}
     .foryou-warning b{color:#d9c795}
     .foryou-error{padding:12px;border:1px solid #47252a;border-radius:13px;background:#180d0f;color:#d39ca5;font-size:9px;line-height:1.55;margin-bottom:10px}
@@ -57,12 +60,20 @@
     .foryou-view-badge{position:absolute;left:8px;bottom:8px;padding:6px 8px;border:1px solid rgba(255,255,255,.15);border-radius:9px;background:rgba(5,5,5,.84);color:#fff;font-size:9px;font-weight:900;backdrop-filter:blur(7px)}
     .foryou-body{padding:10px}.foryou-caption{height:34px;overflow:hidden;color:#bdbdc2;font-size:9px;line-height:1.65;margin-bottom:9px}.foryou-caption.empty{color:#55555c}
     .foryou-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.foryou-actions button,.foryou-actions a{height:34px;border:1px solid #292929;border-radius:9px;background:#101010;color:#d4d4d8;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;cursor:pointer}.foryou-actions button.primary{background:#ededed;border-color:#ededed;color:#090909}
+    .foryou-connect-overlay{position:fixed;inset:0;z-index:2147483500;display:grid;place-items:end center;padding:14px;background:rgba(0,0,0,.72);backdrop-filter:blur(8px)}
+    .foryou-connect-modal{width:min(520px,100%);border:1px solid #2b2b2b;border-radius:20px;background:#0b0b0b;box-shadow:0 24px 80px rgba(0,0,0,.55);padding:18px}
+    .foryou-connect-modal h3{margin:0 0 7px;color:#f3f3f4;font-size:17px}.foryou-connect-modal p{margin:0;color:#85858d;font-size:10px;line-height:1.6}
+    .foryou-connect-state{margin:14px 0;padding:12px;border:1px solid #2a2a2a;border-radius:13px;background:#101010}.foryou-connect-state b{display:block;color:#e4e4e7;font-size:10px;margin-bottom:4px}.foryou-connect-state span{display:block;color:#707078;font-size:9px;line-height:1.55}
+    .foryou-connect-steps{margin:0;padding:0;list-style:none;display:grid;gap:7px}.foryou-connect-steps li{display:flex;gap:9px;align-items:flex-start;padding:9px 10px;border:1px solid #202020;border-radius:11px;background:#0d0d0d;color:#92929a;font-size:9px;line-height:1.5}.foryou-connect-steps i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#1b1b1b;color:#e9e9eb;font-size:8px;font-style:normal;font-weight:900;flex:0 0 auto}
+    .foryou-connect-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:14px}.foryou-connect-actions button{height:46px;border-radius:11px;border:1px solid #2b2b2b;background:#111;color:#e5e5e8;font-size:10px;font-weight:900;cursor:pointer}.foryou-connect-actions button.primary{background:#ededed;border-color:#ededed;color:#090909}
     @media(max-width:760px){
       .virals-reels-subtabs{margin-left:14px;margin-right:14px}
       .virals-foryou-panel{margin:0 10px 14px}
       .foryou-head{padding:14px;border-radius:15px}.foryou-head h3{font-size:16px}.foryou-head p{font-size:9px}.foryou-refresh{padding:0 10px}
       .foryou-controls{grid-template-columns:1fr}.foryou-target{min-width:0}.foryou-rule{grid-template-columns:1fr 1fr}.foryou-rule div:last-child{grid-column:1/-1}
+      .foryou-connect-card{align-items:stretch;flex-direction:column}.foryou-connect-btn{width:100%;min-height:46px}
       .foryou-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.foryou-card{border-radius:13px}.foryou-actions{grid-template-columns:1fr}
+      .foryou-connect-overlay{padding:0;align-items:end}.foryou-connect-modal{width:100%;border-left:0;border-right:0;border-bottom:0;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
     }
   `;
   document.head.appendChild(style);
@@ -105,14 +116,31 @@
     if(ext.loading&&!ext.data)return '<div class="foryou-empty"><b>Carregando ForYou Jujuh…</b><span>Buscando a configuração e os virais de hoje.</span></div>';
     const d=ext.data||{};const settings=d.settings||{};const target=Number(settings.daily_target||5)===10?10:5;const count=Number(d.count||0);const st=statusInfo();const items=Array.isArray(d.items)?d.items:[];
     const last=settings.last_collected_at?new Date(settings.last_collected_at).toLocaleString('pt-BR'):'Ainda não coletou';
-    const warning=String(settings.collector_status||'needs_browser_session')==='needs_browser_session'
-      ?'<div class="foryou-warning"><b>Falta somente o coletor autenticado.</b> O painel, filtro de 400 mil+, banco, deduplicação e meta diária já estão prontos. A captura EXATA da ForYou não pode ser feita pela API oficial: ela precisa de uma sessão de navegador logada na conta da Jujuh. Nenhum resultado falso será preenchido aqui.</div>'
+    const needsSession=String(settings.collector_status||'needs_browser_session')==='needs_browser_session';
+    const connect=needsSession
+      ?'<div class="foryou-connect-card"><div class="foryou-connect-copy"><b>Conectar a sessão da Jujuh</b><span>O CloudentFlow precisa de um navegador remoto autenticado para ler a ForYou personalizada.</span></div><button class="foryou-connect-btn" onclick="window.CloudentForYou.connect()">Conectar Jujuh</button></div>'
+      :'';
+    const warning=needsSession
+      ?'<div class="foryou-warning"><b>A sessão remota ainda não está ativa.</b> A Meta não disponibiliza a ForYou personalizada pela API oficial. O login precisa acontecer em um Browser Worker separado; sua senha não deve ser salva nem enviada pelo CloudentFlow.</div>'
       :'';
     const error=ext.error?'<div class="foryou-error">'+esc(ext.error)+'</div>':'';
     const body=items.length?'<div class="foryou-grid">'+items.map(card).join('')+'</div>':'<div class="foryou-empty"><b>Nenhum Reel da ForYou salvo hoje</b><span>Assim que o coletor encontrar Reels com 400 mil visualizações ou mais, eles aparecem aqui automaticamente — sem repetidos.</span></div>';
     return '<div class="foryou-head"><div><span class="foryou-kicker">Radar personalizado · Instagram</span><h3>ForYou da Jujuh</h3><p>Somente Reels recomendados para @jujuhmartinss que baterem 400 mil visualizações ou mais.</p></div><button class="foryou-refresh" onclick="window.CloudentForYou.refresh()" '+(ext.loading?'disabled':'')+'>'+(ext.loading?'Atualizando…':'↻ Atualizar')+'</button></div>'+
       '<div class="foryou-controls"><div class="foryou-rule"><div><span>Origem</span><b>@jujuhmartinss</b></div><div><span>Mínimo</span><b>400 mil views</b></div><div><span>Repetidos</span><b>Bloqueados</b></div></div><div class="foryou-target"><span>Meta por dia</span><div class="foryou-target-buttons"><button class="'+(target===5?'active':'')+'" onclick="window.CloudentForYou.setTarget(5)">5</button><button class="'+(target===10?'active':'')+'" onclick="window.CloudentForYou.setTarget(10)">10</button></div></div></div>'+
-      '<div class="foryou-status '+esc(st.cls)+'"><div class="foryou-status-main"><i class="foryou-dot"></i><div><b>'+esc(st.title)+'</b><small>'+esc(st.desc)+'</small></div></div><div class="foryou-progress"><b>'+count+'/'+target+'</b><small>hoje · '+esc(last)+'</small></div></div>'+error+warning+body;
+      '<div class="foryou-status '+esc(st.cls)+'"><div class="foryou-status-main"><i class="foryou-dot"></i><div><b>'+esc(st.title)+'</b><small>'+esc(st.desc)+'</small></div></div><div class="foryou-progress"><b>'+count+'/'+target+'</b><small>hoje · '+esc(last)+'</small></div></div>'+connect+error+warning+body;
+  }
+
+  function closeConnect(){
+    document.querySelector('.foryou-connect-overlay')?.remove();
+  }
+
+  function connect(){
+    closeConnect();
+    const overlay=document.createElement('div');
+    overlay.className='foryou-connect-overlay';
+    overlay.innerHTML='<div class="foryou-connect-modal" role="dialog" aria-modal="true" aria-label="Conectar Jujuh"><h3>Conectar Jujuh</h3><p>Essa conexão precisa acontecer em um navegador remoto que fica ligado mesmo com seu celular e PC desligados.</p><div class="foryou-connect-state"><b>Browser Worker ainda não configurado</b><span>O painel e o banco já estão prontos. Falta provisionar o navegador remoto que mantém a sessão do Instagram e coleta a ForYou. Não envie sua senha para o CloudentFlow nem para o chat.</span></div><ul class="foryou-connect-steps"><li><i>1</i><span>Provisionar o Browser Worker em nuvem.</span></li><li><i>2</i><span>Você faz o login da @jujuhmartinss diretamente nesse navegador.</span></li><li><i>3</i><span>O CloudentFlow recebe somente o estado do coletor e os Reels encontrados com 400 mil+ views.</span></li></ul><div class="foryou-connect-actions"><button class="primary" onclick="window.CloudentForYou.closeConnect()">Entendi</button></div></div>';
+    overlay.addEventListener('click',e=>{if(e.target===overlay)closeConnect()});
+    document.body.appendChild(overlay);
   }
 
   function mainReelsActive(tabs){
@@ -189,7 +217,7 @@
   }
 
   window.CloudentForYou={
-    refresh:()=>refresh(false),setTarget,download,
+    refresh:()=>refresh(false),setTarget,download,connect,closeConnect,
     setMode(mode){ext.mode=mode==='foryou'?'foryou':'profile';sync();if(ext.mode==='foryou'&&!ext.data)refresh(false)}
   };
 
