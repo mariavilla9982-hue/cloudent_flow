@@ -4102,6 +4102,14 @@ body.trial-modal-open{overflow:hidden!important}
 .calendar-account-chip small{font-size:10px;opacity:.62;margin-top:3px}
 @media(max-width:760px){.calendar-account-switcher{margin-left:-2px;margin-right:-2px;padding-bottom:10px}.calendar-account-chip{min-height:42px;padding-right:10px}.calendar-account-chip b{max-width:112px}}
 
+
+#faceSwap .face-swap-character-card .face-swap-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#faceSwap .face-swap-preset-btn{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #333;border-radius:12px;background:#101010;color:#fff;text-align:left;cursor:pointer}
+#faceSwap .face-swap-preset-btn.active{border-color:#fff;background:#191919}
+#faceSwap .face-swap-preset-btn img{width:52px;height:48px;object-fit:cover;border-radius:8px}
+#faceSwap .face-swap-preset-copy{display:flex;flex-direction:column;gap:3px}
+#faceSwap .face-swap-preset-copy strong{font-size:13px}
+#faceSwap .face-swap-preset-copy span{font-size:10px;color:#999}
 </style>
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#050505">
@@ -4407,6 +4415,7 @@ body.trial-modal-open{overflow:hidden!important}
 <div id="activityPanelHost"></div>
 <div id="commandPaletteHost"></div>
 
+<script src="/face-swap-character-presets.js?v=4"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const navItems=[
@@ -9512,7 +9521,8 @@ function productionPage(){
 
 async function loadFaceSwapData(){
   if(!cloudSession){faceSwapData=null;return}
-  faceSwapData=await cloudFetch("?resource=face-swap");
+  const characterStamp=CloudentFaceSwapCharacter.stamp();
+  faceSwapData=CloudentFaceSwapCharacter.merge(await cloudFetch("?resource=face-swap"),characterStamp);
   const sig=JSON.stringify((faceSwapData?.jobs||[]).map(j=>[
     j.id,j.status,j.progress,j.production_job_id,j.production?.status,j.production?.progress,j.production?.credits_used,j.production?.last_error,j.last_error,j.updated_at
   ]));
@@ -9609,6 +9619,7 @@ async function uploadFaceSwapJobDirect(video,frame,autoSend){
     fd.append("video",video);
     fd.append("frame",frame);
     fd.append("auto_send",autoSend?"true":"false");
+    await CloudentFaceSwapCharacter.flush();
     return await cloudFetch("?action=face-swap-upload",{method:"POST",body:fd});
   }
   const totalBytes=Math.max(1,Number(video.size||0)+Number(frame.size||0));
@@ -9628,6 +9639,7 @@ async function uploadFaceSwapJobDirect(video,frame,autoSend){
   faceSwapUploadProgress.percent=100;
   faceSwapUploadProgress.current="Upload concluído · registrando job…";
   syncFaceSwapUploadProgressUi();
+  await CloudentFaceSwapCharacter.flush();
   const completed=await cloudFetch("?action=face-swap-upload-complete",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -9905,7 +9917,8 @@ function ensureFaceSwapTicker(){
   faceSwapTicker=setInterval(async()=>{
     if(currentPage!=="faceSwap"||!cloudSession||document.hidden)return;
     try{
-      const next=await cloudFetch("?resource=face-swap");
+      const characterStamp=CloudentFaceSwapCharacter.stamp();
+      const next=CloudentFaceSwapCharacter.merge(await cloudFetch("?resource=face-swap"),characterStamp);
       const sig=JSON.stringify((next?.jobs||[]).map(j=>[j.id,j.status,j.progress,j.production_job_id,j.production?.status,j.production?.progress,j.last_error,j.updated_at]));
       faceSwapData=next;
       if(sig!==faceSwapLastSignature){
@@ -9916,24 +9929,6 @@ function ensureFaceSwapTicker(){
       }
     }catch{}
   },10000);
-}
-let faceSwapCharacterSaving=false;
-async function changeFaceSwapCharacter(input,original=false){
-  if(faceSwapCharacterSaving||faceSwapUploading)return;
-  const file=input?.files?.[0];
-  if(!original&&!file)return;
-  if(file&&(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>10*1024*1024)){
-    toast("Escolha PNG, JPG ou WebP de até 10 MB.","err");input.value="";return;
-  }
-  faceSwapCharacterSaving=true;faceSwapPage();
-  try{
-    const form=new FormData();
-    if(original)form.append("mode","workflow");else form.append("character",file);
-    await cloudFetch("?action=face-swap-character",{method:"POST",body:form});
-    await loadFaceSwapData();
-    toast("Folha salva. Os próximos vídeos usarão essa personagem.");
-  }catch(error){toast(error.message||"Não foi possível trocar a folha.","err");}
-  finally{faceSwapCharacterSaving=false;faceSwapPage();}
 }
 function faceSwapPage(){
   const root=$("#faceSwap");if(!root)return;
@@ -9962,12 +9957,8 @@ function faceSwapPage(){
       '</div>'+
       '<div class="card face-swap-card face-swap-character-card">'+
         '<div class="ui3-panel-head"><div><span>PERSONAGEM</span><h3>Folha de personagem</h3></div></div>'+
-        (wf.character?.preview_url?'<img class="face-swap-character-preview" src="'+esc(wf.character.preview_url)+'" alt="Folha de personagem selecionada">':'')+
-        '<b>'+esc(wf.character?.file_name||"Carregando folha…")+'</b>'+
         '<p class="muted">A troca vale para os próximos vídeos. Os que já estão na fila mantêm a folha usada no envio.</p>'+
-        '<div class="face-swap-quick-actions"><button class="primary" '+((faceSwapCharacterSaving||faceSwapUploading)?'disabled':'')+' onclick="document.getElementById(\'faceSwapCharacterFile\').click()">'+(faceSwapCharacterSaving?'Salvando folha…':'Trocar folha de personagem')+'</button>'+
-        '<input id="faceSwapCharacterFile" type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="changeFaceSwapCharacter(this)">'+
-        '<button '+((faceSwapCharacterSaving||faceSwapUploading)?'disabled':'')+' onclick="changeFaceSwapCharacter(null,true)">Usar folha original</button></div>'+
+        CloudentFaceSwapCharacter.markup()+
       '</div>'+
       '<div class="face-swap-grid">'+
         '<div class="card face-swap-card">'+

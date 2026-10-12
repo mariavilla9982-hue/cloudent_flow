@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v23";
+const CACHE="cloudentflow-pwa-v24";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -18,8 +18,7 @@ async function injectCalendarPatch(response){
     const viralsTag='<script src="/virals-patch.js?v=3"></script>';
     const forYouTag='<script src="/virals-foryou-patch.js?v=1"></script>';
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
-    const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=2"></script>';
-    const faceSwapCharacterClickHotfixTag='<script src="/face-swap-character-click-hotfix.js?v=1"></script>';
+    const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=4"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
@@ -49,11 +48,13 @@ async function injectCalendarPatch(response){
     if(oldForYouWatchdog.test(html))html=html.replace(oldForYouWatchdog,forYouWatchdogTag);
     else html=html.includes("</body>")?html.replace("</body>",forYouWatchdogTag+"</body>"):html+forYouWatchdogTag;
 
-    if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
-    else html=html.includes("</body>")?html.replace("</body>",faceSwapCharacterTag+"</body>"):html+faceSwapCharacterTag;
-
-    if(oldFaceSwapCharacterClickHotfix.test(html))html=html.replace(oldFaceSwapCharacterClickHotfix,faceSwapCharacterClickHotfixTag);
-    else html=html.includes("</body>")?html.replace("</body>",faceSwapCharacterClickHotfixTag+"</body>"):html+faceSwapCharacterClickHotfixTag;
+    // Only native v4 HTML loads the selector. Never inject a controller into legacy HTML.
+    html=html.replace(oldFaceSwapCharacterClickHotfix,'');
+    if(html.includes('CloudentFaceSwapCharacter.markup()')){
+      html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
+    }else{
+      html=html.replace(oldFaceSwapCharacter,'');
+    }
 
     if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
     else html=html.includes("</body>")?html.replace("</body>",faceSwapQueueTag+"</body>"):html+faceSwapQueueTag;
@@ -105,12 +106,7 @@ async function handleNavigation(event){
     }
   })();
 
-  if(cached){
-    event.waitUntil(networkPromise.catch(()=>null));
-    return injectCalendarPatch(cached);
-  }
-
-  const response=(await networkPromise)||Response.error();
+  const response=(await networkPromise)||cached||Response.error();
   return injectCalendarPatch(response);
 }
 
