@@ -6,8 +6,20 @@
     },
     "api/virals.py": {
       "maxDuration": 60
+    },
+    "api/foryou-browser.js": {
+      "maxDuration": 60
+    },
+    "api/foryou-worker-wake.js": {
+      "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/foryou-worker-wake",
+      "schedule": "0 12 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/sw.js",
