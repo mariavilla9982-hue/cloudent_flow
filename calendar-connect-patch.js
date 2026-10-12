@@ -65,6 +65,7 @@
 
   loadScript('/calendar-connect-core.js?v=8','calendar-core');
   loadScript('/calendar-mobile-hotfix.js?v=1','calendar-mobile-hotfix');
+  loadScript('/dashboard-multi-account-patch.js?v=1','dashboard-multi-account');
   loadScript('/virals-patch.js?v=3','virals');
   loadScript('/virals-foryou-patch.js?v=1','virals-foryou');
   loadScript('/virals-foryou-browser-hotfix.js?v=1','virals-foryou-browser-hotfix');
