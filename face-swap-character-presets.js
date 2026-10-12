@@ -1,4 +1,4 @@
-// Face Swap character selector v4. One controller; no observers or global click handlers.
+// Face Swap character selector v5. One controller; no observers or global click handlers.
 (()=>{
   if(window.CloudentFaceSwapCharacter)return;
   const JULIA_THUMB='data:image/jpeg;base64,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';
@@ -95,5 +95,47 @@
         '<img src="'+(name==='julia'?JULIA_THUMB:SAHRY_THUMB)+'" alt="'+label+'"><span class="face-swap-preset-copy"><strong>'+label+'</strong><span>'+(active?(pending?'Salvando…':'Em uso'):'Usar esta folha')+'</span></span></button>';
     }).join('')+'</div>';
   }
-  window.CloudentFaceSwapCharacter={version:4,stamp,merge,markup,select,flush};
+  function mountLegacy(){
+    const card=document.querySelector('#faceSwap .face-swap-character-card');
+    if(!card)return;
+    if(!confirmed&&!pending&&typeof faceSwapData!=='undefined'&&faceSwapData){
+      faceSwapData=merge(faceSwapData,stamp());
+    }
+    if(!card.querySelector('[data-face-swap-preset]')){
+      card.innerHTML='<div class="ui3-panel-head"><div><span>PERSONAGEM</span><h3>Folha de personagem</h3></div></div>'+
+        '<p class="muted">A troca vale para os próximos vídeos. Os que já estão na fila mantêm a folha usada no envio.</p>'+markup();
+    }
+    paint();
+  }
+  function install(){
+    if(typeof faceSwapPage!=='function')return;
+    if(!document.getElementById('faceSwapCharacterSelectorStyle')){
+      const style=document.createElement('style');style.id='faceSwapCharacterSelectorStyle';
+      style.textContent=`#faceSwap .face-swap-character-card .face-swap-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        #faceSwap .face-swap-preset-btn{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #333;border-radius:12px;background:#101010;color:#fff;text-align:left;cursor:pointer}
+        #faceSwap .face-swap-preset-btn.active{border-color:#fff;background:#191919}
+        #faceSwap .face-swap-preset-btn img{width:52px;height:48px;object-fit:cover;border-radius:8px}
+        #faceSwap .face-swap-preset-copy{display:flex;flex-direction:column;gap:3px}
+        #faceSwap .face-swap-preset-copy strong{font-size:13px}
+        #faceSwap .face-swap-preset-copy span{font-size:10px;color:#999}`;
+      document.head.appendChild(style);
+    }
+    // Cached HTML still renders the retired upload/reset controls. Replace only
+    // its Face Swap render boundary, using the same controller as native HTML.
+    if(!String(faceSwapPage).includes('CloudentFaceSwapCharacter.markup()')){
+      const render=faceSwapPage;
+      faceSwapPage=function(...args){const result=render.apply(this,args);mountLegacy();return result};
+      if(typeof loadFaceSwapData==='function'&&!String(loadFaceSwapData).includes('CloudentFaceSwapCharacter.merge')){
+        const load=loadFaceSwapData;
+        loadFaceSwapData=async function(...args){const started=stamp();const result=await load.apply(this,args);if(faceSwapData)faceSwapData=merge(faceSwapData,started);return result};
+      }
+      if(typeof uploadFaceSwapJobDirect==='function'&&!String(uploadFaceSwapJobDirect).includes('CloudentFaceSwapCharacter.flush')){
+        const upload=uploadFaceSwapJobDirect;
+        uploadFaceSwapJobDirect=async function(...args){await flush();return upload.apply(this,args)};
+      }
+    }
+    mountLegacy();
+  }
+  window.CloudentFaceSwapCharacter={version:5,stamp,merge,markup,select,flush};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();

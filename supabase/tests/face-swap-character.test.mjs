@@ -33,7 +33,7 @@ ctx.faceSwapData=api.merge({workflow:{character:{file_name:'Julia'}}},old);
 assert.equal(ctx.faceSwapData.workflow.character.file_name,'Sahry');
 fail=true;await api.select('julia');await assert.rejects(api.flush());assert.equal(buttons.find(b=>b.active).dataset.faceSwapPreset,'sahry');assert.ok(buttons.every(b=>!b.disabled));
 await api.select('julia');await api.flush();assert.equal(backend,'Julia');
-assert.ok(!source.includes('MutationObserver'));assert.ok(!source.includes('addEventListener'));assert.ok(!source.includes('loadFaceSwapData'));
+assert.ok(!source.includes('MutationObserver'));assert.ok(!source.includes("addEventListener('click'"));assert.ok(!source.slice(source.indexOf('function select('),source.indexOf('async function flush(')).includes('loadFaceSwapData'));
 const sw=fs.readFileSync('sw.js','utf8');assert.ok(!sw.includes('faceSwapCharacterClickHotfixTag'));assert.ok(!html.includes('changeFaceSwapCharacter'));assert.ok(!html.includes('faceSwapCharacterSaving'));
 console.log('PASS: 10 alternating clicks; immediate UI; serial backend writes; rapid last-click-wins; stale reads/redraw; failure/retry; pipeline flush; retired handlers; inline syntax');
 
@@ -43,3 +43,12 @@ Object.assign(ctx,{$:()=>root,CloudentFaceSwapCharacter:api,faceSwapAuto:false,f
 vm.runInContext(html.slice(html.indexOf('function faceSwapPage(){'),html.indexOf('function updateFrameExtractorText(')),ctx);
 ctx.faceSwapPage();assert.equal((root.innerHTML.match(/data-face-swap-preset=/g)||[]).length,2);assert.ok(root.innerHTML.includes('Adicionar vídeos'));
 console.log('PASS: actual native Face Swap page renders two presets and upload without removed state');
+
+// Cached original HTML must receive exactly the same two-card selector.
+const legacyCard={innerHTML:'Trocar folha de personagem',querySelector(){return this.innerHTML.includes('data-face-swap-preset')?{}:null}};
+let legacyRenders=0;
+const legacy=vm.createContext({window:{},cloudSession:{user:{id:'u'},access_token:'test'},faceSwapData:{workflow:{character:{file_name:'Sahry'}}},document:{readyState:'complete',querySelector:()=>legacyCard,querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>({}),head:{appendChild(){}}},faceSwapPage(){legacyRenders++;legacyCard.innerHTML='Trocar folha de personagem';},loadFaceSwapData:async()=>{},toast(){}});
+vm.runInContext(source,legacy);legacy.faceSwapPage();
+assert.equal(legacyRenders,1);assert.equal((legacyCard.innerHTML.match(/data-face-swap-preset=/g)||[]).length,2);assert.ok(!legacyCard.innerHTML.includes('Trocar folha'));assert.match(legacyCard.innerHTML,/active[^>]*data-face-swap-preset="sahry"/);
+legacy.faceSwapPage();assert.equal((legacyCard.innerHTML.match(/data-face-swap-preset=/g)||[]).length,2);
+console.log('PASS: cached original HTML restores Julia/Sahry on every Face Swap render, without observers');

@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v24";
+const CACHE="cloudentflow-pwa-v25";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -18,7 +18,7 @@ async function injectCalendarPatch(response){
     const viralsTag='<script src="/virals-patch.js?v=3"></script>';
     const forYouTag='<script src="/virals-foryou-patch.js?v=1"></script>';
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
-    const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=4"></script>';
+    const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=5"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
@@ -48,13 +48,10 @@ async function injectCalendarPatch(response){
     if(oldForYouWatchdog.test(html))html=html.replace(oldForYouWatchdog,forYouWatchdogTag);
     else html=html.includes("</body>")?html.replace("</body>",forYouWatchdogTag+"</body>"):html+forYouWatchdogTag;
 
-    // Only native v4 HTML loads the selector. Never inject a controller into legacy HTML.
+    // Cached native and legacy documents share one selector controller.
     html=html.replace(oldFaceSwapCharacterClickHotfix,'');
-    if(html.includes('CloudentFaceSwapCharacter.markup()')){
-      html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
-    }else{
-      html=html.replace(oldFaceSwapCharacter,'');
-    }
+    if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
+    else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
     if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
     else html=html.includes("</body>")?html.replace("</body>",faceSwapQueueTag+"</body>"):html+faceSwapQueueTag;
