@@ -270,13 +270,33 @@ def _analyze(username):
     }
 
 
+def _serve_profile(handler, value):
+    username = _username(value)
+    if not username:
+        return _json(handler, {"ok": False, "error": "instagram_profile_required", "message": "Cole o link do perfil ou @usuário do Instagram."}, 400)
+    try:
+        return _json(handler, _analyze(username))
+    except Exception as exc:
+        message = str(exc)
+        if "private" in message.lower() or "login" in message.lower():
+            return _json(handler, {"ok": False, "error": "profile_private_or_login_required", "message": "Esse perfil não pode ser analisado publicamente."}, 422)
+        return _json(handler, {"ok": False, "error": "profile_analysis_failed", "message": "Não consegui analisar esse perfil agora.", "detail": message[:240]}, 422)
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def do_GET(self):
+        try:
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            return _serve_profile(self, (query.get("profile") or query.get("username") or [""])[0])
+        except Exception as exc:
+            return _json(self, {"ok": False, "error": "virals_failed", "message": str(exc)[:240]}, 500)
 
     def do_POST(self):
         try:
@@ -284,16 +304,6 @@ class handler(BaseHTTPRequestHandler):
             if length <= 0 or length > 8192:
                 return _json(self, {"ok": False, "error": "invalid_body"}, 400)
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            username = _username(payload.get("profile") or payload.get("url") or payload.get("username"))
-            if not username:
-                return _json(self, {"ok": False, "error": "instagram_profile_required", "message": "Cole o link do perfil ou @usuário do Instagram."}, 400)
-            try:
-                data = _analyze(username)
-                return _json(self, data)
-            except Exception as exc:
-                message = str(exc)
-                if "private" in message.lower() or "login" in message.lower():
-                    return _json(self, {"ok": False, "error": "profile_private_or_login_required", "message": "Esse perfil não pode ser analisado publicamente."}, 422)
-                return _json(self, {"ok": False, "error": "profile_analysis_failed", "message": "Não consegui analisar esse perfil agora.", "detail": message[:240]}, 422)
+            return _serve_profile(self, payload.get("profile") or payload.get("url") or payload.get("username"))
         except Exception as exc:
             return _json(self, {"ok": False, "error": "virals_failed", "message": str(exc)[:240]}, 500)
