@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__cfCloudentRuntimeBootstrapV4)return;
-  window.__cfCloudentRuntimeBootstrapV4=true;
+  if(window.__cfCloudentRuntimeBootstrapV5)return;
+  window.__cfCloudentRuntimeBootstrapV5=true;
 
   const loadScript=(src,key)=>{
     if(document.querySelector('script[data-cloudent-runtime="'+key+'"]'))return;
@@ -64,6 +64,7 @@
   queueGuard();
 
   loadScript('/calendar-connect-core.js?v=8','calendar-core');
+  loadScript('/calendar-mobile-hotfix.js?v=1','calendar-mobile-hotfix');
   loadScript('/virals-patch.js?v=3','virals');
   loadScript('/virals-foryou-patch.js?v=1','virals-foryou');
   loadScript('/virals-foryou-watchdog.js?v=1','virals-foryou-watchdog');
