@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v13";
+const CACHE="cloudentflow-pwa-v14";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -12,10 +12,17 @@ async function injectCalendarPatch(response){
   if(!type.includes("text/html"))return response;
   try{
     let html=await response.text();
-    const tag='<script src="/calendar-connect-patch.js?v=7"></script>';
-    const oldPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
-    if(oldPatch.test(html))html=html.replace(oldPatch,tag);
-    else html=html.includes("</body>")?html.replace("</body>",tag+"</body>"):html+tag;
+    const calendarTag='<script src="/calendar-connect-patch.js?v=7"></script>';
+    const mobileScheduleTag='<script src="/production-schedule-mobile-patch.js?v=1"></script>';
+    const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
+    const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
+
+    if(oldCalendarPatch.test(html))html=html.replace(oldCalendarPatch,calendarTag);
+    else html=html.includes("</body>")?html.replace("</body>",calendarTag+"</body>"):html+calendarTag;
+
+    if(oldMobileSchedulePatch.test(html))html=html.replace(oldMobileSchedulePatch,mobileScheduleTag);
+    else html=html.includes("</body>")?html.replace("</body>",mobileScheduleTag+"</body>"):html+mobileScheduleTag;
+
     const headers=new Headers(response.headers);
     headers.delete("content-length");
     headers.delete("content-encoding");
@@ -101,7 +108,7 @@ self.addEventListener("fetch",event=>{
 
   if(url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;
 
-  if(url.pathname==="/calendar-connect-patch.js"){
+  if(url.pathname==="/calendar-connect-patch.js"||url.pathname==="/production-schedule-mobile-patch.js"){
     event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>Response.error()));
     return;
   }
