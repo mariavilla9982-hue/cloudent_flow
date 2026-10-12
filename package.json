@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "3.7.0"
+  }
+}
