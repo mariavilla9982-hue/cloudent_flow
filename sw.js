@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v19";
+const CACHE="cloudentflow-pwa-v20";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -17,13 +17,15 @@ async function injectCalendarPatch(response){
     const viralsTag='<script src="/virals-patch.js?v=3"></script>';
     const forYouTag='<script src="/virals-foryou-patch.js?v=1"></script>';
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
-    const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=1"></script>';
+    const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=2"></script>';
+    const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=1"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldViralsPatch=/<script\b[^>]*src=["'][^"']*virals-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldForYouPatch=/<script\b[^>]*src=["'][^"']*virals-foryou-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldForYouWatchdog=/<script\b[^>]*src=["'][^"']*virals-foryou-watchdog\.js[^"']*["'][^>]*><\/script>/gi;
     const oldFaceSwapCharacter=/<script\b[^>]*src=["'][^"']*face-swap-character-presets\.js[^"']*["'][^>]*><\/script>/gi;
+    const oldFaceSwapQueue=/<script\b[^>]*src=["'][^"']*face-swap-queue-patch\.js[^"']*["'][^>]*><\/script>/gi;
 
     if(oldCalendarPatch.test(html))html=html.replace(oldCalendarPatch,calendarTag);
     else html=html.includes("</body>")?html.replace("</body>",calendarTag+"</body>"):html+calendarTag;
@@ -42,6 +44,9 @@ async function injectCalendarPatch(response){
 
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes("</body>")?html.replace("</body>",faceSwapCharacterTag+"</body>"):html+faceSwapCharacterTag;
+
+    if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
+    else html=html.includes("</body>")?html.replace("</body>",faceSwapQueueTag+"</body>"):html+faceSwapQueueTag;
 
     const headers=new Headers(response.headers);
     headers.delete("content-length");
@@ -134,7 +139,8 @@ self.addEventListener("fetch",event=>{
     url.pathname==="/virals-patch.js"||
     url.pathname==="/virals-foryou-patch.js"||
     url.pathname==="/virals-foryou-watchdog.js"||
-    url.pathname==="/face-swap-character-presets.js"
+    url.pathname==="/face-swap-character-presets.js"||
+    url.pathname==="/face-swap-queue-patch.js"
   ){
     event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>Response.error()));
     return;
