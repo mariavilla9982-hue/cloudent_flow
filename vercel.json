@@ -3,6 +3,9 @@
   "functions": {
     "api/media_cleaner.py": {
       "maxDuration": 300
+    },
+    "api/virals.py": {
+      "maxDuration": 60
     }
   },
   "headers": [
