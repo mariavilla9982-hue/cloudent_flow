@@ -34,5 +34,12 @@ assert.equal(ctx.faceSwapData.workflow.character.file_name,'Sahry');
 fail=true;await api.select('julia');await assert.rejects(api.flush());assert.equal(buttons.find(b=>b.active).dataset.faceSwapPreset,'sahry');assert.ok(buttons.every(b=>!b.disabled));
 await api.select('julia');await api.flush();assert.equal(backend,'Julia');
 assert.ok(!source.includes('MutationObserver'));assert.ok(!source.includes('addEventListener'));assert.ok(!source.includes('loadFaceSwapData'));
-const sw=fs.readFileSync('sw.js','utf8');assert.ok(!sw.includes('faceSwapCharacterClickHotfixTag'));assert.ok(!html.includes('changeFaceSwapCharacter'));
+const sw=fs.readFileSync('sw.js','utf8');assert.ok(!sw.includes('faceSwapCharacterClickHotfixTag'));assert.ok(!html.includes('changeFaceSwapCharacter'));assert.ok(!html.includes('faceSwapCharacterSaving'));
 console.log('PASS: 10 alternating clicks; immediate UI; serial backend writes; rapid last-click-wins; stale reads/redraw; failure/retry; pipeline flush; retired handlers; inline syntax');
+
+// Render the actual native page, including the video input, to catch retired state references.
+const root={innerHTML:''};
+Object.assign(ctx,{$:()=>root,CloudentFaceSwapCharacter:api,faceSwapAuto:false,faceSwapUploading:false,faceSwapUploadProgress:{},esc:String,ensureFaceSwapTicker(){},setupFaceSwapFrameThumbs(){},setTimeout(){}});
+vm.runInContext(html.slice(html.indexOf('function faceSwapPage(){'),html.indexOf('function updateFrameExtractorText(')),ctx);
+ctx.faceSwapPage();assert.equal((root.innerHTML.match(/data-face-swap-preset=/g)||[]).length,2);assert.ok(root.innerHTML.includes('Adicionar vídeos'));
+console.log('PASS: actual native Face Swap page renders two presets and upload without removed state');
