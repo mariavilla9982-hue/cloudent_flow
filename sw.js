@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v20";
+const CACHE="cloudentflow-pwa-v21";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -14,6 +14,7 @@ async function injectCalendarPatch(response){
     let html=await response.text();
     const calendarTag='<script src="/calendar-connect-patch.js?v=8"></script>';
     const mobileScheduleTag='<script src="/production-schedule-mobile-patch.js?v=3"></script>';
+    const timeHotfixTag='<script src="/production-schedule-time-hotfix.js?v=1"></script>';
     const viralsTag='<script src="/virals-patch.js?v=3"></script>';
     const forYouTag='<script src="/virals-foryou-patch.js?v=1"></script>';
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
@@ -21,6 +22,7 @@ async function injectCalendarPatch(response){
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=1"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
+    const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
     const oldViralsPatch=/<script\b[^>]*src=["'][^"']*virals-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldForYouPatch=/<script\b[^>]*src=["'][^"']*virals-foryou-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldForYouWatchdog=/<script\b[^>]*src=["'][^"']*virals-foryou-watchdog\.js[^"']*["'][^>]*><\/script>/gi;
@@ -32,6 +34,9 @@ async function injectCalendarPatch(response){
 
     if(oldMobileSchedulePatch.test(html))html=html.replace(oldMobileSchedulePatch,mobileScheduleTag);
     else html=html.includes("</body>")?html.replace("</body>",mobileScheduleTag+"</body>"):html+mobileScheduleTag;
+
+    if(oldTimeHotfix.test(html))html=html.replace(oldTimeHotfix,timeHotfixTag);
+    else html=html.includes("</body>")?html.replace("</body>",timeHotfixTag+"</body>"):html+timeHotfixTag;
 
     if(oldViralsPatch.test(html))html=html.replace(oldViralsPatch,viralsTag);
     else html=html.includes("</body>")?html.replace("</body>",viralsTag+"</body>"):html+viralsTag;
@@ -136,6 +141,7 @@ self.addEventListener("fetch",event=>{
   if(
     url.pathname==="/calendar-connect-patch.js"||
     url.pathname==="/production-schedule-mobile-patch.js"||
+    url.pathname==="/production-schedule-time-hotfix.js"||
     url.pathname==="/virals-patch.js"||
     url.pathname==="/virals-foryou-patch.js"||
     url.pathname==="/virals-foryou-watchdog.js"||
