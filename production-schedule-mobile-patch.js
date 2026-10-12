@@ -1,28 +1,59 @@
 (()=>{
-  if(window.__cfProductionScheduleMobilePatchV1)return;
-  window.__cfProductionScheduleMobilePatchV1=true;
+  if(window.__cfProductionScheduleMobilePatchV2)return;
+  window.__cfProductionScheduleMobilePatchV2=true;
+
+  const oldStyle=document.getElementById('cf-production-schedule-mobile-style');
+  if(oldStyle)oldStyle.remove();
 
   const style=document.createElement('style');
   style.id='cf-production-schedule-mobile-style';
   style.textContent=`
     @media(max-width:760px){
-      body.production-schedule-open{overflow:hidden!important;overscroll-behavior:none!important}
+      html:has(body.production-schedule-open),
+      body.production-schedule-open{
+        overflow:hidden!important;
+        overscroll-behavior:none!important;
+      }
       body.production-schedule-open .mobile-appbar,
       body.production-schedule-open .mobile-bottom-nav{display:none!important}
 
       .production-schedule-mobile-shell{
+        position:fixed!important;
         z-index:10050!important;
         inset:0!important;
+        top:0!important;
+        right:0!important;
+        bottom:0!important;
+        left:0!important;
+        width:100vw!important;
+        min-width:100vw!important;
+        max-width:100vw!important;
+        height:100dvh!important;
+        min-height:100dvh!important;
+        max-height:100dvh!important;
+        display:block!important;
         align-items:stretch!important;
         justify-content:stretch!important;
+        margin:0!important;
         padding:0!important;
+        border:0!important;
+        border-radius:0!important;
         background:#080808!important;
         backdrop-filter:none!important;
+        overflow:hidden!important;
+        box-sizing:border-box!important;
       }
 
       .production-schedule-mobile-shell .production-schedule-modal{
-        width:100%!important;
-        max-width:none!important;
+        position:absolute!important;
+        inset:0!important;
+        top:0!important;
+        right:0!important;
+        bottom:0!important;
+        left:0!important;
+        width:100vw!important;
+        min-width:100vw!important;
+        max-width:100vw!important;
         height:100dvh!important;
         min-height:100dvh!important;
         max-height:100dvh!important;
@@ -36,6 +67,7 @@
         overscroll-behavior:contain!important;
         -webkit-overflow-scrolling:touch!important;
         box-shadow:none!important;
+        box-sizing:border-box!important;
       }
 
       .production-schedule-modal .modal-head{
@@ -107,15 +139,14 @@
       .production-schedule-modal .field>input{height:47px!important;min-height:47px!important;padding:0 12px!important}
       .production-schedule-modal .field>textarea{min-height:92px!important;padding:12px!important;resize:vertical!important;line-height:1.45!important}
 
-      .production-schedule-modal>.production-calendar-fields{
-        margin:0 0 13px!important;
-      }
+      .production-schedule-modal>.production-calendar-fields{margin:0 0 13px!important}
 
       .production-schedule-modal .production-calendar-capacity{
         display:flex!important;
         grid-template-columns:none!important;
         gap:8px!important;
         width:100%!important;
+        max-width:100%!important;
         margin:0 0 15px!important;
         padding:0 0 6px!important;
         overflow-x:auto!important;
@@ -148,20 +179,9 @@
         box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)!important;
       }
       .production-schedule-modal .production-calendar-day:disabled{opacity:.45!important}
-      .production-schedule-modal .production-calendar-day>span{
-        font-size:9px!important;
-        color:#74747d!important;
-        font-weight:850!important;
-      }
-      .production-schedule-modal .production-calendar-day>b{
-        font-size:13px!important;
-        color:#ededf0!important;
-        line-height:1.2!important;
-      }
-      .production-schedule-modal .production-calendar-day>small{
-        font-size:8px!important;
-        color:#5f6068!important;
-      }
+      .production-schedule-modal .production-calendar-day>span{font-size:9px!important;color:#74747d!important;font-weight:850!important}
+      .production-schedule-modal .production-calendar-day>b{font-size:13px!important;color:#ededf0!important;line-height:1.2!important}
+      .production-schedule-modal .production-calendar-day>small{font-size:8px!important;color:#5f6068!important}
 
       .production-schedule-modal .production-calendar-fields.formgrid{
         display:grid!important;
@@ -169,15 +189,9 @@
         gap:11px 9px!important;
         margin:0!important;
       }
-      .production-schedule-modal .production-calendar-fields.formgrid .field.full{
-        grid-column:1/-1!important;
-      }
+      .production-schedule-modal .production-calendar-fields.formgrid .field.full{grid-column:1/-1!important}
 
-      .production-schedule-modal .production-scheduled-summary{
-        margin:4px 0 12px!important;
-        padding:12px!important;
-        border-radius:12px!important;
-      }
+      .production-schedule-modal .production-scheduled-summary{margin:4px 0 12px!important;padding:12px!important;border-radius:12px!important}
 
       .production-schedule-modal .production-calendar-modal-actions{
         position:sticky!important;
@@ -193,17 +207,8 @@
         border-top:1px solid #202020!important;
         backdrop-filter:blur(10px)!important;
       }
-      .production-schedule-modal .production-calendar-modal-actions>.btn{
-        width:100%!important;
-        min-height:50px!important;
-        border-radius:12px!important;
-        font-size:12px!important;
-      }
-      .production-schedule-modal .production-calendar-modal-actions>.btn.primary{
-        background:#ececec!important;
-        border-color:#ececec!important;
-        color:#090909!important;
-      }
+      .production-schedule-modal .production-calendar-modal-actions>.btn{width:100%!important;min-height:50px!important;border-radius:12px!important;font-size:12px!important}
+      .production-schedule-modal .production-calendar-modal-actions>.btn.primary{background:#ececec!important;border-color:#ececec!important;color:#090909!important}
     }
 
     @media(max-width:760px) and (max-height:650px){
@@ -217,19 +222,87 @@
   document.head.appendChild(style);
 
   const host=document.getElementById('modalHost');
+  const mobileQuery=window.matchMedia?.('(max-width:760px)');
+  let restoreInline=[];
+
+  const restoreForcedStyles=()=>{
+    while(restoreInline.length){
+      try{restoreInline.pop()()}catch{}
+    }
+  };
+
+  const forceImportant=(el,property,value)=>{
+    if(!el)return;
+    const previousValue=el.style.getPropertyValue(property);
+    const previousPriority=el.style.getPropertyPriority(property);
+    restoreInline.push(()=>{
+      if(previousValue)el.style.setProperty(property,previousValue,previousPriority);
+      else el.style.removeProperty(property);
+    });
+    el.style.setProperty(property,value,'important');
+  };
+
   const syncMobileModal=()=>{
     if(!host||!document.body)return;
+
+    restoreForcedStyles();
     host.querySelectorAll('.production-schedule-mobile-shell').forEach(el=>el.classList.remove('production-schedule-mobile-shell'));
+
     const box=host.querySelector('.production-schedule-modal');
     const modal=box?.closest('.modal');
-    if(modal)modal.classList.add('production-schedule-mobile-shell');
-    document.body.classList.toggle('production-schedule-open',Boolean(box));
+    const isMobile=mobileQuery?mobileQuery.matches:window.innerWidth<=760;
+    const active=Boolean(box&&modal&&isMobile);
+
+    document.body.classList.toggle('production-schedule-open',active);
+    if(!active)return;
+
+    modal.classList.add('production-schedule-mobile-shell');
+
+    // Fallback direto: vence CSS legado/cached mesmo quando a cascata antiga tenta
+    // centralizar o modal como bottom sheet.
+    forceImportant(document.documentElement,'overflow','hidden');
+    forceImportant(document.body,'overflow','hidden');
+    forceImportant(modal,'position','fixed');
+    forceImportant(modal,'inset','0');
+    forceImportant(modal,'width','100vw');
+    forceImportant(modal,'min-width','100vw');
+    forceImportant(modal,'max-width','100vw');
+    forceImportant(modal,'height','100dvh');
+    forceImportant(modal,'min-height','100dvh');
+    forceImportant(modal,'max-height','100dvh');
+    forceImportant(modal,'margin','0');
+    forceImportant(modal,'padding','0');
+    forceImportant(modal,'display','block');
+    forceImportant(modal,'background','#080808');
+    forceImportant(modal,'overflow','hidden');
+
+    forceImportant(box,'position','absolute');
+    forceImportant(box,'inset','0');
+    forceImportant(box,'width','100vw');
+    forceImportant(box,'min-width','100vw');
+    forceImportant(box,'max-width','100vw');
+    forceImportant(box,'height','100dvh');
+    forceImportant(box,'min-height','100dvh');
+    forceImportant(box,'max-height','100dvh');
+    forceImportant(box,'margin','0');
+    forceImportant(box,'border','0');
+    forceImportant(box,'border-radius','0');
+    forceImportant(box,'box-sizing','border-box');
+    forceImportant(box,'overflow-x','hidden');
+    forceImportant(box,'overflow-y','auto');
+
+    document.querySelectorAll('.mobile-appbar,.mobile-bottom-nav').forEach(el=>forceImportant(el,'display','none'));
   };
 
   if(host){
     syncMobileModal();
+    requestAnimationFrame(syncMobileModal);
+    setTimeout(syncMobileModal,60);
     if(typeof MutationObserver==='function'){
       new MutationObserver(syncMobileModal).observe(host,{childList:true,subtree:true});
     }
+    window.addEventListener('resize',syncMobileModal,{passive:true});
+    window.addEventListener('orientationchange',()=>setTimeout(syncMobileModal,80),{passive:true});
+    if(mobileQuery?.addEventListener)mobileQuery.addEventListener('change',syncMobileModal);
   }
 })();
