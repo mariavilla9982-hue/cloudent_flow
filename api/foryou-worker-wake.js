@@ -1,4 +1,4 @@
-const { ensureForYouBrowser } = require('../lib/foryou-browser');
+import { ensureForYouBrowser } from '../lib/foryou-browser.js';
 
 function send(res, status, body) {
   res.statusCode = status;
@@ -7,7 +7,7 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const secret = String(process.env.CRON_SECRET || '');
   const auth = String(req.headers.authorization || '');
   if (!secret || auth !== `Bearer ${secret}`) return send(res, 401, { ok: false, error: 'unauthorized' });
@@ -19,4 +19,4 @@ module.exports = async function handler(req, res) {
     console.error('foryou-worker-wake', error);
     return send(res, 500, { ok: false, error: 'wake_failed', message: String(error?.message || error).slice(0, 300) });
   }
-};
+}
