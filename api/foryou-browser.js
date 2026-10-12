@@ -1,4 +1,4 @@
-const { ensureForYouBrowser } = require('../lib/foryou-browser');
+import { ensureForYouBrowser } from '../lib/foryou-browser.js';
 
 const SUPABASE_URL = 'https://dxrhvudvutmgrmfkmzxo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI';
@@ -22,7 +22,7 @@ async function validCloudentUser(req) {
   return response.ok;
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     return res.end();
@@ -41,4 +41,4 @@ module.exports = async function handler(req, res) {
       message: String(error?.message || error).slice(0, 300),
     });
   }
-};
+}
