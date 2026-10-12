@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__cfCloudentRuntimeBootstrapV2)return;
-  window.__cfCloudentRuntimeBootstrapV2=true;
+  if(window.__cfCloudentRuntimeBootstrapV3)return;
+  window.__cfCloudentRuntimeBootstrapV3=true;
 
   const loadScript=(src,key)=>{
     if(document.querySelector('script[data-cloudent-runtime="'+key+'"]'))return;
@@ -15,4 +15,5 @@
   loadScript('/calendar-connect-core.js?v=8','calendar-core');
   loadScript('/virals-patch.js?v=3','virals');
   loadScript('/virals-foryou-patch.js?v=1','virals-foryou');
+  loadScript('/virals-foryou-watchdog.js?v=1','virals-foryou-watchdog');
 })();
