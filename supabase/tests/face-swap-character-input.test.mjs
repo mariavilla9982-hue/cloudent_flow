@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {stripTypeScriptTypes} from 'node:module';
+import {createHash,webcrypto} from 'node:crypto';
+
+const worker=fs.readFileSync('supabase/functions/cloudent-production-worker/index.ts','utf8');
+const inputCode=worker.slice(worker.indexOf('    async function prepareInput('),worker.indexOf('    async function saveResult('));
+let uploaded=null,uploads=0;
+const bytes=Buffer.from('a distinct character sheet');
+const hash=createHash('sha256').update(bytes).digest('hex');
+const context=vm.createContext({crypto:webcrypto,Uint8Array,Array,File,FormData,Blob,MAX_DIRECT:30*1024*1024,base:'https://example.test',apiKey:'test',admin:{storage:{from:()=>({download:async()=>({data:new Blob([bytes],{type:'image/jpeg'})})})}},fetch:async(url,options)=>{uploads++;uploaded=options.body.get('file');return {ok:true,json:async()=>({code:0,data:{fileName:'api/character.jpg'}})}}});
+vm.runInContext(stripTypeScriptTypes(inputCode),context);
+const audit={expected_sha256:hash};
+assert.equal(await context.prepareInput('u/face-swap-characters/julia.jpg','character.jpg','image/jpeg','supabase',audit),'api/character.jpg');
+assert.equal(audit.sha256,hash);
+assert.deepEqual(Buffer.from(await uploaded.arrayBuffer()),bytes);
+assert.equal(uploaded.name,'character.jpg');
+await assert.rejects(context.prepareInput('u/face-swap-characters/julia.jpg','character.jpg','image/jpeg','supabase',{expected_sha256:'wrong'}),/character_content_mismatch/);
+assert.equal(uploads,1,'a mismatched sheet must never be sent to RunningHub');
+const start=worker.slice(worker.indexOf('    async function startFaceSwapJobs()'));
+assert.ok(start.indexOf('character_snapshot_missing')<start.indexOf('rhJson("/task/openapi/create"'));
+assert.ok(start.indexOf('if(auditError)throw auditError')<start.indexOf('rhJson("/task/openapi/create"'));
+
+const selector=fs.readFileSync('face-swap-character-presets.js','utf8');
+assert.ok(!selector.includes('data:image/'),'no independent static portrait may disguise a different backend sheet');
+const ui=vm.createContext({window:{},document:{},cloudSession:{user:{id:'u'}},faceSwapData:{}});
+vm.runInContext(selector,ui);
+const controller=ui.window.CloudentFaceSwapCharacter;
+controller.merge({workflow:{character:{file_name:'Julia'},character_presets:{julia:{preview_url:'https://images.test/julia?x=1&y=2'},sahry:{preview_url:'https://images.test/sahry'}}}},controller.stamp());
+assert.match(controller.markup(),/src="https:\/\/images.test\/julia\?x=1&amp;y=2"/);
+assert.match(controller.markup(),/src="https:\/\/images.test\/sahry"/);
+console.log('PASS: exact uploaded bytes and checksum; mismatch blocks submission; snapshots required; thumbnails follow backend files');

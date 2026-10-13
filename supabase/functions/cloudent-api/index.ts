@@ -1,6 +1,5 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { defaultCharacterBase64 } from "./default-character.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
 
@@ -2382,20 +2381,15 @@ Deno.serve(async (req: Request) => {
     }
 
     const characterSettingKey="face_swap_character_"+userData.user.id;
-    async function selectedFaceSwapCharacter(){
+    async function selectedFaceSwapCharacter(required=false){
       const {data:setting,error}=await admin.from("app_settings").select("value").eq("key",characterSettingKey).maybeSingle();
       if(error)throw error;
-      if(setting)return setting.value;
-      const path=userData.user.id+"/face-swap-characters/default-20261005.png";
-      const bytes=Uint8Array.from(atob(defaultCharacterBase64),c=>c.charCodeAt(0));
-      const {error:uploadError}=await admin.storage.from("production").upload(path,bytes,{contentType:"image/png",upsert:true});
-      if(uploadError)throw uploadError;
-      const value={storage_path:path,storage_provider:"supabase",file_name:"1000063243.png",mime_type:"image/png",size_bytes:bytes.length};
-      const {error:saveError}=await admin.from("app_settings").upsert({key:characterSettingKey,value},{onConflict:"key",ignoreDuplicates:true});
-      if(saveError)throw saveError;
-      const {data:saved,error:readError}=await admin.from("app_settings").select("value").eq("key",characterSettingKey).single();
-      if(readError)throw readError;
-      return saved.value;
+      const character=setting?.value;
+      if(!character?.storage_path||!String(character.storage_path).startsWith(userData.user.id+"/face-swap-characters/")){
+        if(required)throw new Error("Selecione uma folha de personagem válida antes de enviar o vídeo.");
+        return null;
+      }
+      return character;
     }
 
     if (req.method === "POST" && action === "face-swap-character") {
@@ -2446,6 +2440,15 @@ Deno.serve(async (req: Request) => {
       const cfg:any=integration?.config||{};
       const character=await selectedFaceSwapCharacter();
       const characterUrl=character?.storage_path?await storageSignedGetBucket(admin,"supabase",character.storage_path,3600,"production"):null;
+      const {data:presetSetting,error:presetError}=await admin.from("app_settings").select("value").eq("key","face_swap_character_presets_"+userData.user.id).maybeSingle();
+      if(presetError)throw presetError;
+      const characterPresets:Record<string,any>={};
+      for(const preset of ["julia","sahry"]){
+        const item=presetSetting?.value?.[preset];
+        if(item?.storage_path&&String(item.storage_path).startsWith(userData.user.id+"/face-swap-characters/")){
+          characterPresets[preset]={...item,preview_url:await storageSignedGetBucket(admin,"supabase",item.storage_path,3600,"production")};
+        }
+      }
       const linkedIds=(jobs||[]).map((j:any)=>j.production_job_id).filter(Boolean);
       const productionById:Record<string,any>={};
       if(linkedIds.length){
@@ -2477,7 +2480,8 @@ Deno.serve(async (req: Request) => {
           reference_node_id:String(cfg.faceSwapReferenceNodeId||"17"),
           output_node_id:String(cfg.faceSwapOutputNodeId||"240"),
           fixed_character:!character?.storage_path,
-          character:{file_name:character?.file_name||"Folha original do workflow",preview_url:characterUrl}
+          character:character?{...character,preview_url:characterUrl}:null,
+          character_presets:characterPresets
         },
         worker:worker?{...worker,online}:null
       });
@@ -2567,7 +2571,7 @@ Deno.serve(async (req: Request) => {
         original_storage_path:videoPath,original_file_name:videoName,original_mime_type:videoMime,original_size_bytes:actualVideo||videoSize,
         frame_storage_path:framePath,frame_file_name:frameName,frame_mime_type:frameMime,frame_size_bytes:actualFrame||frameSize,
         status:"waiting",progress:0,auto_send:autoSend,
-        meta:{source:"face_swap_tab",character_node_id:"23",reference_node_id:"17",output_node_id:"240",character:await selectedFaceSwapCharacter()}
+        meta:{source:"face_swap_tab",character_node_id:"23",reference_node_id:"17",output_node_id:"240",character:await selectedFaceSwapCharacter(true)}
       }).select().single();
       if(insertError){
         await storageDeletePathsBucket(admin,"r2",[videoPath,framePath],"production").catch(()=>null);
@@ -2609,7 +2613,7 @@ Deno.serve(async (req: Request) => {
         original_storage_path:videoPath,original_file_name:video.name,original_mime_type:video.type||"video/mp4",original_size_bytes:video.size,
         frame_storage_path:framePath,frame_file_name:frame.name,frame_mime_type:frame.type||"image/jpeg",frame_size_bytes:frame.size,
         status:"waiting",progress:0,auto_send:autoSend,
-        meta:{source:"face_swap_tab",character_node_id:"23",reference_node_id:"17",output_node_id:"240",character:await selectedFaceSwapCharacter()}
+        meta:{source:"face_swap_tab",character_node_id:"23",reference_node_id:"17",output_node_id:"240",character:await selectedFaceSwapCharacter(true)}
       }).select().single();
       if(insertError){
         await admin.storage.from("production").remove([videoPath,framePath]).catch(()=>null);
