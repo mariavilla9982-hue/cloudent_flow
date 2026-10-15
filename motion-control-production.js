@@ -1,7 +1,7 @@
 (()=>{
-  if(window.CloudentMotionControl?.version>=5)return;
+  if(window.CloudentMotionControl?.version>=6)return;
   function start(){
-  if(window.CloudentMotionControl?.version>=5)return;
+  if(window.CloudentMotionControl?.version>=6)return;
   // A cached document may request this script before the SPA bundle.
   // Wait at the document boundary; never capture undefined SPA functions.
   const required=[typeof productionPage,typeof productionJobRow,typeof productionCostSummary,typeof uploadProductionJobDirect,typeof controlRunningHub,typeof productionAction,typeof renderProductionDraft];
@@ -66,6 +66,11 @@
       #production .motion-workflow-state.err{color:#ff8c8c}
       #production .motion-workflow-state.err i{background:#ff5e5e}
       #production.motion-control-mode .production-note{border-left:2px solid #fff;padding-left:10px}
+      #production .motion-preview-result>.production-ready-actions{margin-top:8px;min-width:0}
+      #production .motion-preview-result>.production-ready-actions button{border:1px solid #2f2f2f;background:#151515;color:#c9ced7;border-radius:7px;padding:7px 8px;font-size:8px;cursor:pointer;min-height:30px}
+      #production .motion-preview-result>.production-ready-actions button:hover{border-color:#3b3b3b;color:#a1a1a1;background:#151515}
+      #production .motion-preview-result>.production-ready-actions button:not(:disabled):hover{transform:translateY(-1px)}
+      #production .motion-preview-result>.production-ready-actions button:not(:disabled):active{transform:scale(.98)}
       @media(max-width:760px){
         #production .production-workflow-tabs{width:100%;display:grid;grid-template-columns:1fr 1fr}
         #production .production-workflow-tab{width:100%}
@@ -246,7 +251,7 @@
         :"Vídeo #384 salvo. Solicitando encerramento da execução no RunningHub.";
       return '<div class="motion-preview-result"><p>'+esc(message)+'</p>'+
         nativeJobRow.call(this,job,...rest)+
-        '<div class="production-ready-actions"><button data-id="'+esc(job.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button><button onclick="downloadProductionResult(&quot;'+esc(job.id)+'&quot;,1)">↓ Baixar vídeo #384</button></div></div>';
+        '<div class="production-ready-actions"><button data-id="'+esc(job.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button><button onclick="downloadProductionResult(&quot;'+esc(job.id)+'&quot;,1)">↓ Baixar</button></div></div>';
     }
     if(isMotionJob(job)&&job.status==="motion_waiting"){
       return nativeJobRow.call(this,{...job,status:"waiting"},...rest)
@@ -344,7 +349,7 @@
   }
 
   window.CloudentMotionControl={
-    version:5,
+    version:6,
     get mode(){return activeMode},
     setMode,
     reloadConfig:async()=>{await loadMotionConfig(true);if(currentPage==="production")productionPage();}
