@@ -92,7 +92,9 @@ async function validateWorkflow(base:string,apiKey:string,cfg:any){
   if(String(video.class_type||video.type||"")!=="VHS_LoadVideo")throw new Error("Motion Control: node #275 não é VHS_LoadVideo.");
   if(String(frame.class_type||frame.type||"")!=="LoadImage")throw new Error("Motion Control: node #299 não é LoadImage.");
   if(!output||String(output.class_type||output.type||"")!=="VHS_VideoCombine")throw new Error("Motion Control: saída #285 VHS_VideoCombine ausente ou inválida.");
-  return {video_class:"VHS_LoadVideo",frame_class:"LoadImage",output_class:"VHS_VideoCombine",output_node:"285"};
+  const preview=deepNode(format,"384");
+  if(!preview||String(preview.class_type||preview.type||"")!=="SaveVideo")throw new Error("Motion Control: saída #384 SaveVideo ausente ou inválida.");
+  return {video_class:"VHS_LoadVideo",frame_class:"LoadImage",output_class:"VHS_VideoCombine",output_node:"285",preview_class:"SaveVideo",preview_node:"384"};
 }
 async function rhJson(base:string,apiKey:string,path:string,body:any){
   const r=await fetch(base+path,{method:"POST",headers:{"Authorization":"Bearer "+apiKey,"Content-Type":"application/json"},body:JSON.stringify({...body,apiKey})});
@@ -191,6 +193,7 @@ Deno.serve(async(req:Request)=>{
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new Error(created?.msg||"RunningHub não retornou taskId no Motion Control.");
         const taskStatus=String(created.data.taskStatus||"QUEUED").toUpperCase();
         await admin.from("production_jobs").update({status:taskStatus==="RUNNING"?"running":"queued",progress:taskStatus==="RUNNING"?55:35,runninghub_task_id:String(created.data.taskId),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",job.id);
+        EdgeRuntime.waitUntil(fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-production-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null));
         processed++;
       }catch(e:any){
         const message=e instanceof Error?e.message:String(e);

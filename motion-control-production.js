@@ -1,7 +1,7 @@
 (()=>{
-  if(window.CloudentMotionControl?.version>=3)return;
+  if(window.CloudentMotionControl?.version>=4)return;
   function start(){
-  if(window.CloudentMotionControl?.version>=3)return;
+  if(window.CloudentMotionControl?.version>=4)return;
   // A cached document may request this script before the SPA bundle.
   // Wait at the document boundary; never capture undefined SPA functions.
   const required=[typeof productionPage,typeof productionJobRow,typeof productionCostSummary,typeof uploadProductionJobDirect,typeof controlRunningHub,typeof productionAction,typeof renderProductionDraft];
@@ -83,7 +83,7 @@
     const text=err
       ?"Validação bloqueou a execução: "+esc(err)
       :validated
-        ?"Workflow validado pela API do RunningHub."
+        ?"Workflow validado pela API do RunningHub. GPU padrão: 48 GB."
         :"O worker valida workflow + nodes antes da primeira execução para não gastar crédito em configuração errada.";
     return '<div class="motion-workflow-state '+cls+'"><i></i><span>'+text+'</span></div>';
   }
@@ -124,7 +124,7 @@
       if(title)title.textContent="Vídeo + frame";
       if(settings){
         settings.disabled=true;
-        settings.textContent="Nodes 275 · 299 · 285";
+        settings.textContent="Nodes 275 · 299 · 384";
         settings.onclick=null;
       }
     }
@@ -144,7 +144,7 @@
     const add=root.querySelector(".production-add-btn");
     if(add&&!productionUploading)add.textContent="＋ Adicionar ao Motion Control";
     const note=root.querySelector(".production-note");
-    if(note)note.textContent="Saída final: VHS Video Combine · node #285. O workflow é validado antes de iniciar para evitar envio para node errado.";
+    if(note)note.textContent="Entrega: SaveVideo · node #384, sem esperar o fim da execução. GPU padrão: 48 GB.";
 
     const main=root.querySelector(".production-main-grid");
     if(main&&!root.querySelector(".motion-workflow-map")){
@@ -154,7 +154,7 @@
           '<div class="motion-node-arrow">→</div>'+
           '<div class="motion-node"><small>Entrada 2</small><b>Frame / personagem</b><code>#299 · image</code></div>'+
           '<div class="motion-node-arrow">→</div>'+
-          '<div class="motion-node"><small>Saída</small><b>Vídeo final</b><code>#285 · VHS_VideoCombine</code></div>'+
+          '<div class="motion-node"><small>Saída</small><b>Vídeo disponível</b><code>#384 · SaveVideo</code></div>'+
           workflowStateMarkup()+
         '</div>'
       );
@@ -240,6 +240,11 @@
 
   const nativeJobRow=productionJobRow;
   productionJobRow=function(job,...rest){
+    if(isMotionJob(job)&&job.meta?.motion_preview_available&&job.result_video_id&&["running","queued"].includes(job.status)){
+      return '<div class="motion-preview-result"><p>Vídeo disponível · saída #384. RunningHub continua em execução; custo ainda em atualização.</p>'+
+        nativeJobRow.call(this,job,...rest)+
+        '<div class="production-ready-actions"><button data-id="'+esc(job.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button><button onclick="downloadProductionResult(&quot;'+esc(job.id)+'&quot;,1)">↓ Baixar vídeo #384</button></div></div>';
+    }
     if(isMotionJob(job)&&job.status==="motion_waiting"){
       return nativeJobRow.call(this,{...job,status:"waiting"},...rest)
         .replace("Pronto para nova tentativa","Aguardando vaga do Motion Control");
@@ -336,7 +341,7 @@
   }
 
   window.CloudentMotionControl={
-    version:3,
+    version:4,
     get mode(){return activeMode},
     setMode,
     reloadConfig:async()=>{await loadMotionConfig(true);if(currentPage==="production")productionPage();}

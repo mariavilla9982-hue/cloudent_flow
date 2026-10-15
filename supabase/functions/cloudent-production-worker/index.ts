@@ -98,6 +98,88 @@ function imageMimeFor(ext:string){
 }
 
 
+const MOTION_PREVIEW_WORKFLOW="2110721194974982146";
+function isMotionPreviewJob(job:any){
+  return job?.meta?.workflow_key==="motion_control"&&job?.meta?.workflow_id===MOTION_PREVIEW_WORKFLOW;
+}
+function motionPreviewFile(message:any,taskId:string){
+  const d=message?.data;
+  if(message?.type!=="executed"||String(d?.node)!=="384"||String(d?.prompt_id)!==String(taskId))return null;
+  const output=d?.output||{};
+  for(const key of ["images","videos","gifs"]){
+    for(const item of Array.isArray(output[key])?output[key]:[]){
+      const filename=String(item?.filename||"");
+      const subfolder=String(item?.subfolder||"");
+      if(!/\.(mp4|webm|mov)$/i.test(filename)||filename.includes("/")||filename.includes("\\")||filename.includes("..")||subfolder.split(/[\\/]/).includes(".."))continue;
+      if(String(item?.type||"output")!=="output")continue;
+      return {filename,subfolder,type:"output",node_id:"384",task_id:String(taskId)};
+    }
+  }
+  return null;
+}
+function motionPreviewViewUrl(base:string,wss:string,file:any){
+  const b=new URL(base),w=new URL(wss);
+  if(w.protocol!=="wss:"||w.host!==b.host||!w.searchParams.get("Rh-Comfy-Auth"))throw new Error("Motion Control: canal de prévia inválido.");
+  const u=new URL("/view",b);
+  for(const key of ["Rh-Comfy-Auth","Rh-Identify"]){const value=w.searchParams.get(key);if(value)u.searchParams.set(key,value);}
+  u.searchParams.set("filename",file.filename);u.searchParams.set("subfolder",file.subfolder||"");u.searchParams.set("type","output");
+  return u.toString();
+}
+async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:string,master:string){
+  if(!isMotionPreviewJob(job)||job.result_video_id||job.meta?.motion_preview_file)return;
+  if(job.locked_by&&Date.now()-Date.parse(job.locked_at||"")<130000)return;
+  const lease="motion-preview-"+crypto.randomUUID();
+  let claim=admin.from("production_jobs").update({locked_by:lease,locked_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",job.runninghub_task_id).in("status",["queued","running"]);
+  claim=job.locked_by?claim.eq("locked_by",job.locked_by):claim.is("locked_by",null);
+  const {data:claimed,error}=await claim.select("id").maybeSingle();
+  if(error||!claimed)return;
+  const work=watchMotionPreview(admin,job,base,apiKey,master,lease);
+  EdgeRuntime.waitUntil(work);
+}
+async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,master:string,lease:string){
+  let captured=false,continueWatching=false;const began=Date.now();
+  try{
+    const r=await fetch(base+"/task/openapi/outputs",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},body:JSON.stringify({apiKey,taskId:job.runninghub_task_id}),signal:AbortSignal.timeout(10000)});
+    const j=await r.json(),wss=j?.data?.netWssUrl;
+    if(!wss)return;
+    motionPreviewViewUrl(base,wss,{filename:"check.mp4",subfolder:""});
+    continueWatching=true;
+    await new Promise<void>(resolve=>{
+      const ws=new WebSocket(wss);let finished=false;
+      const finish=()=>{if(finished)return;finished=true;clearTimeout(timer);clearInterval(ping);try{ws.close()}catch{}resolve()};
+      const timer=setTimeout(finish,105000);
+      const ping=setInterval(()=>{if(ws.readyState===WebSocket.OPEN)ws.send("ping")},20000);
+      ws.onerror=finish;ws.onclose=finish;
+      ws.onmessage=async event=>{
+        if(finished||typeof event.data!=="string")return;
+        let message:any;try{message=JSON.parse(event.data)}catch{return;}
+        const file=motionPreviewFile(message,String(job.runninghub_task_id));
+        if(!file)return;
+        // Persist only the file descriptor. Provider credentials stay server-side.
+        finished=true;clearTimeout(timer);clearInterval(ping);
+        try{
+          const {data:latest}=await admin.from("production_jobs").select("meta,status,runninghub_task_id").eq("id",job.id).maybeSingle();
+          if(latest&&["queued","running"].includes(latest.status)&&String(latest.runninghub_task_id)===String(job.runninghub_task_id)){
+            const {error}=await admin.from("production_jobs").update({meta:{...(latest.meta||{}),motion_preview_file:file,motion_preview_detected_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq("id",job.id).eq("locked_by",lease).eq("runninghub_task_id",job.runninghub_task_id);
+            if(error)throw error;
+            captured=true;
+          }
+        }catch{/* Retain the task and let the next listener retry. */}finally{try{ws.close()}catch{}resolve();}
+      };
+    });
+  }catch{/* A transient monitor error must never fail or restart the paid generation. */}
+  finally{
+    await admin.from("production_jobs").update({locked_by:null,locked_at:null}).eq("id",job.id).eq("locked_by",lease);
+    if(captured||(continueWatching&&Date.now()-began>60000)){
+      const {data:latest}=await admin.from("production_jobs").select("status,result_video_id,runninghub_task_id").eq("id",job.id).maybeSingle();
+      if(latest&&["queued","running"].includes(latest.status)&&String(latest.runninghub_task_id)===String(job.runninghub_task_id)){
+        // Renew the listener without waiting for the next cron tick; no new RH task.
+        await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-production-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":master},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);
+      }
+    }
+  }
+}
+
 Deno.serve(async(req:Request)=>{
   const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
   const workerId="production-"+crypto.randomUUID();
@@ -202,12 +284,15 @@ Deno.serve(async(req:Request)=>{
       return String(j.data.fileName);
     }
 
-    async function saveResult(job:any,item:any,usage:any=null){
+    async function saveResult(job:any,item:any,usage:any=null,previewBlob:Blob|null=null){
+      const early=previewBlob!==null;
+      if(early&&!isMotionPreviewJob(job))throw new Error("motion_preview_scope_invalid");
       const fileUrl=String(item?.fileUrl||item?.url||"");
-      if(!fileUrl)throw new Error("RunningHub concluiu sem URL de resultado");
-      const rr=await fetch(fileUrl);
-      if(!rr.ok)throw new Error("Não consegui baixar o resultado do RunningHub");
-      const blob=await rr.blob();
+      if(!fileUrl&&!early)throw new Error("RunningHub concluiu sem URL de resultado");
+      const rr=early?null:await fetch(fileUrl);
+      if(rr&&!rr.ok)throw new Error("Não consegui baixar o resultado do RunningHub");
+      const blob=previewBlob||await rr!.blob();
+      if(!blob.size)throw new Error("Vídeo vazio retornado pelo RunningHub");
       const ext=extFrom(fileUrl,item?.fileType||item?.outputType);
       const mime=mimeFor(ext);
       const path=job.user_id+"/production-results/"+new Date().toISOString().slice(0,10)+"/"+job.id+"."+ext;
@@ -222,10 +307,9 @@ Deno.serve(async(req:Request)=>{
         if(ue)throw ue;
       }
       const name="runninghub-"+job.id.slice(0,8)+"."+ext;
-      const {data:video,error:ve}=await admin.from("videos").insert({
-        storage_path:path,storage_provider:provider,file_name:name,mime_type:mime,size_bytes:blob.size,status:"ready",platform:"instagram",
-        caption:""
-      }).select().single();
+      const videoPayload={storage_path:path,storage_provider:provider,file_name:name,mime_type:mime,size_bytes:blob.size,status:"ready",platform:"instagram",caption:""};
+      const videoWrite=early?admin.from("videos").upsert({id:job.id,...videoPayload},{onConflict:"id"}):admin.from("videos").insert(videoPayload);
+      const {data:video,error:ve}=await videoWrite.select().single();
       if(ve){
         if(provider==="r2"&&r2)await deleteR2Object(r2,path).catch(()=>null);
         else await admin.storage.from("videos").remove([path]).catch(()=>null);
@@ -247,7 +331,7 @@ Deno.serve(async(req:Request)=>{
       let creditsAfter:any=null;
 
       const before=Number(job.credits_before);
-      if(concurrency===1&&Number.isFinite(before)){
+      if(!early&&concurrency===1&&Number.isFinite(before)){
         for(let attempt=0;attempt<4;attempt++){
           creditsAfter=await getAccountCredits();
           if(Number.isFinite(creditsAfter)){
@@ -262,18 +346,19 @@ Deno.serve(async(req:Request)=>{
         }
       }
 
-      await admin.from("production_jobs").update({
-        status:"ready",progress:100,result_url:fileUrl,result_storage_path:path,result_video_id:video.id,
+      const {error:saveError}=await admin.from("production_jobs").update({
+        status:early?"running":"ready",progress:early?99:100,result_url:early?null:fileUrl,result_storage_path:path,result_video_id:video.id,
         credits_used:Number.isFinite(creditsUsed)?creditsUsed:null,
         credits_after:Number.isFinite(creditsAfter)?creditsAfter:null,
         runninghub_cost_money:Number.isFinite(costMoney)?costMoney:null,
         runninghub_third_party_cost_money:Number.isFinite(thirdPartyCost)?thirdPartyCost:null,
         runninghub_runtime_seconds:Number.isFinite(runtimeSeconds)?runtimeSeconds:null,
-        meta:{...(job.meta||{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
-        completed_at:new Date().toISOString(),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()
+        meta:{...(job.meta||{}),...(early?{motion_preview_available:true,motion_preview_saved_at:new Date().toISOString(),result_node_id:"384",provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
+        completed_at:early?null:new Date().toISOString(),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()
       }).eq("id",job.id);
+      if(early&&saveError)throw saveError;
       await admin.from("activity_logs").insert({
-        level:"info",event_type:"runninghub_production_ready",message:"Vídeo do RunningHub finalizado e salvo",
+        level:"info",event_type:early?"motion_preview_ready":"runninghub_production_ready",message:early?"Vídeo #384 salvo; execução RunningHub continua":"Vídeo do RunningHub finalizado e salvo",
         meta:{production_job_id:job.id,result_video_id:video.id,credits_used:Number.isFinite(creditsUsed)?creditsUsed:null}
       });
     }
@@ -468,7 +553,7 @@ Deno.serve(async(req:Request)=>{
               }).eq("id",job.id);
             }
           }
-        }catch{}
+        }catch{if(isMotionPreviewJob(job))handledByV2=false;}
 
         if(handledByV2)continue;
 
@@ -519,6 +604,44 @@ Deno.serve(async(req:Request)=>{
 
     for(const job of active||[]){
       try{
+        if(isMotionPreviewJob(job)){
+          if(job.result_video_id&&job.meta?.motion_preview_available){
+            const state=await rhJson("/task/openapi/status",{taskId:job.runninghub_task_id});
+            const status=String(state?.data||"").toUpperCase();
+            const done=["SUCCESS","FAILED","CANCELLED"].includes(status);
+            if(done)await admin.from("production_jobs").update({status:"ready",progress:100,completed_at:new Date().toISOString(),meta:{...job.meta,provider_task_pending:false,provider_terminal_status:status},locked_by:null,locked_at:null,updated_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",job.runninghub_task_id);
+            continue;
+          }
+          const file=job.meta?.motion_preview_file;
+          if(file&&String(file.task_id)===String(job.runninghub_task_id)&&file.node_id==="384"){
+            const valid=motionPreviewFile({type:"executed",data:{node:"384",prompt_id:job.runninghub_task_id,output:{videos:[file]}}},String(job.runninghub_task_id));
+            if(!valid)throw new Error("Motion Control: arquivo de prévia inválido.");
+            const lease="motion-save-"+crypto.randomUUID();
+            const {data:locked}=await admin.from("production_jobs").update({locked_by:lease,locked_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",job.runninghub_task_id).is("result_video_id",null).is("locked_by",null).select("id").maybeSingle();
+            if(!locked)continue;
+            try{
+              const outputs=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
+              const wss=outputs?.data?.netWssUrl;
+              if(wss){
+                const rr=await fetch(motionPreviewViewUrl(base,wss,valid),{signal:AbortSignal.timeout(30000)});
+                if(!rr.ok)throw new Error("Motion Control: download da saída #384 indisponível · HTTP "+rr.status);
+                const blob=await rr.blob();
+                const bytes=new Uint8Array(await blob.slice(0,16).arrayBuffer());
+                const mp4=new TextDecoder().decode(bytes.slice(4,8))==="ftyp";
+                const webm=bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3;
+                if(!mp4&&!webm)throw new Error("Motion Control: saída #384 não retornou um arquivo de vídeo.");
+                await saveResult(job,{fileType:valid.filename.split(".").pop()},null,blob);
+                touched++;continue;
+              }
+              if(Number(outputs?.code)===0&&Array.isArray(outputs.data)){
+                const item=outputs.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384");
+                if(item){await saveResult(job,item,item);touched++;continue;}
+              }
+              throw new Error("Motion Control: saída #384 ainda não acessível.");
+            }finally{await admin.from("production_jobs").update({locked_by:null,locked_at:null}).eq("id",job.id).eq("locked_by",lease);}
+          }
+          await ensureMotionPreviewMonitor(admin,job,base,apiKey,String(expected));
+        }
         let handledByV2=false;
         try{
           const vr=await fetch(base+"/openapi/v2/query",{
@@ -531,7 +654,12 @@ Deno.serve(async(req:Request)=>{
           if(vr.ok&&["QUEUED","RUNNING","SUCCESS","FAILED"].includes(status)){
             handledByV2=true;
             if(status==="SUCCESS"&&Array.isArray(vj?.results)&&vj.results.length){
-              const item=vj.results.find((x:any)=>String(x?.outputType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||vj.results[0];
+              let item=vj.results.find((x:any)=>String(x?.outputType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||vj.results[0];
+              if(isMotionPreviewJob(job)){
+                const exact=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
+                item=Array.isArray(exact?.data)?exact.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384"):null;
+                if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados.");
+              }
               let usage=vj?.usage||null;
               try{
                 const legacy=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
@@ -575,7 +703,8 @@ Deno.serve(async(req:Request)=>{
         const resultCode=Number(j?.code);
         const data=j?.data;
         if(resultCode===0 && Array.isArray(data) && data.length){
-          const item=data.find((x:any)=>String(x?.fileType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||data[0];
+          const item=isMotionPreviewJob(job)?data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384"):data.find((x:any)=>String(x?.fileType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||data[0];
+          if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados.");
           await saveResult(job,item,{
             consumeCoins:item?.consumeCoins??null,
             consumeMoney:item?.consumeMoney??null,
