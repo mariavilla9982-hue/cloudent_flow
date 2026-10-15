@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v26";
+const CACHE="cloudentflow-pwa-v27";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -20,6 +20,7 @@ async function injectCalendarPatch(response){
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
+    const motionControlTag='<script src="/motion-control-production.js?v=2"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
@@ -29,6 +30,7 @@ async function injectCalendarPatch(response){
     const oldFaceSwapCharacter=/<script\b[^>]*src=["'][^"']*face-swap-character-presets\.js[^"']*["'][^>]*><\/script>/gi;
     const oldFaceSwapCharacterClickHotfix=/<script\b[^>]*src=["'][^"']*face-swap-character-click-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
     const oldFaceSwapQueue=/<script\b[^>]*src=["'][^"']*face-swap-queue-patch\.js[^"']*["'][^>]*><\/script>/gi;
+    const oldMotionControl=/<script\b[^>]*src=["'][^"']*motion-control-production\.js[^"']*["'][^>]*><\/script>/gi;
 
     if(oldCalendarPatch.test(html))html=html.replace(oldCalendarPatch,calendarTag);
     else html=html.includes("</body>")?html.replace("</body>",calendarTag+"</body>"):html+calendarTag;
@@ -55,6 +57,11 @@ async function injectCalendarPatch(response){
 
     if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
     else html=html.includes("</body>")?html.replace("</body>",faceSwapQueueTag+"</body>"):html+faceSwapQueueTag;
+
+    // Motion Control must load after the main inline SPA bundle. Injecting at the
+    // end of body avoids depending on the Face Swap controller's dynamic loader.
+    if(oldMotionControl.test(html))html=html.replace(oldMotionControl,motionControlTag);
+    else html=html.includes("</body>")?html.replace("</body>",motionControlTag+"</body>"):html+motionControlTag;
 
     const headers=new Headers(response.headers);
     headers.delete("content-length");
@@ -145,7 +152,8 @@ self.addEventListener("fetch",event=>{
     url.pathname==="/virals-foryou-watchdog.js"||
     url.pathname==="/face-swap-character-presets.js"||
     url.pathname==="/face-swap-character-click-hotfix.js"||
-    url.pathname==="/face-swap-queue-patch.js"
+    url.pathname==="/face-swap-queue-patch.js"||
+    url.pathname==="/motion-control-production.js"
   ){
     event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>Response.error()));
     return;
