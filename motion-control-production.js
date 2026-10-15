@@ -1,7 +1,7 @@
 (()=>{
-  if(window.CloudentMotionControl?.version>=4)return;
+  if(window.CloudentMotionControl?.version>=5)return;
   function start(){
-  if(window.CloudentMotionControl?.version>=4)return;
+  if(window.CloudentMotionControl?.version>=5)return;
   // A cached document may request this script before the SPA bundle.
   // Wait at the document boundary; never capture undefined SPA functions.
   const required=[typeof productionPage,typeof productionJobRow,typeof productionCostSummary,typeof uploadProductionJobDirect,typeof controlRunningHub,typeof productionAction,typeof renderProductionDraft];
@@ -144,7 +144,7 @@
     const add=root.querySelector(".production-add-btn");
     if(add&&!productionUploading)add.textContent="＋ Adicionar ao Motion Control";
     const note=root.querySelector(".production-note");
-    if(note)note.textContent="Entrega: SaveVideo · node #384, sem esperar o fim da execução. GPU padrão: 48 GB.";
+    if(note)note.textContent="Entrega: SaveVideo · node #384. A execução é cancelada após salvar e verificar o vídeo. GPU padrão: 48 GB.";
 
     const main=root.querySelector(".production-main-grid");
     if(main&&!root.querySelector(".motion-workflow-map")){
@@ -241,7 +241,10 @@
   const nativeJobRow=productionJobRow;
   productionJobRow=function(job,...rest){
     if(isMotionJob(job)&&job.meta?.motion_preview_available&&job.result_video_id&&["running","queued"].includes(job.status)){
-      return '<div class="motion-preview-result"><p>Vídeo disponível · saída #384. RunningHub continua em execução; custo ainda em atualização.</p>'+
+      const message=job.meta?.provider_cancel_error
+        ?"Vídeo #384 salvo. Cancelamento pendente: "+job.meta.provider_cancel_error
+        :"Vídeo #384 salvo. Solicitando encerramento da execução no RunningHub.";
+      return '<div class="motion-preview-result"><p>'+esc(message)+'</p>'+
         nativeJobRow.call(this,job,...rest)+
         '<div class="production-ready-actions"><button data-id="'+esc(job.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button><button onclick="downloadProductionResult(&quot;'+esc(job.id)+'&quot;,1)">↓ Baixar vídeo #384</button></div></div>';
     }
@@ -341,7 +344,7 @@
   }
 
   window.CloudentMotionControl={
-    version:4,
+    version:5,
     get mode(){return activeMode},
     setMode,
     reloadConfig:async()=>{await loadMotionConfig(true);if(currentPage==="production")productionPage();}

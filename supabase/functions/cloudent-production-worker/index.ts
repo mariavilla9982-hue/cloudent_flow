@@ -180,6 +180,60 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
   }
 }
 
+async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,body:any)=>Promise<any>){
+  const {data:job,error}=await admin.from("production_jobs").select("*").eq("id",jobId).maybeSingle();
+  if(error)throw error;
+  if(!job||!isMotionPreviewJob(job)||!job.result_video_id||!job.result_storage_path||!job.meta?.motion_preview_available)return false;
+  if(!["queued","running"].includes(job.status))return false;
+  const meta=job.meta||{},taskId=String(job.runninghub_task_id||"");
+  if(!taskId||String(meta.motion_preview_file?.task_id)!==taskId||meta.result_node_id!=="384")throw new Error("Motion Control: cancelamento bloqueado até confirmar a origem do vídeo #384.");
+  const {data:video,error:videoError}=await admin.from("videos").select("id,status,storage_path,storage_provider,size_bytes,mime_type").eq("id",job.result_video_id).maybeSingle();
+  if(videoError)throw videoError;
+  if(!video||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
+  if(!meta.motion_preview_verified_at||!/^[a-f0-9]{64}$/.test(String(meta.motion_preview_sha256||""))||Number(meta.motion_preview_verified_bytes)!==Number(video.size_bytes)){
+    let blob:Blob;
+    if(String(video.storage_provider||"supabase")==="r2"){
+      const config=await getCloudentR2Config(admin);if(!config)throw new Error("r2_not_configured");
+      const url=await r2PresignedUrl(config,"GET",video.storage_path,300);
+      const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+      if(!response.ok)throw new Error("Motion Control: não foi possível verificar o vídeo salvo. Task preservada.");
+      blob=await response.blob();
+    }else{
+      const {data,error}=await admin.storage.from("videos").download(video.storage_path);
+      if(error||!data)throw new Error("Motion Control: não foi possível verificar o vídeo salvo. Task preservada.");
+      blob=data;
+    }
+    const bytes=new Uint8Array(await blob.arrayBuffer());
+    const mp4=new TextDecoder().decode(bytes.slice(4,8))==="ftyp";
+    const webm=bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3;
+    if(bytes.length!==Number(video.size_bytes)||(!mp4&&!webm))throw new Error("Motion Control: cópia do vídeo inválida. Task preservada.");
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(x=>x.toString(16).padStart(2,"0")).join("");
+    if(meta.motion_preview_source_sha256&&digest!==meta.motion_preview_source_sha256)throw new Error("Motion Control: cópia diferente do vídeo capturado. Task preservada.");
+    Object.assign(meta,{motion_preview_verified_at:new Date().toISOString(),motion_preview_sha256:digest,motion_preview_verified_bytes:bytes.length});
+    const {data:verified,error:verificationError}=await admin.from("production_jobs").update({meta}).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]).select("id").maybeSingle();
+    if(verificationError)throw verificationError;if(!verified)return false;
+  }
+  const terminal=(state:any)=>Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
+  let state=await rhJson("/task/openapi/status",{taskId});
+  let cancellation:any={};
+  if(!terminal(state)){
+    const last=Date.parse(meta.provider_cancel_requested_at||"");
+    if(!Number.isFinite(last)||Date.now()-last>=30000){
+      const response=await rhJson("/task/openapi/cancel",{taskId});
+      cancellation={provider_cancel_requested_at:new Date().toISOString(),provider_cancel_accepted:Number(response?.code)===0,provider_cancel_error:Number(response?.code)===0?null:"RunningHub não confirmou cancelamento · código "+String(response?.code??"indisponível")};
+    }
+    state=await rhJson("/task/openapi/status",{taskId});
+  }
+  const done=terminal(state),now=new Date().toISOString();
+  const {error:updateError}=await admin.from("production_jobs").update({
+    status:done?"ready":"running",progress:done?100:99,completed_at:done?now:null,
+    meta:{...meta,...cancellation,provider_task_pending:!done,provider_terminal_status:done?String(state.data).toUpperCase():null,...(done?{provider_cancel_confirmed_at:now}:{})},
+    last_error:null,updated_at:now
+  }).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]);
+  if(updateError)throw updateError;
+  return done;
+}
+
 Deno.serve(async(req:Request)=>{
   const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
   const workerId="production-"+crypto.randomUUID();
@@ -353,7 +407,7 @@ Deno.serve(async(req:Request)=>{
         runninghub_cost_money:Number.isFinite(costMoney)?costMoney:null,
         runninghub_third_party_cost_money:Number.isFinite(thirdPartyCost)?thirdPartyCost:null,
         runninghub_runtime_seconds:Number.isFinite(runtimeSeconds)?runtimeSeconds:null,
-        meta:{...(job.meta||{}),...(early?{motion_preview_available:true,motion_preview_saved_at:new Date().toISOString(),result_node_id:"384",provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
+        meta:{...(job.meta||{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,"0")).join(""),motion_preview_saved_at:new Date().toISOString(),result_node_id:"384",provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
         completed_at:early?null:new Date().toISOString(),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()
       }).eq("id",job.id);
       if(early&&saveError)throw saveError;
@@ -361,6 +415,7 @@ Deno.serve(async(req:Request)=>{
         level:"info",event_type:early?"motion_preview_ready":"runninghub_production_ready",message:early?"Vídeo #384 salvo; execução RunningHub continua":"Vídeo do RunningHub finalizado e salvo",
         meta:{production_job_id:job.id,result_video_id:video.id,credits_used:Number.isFinite(creditsUsed)?creditsUsed:null}
       });
+      if(early)await cancelMotionAfterSave(admin,job.id,rhJson);
     }
 
 
@@ -606,10 +661,7 @@ Deno.serve(async(req:Request)=>{
       try{
         if(isMotionPreviewJob(job)){
           if(job.result_video_id&&job.meta?.motion_preview_available){
-            const state=await rhJson("/task/openapi/status",{taskId:job.runninghub_task_id});
-            const status=String(state?.data||"").toUpperCase();
-            const done=["SUCCESS","FAILED","CANCELLED"].includes(status);
-            if(done)await admin.from("production_jobs").update({status:"ready",progress:100,completed_at:new Date().toISOString(),meta:{...job.meta,provider_task_pending:false,provider_terminal_status:status},locked_by:null,locked_at:null,updated_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",job.runninghub_task_id);
+            await cancelMotionAfterSave(admin,job.id,rhJson);
             continue;
           }
           const file=job.meta?.motion_preview_file;
