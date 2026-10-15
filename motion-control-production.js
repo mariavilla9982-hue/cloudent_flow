@@ -97,8 +97,8 @@
     if(head&&!root.querySelector(".production-workflow-tabs")){
       head.insertAdjacentHTML("afterend",
         '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
-          '<button type="button" class="production-workflow-tab '+(activeMode===STANDARD?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;standard&quot;)">Produção atual</button>'+
-          '<button type="button" class="production-workflow-tab '+(activeMode===MOTION?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;motion_control&quot;)">Motion Control</button>'+
+          '<button type="button" class="production-workflow-tab '+(activeMode===STANDARD?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;standard&quot;)">video 7 minutos</button>'+
+          '<button type="button" class="production-workflow-tab '+(activeMode===MOTION?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;motion_control&quot;)">motion control v7</button>'+
         '</div>'
       );
     }
