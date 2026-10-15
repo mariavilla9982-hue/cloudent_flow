@@ -27,14 +27,22 @@
       const actionCell=row?.querySelector(".production-job-actions");
       if(!row||!readyActions||!actionCell)return html;
 
-      // Reuse the exact native action container/placement from video 7 minutos.
-      // Only the two actions that are valid while provider cancellation is pending stay visible.
+      const id=esc(String(job.id));
+      const i=Number(rest[0]||0),total=Number(rest[1]||1);
+      const number=Math.max(1,total-i);
+      const scheduled=!!job?.meta?.scheduled;
+
+      // Keep the same native Video 7 minutos action grid and expose the missing actions.
+      readyActions.insertAdjacentHTML("beforeend",
+        '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+id+'\','+number+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
+        '<button class="danger" onclick="deleteProductionJob(\''+id+'\',this)">Excluir</button>'
+      );
       actionCell.innerHTML=readyActions.outerHTML;
       return row.outerHTML;
     };
 
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=7}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=8}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 
