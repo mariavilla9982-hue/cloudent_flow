@@ -186,6 +186,7 @@
     if(ticket?.fallback){
       const fd=new FormData();
       fd.append("video",video);fd.append("frame",frame);
+      if(ticket.job_id)fd.append("reservation_id",ticket.job_id);
       if(videoThumb)fd.append("video_thumb",videoThumb,"video-thumb.jpg");
       if(frameThumb)fd.append("frame_thumb",frameThumb,"frame-thumb.jpg");
       return await motionFetch("?action=upload",{method:"POST",body:fd});

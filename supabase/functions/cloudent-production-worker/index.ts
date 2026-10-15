@@ -1,3 +1,4 @@
+import {motionStorageHealth,motionStorageRead,requireMotionStorage,reserveMotionStorage,commitMotionStorage,putMotionPrimary,MotionStorageSafetyError} from "./motion-storage-protection.ts";
 import {isMotionStatusJob,readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -190,13 +191,13 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
   if(!taskId||String(meta.motion_preview_file?.task_id)!==taskId||meta.result_node_id!=="384")throw new Error("Motion Control: cancelamento bloqueado até confirmar a origem do vídeo #384.");
   const {data:video,error:videoError}=await admin.from("videos").select("id,status,storage_path,storage_provider,size_bytes,mime_type").eq("id",job.result_video_id).maybeSingle();
   if(videoError)throw videoError;
-  if(!video||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
+  if(!video||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(meta.result_storage_provider||job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
   if(!meta.motion_preview_verified_at||!/^[a-f0-9]{64}$/.test(String(meta.motion_preview_sha256||""))||Number(meta.motion_preview_verified_bytes)!==Number(video.size_bytes)){
     let blob:Blob;
     if(String(video.storage_provider||"supabase")==="r2"){
       const config=await getCloudentR2Config(admin);if(!config)throw new Error("r2_not_configured");
-      const url=await r2PresignedUrl(config,"GET",video.storage_path,300);
-      const response=await fetch(url,{signal:AbortSignal.timeout(30000)});
+      await requireMotionStorage(admin);
+      const response=await motionStorageRead(admin,config,video.storage_path);
       if(!response.ok)throw new Error("Motion Control: não foi possível verificar o vídeo salvo. Task preservada.");
       blob=await response.blob();
     }else{
@@ -351,14 +352,25 @@ Deno.serve(async(req:Request)=>{
       const ext=extFrom(fileUrl,item?.fileType||item?.outputType);
       const mime=mimeFor(ext);
       const path=job.user_id+"/production-results/"+new Date().toISOString().slice(0,10)+"/"+job.id+"."+ext;
-      const provider=String(job.storage_provider||"supabase")==="r2"?"r2":"supabase";
+      let provider=String(job.storage_provider||"supabase")==="r2"?"r2":"supabase";
+      const protectedMotion=isMotionStatusJob(job);
+      let reserveResult=protectedMotion&&provider==="supabase"&&!!job.meta?.storage_reserve;
       let r2:CloudentR2Config|null=null;
+      if(protectedMotion&&provider==="r2"){
+        const health=await motionStorageHealth(admin);
+        if(!health?.allow_primary){provider="supabase";reserveResult=true;}
+      }
       if(provider==="r2"){
         r2=await getCloudentR2Config(admin);
         if(!r2)throw new Error("r2_not_configured");
-        await putAndVerifyR2(r2,path,blob,mime);
-      }else{
-        const {error:ue}=await admin.storage.from("videos").upload(path,blob,{contentType:mime,upsert:true});
+        if(protectedMotion){
+          try{await putMotionPrimary(admin,r2,path,blob,mime);}
+          catch(e){if(!(e instanceof MotionStorageSafetyError))throw e;provider="supabase";reserveResult=true;}
+        }else await putAndVerifyR2(r2,path,blob,mime);
+      }
+      if(provider==="supabase"){
+        if(reserveResult)await reserveMotionStorage(admin,job.id,job.user_id,0,blob.size);
+        const {error:ue}=await admin.storage.from("videos").upload(path,blob,{contentType:mime,upsert:true,cacheControl:"3600"});
         if(ue)throw ue;
       }
       const name="runninghub-"+job.id.slice(0,8)+"."+ext;
@@ -408,10 +420,11 @@ Deno.serve(async(req:Request)=>{
         runninghub_cost_money:Number.isFinite(costMoney)?costMoney:null,
         runninghub_third_party_cost_money:Number.isFinite(thirdPartyCost)?thirdPartyCost:null,
         runninghub_runtime_seconds:Number.isFinite(runtimeSeconds)?runtimeSeconds:null,
-        meta:{...(job.meta||{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,"0")).join(""),motion_preview_saved_at:new Date().toISOString(),result_node_id:"384",provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
+        meta:{...(job.meta||{}),...(protectedMotion?{result_storage_provider:provider,storage_reserve_result:reserveResult}:{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,"0")).join(""),motion_preview_saved_at:new Date().toISOString(),result_node_id:"384",provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
         completed_at:early?null:new Date().toISOString(),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()
       }).eq("id",job.id);
-      if(early&&saveError)throw saveError;
+      if((early||protectedMotion)&&saveError)throw saveError;
+      if(reserveResult)await commitMotionStorage(admin,job.id,path,blob.size);
       await admin.from("activity_logs").insert({
         level:"info",event_type:early?"motion_preview_ready":"runninghub_production_ready",message:early?"Vídeo #384 salvo; execução RunningHub continua":"Vídeo do RunningHub finalizado e salvo",
         meta:{production_job_id:job.id,result_video_id:video.id,credits_used:Number.isFinite(creditsUsed)?creditsUsed:null}

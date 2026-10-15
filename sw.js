@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v33";
+const CACHE="cloudentflow-pwa-v34";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -20,7 +20,7 @@ async function injectCalendarPatch(response){
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
-    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=13"></script>';
+    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=14"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
@@ -85,7 +85,7 @@ self.addEventListener("install",event=>{
 self.addEventListener("activate",event=>{
   event.waitUntil((async()=>{
     const keys=await caches.keys();
-    await Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)));
+    await Promise.all(keys.filter(key=>key!==CACHE&&key!=="cloudent-motion-thumbnails-v1").map(key=>caches.delete(key)));
     if(self.registration.navigationPreload){
       try{await self.registration.navigationPreload.enable()}catch{}
     }
@@ -153,7 +153,9 @@ self.addEventListener("fetch",event=>{
     url.pathname==="/face-swap-character-presets.js"||
     url.pathname==="/face-swap-character-click-hotfix.js"||
     url.pathname==="/face-swap-queue-patch.js"||
-    url.pathname==="/motion-control-production.js"
+    url.pathname==="/motion-control-production.js"||
+    url.pathname==="/motion-control-core-v6.js"||
+    url.pathname==="/motion-storage-ui.js"
   ){
     event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>Response.error()));
     return;

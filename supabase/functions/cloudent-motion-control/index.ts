@@ -1,3 +1,4 @@
+import {MotionStorageSafetyError as MotionStorageError,motionStorageHealth,motionCheckObject,motionStorageRead,motionObjectConfig,reserveMotionStorage,storageRPC,RESERVE_INPUT_MAX} from "./motion-storage-protection.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
@@ -45,37 +46,7 @@ async function signed(config,method,key,expires=3600,contentType=""){
   const request=await aws.sign(req,{aws:{signQuery:true}});
   return request.url.toString();
 }
-class MotionStorageError extends Error{
-  constructor(message,code="storage_read_unavailable"){super(message);this.code=code;}
-}
-let storageReadBlockedUntil=0;
-async function exists(config,key,expectedSize=0){
-  if(storageReadBlockedUntil>Date.now())throw new MotionStorageError("Backblaze bloqueou leituras: limite diário de download ou transações Class B atingido. Aguarde a renovação do limite ou revise Caps & Alerts na Backblaze.","storage_read_cap_exceeded");
-  const r=await fetch(await signed(config,"HEAD",key,900),{method:"HEAD",cache:"no-store",signal:AbortSignal.timeout(10000)});
-  if(r.status===404)return false;
-  if(r.ok){
-    const size=Number(r.headers.get("content-length"));
-    if(expectedSize>0&&size!==expectedSize)throw new MotionStorageError("Arquivo enviado com tamanho diferente do esperado. Selecione o arquivo e tente novamente.","storage_size_mismatch");
-    return true;
-  }
-  if(r.status===401||r.status===403){
-    // HEAD has no body. Read at most one byte to distinguish a cap from a missing file/permission.
-    const detail=await fetch(await signed(config,"GET",key,900),{headers:{Range:"bytes=0-0"},cache:"no-store",signal:AbortSignal.timeout(10000)});
-    if(detail.ok){
-      const total=detail.headers.get("content-range")?.match(/\/(\d+)$/)?.[1]||detail.headers.get("content-length");
-      await detail.body?.cancel().catch(()=>{});
-      if(expectedSize>0&&Number(total)!==expectedSize)throw new MotionStorageError("Arquivo enviado com tamanho diferente do esperado. Selecione o arquivo e tente novamente.","storage_size_mismatch");
-      return true;
-    }
-    const message=(await detail.text()).slice(0,8192);
-    if(/download bandwidth or transaction.*cap exceeded|download_cap_exceeded|transaction_cap_exceeded/i.test(message)){
-      storageReadBlockedUntil=Date.now()+60000;
-      throw new MotionStorageError("Backblaze bloqueou leituras: limite diário de download ou transações Class B atingido. Aguarde a renovação do limite ou revise Caps & Alerts na Backblaze.","storage_read_cap_exceeded");
-    }
-    throw new MotionStorageError("O armazenamento recusou a leitura do arquivo. Verifique as permissões da chave Backblaze.","storage_read_forbidden");
-  }
-  throw new MotionStorageError("Armazenamento indisponível para confirmar o upload (HTTP "+r.status+"). Tente novamente em instantes.");
-}
+async function exists(admin,config,key,expectedSize=0){return motionCheckObject(admin,config,key,expectedSize);}
 async function wake(admin){
   try{
     const {data:secret}=await admin.rpc("get_cloudent_worker_secret");
@@ -108,6 +79,33 @@ Deno.serve(async(req)=>{
     const action=url.searchParams.get("action")||"";
     const resource=url.searchParams.get("resource")||"";
 
+    if(req.method==="GET"&&resource==="storage-health"){
+      return out({ok:true,storage:await storageRPC(admin,"motion_storage_status")});
+    }
+    if(req.method==="GET"&&resource==="thumbnail"){
+      const id=String(url.searchParams.get("id")||""),kind=String(url.searchParams.get("kind")||"");
+      if(!["video-thumb","frame-thumb"].includes(kind))return out({error:"thumbnail_kind_invalid"},400);
+      const {data:job,error}=await admin.from("production_jobs").select("id,user_id,storage_provider,meta").eq("id",id).eq("user_id",user.id).maybeSingle();
+      if(error)throw error;if(!job||!isMotion(job))return out({error:"thumbnail_not_found"},404);
+      const path=String(kind==="video-thumb"?job.meta?.original_thumbnail_path:job.meta?.frame_thumbnail_path);
+      if(!path||!path.startsWith(user.id+"/"))return out({error:"thumbnail_not_found"},404);
+      let blob;
+      if(job.storage_provider==="r2"){
+        const health=await motionStorageHealth(admin);
+        if(!health?.allow_primary)throw new MotionStorageError("Miniaturas aguardam a recuperação do armazenamento.");
+        const cfg=await motionObjectConfig(admin);if(!cfg)throw new MotionStorageError("Armazenamento indisponível.");
+        const response=await motionStorageRead(admin,cfg,path);
+        if(!response.ok)return out({error:"thumbnail_not_found"},404);
+        const size=Number(response.headers.get("content-length")||0);
+        if(size>256*1024){await response.body?.cancel();return out({error:"thumbnail_too_large"},413);}
+        blob=await response.blob();
+      }else{
+        const {data,error}=await admin.storage.from("production").download(path);if(error||!data)return out({error:"thumbnail_not_found"},404);blob=data;
+      }
+      if(blob.size>256*1024||!["image/jpeg","image/png","image/webp"].includes(blob.type.split(";")[0]))return out({error:"thumbnail_invalid"},415);
+      return new Response(blob,{headers:{...CORS,"Content-Type":blob.type,"Cache-Control":"private, max-age=86400","X-Content-Type-Options":"nosniff"}});
+    }
+
     if(req.method==="GET"&&resource==="config"){
       const [{data:setting},{data:integration}]=await Promise.all([
         admin.from("app_settings").select("value,updated_at").eq("key","motion_control_workflow").maybeSingle(),
@@ -135,14 +133,12 @@ Deno.serve(async(req)=>{
       if(videoSize>2*1024*1024*1024)throw new Error("Vídeo maior que 2 GB.");
       if(frameSize>30*1024*1024)throw new Error("Frame maior que 30 MB.");
       const cfg=await getObjectConfig(admin);
-      if(!cfg)return out({ok:true,fallback:true});
-      // Check real read access before issuing another upload when B2 is capped.
-      const {data:recent,error:recentError}=await admin.from("production_jobs")
-        .select("original_storage_path").eq("user_id",user.id).eq("storage_provider","r2")
-        .contains("meta",{workflow_key:"motion_control"}).order("created_at",{ascending:false}).limit(1).maybeSingle();
-      if(recentError)throw recentError;
-      if(recent?.original_storage_path)await exists(cfg,recent.original_storage_path);
+      const health=await motionStorageHealth(admin);
       const jobId=crypto.randomUUID();
+      if(!cfg||!health?.allow_primary){
+        await reserveMotionStorage(admin,jobId,user.id,videoSize+frameSize);
+        return out({ok:true,fallback:true,reserve:true,job_id:jobId,max_input_bytes:RESERVE_INPUT_MAX,storage_paused:true});
+      }
       const day=new Date().toISOString().slice(0,10);
       const base=user.id+"/motion-control-inputs/"+day+"/"+jobId;
       const videoMime=String(body.video_mime_type||"video/mp4");
@@ -171,7 +167,9 @@ Deno.serve(async(req)=>{
       if(!videoPath.startsWith(prefix)||!framePath.startsWith(prefix))throw new Error("Caminho de upload inválido.");
       const cfg=await getObjectConfig(admin);
       if(!cfg)throw new Error("Armazenamento de produção indisponível.");
-      const [videoOk,frameOk]=await Promise.all([exists(cfg,videoPath,Number(body.video_size_bytes||0)),exists(cfg,framePath,Number(body.frame_size_bytes||0))]);
+      const storageState=await motionStorageHealth(admin);
+      if(!storageState?.allow_primary)throw new MotionStorageError("O armazenamento principal está protegido. Seus arquivos selecionados foram preservados; tente novamente após a recuperação.");
+      const [videoOk,frameOk]=await Promise.all([exists(admin,cfg,videoPath,Number(body.video_size_bytes||0)),exists(admin,cfg,framePath,Number(body.frame_size_bytes||0))]);
       if(!videoOk||!frameOk)throw new Error("Vídeo ou frame ainda não terminou de enviar.");
       const videoThumbPath=String(body.video_thumb_path||"");
       const frameThumbPath=String(body.frame_thumb_path||"");
@@ -204,8 +202,14 @@ Deno.serve(async(req)=>{
       const fd=await req.formData();
       const video=fd.get("video"), frame=fd.get("frame");
       if(!(video instanceof File)||!(frame instanceof File))throw new Error("Vídeo e frame são obrigatórios.");
-      const jobId=crypto.randomUUID(),day=new Date().toISOString().slice(0,10);
-      const base=user.id+"/motion-control-inputs/"+day+"/"+jobId;
+      const requestedId=String(fd.get("reservation_id")||"");
+      if(requestedId&&!/^[0-9a-f-]{36}$/i.test(requestedId))throw new Error("Reserva inválida.");
+      const jobId=requestedId||crypto.randomUUID();
+      const {data:existing,error:existingError}=await admin.from("production_jobs").select("*").eq("id",jobId).eq("user_id",user.id).maybeSingle();
+      if(existingError)throw existingError;
+      if(existing&&isMotion(existing))return out({ok:true,job:existing});
+      await reserveMotionStorage(admin,jobId,user.id,video.size+frame.size);
+      const base=user.id+"/motion-control-reserve/"+jobId;
       const videoPath=base+"/video."+ext(video.name,video.type,"mp4");
       const framePath=base+"/frame."+ext(frame.name,frame.type,"jpg");
       const uploads=[
@@ -214,11 +218,11 @@ Deno.serve(async(req)=>{
       ];
       const videoThumb=fd.get("video_thumb"),frameThumb=fd.get("frame_thumb");
       let videoThumbPath=null,frameThumbPath=null;
-      if(videoThumb instanceof File){
+      if(videoThumb instanceof File&&videoThumb.size<=256*1024){
         videoThumbPath=base+"/video-thumb.jpg";
         uploads.push(admin.storage.from("production").upload(videoThumbPath,videoThumb,{contentType:"image/jpeg",upsert:false}));
       }
-      if(frameThumb instanceof File){
+      if(frameThumb instanceof File&&frameThumb.size<=256*1024){
         frameThumbPath=base+"/frame-thumb.jpg";
         uploads.push(admin.storage.from("production").upload(frameThumbPath,frameThumb,{contentType:"image/jpeg",upsert:false}));
       }
@@ -230,7 +234,7 @@ Deno.serve(async(req)=>{
         original_storage_path:videoPath,original_file_name:cleanName(video.name,"motion.mp4"),original_mime_type:video.type||"video/mp4",original_size_bytes:video.size,
         frame_storage_path:framePath,frame_file_name:cleanName(frame.name,"frame.jpg"),frame_mime_type:frame.type||"image/jpeg",frame_size_bytes:frame.size,
         status:"motion_waiting",progress:0,max_attempts:1,attempt_count:0,
-        meta:{workflow_key:"motion_control",workflow_label:"Motion Control V7",workflow_nodes:{video:"275",frame:"299",output:"285"},manual_run:true,original_thumbnail_path:videoThumbPath,frame_thumbnail_path:frameThumbPath}
+        meta:{workflow_key:"motion_control",workflow_label:"Motion Control V7",workflow_nodes:{video:"275",frame:"299",output:"285"},storage_reserve:true,manual_run:true,original_thumbnail_path:videoThumbPath,frame_thumbnail_path:frameThumbPath}
       }).select("*").single();
       if(error)throw error;
       await wake(admin);

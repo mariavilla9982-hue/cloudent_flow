@@ -125,8 +125,11 @@
 
     patchCalendarScheduling();
     patchMotionThumbFailures();
+    if(!document.getElementById("cloudentMotionStorageScript")){
+      const storageScript=document.createElement("script");storageScript.id="cloudentMotionStorageScript";storageScript.src="/motion-storage-ui.js?v=1";storageScript.async=false;(document.head||document.documentElement).appendChild(storageScript);
+    }
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=13}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=14}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 
@@ -136,7 +139,7 @@
       return;
     }
     const core=document.createElement("script");
-    core.src="/motion-control-core-v6.js?v=7b23bad";
+    core.src="/motion-control-core-v6.js?v=storage1";
     core.async=false;
     core.onload=applyExactVideo7Actions;
     core.onerror=()=>console.error("Motion Control: não foi possível carregar o controlador base.");

@@ -1,3 +1,4 @@
+import {motionStorageHealth,requireMotionStorage,motionCheckObject,MotionStorageSafetyError,storageRPC} from "./motion-storage-protection.ts";
 import {applyMotionProviderStatus} from "./motion-provider-state.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -108,7 +109,11 @@ async function getCredits(base:string,apiKey:string){
 }
 async function prepareInput(admin:any,base:string,apiKey:string,job:any,path:string,name:string,mime:string){
   if(String(job.storage_provider||"supabase")==="r2"){
-    const cfg=await getObjectConfig(admin);if(!cfg)throw new Error("Armazenamento R2/B2 não configurado.");return await signed(cfg,"GET",path,3600);
+    const cfg=await getObjectConfig(admin);if(!cfg)throw new Error("Armazenamento R2/B2 não configurado.");
+    const expected=path===job.original_storage_path?Number(job.original_size_bytes||0):Number(job.frame_size_bytes||0);
+    if(!await motionCheckObject(admin,cfg,path,expected))throw new Error("Arquivo do Motion Control não encontrado.");
+    if(!await storageRPC(admin,"motion_storage_record_read",{p_count:1}))throw new MotionStorageSafetyError("Orçamento preventivo de leituras atingido.");
+    return await signed(cfg,"GET",path,3600);
   }
   const {data:blob,error}=await admin.storage.from("production").download(path);
   if(error||!blob)throw new Error(error?.message||"Arquivo do Motion Control não encontrado.");
@@ -151,6 +156,8 @@ Deno.serve(async(req:Request)=>{
       return out({ok:true,enabled,configured,processed:0,message});
     }
 
+    const storageState=await motionStorageHealth(admin);
+    if(!storageState?.allow_primary)return out({ok:true,enabled:true,configured:true,processed:0,storage_paused:true,message:"Fila preservada: aguardando armazenamento."});
     const [{count:productionActive},{count:faceActive}]=await Promise.all([
       admin.from("production_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"]),
       admin.from("face_swap_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"])
@@ -194,6 +201,7 @@ Deno.serve(async(req:Request)=>{
         const {data:existingTask,error:existingError}=await admin.from("production_jobs").select("runninghub_task_id").eq("id",job.id).maybeSingle();
         if(existingError)throw existingError;
         if(existingTask?.runninghub_task_id)continue;
+        await requireMotionStorage(admin);
         const created=await rhJson(base,apiKey,"/task/openapi/create",{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}],addMetadata:true});
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new Error(created?.msg||"RunningHub não retornou taskId no Motion Control.");
         const taskId=String(created.data.taskId);
@@ -204,6 +212,7 @@ Deno.serve(async(req:Request)=>{
         EdgeRuntime.waitUntil(fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-production-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null));
         processed++;
       }catch(e:any){
+        if(e instanceof MotionStorageSafetyError){await storageRPC(admin,"release_motion_storage_claim",{p_job_id:job.id,p_worker:workerId});continue;}
         const message=e instanceof Error?e.message:String(e);
         await admin.from("production_jobs").update({status:"failed",locked_at:null,locked_by:null,last_error:message,updated_at:new Date().toISOString()}).eq("id",job.id);
         processed++;

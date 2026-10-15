@@ -1,3 +1,4 @@
+import {motionStorageHealth} from "./motion-storage-protection.ts";
 import {readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -45,6 +46,14 @@ Deno.serve(async(req:Request)=>{
     const base=cleanBase(cfg.baseUrl);
 
     const options=await req.json().catch(()=>({}));
+    // Storage availability must not stop real provider-status reconciliation.
+    let storageState:any=null;
+    try{storageState=await motionStorageHealth(admin);}catch{}
+    if(storageState?.just_recovered&&options.sync_only!==true){
+      EdgeRuntime.waitUntil(fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker",{
+        method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":master},body:"{}",signal:AbortSignal.timeout(15000)
+      }).catch(()=>null));
+    }
     const jobs:any[]=[];
     for(let offset=0;;offset+=500){
       const {data:page,error:jobsError}=await admin.from("production_jobs")
@@ -74,7 +83,7 @@ Deno.serve(async(req:Request)=>{
 
     if(needsCapture&&options.sync_only!==true)EdgeRuntime.waitUntil(wakeProduction(master));
     await admin.from("worker_runtime").upsert({worker_name:"motion_status",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_jobs:processed,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
-    return out({ok:true,processed,queued,running,terminal,unknown});
+    return out({ok:true,processed,queued,running,terminal,unknown,storage_phase:storageState?.phase||"unknown"});
   }catch(e:any){
     const message=e instanceof Error?e.message:String(e);
     try{await admin.from("worker_runtime").upsert({worker_name:"motion_status",last_heartbeat:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()},{onConflict:"worker_name"})}catch{}

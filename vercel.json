@@ -65,6 +65,24 @@
           "value": "no-store, max-age=0"
         }
       ]
+    },
+    {
+      "source": "/motion-control-core-v6.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/motion-storage-ui.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
     }
   ]
 }
