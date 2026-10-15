@@ -1,3 +1,4 @@
+import {applyMotionProviderStatus} from "./motion-provider-state.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
@@ -177,6 +178,7 @@ Deno.serve(async(req:Request)=>{
     let processed=0;
     for(const job of claimed||[]){
       try{
+        if(job.runninghub_task_id)continue;
         const executionOptions=motionExecutionOptions(job,cfg);
         const {error:hardwareError}=await admin.from("production_jobs").update({
           meta:{...(job.meta||{}),execution_instance_type:"plus",execution_instance_used:"plus",execution_instance_vram_gb:48,execution_instance_policy:"motion_default_48gb",execution_instance_authorized:false,workflow_id:String(cfg.workflowId)},
@@ -189,10 +191,16 @@ Deno.serve(async(req:Request)=>{
         await admin.from("production_jobs").update({progress:25,runninghub_frame_file:frameInput,updated_at:new Date().toISOString()}).eq("id",job.id);
         const creditsBefore=concurrency===1?await getCredits(base,apiKey):null;
         if(Number.isFinite(creditsBefore))await admin.from("production_jobs").update({credits_before:creditsBefore,updated_at:new Date().toISOString()}).eq("id",job.id);
+        const {data:existingTask,error:existingError}=await admin.from("production_jobs").select("runninghub_task_id").eq("id",job.id).maybeSingle();
+        if(existingError)throw existingError;
+        if(existingTask?.runninghub_task_id)continue;
         const created=await rhJson(base,apiKey,"/task/openapi/create",{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}],addMetadata:true});
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new Error(created?.msg||"RunningHub não retornou taskId no Motion Control.");
+        const taskId=String(created.data.taskId);
         const taskStatus=String(created.data.taskStatus||"QUEUED").toUpperCase();
-        await admin.from("production_jobs").update({status:taskStatus==="RUNNING"?"running":"queued",progress:taskStatus==="RUNNING"?55:35,runninghub_task_id:String(created.data.taskId),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",job.id);
+        const {error:attachError}=await admin.from("production_jobs").update({status:"queued",progress:38,started_at:null,runninghub_task_id:taskId,locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",job.id).is("runninghub_task_id",null);
+        if(attachError)throw attachError;
+        await applyMotionProviderStatus(admin,{id:job.id,runninghub_task_id:taskId},{status:["RUNNING","QUEUED","FAILED"].includes(taskStatus)?taskStatus:"UNKNOWN",source:"create",error:created?.data?.promptTips||null,checkedAt:new Date().toISOString()});
         EdgeRuntime.waitUntil(fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-production-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null));
         processed++;
       }catch(e:any){

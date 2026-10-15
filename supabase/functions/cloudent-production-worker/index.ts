@@ -1,3 +1,4 @@
+import {isMotionStatusJob,readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -659,6 +660,15 @@ Deno.serve(async(req:Request)=>{
 
     for(const job of active||[]){
       try{
+        let motionState:any=null;
+        if(isMotionStatusJob(job)){
+          if(!job.runninghub_task_id)continue;
+          motionState=await readMotionProviderStatus(base,apiKey,String(job.runninghub_task_id));
+          const synced=await applyMotionProviderStatus(admin,job,motionState);
+          if(!synced)continue;
+          Object.assign(job,synced);
+          if(!["RUNNING","SUCCESS"].includes(motionState.status))continue;
+        }
         if(isMotionPreviewJob(job)){
           if(job.result_video_id&&job.meta?.motion_preview_available){
             await cancelMotionAfterSave(admin,job.id,rhJson);
@@ -696,13 +706,19 @@ Deno.serve(async(req:Request)=>{
         }
         let handledByV2=false;
         try{
-          const vr=await fetch(base+"/openapi/v2/query",{
+          const vr=motionState?.source==="v2"?{ok:true}:await fetch(base+"/openapi/v2/query",{
             method:"POST",
             headers:{"Authorization":"Bearer "+apiKey,"Content-Type":"application/json"},
             body:JSON.stringify({taskId:job.runninghub_task_id})
           });
-          let vj:any={};try{vj=await vr.json()}catch{}
+          let vj:any=motionState?.source==="v2"?motionState.raw:{};if(motionState?.source!=="v2"){try{vj=await (vr as Response).json()}catch{}}
           const status=String(vj?.status||"").toUpperCase();
+          if(isMotionStatusJob(job)&&motionState?.source!=="v2"&&vr.ok&&["QUEUED","RUNNING","SUCCESS","FAILED"].includes(status)){
+            const current=await applyMotionProviderStatus(admin,job,{status,source:"v2",raw:vj,error:vj?.errorMessage||vj?.failedReason?.exception_message||null,checkedAt:new Date().toISOString()});
+            if(!current)continue;
+            Object.assign(job,current);
+            if(["QUEUED","FAILED"].includes(status))continue;
+          }
           if(vr.ok&&["QUEUED","RUNNING","SUCCESS","FAILED"].includes(status)){
             handledByV2=true;
             if(status==="SUCCESS"&&Array.isArray(vj?.results)&&vj.results.length){
@@ -710,7 +726,7 @@ Deno.serve(async(req:Request)=>{
               if(isMotionPreviewJob(job)){
                 const exact=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
                 item=Array.isArray(exact?.data)?exact.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384"):null;
-                if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados.");
+                if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados. RunningHub retornou nodes: "+(Array.isArray(exact?.data)?exact.data.map((x:any)=>String(x?.nodeId??x?.node_id??"?")).join(", "):"nenhum"));
               }
               let usage=vj?.usage||null;
               try{
@@ -729,7 +745,7 @@ Deno.serve(async(req:Request)=>{
               touched++;
             }else if(status==="FAILED"){
               const reason=vj?.errorMessage||vj?.failedReason?.exception_message||vj?.failedReason?.node_name||"RunningHub falhou";
-              const retry=Number(job.attempt_count)<Number(job.max_attempts);
+              const retry=!isMotionStatusJob(job)&&Number(job.attempt_count)<Number(job.max_attempts);
               await admin.from("production_jobs").update({
                 status:retry?"waiting":"failed",progress:retry?0:job.progress,runninghub_task_id:retry?null:job.runninghub_task_id,
                 credits_used:vj?.usage?.consumeCoins===null||vj?.usage?.consumeCoins===undefined?job.credits_used:Number(vj.usage.consumeCoins),
@@ -747,13 +763,18 @@ Deno.serve(async(req:Request)=>{
               }).eq("id",job.id);
             }
           }
-        }catch{}
+        }catch(e){if(isMotionStatusJob(job))throw e;}
 
         if(handledByV2)continue;
 
         const j=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
         const resultCode=Number(j?.code);
         const data=j?.data;
+        if(isMotionStatusJob(job)&&resultCode!==0){
+          const status=resultCode===813?"QUEUED":resultCode===804?"RUNNING":resultCode===805?"FAILED":"UNKNOWN";
+          await applyMotionProviderStatus(admin,job,{status,source:"legacy_outputs",error:status==="FAILED"?(data?.failedReason?.exception_message||data?.failedReason?.node_name||j?.msg||"RunningHub falhou"):status==="UNKNOWN"?"Resposta de saída não reconhecida · "+String(resultCode):null,checkedAt:new Date().toISOString()});
+          continue;
+        }
         if(resultCode===0 && Array.isArray(data) && data.length){
           const item=isMotionPreviewJob(job)?data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384"):data.find((x:any)=>String(x?.fileType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||data[0];
           if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados.");
@@ -766,7 +787,7 @@ Deno.serve(async(req:Request)=>{
           touched++;
         }else if(resultCode===805){
           const reason=data?.failedReason?.exception_message||data?.failedReason?.node_name||j?.msg||"RunningHub falhou";
-          const retry=Number(job.attempt_count)<Number(job.max_attempts);
+          const retry=!isMotionStatusJob(job)&&Number(job.attempt_count)<Number(job.max_attempts);
           await admin.from("production_jobs").update({
             status:retry?"waiting":"failed",progress:retry?0:job.progress,runninghub_task_id:retry?null:job.runninghub_task_id,
             next_attempt_at:new Date(Date.now()+5*60_000).toISOString(),locked_at:null,locked_by:null,last_error:String(reason),
@@ -781,9 +802,14 @@ Deno.serve(async(req:Request)=>{
           }).eq("id",job.id);
         }
       }catch(e:any){
-        await admin.from("production_jobs").update({
-          last_error:e instanceof Error?e.message:String(e),updated_at:new Date().toISOString()
+        const message=e instanceof Error?e.message:String(e);
+        const missingMotionOutput=isMotionStatusJob(job)&&job.meta?.provider_status==="SUCCESS"&&message.includes("saída #384 ausente");
+        let update=admin.from("production_jobs").update({
+          ...(missingMotionOutput?{status:"failed",completed_at:new Date().toISOString(),locked_at:null,locked_by:null}:{}),
+          last_error:message,updated_at:new Date().toISOString()
         }).eq("id",job.id);
+        if(isMotionStatusJob(job))update=update.eq("runninghub_task_id",job.runninghub_task_id);
+        await update;
       }
     }
 

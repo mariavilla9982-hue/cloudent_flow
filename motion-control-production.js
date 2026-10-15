@@ -49,19 +49,17 @@
     productionJobRow=function(job,...rest){
       const isMotion=String(job?.meta?.workflow_key||"")==="motion_control";
 
-      // A task accepted by RunningHub can still be QUEUED. While it is queued there
-      // is no generation runtime yet, so show a waiting state and do not render a timer/cost clock.
-      if(isMotion&&job.status==="queued"){
-        const waitingJob={...job,status:"waiting",started_at:null};
-        const waitingHtml=motionRow.call(this,waitingJob,...rest);
-        if(typeof waitingHtml!=="string")return waitingHtml;
-        return waitingHtml
-          .replace(/Aguardando envio/g,"Aguardando vaga")
-          .replace(/Pronto para nova tentativa/g,"Aguardando vaga do RunningHub")
-          .replace(/Vai iniciar quando a vaga atual liberar/g,"Aguardando vaga do RunningHub");
+      const active=isMotion&&["queued","running"].includes(job.status);
+      const queued=active&&(job.meta?.provider_status==="QUEUED"||job.meta?.provider_queue_waiting===true||(!job.meta?.provider_status&&job.status==="queued"));
+      const confirmedRunning=active&&!queued&&job.meta?.provider_status==="RUNNING"&&
+        String(job.meta?.provider_status_task_id||"")===String(job.runninghub_task_id||"")&&!job.meta?.provider_status_error;
+      const displayJob=queued?{...job,status:"queued",progress:38,started_at:null}:
+        active&&!confirmedRunning?{...job,status:"running",started_at:null}:job;
+      let html=motionRow.call(this,displayJob,...rest);
+      if(typeof html==="string"){
+        if(queued)html=html.replace(/Na fila do RunningHub/g,"Aguardando vaga");
+        else if(active&&!confirmedRunning)html=html.replace(/>Gerando</g,job.meta?.provider_status==="SUCCESS"?">Salvando resultado<":">Consultando RunningHub<");
       }
-
-      const html=motionRow.call(this,job,...rest);
       const previewReady=isMotion&&
         !!job?.meta?.motion_preview_available&&!!job?.result_video_id&&
         ["running","queued"].includes(job.status);
@@ -93,7 +91,7 @@
 
     patchCalendarScheduling();
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=10}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=11}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 
