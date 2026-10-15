@@ -60,6 +60,14 @@
         if(queued)html=html.replace(/Na fila do RunningHub/g,"Aguardando vaga");
         else if(active&&!confirmedRunning)html=html.replace(/>Gerando</g,job.meta?.provider_status==="SUCCESS"?">Salvando resultado<":">Consultando RunningHub<");
       }
+      const recovered=isMotion&&job.status==="ready"&&!!job.result_video_id&&
+        job.meta?.legacy_result_recovery?.task_id===String(job.runninghub_task_id||"")&&
+        job.meta?.legacy_result_recovery?.node_id==="313";
+      if(recovered&&typeof html==="string"){
+        html=html.replace(/>Pronto</g,">Recuperado<")
+          .replace(/(<div class="production-job-meta">)/,
+            '<small class="production-wait-detail" title="Esta execução antiga foi enviada pelo fluxo video 7 minutos. O vídeo foi recuperado da mesma task, sem nova geração.">Recuperado do fluxo video 7 minutos · node #313</small>$1');
+      }
       const previewReady=isMotion&&
         !!job?.meta?.motion_preview_available&&!!job?.result_video_id&&
         ["running","queued"].includes(job.status);
@@ -91,7 +99,7 @@
 
     patchCalendarScheduling();
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=11}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=12}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 
