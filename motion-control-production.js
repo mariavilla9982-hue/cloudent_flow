@@ -38,6 +38,32 @@
     scheduleProductionResult=wrapped;
   }
 
+  function patchMotionThumbFailures(){
+    if(typeof loadProductionThumb!=="function"||loadProductionThumb.__motionStorageSafe)return;
+    const nativeThumb=loadProductionThumb,failed=new Map();
+    const wrapped=async function(el){
+      const id=el?.dataset?.productionThumbId,kind=el?.dataset?.productionThumbKind;
+      const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+      if(job?.meta?.workflow_key!=="motion_control")return nativeThumb.call(this,el);
+      const key=String(id)+"|"+String(kind),until=failed.get(key)||0;
+      const unavailable=()=>{
+        failed.set(key,Date.now()+5*60*1000);
+        if(failed.size>200)failed.delete(failed.keys().next().value);
+        el.querySelector("img")?.remove();
+        el.dataset.loaded="1";
+        el.title="Miniatura indisponível no armazenamento. O arquivo original não foi alterado.";
+      };
+      if(until>Date.now()){el.dataset.loaded="1";el.title="Miniatura temporariamente indisponível.";return;}
+      await nativeThumb.call(this,el);
+      const img=el.querySelector("img");
+      if(img){
+        img.addEventListener("error",unavailable,{once:true});
+        if(img.complete&&!img.naturalWidth)unavailable();
+      }
+    };
+    wrapped.__motionStorageSafe=true;loadProductionThumb=wrapped;
+  }
+
   function applyExactVideo7Actions(){
     if(uiState.patched)return;
     if(typeof productionJobRow!=="function"){
@@ -98,8 +124,9 @@
     };
 
     patchCalendarScheduling();
+    patchMotionThumbFailures();
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=12}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=13}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 

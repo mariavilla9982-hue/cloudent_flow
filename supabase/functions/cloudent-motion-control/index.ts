@@ -45,10 +45,36 @@ async function signed(config,method,key,expires=3600,contentType=""){
   const request=await aws.sign(req,{aws:{signQuery:true}});
   return request.url.toString();
 }
-async function exists(config,key){
-  const url=await signed(config,"HEAD",key,900);
-  const r=await fetch(url,{method:"HEAD"});
-  return r.ok;
+class MotionStorageError extends Error{
+  constructor(message,code="storage_read_unavailable"){super(message);this.code=code;}
+}
+let storageReadBlockedUntil=0;
+async function exists(config,key,expectedSize=0){
+  if(storageReadBlockedUntil>Date.now())throw new MotionStorageError("Backblaze bloqueou leituras: limite diário de download ou transações Class B atingido. Aguarde a renovação do limite ou revise Caps & Alerts na Backblaze.","storage_read_cap_exceeded");
+  const r=await fetch(await signed(config,"HEAD",key,900),{method:"HEAD",cache:"no-store",signal:AbortSignal.timeout(10000)});
+  if(r.status===404)return false;
+  if(r.ok){
+    const size=Number(r.headers.get("content-length"));
+    if(expectedSize>0&&size!==expectedSize)throw new MotionStorageError("Arquivo enviado com tamanho diferente do esperado. Selecione o arquivo e tente novamente.","storage_size_mismatch");
+    return true;
+  }
+  if(r.status===401||r.status===403){
+    // HEAD has no body. Read at most one byte to distinguish a cap from a missing file/permission.
+    const detail=await fetch(await signed(config,"GET",key,900),{headers:{Range:"bytes=0-0"},cache:"no-store",signal:AbortSignal.timeout(10000)});
+    if(detail.ok){
+      const total=detail.headers.get("content-range")?.match(/\/(\d+)$/)?.[1]||detail.headers.get("content-length");
+      await detail.body?.cancel().catch(()=>{});
+      if(expectedSize>0&&Number(total)!==expectedSize)throw new MotionStorageError("Arquivo enviado com tamanho diferente do esperado. Selecione o arquivo e tente novamente.","storage_size_mismatch");
+      return true;
+    }
+    const message=(await detail.text()).slice(0,8192);
+    if(/download bandwidth or transaction.*cap exceeded|download_cap_exceeded|transaction_cap_exceeded/i.test(message)){
+      storageReadBlockedUntil=Date.now()+60000;
+      throw new MotionStorageError("Backblaze bloqueou leituras: limite diário de download ou transações Class B atingido. Aguarde a renovação do limite ou revise Caps & Alerts na Backblaze.","storage_read_cap_exceeded");
+    }
+    throw new MotionStorageError("O armazenamento recusou a leitura do arquivo. Verifique as permissões da chave Backblaze.","storage_read_forbidden");
+  }
+  throw new MotionStorageError("Armazenamento indisponível para confirmar o upload (HTTP "+r.status+"). Tente novamente em instantes.");
 }
 async function wake(admin){
   try{
@@ -110,6 +136,12 @@ Deno.serve(async(req)=>{
       if(frameSize>30*1024*1024)throw new Error("Frame maior que 30 MB.");
       const cfg=await getObjectConfig(admin);
       if(!cfg)return out({ok:true,fallback:true});
+      // Check real read access before issuing another upload when B2 is capped.
+      const {data:recent,error:recentError}=await admin.from("production_jobs")
+        .select("original_storage_path").eq("user_id",user.id).eq("storage_provider","r2")
+        .contains("meta",{workflow_key:"motion_control"}).order("created_at",{ascending:false}).limit(1).maybeSingle();
+      if(recentError)throw recentError;
+      if(recent?.original_storage_path)await exists(cfg,recent.original_storage_path);
       const jobId=crypto.randomUUID();
       const day=new Date().toISOString().slice(0,10);
       const base=user.id+"/motion-control-inputs/"+day+"/"+jobId;
@@ -139,7 +171,7 @@ Deno.serve(async(req)=>{
       if(!videoPath.startsWith(prefix)||!framePath.startsWith(prefix))throw new Error("Caminho de upload inválido.");
       const cfg=await getObjectConfig(admin);
       if(!cfg)throw new Error("Armazenamento de produção indisponível.");
-      const [videoOk,frameOk]=await Promise.all([exists(cfg,videoPath),exists(cfg,framePath)]);
+      const [videoOk,frameOk]=await Promise.all([exists(cfg,videoPath,Number(body.video_size_bytes||0)),exists(cfg,framePath,Number(body.frame_size_bytes||0))]);
       if(!videoOk||!frameOk)throw new Error("Vídeo ou frame ainda não terminou de enviar.");
       const videoThumbPath=String(body.video_thumb_path||"");
       const frameThumbPath=String(body.frame_thumb_path||"");
@@ -257,6 +289,6 @@ Deno.serve(async(req)=>{
 
     return out({ok:false,error:"not_found"},404);
   }catch(e){
-    return out({ok:false,error:e instanceof Error?e.message:String(e)},500);
+    return out({ok:false,error:e instanceof Error?e.message:String(e),...(e instanceof MotionStorageError?{code:e.code}:{})},e instanceof MotionStorageError?503:500);
   }
 });
