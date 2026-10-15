@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v27";
+const CACHE="cloudentflow-pwa-v28";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -20,7 +20,7 @@ async function injectCalendarPatch(response){
     const forYouWatchdogTag='<script src="/virals-foryou-watchdog.js?v=1"></script>';
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
-    const motionControlTag='<script src="/motion-control-production.js?v=2"></script>';
+    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=3"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
@@ -60,8 +60,8 @@ async function injectCalendarPatch(response){
 
     // Motion Control must load after the main inline SPA bundle. Injecting at the
     // end of body avoids depending on the Face Swap controller's dynamic loader.
-    if(oldMotionControl.test(html))html=html.replace(oldMotionControl,motionControlTag);
-    else html=html.includes("</body>")?html.replace("</body>",motionControlTag+"</body>"):html+motionControlTag;
+    html=html.replace(oldMotionControl, "");
+    html=html.includes("</body>")?html.replace("</body>",motionControlTag+"</body>"):html+motionControlTag;
 
     const headers=new Headers(response.headers);
     headers.delete("content-length");

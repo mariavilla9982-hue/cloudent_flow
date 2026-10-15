@@ -5152,7 +5152,7 @@ async function installCloudentApp(){
   if(!pwaInstallPrompt){toast("Use Instalar aplicativo / Adicionar à tela inicial no navegador.","ok");return}
   pwaInstallPrompt.prompt();await pwaInstallPrompt.userChoice.catch(()=>null);pwaInstallPrompt=null;settings();
 }
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}))}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).then(reg=>reg.update()).catch(()=>{}))}
 
 function focusCloudLogin(){
   if(!cloudSession){syncAuthGate();return}
@@ -11586,5 +11586,7 @@ async function init(){
 
 init();
 </script>
+<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=3"></script>
 </body>
 </html>
+

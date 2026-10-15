@@ -1,5 +1,14 @@
 (()=>{
-  if(window.CloudentMotionControl?.version>=1)return;
+  if(window.CloudentMotionControl?.version>=3)return;
+  function start(){
+  if(window.CloudentMotionControl?.version>=3)return;
+  // A cached document may request this script before the SPA bundle.
+  // Wait at the document boundary; never capture undefined SPA functions.
+  const required=[typeof productionPage,typeof productionJobRow,typeof productionCostSummary,typeof uploadProductionJobDirect,typeof controlRunningHub,typeof productionAction,typeof renderProductionDraft];
+  if(required.some(type=>type!=="function")){
+    console.error("Motion Control: bundle principal da SPA indisponível.");
+    return;
+  }
 
   const MODE_KEY="cloudent_production_workflow_tab_v1";
   const MOTION="motion_control";
@@ -98,7 +107,7 @@
 
     const h2=head?.querySelector("h2");
     const p=head?.querySelector("p");
-    if(h2)h2.textContent="Motion Control";
+    if(h2)h2.textContent="Fila de produção";
     if(p)p.textContent="Vídeo de movimento + frame da personagem. Pipeline V7 separado da produção atual.";
 
     const commandInfo=root.querySelector(".runninghub-command-info");
@@ -122,15 +131,15 @@
 
     const videoBox=root.querySelector("#productionVideoBox");
     const frameBox=root.querySelector("#productionFrameBox");
-    if(videoBox&&!productionDraft?.video){
+    if(videoBox){
       const title=videoBox.querySelector(".production-upload-title"),meta=videoBox.querySelector(".production-upload-meta");
       if(title)title.textContent="Vídeo de movimento";
-      if(meta)meta.textContent="Load Video · node #275 · field video";
+      if(meta)meta.textContent="Load Video · node #275 · campo video"+(productionDraft?.video?" · "+fmtSize(productionDraft.video.size):"");
     }
-    if(frameBox&&!productionDraft?.frame){
+    if(frameBox){
       const title=frameBox.querySelector(".production-upload-title"),meta=frameBox.querySelector(".production-upload-meta");
       if(title)title.textContent="Frame da personagem";
-      if(meta)meta.textContent="Load Image · node #299 · field image";
+      if(meta)meta.textContent="Load Image · node #299 · campo image"+(productionDraft?.frame?" · "+fmtSize(productionDraft.frame.size):"");
     }
     const add=root.querySelector(".production-add-btn");
     if(add&&!productionUploading)add.textContent="＋ Adicionar ao Motion Control";
@@ -222,6 +231,13 @@
     }
   };
 
+  const nativeDraft=renderProductionDraft;
+  renderProductionDraft=function(...args){
+    const result=nativeDraft.apply(this,args);
+    if(activeMode===MOTION)decorateProduction();
+    return result;
+  };
+
   const nativeJobRow=productionJobRow;
   productionJobRow=function(job,...rest){
     if(isMotionJob(job)&&job.status==="motion_waiting"){
@@ -268,9 +284,6 @@
     if(activeMode!==MOTION||operation==="pause")return nativeControl.call(this,operation,button);
     actionButtonBusy(button,true,"Executando…");
     try{
-      await cloudFetch("?action=runninghub-control",{
-        method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({operation:"run"})
-      });
       const result=await motionFetch("?action=run-queue",{method:"PATCH",headers:{"Content-Type":"application/json"},body:"{}"});
       await loadProductionData(false);
       if(currentPage==="production")productionPage();
@@ -307,26 +320,31 @@
   async function setMode(mode){
     const next=mode===MOTION?MOTION:STANDARD;
     if(next===activeMode)return;
+    if(productionUploading){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
     activeMode=next;
     localStorage.setItem(MODE_KEY,activeMode);
     try{releaseProductionDraft()}catch{}
     try{productionSelectedJobs.clear()}catch{}
-    if(activeMode===MOTION)await loadMotionConfig(false);
     if(currentPage==="production")productionPage();
+    if(activeMode===MOTION){await loadMotionConfig(false);if(currentPage==="production")productionPage();}
   }
 
   async function install(){
     injectStyle();
-    if(activeMode===MOTION)await loadMotionConfig(false);
     if(currentPage==="production")productionPage();
+    if(activeMode===MOTION){await loadMotionConfig(false);if(currentPage==="production")productionPage();}
   }
 
   window.CloudentMotionControl={
-    version:1,
+    version:3,
     get mode(){return activeMode},
     setMode,
     reloadConfig:async()=>{await loadMotionConfig(true);if(currentPage==="production")productionPage();}
   };
 
-  install();
+  install().catch(error=>console.error("Motion Control:",error));
+  }
+  if(document.readyState==="loading"&&typeof productionPage!=="function")document.addEventListener("DOMContentLoaded",start,{once:true});
+  else start();
 })();
+
