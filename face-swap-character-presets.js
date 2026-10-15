@@ -143,3 +143,17 @@
   window.CloudentFaceSwapCharacter={version:6,stamp,merge,markup,select,flush};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
+
+// Keep Motion Control isolated from the legacy inline bundle and load it only
+// after the page functions above are available.
+(()=>{
+  const load=()=>{
+    if(document.getElementById('cloudentMotionControlScript'))return;
+    const script=document.createElement('script');
+    script.id='cloudentMotionControlScript';
+    script.src='/motion-control-production.js?v=1';
+    script.defer=true;
+    document.head.appendChild(script);
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',load,{once:true});else load();
+})();
