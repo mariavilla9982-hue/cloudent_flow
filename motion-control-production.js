@@ -47,8 +47,22 @@
 
     const motionRow=productionJobRow;
     productionJobRow=function(job,...rest){
+      const isMotion=String(job?.meta?.workflow_key||"")==="motion_control";
+
+      // A task accepted by RunningHub can still be QUEUED. While it is queued there
+      // is no generation runtime yet, so show a waiting state and do not render a timer/cost clock.
+      if(isMotion&&job.status==="queued"){
+        const waitingJob={...job,status:"waiting",started_at:null};
+        const waitingHtml=motionRow.call(this,waitingJob,...rest);
+        if(typeof waitingHtml!=="string")return waitingHtml;
+        return waitingHtml
+          .replace(/Aguardando envio/g,"Aguardando vaga")
+          .replace(/Pronto para nova tentativa/g,"Aguardando vaga do RunningHub")
+          .replace(/Vai iniciar quando a vaga atual liberar/g,"Aguardando vaga do RunningHub");
+      }
+
       const html=motionRow.call(this,job,...rest);
-      const previewReady=String(job?.meta?.workflow_key||"")==="motion_control"&&
+      const previewReady=isMotion&&
         !!job?.meta?.motion_preview_available&&!!job?.result_video_id&&
         ["running","queued"].includes(job.status);
       if(!previewReady||typeof html!=="string")return html;
@@ -79,7 +93,7 @@
 
     patchCalendarScheduling();
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=9}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=10}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 
