@@ -268,14 +268,20 @@ async function syncFolder(admin:any,userId:string,master:string){
 }
 
 async function resolveXAccount(admin:any,userId:string,config:any){
-  if(config?.platform_account_id){
-    const {data}=await admin.from("platform_accounts").select("*").eq("id",config.platform_account_id).eq("platform","x").eq("enabled",true).maybeSingle();
-    if(data&&String(data?.config?.owner_user_id||'')===userId)return data;
-  }
-  const {data,error}=await admin.from("platform_accounts").select("*").eq("platform","x").eq("enabled",true).order("created_at",{ascending:true});
-  if(error)throw error;
-  const owned=(data||[]).find((x:any)=>String(x?.config?.owner_user_id||"")===userId);
-  return owned||null;
+ const id=String(config?.platform_account_id||"");
+ if(!/^[0-9a-f-]{36}$/i.test(id))throw new HttpError("platform_account_id_required",400);
+ const {data:allowed,error:permissionError}=await admin.rpc("cloudent_x_access",{p_user:userId,p_account:id});
+ if(permissionError)throw permissionError;if(!allowed)throw new HttpError("forbidden",403);
+ const {data,error}=await admin.from("platform_accounts").select("*").eq("id",id).eq("platform","x").maybeSingle();
+ if(error)throw error;if(!data)throw new HttpError("not_found",404);return data;
+}
+async function requireXMember(admin:any,userId:string){
+ const {data,error}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",userId).maybeSingle();
+ if(error)throw error;if(!data?.enabled||!["admin","x_user"].includes(data.role))throw new HttpError("forbidden",403);return data;
+}
+function safeAccount(a:any){return {id:a.id,label:a.account_label,username:a.config?.username||a.account_label,avatar_url:a.config?.profile_image_url||null,enabled:a.enabled,status:a.config?.status||"disconnected",token_expires_at:a.config?.tokenExpiresAt||null};}
+async function auditX(admin:any,member:any,userId:string,accountId:string|null,event:string,metadata:any={}){
+ await admin.from("x_audit_log").insert({workspace_id:member.workspace_id,user_id:userId,platform_account_id:accountId,event_type:event,metadata});
 }
 
 async function usableXToken(admin:any,platform:any,master:string){
@@ -291,7 +297,7 @@ async function usableXToken(admin:any,platform:any,master:string){
   const body=new URLSearchParams({grant_type:"refresh_token",refresh_token:refresh});
   const r=await fetch("https://api.x.com/2/oauth2/token",{method:"POST",headers:{Authorization:"Basic "+btoa(clientId+":"+clientSecret),"Content-Type":"application/x-www-form-urlencoded"},body:body.toString()});
   let d:any={};try{d=await r.json()}catch{}
-  if(!r.ok||!d.access_token)throw new HttpError(String(d?.error_description||d?.error||"x_token_refresh_failed"),r.status,d);
+  if(!r.ok||!d.access_token){await admin.from("platform_accounts").update({config:{...cfg,status:"reconnection_required"}}).eq("id",platform.id);throw new HttpError("x_reconnection_required",409);}
   const access=await encryptSecret(String(d.access_token),master);const ref=d.refresh_token?await encryptSecret(String(d.refresh_token),master):null;
   const now=new Date().toISOString();
   const next={...cfg,accessTokenCipher:access.cipher,accessTokenIv:access.iv,refreshTokenCipher:ref?.cipher||cfg.refreshTokenCipher,refreshTokenIv:ref?.iv||cfg.refreshTokenIv,tokenExpiresAt:new Date(Date.now()+Math.max(60,Number(d.expires_in||7200))*1000).toISOString(),last_refresh_at:now};
@@ -360,13 +366,14 @@ async function createTweet(xToken:string,text:string,mediaId:string){
 function backoff(attempt:number){return Math.min(180,Math.max(5,Math.pow(2,Math.max(0,attempt-1))*5));}
 
 async function publishOne(admin:any,userId:string,config:any,master:string,workerId:string){
-  const xAccount=await resolveXAccount(admin,userId,config);
-  if(!xAccount)throw new HttpError("Nenhuma conta X conectada para esta conta.",409);
-  const {data:file,error:claimErr}=await admin.rpc("claim_x_upload_post",{p_user_id:userId,p_worker_id:workerId});
+  const {data:file,error:claimErr}=await admin.rpc("claim_x_account_post",{p_account:config.platform_account_id,p_worker:workerId});
   if(claimErr)throw claimErr;if(!file)return null;
   const attempt=Number(file.attempts||1);
   let postAccepted=false;
+  userId=String(file.user_id);
   try{
+    const xAccount=await resolveXAccount(admin,userId,{platform_account_id:file.platform_account_id});
+    if(!xAccount.enabled||xAccount.config?.status!=="connected")throw new HttpError("x_reconnection_required",409);
     const text=captionValue(file.post_text);
     const xToken=await usableXToken(admin,xAccount,master);
     let sourceUrl="",driveToken="";
@@ -376,64 +383,81 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
       sourceUrl=await uploadReadUrl(admin,String(file.meta.storage_provider||"supabase"),path);
     }else{driveToken=(await usableGoogleToken(admin,userId,master)).token;}
     const mediaId=await uploadVideoX(driveToken,file,xToken,sourceUrl);
-    const {error:markErr}=await admin.from("x_drive_posts").update({meta:{...(file.meta||{}),publish_request_started:true},updated_at:new Date().toISOString()}).eq("id",file.id).eq("locked_by",workerId);
-    if(markErr)throw markErr;
+    const {data:marked,error:markErr}=await admin.from("x_drive_posts").update({meta:{...(file.meta||{}),publish_request_started:true},updated_at:new Date().toISOString()}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing").is("x_post_id",null).select("id").maybeSingle();
+    if(markErr||!marked)throw markErr||new Error("publication_claim_lost");
     const tweetId=await createTweet(xToken,text,mediaId);postAccepted=true;
     const now=new Date().toISOString();
     const {error:completeErr}=await admin.rpc("complete_x_upload_post",{p_id:file.id,p_worker_id:workerId,p_account_id:xAccount.id,p_text:text,p_media_id:mediaId,p_post_id:tweetId});
     if(completeErr)throw completeErr;
     await admin.from("activity_logs").insert({level:"info",event_type:"x_drive_post_published",message:"Vídeo da fila publicado no X",meta:{user_id:userId,drive_file_id:file.drive_file_id,drive_file_name:file.drive_file_name,x_post_id:tweetId}});
+    await publishReply(admin,{...file,x_post_id:tweetId,reply_status:file.reply_text?"pending":"none"},master);
     return {id:file.id,state:"published",x_post_id:tweetId,file:file.drive_file_name};
   }catch(e:any){
     const message=cleanError(e);const uncertain=postAccepted||Boolean(e?.uncertain);const final=uncertain||attempt>=Number(file.max_attempts||5)||[400,401,403,409,422].includes(Number(e?.status||0));
     const next=new Date(Date.now()+backoff(attempt)*60_000).toISOString();
-    await admin.from("x_drive_posts").update({status:final?"failed":"queued",next_attempt_at:final?file.next_attempt_at:next,locked_at:null,locked_by:null,last_error:message,meta:{...(file.meta||{}),publish_uncertain:uncertain,http_status:Number(e?.status||0)},updated_at:new Date().toISOString()}).eq("id",file.id);
-    await admin.from("x_publish_configs").update({last_worker_at:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()}).eq("user_id",userId);
+    await admin.from("x_drive_posts").update({status:final?"failed":"queued",next_attempt_at:final?file.next_attempt_at:next,locked_at:null,locked_by:null,last_error:message,meta:{...(file.meta||{}),publish_uncertain:uncertain,http_status:Number(e?.status||0)},updated_at:new Date().toISOString()}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing");
+    await admin.from("x_account_configs").update({last_worker_at:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()}).eq("platform_account_id",file.platform_account_id);
     await admin.from("activity_logs").insert({level:"error",event_type:"x_drive_post_error",message,meta:{user_id:userId,drive_file_id:file.drive_file_id,drive_file_name:file.drive_file_name,attempt,publish_uncertain:uncertain,http_status:Number(e?.status||0)}});
     return {id:file.id,state:final?"failed":"retry",error:message,uncertain};
   }
 }
 
 async function statusPayload(admin:any,userId:string,master:string,url:URL){
-  const [gInt,xInt,connRes,cfgRes,postsRes,accountsRes]=await Promise.all([
-    integration(admin,"google_drive"),integration(admin,"x"),admin.from("google_drive_connections").select("id,account_email,account_name,folder_id,folder_name,folder_web_url,connected_at,last_verified_at").eq("user_id",userId).maybeSingle(),admin.from("x_publish_configs").select("*").eq("user_id",userId).maybeSingle(),admin.from("x_drive_posts").select("id,drive_file_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,updated_at",{count:"exact"}).eq("user_id",userId).order("created_at",{ascending:false}).limit(80),admin.from("platform_accounts").select("id,external_account_id,account_label,enabled,config,created_at").eq("platform","x").eq("enabled",true).order("created_at",{ascending:true})
-  ]);
-  if(connRes.error)throw connRes.error;if(cfgRes.error)throw cfgRes.error;if(postsRes.error)throw postsRes.error;if(accountsRes.error)throw accountsRes.error;
-  const cfg:any=cfgRes.data||{user_id:userId,enabled:false,caption:"",link_url:"",interval_minutes:120,timezone:"America/Recife"};
-  const owned=(accountsRes.data||[]).filter((x:any)=>String(x?.config?.owner_user_id||"")===userId);
-  const active=owned.find((x:any)=>x.id===cfg.platform_account_id)||owned[0]||null;
-  const rows=postsRes.data||[];
-  const from=new Date(url.searchParams.get("from")||Date.now()-7*86400000);
-  const to=new Date(url.searchParams.get("to")||Date.now()+35*86400000);
-  if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to<=from||to.getTime()-from.getTime()>43*86400000)throw new HttpError("Período de calendário inválido.",400);
-  const {data:calendar,error:calendarError}=await admin.from("x_drive_posts").select("id,drive_file_name,drive_size_bytes,status,post_text,scheduled_at,x_post_id,published_at,last_error,meta,created_at,attempts").eq("user_id",userId).gte("scheduled_at",from.toISOString()).lt("scheduled_at",to.toISOString()).neq("status","skipped").order("scheduled_at").limit(1000);
-  if(calendarError)throw calendarError;
-  const {data:nextPosts,error:nextError}=await admin.from("x_drive_posts").select("scheduled_at").eq("user_id",userId).eq("status","queued").not("scheduled_at","is",null).order("scheduled_at").limit(1);
-  if(nextError)throw nextError;
-  const counts={queued:0,processing:0,published:0,failed:0,total:Number(postsRes.count||0)} as any;
-  await Promise.all(["queued","processing","published","failed"].map(async status=>{
-    const {count,error}=await admin.from("x_drive_posts").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("status",status);
-    if(error)throw error;counts[status]=Number(count||0);
-  }));
-  const {count:intervalCount,error:intervalError}=await admin.from("x_drive_posts").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("status","queued").is("scheduled_at",null);
-  if(intervalError)throw intervalError;counts.interval_queued=Number(intervalCount||0);
-  const gcfg:any=gInt?.config||{};const xcfg:any=xInt?.config||{};
-  const callback=`${Deno.env.get("SUPABASE_URL")}/functions/v1/cloudent-x-publish-worker?action=google-callback`;
-  return {
-    ok:true,
-    google:{app_configured:Boolean(gcfg.clientIdCipher&&gcfg.clientSecretCipher),connected:Boolean(connRes.data),account:connRes.data?.account_email||connRes.data?.account_name||null,folder:connRes.data?.folder_id?{id:connRes.data.folder_id,name:connRes.data.folder_name,url:connRes.data.folder_web_url}:null,callback_url:callback},
-    x:{app_configured:Boolean(xcfg.clientIdCipher&&xcfg.clientSecretCipher),connected:Boolean(active),account:active?{id:active.id,label:active.account_label,username:active?.config?.username||null,external_id:active.external_account_id}:null},
-    config:cfg,
-    counts,
-    posts:rows,calendar_posts:calendar||[],next_scheduled_at:nextPosts?.[0]?.scheduled_at||null
-  };
+ const member=await requireXMember(admin,userId);
+ const {data:all,error}=await admin.from("platform_accounts").select("id,account_label,enabled,config,workspace_id,owner_user_id").eq("platform","x").eq("workspace_id",member.workspace_id).order("created_at");if(error)throw error;
+ const {data:grants,error:ge}=await admin.from("x_account_access").select("platform_account_id").eq("user_id",userId).eq("workspace_id",member.workspace_id);if(ge)throw ge;
+ const accounts=(all||[]).filter((a:any)=>member.role==="admin"||a.owner_user_id===userId||(grants||[]).some((g:any)=>g.platform_account_id===a.id));
+ const selected=url.searchParams.get("platform_account_id")||"";
+ if(selected&&selected!=="all"&&!accounts.some((a:any)=>a.id===selected))throw new HttpError("forbidden",403);
+ // No implicit account selection. An empty selection only returns account metadata.
+ const ids=selected==="all"?accounts.map((a:any)=>a.id):selected?[selected]:[];
+ const active=accounts.find((a:any)=>a.id===selected);
+ const from=new Date(url.searchParams.get("from")||Date.now()-7*86400000),to=new Date(url.searchParams.get("to")||Date.now()+35*86400000);
+ if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to<=from||to.getTime()-from.getTime()>43*86400000)throw new HttpError("invalid_period",400);
+ let posts:any[]=[],cfg:any={enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
+ if(ids.length){
+ const {data:rows,error:pe}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(2000);if(pe)throw pe;posts=rows||[];
+ if(active){const {data:c,error:ce}=await admin.from("x_account_configs").select("*").eq("platform_account_id",active.id).maybeSingle();if(ce)throw ce;if(c)cfg=c;}
+ }
+ const calendar=posts.filter(p=>p.scheduled_at&&new Date(p.scheduled_at)>=from&&new Date(p.scheduled_at)<to&&p.status!=="skipped");
+ const counts:any={total:posts.length};for(const st of ["queued","processing","published","failed"])counts[st]=posts.filter(p=>p.status===st).length;
+ counts.interval_queued=posts.filter(p=>p.status==="queued"&&!p.scheduled_at).length;
+ const next=posts.filter(p=>p.status==="queued"&&p.scheduled_at).map(p=>p.scheduled_at).sort()[0]||null;
+ return {ok:true,accounts:accounts.map(safeAccount),x:{account:active?safeAccount(active):null,connected:Boolean(active?.enabled)},config:cfg,counts,posts,calendar_posts:calendar,next_scheduled_at:next,aggregate:selected==="all",truncated:posts.length===2000};
+}
+
+async function syncAccountMetrics(admin:any,account:any,master:string){
+ const {data:posts,error}=await admin.from("x_drive_posts").select("id,x_post_id").eq("platform_account_id",account.id).eq("status","published").order("published_at",{ascending:false}).limit(100);if(error)throw error;
+ if(!posts?.length)return {ok:true,updated:0};
+ const token=await usableXToken(admin,account,master);
+ const base="/2/tweets?ids="+posts.map((p:any)=>p.x_post_id).join(",")+"&expansions=attachments.media_keys&media.fields=public_metrics&tweet.fields=";
+ let result:any;try{result=await xJson(base+"public_metrics,non_public_metrics,organic_metrics",token);}catch(e:any){if(![400,403].includes(e.status))throw e;result=await xJson(base+"public_metrics",token);}
+ const media=new Map((result.includes?.media||[]).map((m:any)=>[m.media_key,m.public_metrics||{}]));
+ for(const tweet of result.data||[]){const metrics:any={...(tweet.public_metrics||{}),...(tweet.non_public_metrics||{}),...(tweet.organic_metrics||{})};let views=0,found=false;for(const key of tweet.attachments?.media_keys||[]){const m:any=media.get(key);if(typeof m?.view_count==="number"){views+=m.view_count;found=true;}}if(found)metrics.view_count=views;
+ if(metrics.impression_count>0)metrics.engagement_rate=(Number(metrics.like_count||0)+Number(metrics.reply_count||0)+Number(metrics.retweet_count||0)+Number(metrics.quote_count||0))/metrics.impression_count;
+ const {error:saveError}=await admin.from("x_drive_posts").update({metrics,metrics_synced_at:new Date().toISOString()}).eq("platform_account_id",account.id).eq("x_post_id",tweet.id);if(saveError)throw saveError;}
+ return {ok:true,updated:result.data?.length||0};
+}
+
+async function publishReply(admin:any,file:any,master:string){
+ if(!file.reply_text||!file.x_post_id||file.external_reply_id||file.reply_status!=="pending")return;
+ const {data:claimed,error}=await admin.from("x_drive_posts").update({reply_status:"processing",reply_started_at:new Date().toISOString(),reply_attempts:(file.reply_attempts||0)+1}).eq("id",file.id).eq("reply_status","pending").is("external_reply_id",null).select("id").maybeSingle();
+ if(error||!claimed)return;
+ let sent=false;
+ try{
+  const account=await resolveXAccount(admin,file.user_id,{platform_account_id:file.platform_account_id});if(!account.enabled)throw new HttpError("x_disconnected",409);
+  const token=await usableXToken(admin,account,master);sent=true;
+  const reply=await xJson("/2/tweets",token,"POST",{text:captionValue(file.reply_text),reply:{in_reply_to_tweet_id:file.x_post_id}});
+  if(!reply?.data?.id)throw new Error("reply_response_uncertain");
+  const {error:saveError}=await admin.from("x_drive_posts").update({reply_status:"published",external_reply_id:String(reply.data.id),reply_error:null}).eq("id",file.id);if(saveError)throw saveError;
+ }catch(e:any){await admin.from("x_drive_posts").update({reply_status:sent&&(!e.status||e.status>=500)?"uncertain":"failed",reply_error:cleanError(e)}).eq("id",file.id);}
 }
 
 async function runWorker(admin:any,master:string){
   const workerId="xdrive-"+crypto.randomUUID();const now=new Date().toISOString();
   await admin.rpc("release_stale_x_drive_posts");
   await admin.from("worker_runtime").upsert({worker_name:"x_drive_publisher",last_heartbeat:now,updated_at:now},{onConflict:"worker_name"});
-  const {data:configs,error}=await admin.from("x_publish_configs").select("*").eq("enabled",true).order("updated_at",{ascending:true});if(error)throw error;
+  const {data:configs,error}=await admin.from("x_account_configs").select("*").eq("enabled",true).order("last_worker_at",{ascending:true,nullsFirst:true}).limit(7);if(error)throw error;
   const results:any[]=[];
   for(const cfg of configs||[]){
     const userId=String(cfg.user_id);
@@ -441,12 +465,19 @@ async function runWorker(admin:any,master:string){
       const sync={files:0};
       // The atomic claim checks both calendar due dates and the FIFO interval.
       let pub:any=await publishOne(admin,userId,cfg,master,workerId);
-      results.push({user_id:userId,synced:sync.files,publish:pub||"not_due"});
+      if(!cfg.last_metrics_at||Date.now()-new Date(cfg.last_metrics_at).getTime()>6*3600000){
+        try{const account=await resolveXAccount(admin,userId,{platform_account_id:cfg.platform_account_id});await syncAccountMetrics(admin,account,master);await admin.from("x_account_configs").update({last_metrics_at:new Date().toISOString()}).eq("platform_account_id",cfg.platform_account_id);}catch(e){await admin.from("x_account_configs").update({metrics_error:cleanError(e),last_metrics_at:new Date().toISOString()}).eq("platform_account_id",cfg.platform_account_id);}
+      }
+      await admin.from("x_account_configs").update({last_worker_at:new Date().toISOString()}).eq("platform_account_id",cfg.platform_account_id);
+      results.push({user_id:userId,platform_account_id:cfg.platform_account_id,synced:sync.files,publish:pub||"not_due"});
     }catch(e){
-      const message=cleanError(e);await admin.from("x_publish_configs").update({last_worker_at:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()}).eq("user_id",userId);
+      const message=cleanError(e);await admin.from("x_account_configs").update({last_worker_at:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()}).eq("platform_account_id",cfg.platform_account_id);
       results.push({user_id:userId,error:message});
     }
   }
+  await admin.from("x_drive_posts").update({reply_status:"uncertain",reply_error:"Resposta interrompida. Confira o comentário no X antes de repetir."}).eq("reply_status","processing").lt("reply_started_at",new Date(Date.now()-15*60000).toISOString());
+  const {data:replies}=await admin.from("x_drive_posts").select("*").eq("status","published").eq("reply_status","pending").limit(20);
+  for(const reply of replies||[])await publishReply(admin,reply,master);
   await admin.from("worker_runtime").upsert({worker_name:"x_drive_publisher",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_jobs:results.length,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
   return {ok:true,worker:"x_drive_publisher",users:results.length,results};
 }
@@ -484,11 +515,48 @@ Deno.serve(async(req:Request)=>{
       return redirectBack({drive_connected:"1"});
     }
 
-    const user=await requireUser(admin,req);const userId=String(user.id);
+    const user=await requireUser(admin,req);let userId=String(user.id);
+    const member=await requireXMember(admin,userId);
+    const {data:rateOk,error:rateError}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:action==="status"?"x-read":"x-write",p_limit:action==="status"?120:100});if(rateError)throw rateError;if(!rateOk)return json({error:"rate_limit"},429);
     if(action==="status")return json(await statusPayload(admin,userId,master,url));
+    if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     const body=await parseBody(req);
+    if(action==="audit-session"){await auditX(admin,member,userId,null,body.event==="logout"?"logout":"login");return json({ok:true});}
+    if(action==="account-status"||action==="account-remove"){
+      const account=await resolveXAccount(admin,userId,body);
+      if(member.role!=="admin"&&account.owner_user_id!==userId)return json({error:"forbidden"},403);
+      const cfg={...account.config,status:action==="account-remove"?"removed":"disconnected"};
+      for(const k of ["accessTokenCipher","accessTokenIv","refreshTokenCipher","refreshTokenIv"])delete cfg[k];
+      const {error}=await admin.from("platform_accounts").update({enabled:false,config:cfg,updated_at:new Date().toISOString()}).eq("id",account.id);if(error)throw error;
+      await admin.from("x_account_configs").update({enabled:false}).eq("platform_account_id",account.id);
+      await auditX(admin,member,userId,account.id,action==="account-remove"?"account_removed":"account_disconnected");return json({ok:true});
+    }
+    if(action==="metrics"){
+      const account=await resolveXAccount(admin,userId,body);return json(await syncAccountMetrics(admin,account,master));
+    }
+    if(action==="health"){
+      const account=await resolveXAccount(admin,userId,body);
+      const [{data:runtime},{data:config},{data:last}]=await Promise.all([
+       admin.from("worker_runtime").select("last_heartbeat,last_error").eq("worker_name","x_drive_publisher").maybeSingle(),
+       admin.from("x_account_configs").select("last_worker_at,last_error,enabled").eq("platform_account_id",account.id).maybeSingle(),
+       admin.from("x_drive_posts").select("published_at").eq("platform_account_id",account.id).eq("status","published").order("published_at",{ascending:false}).limit(1)]);
+      return json({account:safeAccount(account),worker:runtime||null,queue:config||null,last_publication:last?.[0]?.published_at||null,supabase:"reachable",storage:"not_probed",vercel:"not_probed",x_api:"not_probed"});
+    }
+    // Existing post mutations must match the selected account as well as ownership.
+    if(["preview","schedule","edit-caption","skip","retry","retry-reply"].includes(action)){
+      const account=await resolveXAccount(admin,userId,body);
+      const {data:post,error}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,x_post_id,reply_status").eq("id",String(body.id||"")).eq("platform_account_id",account.id).maybeSingle();if(error)throw error;if(!post)return json({error:"not_found"},404);
+      if(post.user_id!==userId&&member.role!=="admin")return json({error:"forbidden"},403);
+      if(action==="retry-reply"){
+        const {data:changed,error}=await admin.from("x_drive_posts").update({reply_status:"pending",reply_error:null}).eq("id",post.id).eq("reply_status","failed").is("external_reply_id",null).select("id").maybeSingle();if(error)throw error;if(!changed)return json({error:"reply_not_retryable"},409);return json({ok:true});
+      }
+      await auditX(admin,member,userId,account.id,action,{job_id:post.id});
+      userId=String(post.user_id);
+    }
+
 
     if(action==="google-configure"){
+      if(member.role!=="admin")return json({error:"forbidden"},403);
       const clientId=String(body.client_id||"").trim(),clientSecret=String(body.client_secret||"").trim();if(!clientId||!clientSecret)return json({error:"missing_google_oauth_credentials",user_message:"Preencha Client ID e Client Secret do Google."},400);
       const a=await encryptSecret(clientId,master),s=await encryptSecret(clientSecret,master);const now=new Date().toISOString();const current=await integration(admin,"google_drive");
       const cfg={...(current?.config||{}),clientIdCipher:a.cipher,clientIdIv:a.iv,clientSecretCipher:s.cipher,clientSecretIv:s.iv,status:"configured",configured_at:now};
@@ -503,9 +571,10 @@ Deno.serve(async(req:Request)=>{
       return json({ok:true,auth_url:a.toString(),callback_url:callback,expires_at:expiresAt});
     }
     if(action==="google-folder"){
+      if(member.role!=="admin")return json({error:"forbidden"},403);
       const conn=await validateFolder(admin,userId,String(body.folder||body.folder_url||body.folder_id||""),master);const sync=await syncFolder(admin,userId,master);return json({ok:true,folder:{id:conn.folder_id,name:conn.folder_name,url:conn.folder_web_url},sync});
     }
-    if(action==="sync")return json({ok:true,...await syncFolder(admin,userId,master)});
+    if(action==="sync")return json({error:"drive_import_requires_account_migration"},409);
 
     if(action==="preview"){
       const {data:p,error}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
@@ -526,6 +595,7 @@ Deno.serve(async(req:Request)=>{
       return json({ok:true});
     }
     if(action==="upload-ticket"){
+      const account=await resolveXAccount(admin,userId,body);if(!account.enabled)return json({error:"x_disconnected"},409);
       if(req.method!=="POST")return json({error:"method_not_allowed"},405);
       const size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
       if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video",user_message:"Envie um vídeo MP4 ou MOV de até 512 MB."},400);
@@ -543,15 +613,17 @@ Deno.serve(async(req:Request)=>{
       if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video"},400);
       const source=await uploadReadUrl(admin,provider,path);
       if(!await uploadedVideoMatches(source,size))return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
-      const x=await resolveXAccount(admin,userId,{});
-      const row={user_id:userId,platform_account_id:x?.id||null,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path}};
-      const {data,error}=await admin.from("x_drive_posts").insert(row).select("id").single();if(error){if(error.code==="23505"){
-        const {data:existing}=await admin.from("x_drive_posts").select("id").eq("user_id",userId).eq("drive_file_id","upload:"+path).maybeSingle();
-        if(existing)return json({ok:true,id:existing.id,already_queued:true});
-        return json({error:"slot_taken",user_message:"Já existe um vídeo nesse horário. Escolha outra vaga."},409);
-      }throw error;}
-      return json({ok:true,id:data.id});
+      const ids=Array.isArray(body.platform_account_ids)?[...new Set(body.platform_account_ids.map(String))]:[String(body.platform_account_id||"")];
+      if(!ids.length||ids.length>100)return json({error:"invalid_accounts"},400);
+      const accounts=[];for(const id of ids){const a=await resolveXAccount(admin,userId,{platform_account_id:id});if(!a.enabled)throw new HttpError("x_disconnected",409);accounts.push(a);}
+      const reply=String(body.reply_text||"").trim();if(reply)captionValue(reply);
+      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path}}));
+      const {data,error}=await admin.from("x_drive_posts").upsert(rows,{onConflict:"user_id,drive_file_id,platform_account_id",ignoreDuplicates:true}).select("id,platform_account_id");
+      if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Horário já ocupado nesta conta."},409);throw error;}
+      for(const a of accounts)await auditX(admin,member,userId,a.id,"post_created",{count:1});
+      return json({ok:true,jobs:data||[]});
     }
+
     if(action==="edit-caption"||action==="skip"){
       const text=action==="edit-caption"?captionValue(body.caption):null;
       const patch=action==="skip"?{status:"skipped"}:{post_text:text};
@@ -567,22 +639,24 @@ Deno.serve(async(req:Request)=>{
       if(Number.isNaN(next.getTime()))return json({error:"invalid_start"},400);
       const slots=body.daily_slots===undefined?undefined:Array.isArray(body.daily_slots)?[...new Set(body.daily_slots.map(String))].sort():[];
       if(slots&&(!slots.length||slots.length>15||slots.some((t:any)=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))))return json({error:"invalid_slots",user_message:"Defina entre 1 e 15 horários no formato HH:MM."},400);
-      const row={...(slots?{daily_slots:slots}:{}),user_id:userId,platform_account_id:x?.id||null,enabled,caption:"",link_url:"",interval_minutes:interval,timezone:String(body.timezone||"America/Recife"),next_publish_at:enabled?next.toISOString():null,last_error:null,updated_at:now};
-      const {error}=await admin.from("x_publish_configs").upsert(row,{onConflict:"user_id"});if(error)throw error;
+      const row={...(slots?{daily_slots:slots}:{}),user_id:userId,workspace_id:member.workspace_id,platform_account_id:x.id,enabled,interval_minutes:interval,timezone:String(body.timezone||"America/Recife"),next_publish_at:enabled?next.toISOString():null,last_error:null,updated_at:now};
+      const {error}=await admin.from("x_account_configs").upsert(row,{onConflict:"platform_account_id"});if(error)throw error;
       if(enabled)bg(fetch(`${supabaseUrl}/functions/v1/cloudent-x-publish-worker?action=worker`,{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":master},body:"{}"}));
       return json({ok:true,config:row});
     }
     if(action==="publish-next"){
-      const now=new Date().toISOString();const {error}=await admin.from("x_publish_configs").upsert({user_id:userId,next_publish_at:now,updated_at:now},{onConflict:"user_id"});if(error)throw error;
+      const account=await resolveXAccount(admin,userId,body);const now=new Date().toISOString();const {error}=await admin.from("x_account_configs").update({next_publish_at:now,updated_at:now}).eq("platform_account_id",account.id);if(error)throw error;
       bg(fetch(`${supabaseUrl}/functions/v1/cloudent-x-publish-worker?action=worker`,{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":master},body:"{}"}));
       return json({ok:true,state:"queued"});
     }
     if(action==="retry"){
       const id=String(body.id||"");if(!id)return json({error:"missing_id"},400);
-      const {data:p,error:e}=await admin.from("x_drive_posts").select("id,status,meta").eq("id",id).eq("user_id",userId).maybeSingle();if(e)throw e;if(!p)return json({error:"not_found"},404);
+      const {data:p,error:e}=await admin.from("x_drive_posts").select("id,status,meta,x_post_id,attempts").eq("id",id).eq("user_id",userId).maybeSingle();if(e)throw e;if(!p)return json({error:"not_found"},404);
+      if(p.attempts>=20)return json({error:"attempts_exhausted"},409);
+      if(p.x_post_id)return json({error:"already_published"},409);
       if(p.status!=="failed")return json({error:"post_not_failed"},409);
       if(Boolean(p?.meta?.publish_uncertain))return json({error:"publish_uncertain",user_message:"Esse envio pode já ter virado post no X. Confira a conta antes de forçar uma repetição."},409);
-      const {error:u}=await admin.from("x_drive_posts").update({status:"queued",attempts:0,next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,meta:{...(p.meta||{}),publish_uncertain:false},updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",userId).eq("status","failed");if(u)throw u;
+      const {error:u}=await admin.from("x_drive_posts").update({status:"queued",max_attempts:20,next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,meta:{...(p.meta||{}),publish_uncertain:false},updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",userId).eq("status","failed");if(u)throw u;
       return json({ok:true});
     }
     return json({error:"not_found"},404);

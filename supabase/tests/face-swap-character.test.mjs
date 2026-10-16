@@ -6,7 +6,7 @@ const html=fs.readFileSync('index.html','utf8');
 new vm.Script(html.match(/<script>\s*([\s\S]*?)<\/script>/)[1]);
 let calls=[],inFlight=0,max=0,backend='Julia',hold=null,fail=false;
 const buttons=['julia','sahry'].map(name=>({dataset:{faceSwapPreset:name},disabled:false,active:false,label:{textContent:''},classList:{toggle(key,value){if(key==='active')buttons.find(b=>b.dataset.faceSwapPreset===name).active=value}},setAttribute(){},querySelector(){return this.label}}));
-const ctx=vm.createContext({window:{},document:{querySelectorAll:()=>buttons},cloudSession:{user:{id:'u'},access_token:'test'},faceSwapData:{workflow:{character:{file_name:'Julia'}}},toast(){},fetch:async(url,options)=>{
+const ctx=vm.createContext({window:{},document:{getElementById:()=>({}),querySelectorAll:()=>buttons},cloudSession:{user:{id:'u'},access_token:'test'},faceSwapData:{workflow:{character:{file_name:'Julia'}}},toast(){},fetch:async(url,options)=>{
  const name=JSON.parse(options.body).p_preset;calls.push(name);max=Math.max(max,++inFlight);
  if(hold){const wait=hold;hold=null;await wait;}
  inFlight--;if(fail){fail=false;return {ok:false,json:async()=>({message:'failed'})}}

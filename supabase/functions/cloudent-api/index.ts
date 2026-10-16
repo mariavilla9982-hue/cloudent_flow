@@ -242,6 +242,38 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const resource = url.searchParams.get("resource");
     const action = url.searchParams.get("action");
+    const {data:accessMember,error:accessError}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",userData.user.id).maybeSingle();
+    if(accessError)throw accessError;
+    if(!accessMember?.enabled||!["admin","x_user"].includes(accessMember.role))return json({error:"forbidden"},403);
+    if(resource==="session"&&req.method==="GET")return json({user_id:userData.user.id,role:accessMember.role,workspace_id:accessMember.workspace_id});
+    if(accessMember.role!=="admin")return json({error:"forbidden",user_message:"Seu acesso está limitado ao X Studio."},403);
+    if(resource==="members"){
+      if(req.method==="GET"){
+        const {data:members,error}=await admin.from("app_members").select("user_id,role,enabled,workspace_id,created_at").eq("workspace_id",accessMember.workspace_id);if(error)throw error;
+        const list=await Promise.all((members||[]).map(async m=>{const {data}=await admin.auth.admin.getUserById(m.user_id);return {...m,email:data?.user?.email||null};}));return json({members:list});
+      }
+      const body=await req.json();
+      if(action==="invite"){
+        const email=String(body.email||"").trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(email))return json({error:"invalid_email"},400);
+        const inviteToken=crypto.randomUUID()+crypto.randomUUID();
+        const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(inviteToken));
+        const hash=Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
+        const {error}=await admin.from("member_invites").upsert({email,role:"x_user",enabled:true,workspace_id:accessMember.workspace_id,invited_by:userData.user.id,claimed_by:null,claimed_at:null,signup_token_hash:hash,signup_token_expires_at:new Date(Date.now()+86400000).toISOString()},{onConflict:"email"});if(error)throw error;
+        return json({ok:true,url:"https://cloudent-flow.vercel.app/primeiro-acesso.html?email="+encodeURIComponent(email)+"&token="+encodeURIComponent(inviteToken)});
+      }
+      if(action==="set-enabled"){
+        if(body.user_id===userData.user.id)return json({error:"cannot_disable_self"},409);
+        const {data,error}=await admin.from("app_members").update({enabled:body.enabled===true,updated_at:new Date().toISOString()}).eq("user_id",String(body.user_id||"")).eq("workspace_id",accessMember.workspace_id).eq("role","x_user").select("user_id").maybeSingle();if(error)throw error;if(!data)return json({error:"not_found"},404);return json({ok:true});
+      }
+      if(action==="grant-account"||action==="revoke-account"){
+        const uid=String(body.user_id||""),aid=String(body.platform_account_id||"");
+        const [{data:m},{data:a}]=await Promise.all([admin.from("app_members").select("user_id").eq("workspace_id",accessMember.workspace_id).eq("user_id",uid).eq("role","x_user").maybeSingle(),admin.from("platform_accounts").select("id").eq("workspace_id",accessMember.workspace_id).eq("platform","x").eq("id",aid).maybeSingle()]);
+        if(!m||!a)return json({error:"not_found"},404);
+        const {error}=action==="grant-account"?await admin.from("x_account_access").upsert({user_id:uid,platform_account_id:aid,workspace_id:accessMember.workspace_id},{onConflict:"user_id,platform_account_id"}):await admin.from("x_account_access").delete().eq("user_id",uid).eq("platform_account_id",aid);if(error)throw error;return json({ok:true});
+      }
+      return json({error:"not_found"},404);
+    }
+
 
     if (req.method === "GET" && !resource) {
       const { count, error } = await admin.from("schedules").select("*", { count: "exact", head: true });

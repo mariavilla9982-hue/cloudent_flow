@@ -22,6 +22,8 @@ Deno.serve(async(req:Request)=>{
     const bearer=req.headers.get("Authorization")?.replace("Bearer ","")||"";
     const {data:a,error:ae}=await admin.auth.getUser(bearer);
     if(ae||!a.user)return out({ok:false,error:"unauthorized"},401);
+  const {data:accessMember,error:accessError}=await admin.from("app_members").select("role,enabled").eq("user_id",a.user.id).maybeSingle();
+  if(accessError||!accessMember?.enabled||accessMember.role!=="admin")return out({error:"forbidden"},403);
 
     const url=new URL(req.url);
     const days=Math.max(1,Math.min(90,Number(url.searchParams.get("days")||30)));

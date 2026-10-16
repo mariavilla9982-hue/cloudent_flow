@@ -30,7 +30,7 @@ const admin={auth:{getUser:async()=>({data:{user:{id:'USER'}}})},from(table){
   const query={table,filters:[]};queries.push(query);
   const builder=new Proxy({}, {get(_,key){
     if(key==='then')return (resolve)=>resolve({data:[],error:null});
-    if(key==='maybeSingle')return async()=>({data:account,error:null});
+    if(key==='maybeSingle')return async()=>({data:table==='app_members'?{role:'admin',enabled:true,workspace_id:'w'}:account,error:null});
     return (...args)=>{query[key]=args;query.filters.push([key,...args]);return builder};
   }});return builder;
 }};
