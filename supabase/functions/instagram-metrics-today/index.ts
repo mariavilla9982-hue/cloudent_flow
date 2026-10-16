@@ -9,6 +9,8 @@ Deno.serve(async(req:Request)=>{
  try{
  const {data:auth,error:ae}=await admin.auth.getUser((req.headers.get('Authorization')||'').replace(/^Bearer\s+/i,''));
  if(ae||!auth.user)return out({error:'unauthorized'},401);
+  const {data:accessMember,error:accessError}=await admin.from("app_members").select("role,enabled").eq("user_id",auth.user.id).maybeSingle();
+  if(accessError||!accessMember?.enabled||accessMember.role!=="admin")return out({error:"forbidden"},403);
  const url=new URL(req.url),requested=url.searchParams.get('account_id');
  const rawDays=Number(url.searchParams.get('days')||120),days=Number.isFinite(rawDays)?Math.max(1,Math.min(120,Math.floor(rawDays))):120;
  const cutoff=metricCutoff(days),account=await metricAccount(admin,auth.user.id,requested);

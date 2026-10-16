@@ -4250,7 +4250,7 @@ body.trial-modal-open{overflow:hidden!important}
 @media(max-width:640px){#xStudio .x-studio{padding-top:4px}#xStudio .x-brand{font-size:35px}#xStudio .x-heading h2{font-size:23px}#xStudio .x-heading p{font-size:11px}#xStudio .x-header-actions{width:100%;margin:0;gap:8px;flex-wrap:wrap}#xStudio .x-account-chip{flex:1;min-width:120px;padding:8px 11px}#xStudio .x-header-actions>.x-primary-btn{padding:10px 12px}#xStudio .x-studio-tabs{gap:19px;margin-bottom:14px}#xStudio .x-studio-tabs button{font-size:12px}#xStudio .x-summary{gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}#xStudio .x-summary>div{padding:13px}#xStudio .x-summary>div:last-child{grid-column:1/-1}#xStudio .x-summary small{font-size:10px}#xStudio .x-summary b{font-size:22px}#xStudio .x-summary .x-next-label{font-size:15px}#xStudio .x-date-controls{flex-wrap:wrap}#xStudio .x-date-controls h3{font-size:11px}#xStudio .x-calendar-toolbar{padding:12px;gap:11px}#xStudio .x-calendar-controls{justify-content:space-between;width:100%}#xStudio .x-queue-date{display:none}#xStudio .x-list-panel,#xStudio .x-settings-panel{padding:16px}#xStudio .x-detail-panel{padding:16px}#xStudio .x-calendar-grid{grid-template-columns:repeat(7,142px);min-width:994px}}
 
 </style>
-</head>
+<style>.x-only .top-search-trigger,.x-only .top-actions,.x-only .mobile-appbar-actions,.x-only .sidebar-foot{display:none!important}.x-account-select{background:#111;color:#fff;border:1px solid #444;border-radius:8px;padding:9px;max-width:220px;font-size:12px}.x-batch-row{padding:12px 0;border-bottom:1px solid #333;display:grid;gap:7px}.x-targets{display:flex;gap:10px;flex-wrap:wrap;font-size:12px}.x-targets label{display:flex;align-items:center;gap:5px}.x-targets input{width:auto}.x-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.x-metric-grid div{padding:14px;border:1px solid #333;border-radius:8px}@media(max-width:700px){.x-header-actions{flex-wrap:wrap}.x-account-select{max-width:100%}}</style></head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
   <div class="auth-boot-shell">
@@ -4593,7 +4593,8 @@ async function refreshCloudSession(){
     const r=await authRequest("/token?grant_type=refresh_token",{
       method:"POST",body:JSON.stringify({refresh_token:cloudSession.refresh_token})
     });
-    persistCloudSession(r);return true;
+    persistCloudSession(r);
+    cloudAccess=null;return true;
   }catch(e){persistCloudSession(null);return false}
 }
 function withTimeout(promise,ms,label="operação"){
@@ -4630,6 +4631,9 @@ function responseErrorMessage(data,status){
   }
   return friendlyCloudentError("",status);
 }
+let cloudAccess=null;
+function canAccessPage(id){return cloudAccess?.role==="admin"||(cloudAccess?.role==="x_user"&&id==="xStudio");}
+function deniedPage(){document.querySelectorAll(".page").forEach(el=>el.classList.add("hidden"));let el=document.getElementById("accessDenied");if(!el){el=document.createElement("section");el.id="accessDenied";el.className="card";document.getElementById("xStudio").parentElement.appendChild(el);}el.hidden=false;el.innerHTML=`<h2>Acesso negado</h2><p>Você não tem permissão para acessar esta área.</p><button class="btn" onclick="document.getElementById('accessDenied').hidden=true;showPage('xStudio')">Abrir X Studio</button>`;}
 async function initCloud(){
   try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
   if(!cloudSession)return;
@@ -4639,6 +4643,13 @@ async function initCloud(){
   }
   if(!cloudSession)return;
 
+  cloudAccess=await cloudFetch("?resource=session");
+  document.body.classList.toggle("x-only",cloudAccess.role==="x_user");
+  nav();
+  if(cloudAccess.role==="x_user"){
+    backendOnline=true;currentPage="xStudio";
+    await loadXPostingStatus();showPage("xStudio");if(location.hash&&location.hash!=="#xStudio")deniedPage();return;
+  }
   await withTimeout(testBackend(),4000,"conexão com servidor").catch(()=>{backendOnline=false});
   if(!backendOnline)return;
 
@@ -4658,7 +4669,7 @@ async function initCloud(){
   ]);
 }
 async function loadDeferredCloudData(){
-  if(!cloudSession||!backendOnline)return;
+  if(!cloudSession||!backendOnline||cloudAccess?.role!=="admin")return;
   try{
     // Atividade/logs ficam sob demanda. Evita uma chamada pesada logo no boot.
     await Promise.allSettled([
@@ -5251,6 +5262,7 @@ async function signInCloud(){
     syncAuthGate();
     renderAll();
     loadDeferredCloudData();
+    await xPostingRequest("audit-session",{event:"login"}).catch(()=>{});
     setLoginMessage("");
   }catch(e){
     persistCloudSession(null);
@@ -5261,11 +5273,20 @@ async function signInCloud(){
   }
 }
 async function signOutCloud(){
+  document.body.classList.remove("x-only");
+  await xPostingRequest("audit-session",{event:"logout"}).catch(()=>{});
+  xAccountGeneration++;xSelectedAccountId="";xAccountList=[];xPostingData=null;xPostingFile=null;xPostingFiles=[];xUploadTicket=null;xPostingDraft={caption:"",interval:120,start:""};xPreviewCache.clear();xSelectedPost=null;xDetailDraft=null;xComposeOpen=false;xMembersData=null;cloudAccess=null;
+  document.querySelectorAll(".page").forEach(el=>el.innerHTML="");
+  for(const key of ["cloudentflow-stage4","cloudentflow-stage3"])localStorage.removeItem(key);
+
   if(cloudSession?.access_token){
     try{await fetch(SUPABASE_URL+"/auth/v1/logout",{method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token}})}catch{}
   }
   persistCloudSession(null);metricsAccountId="";metricsDataError="";metricsLastCollectedAt=null;metricsLoadVersion++;followerLoadVersion++;backendOnline=false;instagramIntegration=null;platformAccounts=[];liveInstagramMetrics=[];automationData=null;followerStats=null;
-  syncAuthGate();renderAll()
+  syncAuthGate();renderAll();
+  localStorage.removeItem("cloudentflow-ai-history");
+  // Replace the document to discard all account-bound memory and pending handlers.
+  window.location.replace(window.location.pathname);
 }
 
 function queueResourcePath(){
@@ -5580,6 +5601,7 @@ function commandItems(){
   ];
 }
 function openCommandPalette(){
+  if(cloudAccess?.role!=="admin")return;
   const host=$("#commandPaletteHost");if(!host)return;
   host.innerHTML=`<div class="command-backdrop" onclick="closeCommandPalette()"></div><div class="command-palette">
     <div class="command-search-row"><span>⌕</span><input id="commandSearch" placeholder="Digite uma ação…" autocomplete="off"><kbd>ESC</kbd></div>
@@ -5623,6 +5645,7 @@ function updateLiveChrome(){
 }
 
 async function refreshLiveData(showFeedback=false){
+  if(cloudAccess?.role==='x_user'){await refreshXPosting();return;}
   if(!cloudSession||window.__cloudentGlobalRefreshing)return;
   window.__cloudentGlobalRefreshing=true;
   try{
@@ -5722,6 +5745,10 @@ function mobileNavItem(id){
   return x||[id,"",id];
 }
 function renderMobileNav(){
+  if(cloudAccess?.role!=="admin"){
+    const host=document.getElementById("mobileBottomNav");if(host)host.innerHTML=cloudAccess?.role==="x_user"?`<button onclick="showPage('xStudio')">𝕏 X Studio</button><button onclick="signOutCloud()">Sair</button>`:"";return;
+  }
+
   const host=$("#mobileBottomNav");
   if(!host)return;
   const primary=mobilePrimaryPages();
@@ -5773,6 +5800,11 @@ function syncMobileChrome(){
   renderMobileNav();
 }
 function nav(){
+  if(cloudAccess?.role!=="admin"){
+    $("#nav").innerHTML=cloudAccess?.role==="x_user"?`<button data-page="xStudio" onclick="showPage('xStudio')">𝕏 X Studio</button><button onclick="signOutCloud()">Sair</button>`:"";
+    renderMobileNav();return;
+  }
+
   const groups=[
     {label:"Planejamento",pages:["overview","calendar","trialReels","bulkPublish"]},
     {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
@@ -5806,6 +5838,9 @@ function nav(){
 }
 
 function showPage(id){
+  if(cloudSession&&!canAccessPage(id)){deniedPage();return;}
+  const denied=document.getElementById("accessDenied");if(denied)denied.hidden=true;
+
   const page=$("#"+id),meta=navItems.find(x=>x[0]===id);
   if(!page||!meta)return;
   currentPage=id;
@@ -5826,7 +5861,7 @@ function showPage(id){
   }
   if(id==="bulkPublish"&&cloudSession){loadBulkPublishRows().then(()=>{if(currentPage==="bulkPublish")bulkPublishPage()}).catch(()=>{});}
   if(id==="xStudio"&&cloudSession){
-    Promise.allSettled([loadXPostingStatus(),loadXIntegrationConfig()]).then(()=>{if(currentPage==="xStudio")xStudioPage()});
+    Promise.allSettled([loadXPostingStatus(),...(cloudAccess?.role==='admin'?[loadXIntegrationConfig()]:[])]).then(()=>{if(currentPage==="xStudio")xStudioPage()});
   }else if(id==="tiktokStudio"&&cloudSession){
     Promise.allSettled([loadPlatformAccounts(),loadAutomationStatus()]).then(()=>renderAll());
   }
@@ -10733,18 +10768,22 @@ function platformStudioPage(platform){
 const X_POSTING_URL=SUPABASE_URL+"/functions/v1/cloudent-x-publish-worker";
 let xPostingData=null,xPostingError="",xPostingBusy=false,xPostingLoading=false,xPostingDraft={caption:"",interval:120,start:""},xPostingLoaded=false;
 let xPostingFile=null,xPostingPoll=null,xPostingReload=false;
+let xSelectedAccountId="",xAccountList=[],xAccountGeneration=0,xPostingFiles=[],xTargetAccounts=[],xBatchDrafts=[];
 async function xPostingRequest(action,body){
- return edgeFetch(X_POSTING_URL+"?action="+action,body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+ const account=xSelectedAccountId;
+ return edgeFetch(X_POSTING_URL+"?action="+action+"&platform_account_id="+encodeURIComponent(account),body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:account,...body})});
 }
 async function loadXPostingStatus(){
  if(!cloudSession){xPostingData=null;xPostingLoaded=false;return}
  if(xPostingLoading){xPostingReload=true;return;}
  xPostingLoading=true;
  try{
-  const range=xCalendarRange();
-  xPostingData=await xPostingRequest("status&from="+encodeURIComponent(range.from)+"&to="+encodeURIComponent(range.to));xPostingError="";
+  const range=xCalendarRange(),generation=xAccountGeneration;
+  const result=await xPostingRequest("status&from="+encodeURIComponent(range.from)+"&to="+encodeURIComponent(range.to));
+  if(generation!==xAccountGeneration)return;
+  xPostingData=result;xAccountList=result.accounts||[];xPostingError="";
   if(!xPostingLoaded){xPostingDraft.interval=xPostingData.config?.interval_minutes||120;xPostingLoaded=true;}
- }catch(e){xPostingError=e.message;}
+ }catch(e){xPostingData=null;xPostingError=e.message;}
  finally{xPostingLoading=false;if(xPostingReload){xPostingReload=false;await loadXPostingStatus();}}
 }
 async function refreshXPosting(){
@@ -10755,10 +10794,16 @@ function xPostingCaptionCount(el){
  const count=$("#xPostCaptionCount");if(count)count.textContent=Array.from(el.value.trim()).length+"/280";
 }
 function xPostingPickFile(el){
- xPostingFile=el.files?.[0]||null;xUploadTicket=null;
+ xPostingFiles=Array.from(el.files||[]);xPostingFile=xPostingFiles[0]||null;xUploadTicket=null;
+ xBatchDrafts=xPostingFiles.map(file=>({caption:"",reply:"",date:""}));
+ xStudioPage();
  const name=$("#xPostingFileName");if(name)name.textContent=xPostingFile?xPostingFile.name+" · "+(xPostingFile.size/1048576).toFixed(1)+" MB":"Nenhum vídeo selecionado";
 }
 async function addXPostingVideo(){
+ if(xPostingFiles.length>1){await addXPostingBatch();return;}
+ if(!xSelectedAccountId||xSelectedAccountId==="all"){toast("Selecione uma conta X.","err");return;}
+ const capturedAccount=xSelectedAccountId,capturedGeneration=xAccountGeneration;
+
  if(!cloudSession){focusCloudLogin();return}
  if(xPostingBusy)return;
  const file=xPostingFile,caption=xPostingDraft.caption.trim();
@@ -10779,8 +10824,9 @@ async function addXPostingVideo(){
   });
   xUploadTicket={file,ticket};
   if(xComposeDate)scheduled=xScheduleIso(xComposeDate);
-  await xPostingRequest("upload-complete",{scheduled_at:scheduled,provider:ticket.provider,object_path:ticket.object_path,file_name:file.name,mime_type:mime,size_bytes:file.size,caption});
-  xPostingFile=null;xUploadTicket=null;xPostingDraft.caption="";xComposeOpen=false;await loadXPostingStatus();toast(scheduled?"Vídeo agendado no X.":"Vídeo adicionado à fila do X.","ok");
+  if(capturedGeneration!==xAccountGeneration)throw new Error("A conta foi alterada. Reabra o envio.");
+  await xPostingRequest("upload-complete",{platform_account_id:capturedAccount,platform_account_ids:xTargetAccounts.length?xTargetAccounts:[capturedAccount],reply_text:document.getElementById("xPostReply")?.value||"",scheduled_at:scheduled,provider:ticket.provider,object_path:ticket.object_path,file_name:file.name,mime_type:mime,size_bytes:file.size,caption});
+  xPostingFiles=[];xBatchDrafts=[];xPostingFile=null;xUploadTicket=null;xPostingDraft.caption="";xComposeOpen=false;await loadXPostingStatus();toast(scheduled?"Vídeo agendado no X.":"Vídeo adicionado à fila do X.","ok");
  }catch(e){toast(e.message,"err")}
  finally{xPostingBusy=false;if(currentPage==="xStudio")xStudioPage();}
 }
@@ -10853,11 +10899,14 @@ function xDefaultComposeDate(){
  return xDayAdd(today,1)+"T12:00";
 }
 function xOpenComposer(date="",time=""){
+ if(!xSelectedAccountId||xSelectedAccountId==='all'){toast('Selecione uma conta para agendar.','err');return;}
+ xTargetAccounts=[xSelectedAccountId];
  xComposeOpen=true;xSelectedPost=null;xDetailDraft=null;xComposeDate=date&&time?date+"T"+time:xDefaultComposeDate();
  xStudioPage();document.getElementById("xPostCaption")?.focus();
 }
 function xCloseDetail(){if(xPostingBusy)return;xComposeOpen=false;xSelectedPost=null;xDetailDraft=null;xStudioPage();}
 function xSelectPost(id){
+ if(xSelectedAccountId==='all'){const p=xAllPosts().find(p=>p.id===id);if(p){switchXAccount(p.platform_account_id);return;}}
  const p=xAllPosts().find(p=>p.id===id);if(!p)return;
  xSelectedPost=id;xComposeOpen=false;xDetailDraft={id,caption:p.post_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()};
  xStudioPage();
@@ -10900,9 +10949,9 @@ async function xToggleAutomation(){
 }
 function xPostCard(p,compact=false){
  const selected=xSelectedPost===p.id;
- return `<button type="button" class="x-post-card ${selected?"selected":""} ${compact?"compact":""}" onclick="xSelectPost('${p.id}')" draggable="${Boolean(xEditable(p))}" ondragstart="xDragPost(event,'${p.id}')">
+ return `<button type="button" class="x-post-card ${selected?"selected":""} ${compact?"compact":""}" onclick="xSelectPost('${p.id}')" draggable="${Boolean(xEditable(p)&&xSelectedAccountId!=='all')}" ondragstart="xDragPost(event,'${p.id}')">
  ${!compact?`<span class="x-video-art"><span class="x-play-mark">▷</span><span class="x-video-format">VÍDEO</span></span>`:""}
- <strong title="${esc(p.drive_file_name)}">${esc(p.drive_file_name||"Vídeo")}</strong><span class="x-card-caption">${esc(p.post_text||"Sem legenda")}</span><span class="x-card-foot"><span class="x-status ${p.status}">${xStatusLabels[p.status]||esc(p.status)}</span><span>${xTimeKey(p.scheduled_at)}</span></span></button>`;
+ <strong title="${esc(p.drive_file_name)}">${esc(p.drive_file_name||"Vídeo")}${xSelectedAccountId==='all'?' · @'+esc(xAccountList.find(a=>a.id===p.platform_account_id)?.username||''):''}</strong><span class="x-card-caption">${esc(p.post_text||"Sem legenda")}</span><span class="x-card-foot"><span class="x-status ${p.status}">${xStatusLabels[p.status]||esc(p.status)}</span><span>${xTimeKey(p.scheduled_at)}</span></span></button>`;
 }
 function xCalendarDay(date,month=false){
  const today=xDateKey(),posts=xCalendarPosts().filter(p=>xDateKey(p.scheduled_at)===date),times=[...new Set([...xSlotTimes(),...posts.map(p=>xTimeKey(p.scheduled_at))])].sort();
@@ -10923,9 +10972,11 @@ function xCalendarMarkup(){
  return `<section class="x-calendar-shell"><div class="x-calendar-toolbar"><div class="x-date-controls"><button class="x-icon-btn" aria-label="Período anterior" onclick="xMoveCalendar(-1)">‹</button><button class="x-icon-btn" aria-label="Próximo período" onclick="xMoveCalendar(1)">›</button><h3>${esc(title)}</h3><button class="x-subtle-btn" onclick="xMoveCalendar(0)">Hoje</button></div><div class="x-calendar-controls"><div class="x-view-switch"><button class="${xCalendarView==="week"?"active":""}" onclick="xSetCalendarView('week')">Semana</button><button class="${xCalendarView==="month"?"active":""}" onclick="xSetCalendarView('month')">Mês</button></div><small>Horário de Brasília</small></div></div><div class="x-calendar-scroll"><div class="x-calendar-grid ${xCalendarView==="month"?"month":""}">${xCalendarView==="month"?["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].map(d=>`<div class="x-month-weekday">${d}</div>`).join(""):""}${Array.from({length:leading},()=>'<div class="x-month-blank"></div>').join("")}${days.map(d=>xCalendarDay(d,xCalendarView==="month")).join("")}</div></div><footer class="x-calendar-help">Arraste os vídeos para alterar o horário. No celular, toque no vídeo para editar.</footer></section>`;
 }
 function xComposerMarkup(){
+ if(xPostingFiles.length>1)return xBatchMarkup();
  return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>Agendar vídeo</h3><button class="x-icon-btn" aria-label="Fechar" onclick="xCloseDetail()">×</button></div>
- <label class="x-file-picker">＋ Selecionar vídeo<input id="xPostingVideo" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" onchange="xPostingPickFile(this)" ${xPostingBusy?"disabled":""}></label><p id="xPostingFileName" class="x-file-name">${esc(xPostingFile?.name||"Nenhum vídeo selecionado")}</p>
+ <label class="x-file-picker">＋ Selecionar vídeo<input id="xPostingVideo" type="file" multiple accept="video/mp4,video/quicktime,.mp4,.mov" onchange="xPostingPickFile(this)" ${xPostingBusy?"disabled":""}></label><p id="xPostingFileName" class="x-file-name">${esc(xPostingFile?.name||"Nenhum vídeo selecionado")}</p>
  <label for="xPostCaption">Legenda</label><textarea id="xPostCaption" rows="5" placeholder="Escreva a legenda, hashtags ou link…" oninput="xPostingCaptionCount(this)" ${xPostingBusy?"disabled":""}>${esc(xPostingDraft.caption)}</textarea><small id="xPostCaptionCount" class="x-char-count">${Array.from(xPostingDraft.caption.trim()).length} / 280</small>
+ <label>Publicar nas contas</label>${xTargetsMarkup()}<label>Comentar após publicar</label><textarea id="xPostReply" rows="2" maxlength="560" placeholder="Comentário opcional"></textarea>
  <label for="xComposeDate">Data e horário</label><input id="xComposeDate" type="datetime-local" value="${esc(xComposeDate)}" min="${xDateKey()}T00:00" oninput="xComposeDate=this.value" ${xPostingBusy?"disabled":""}><small>Horário de Brasília · MP4 ou MOV até 512 MB</small>
  <button id="xAddPost" class="x-primary-btn" onclick="addXPostingVideo()" ${!cloudSession||!xPostingData?.x?.account||xPostingBusy?"disabled":""}>${xPostingBusy?"Enviando vídeo…":"Agendar vídeo"}</button>
  <button class="x-subtle-btn" onclick="xAddToIntervalQueue()" ${xPostingBusy?"disabled":""}>Adicionar à fila por intervalo</button></aside>`;
@@ -10940,12 +10991,13 @@ function xDetailMarkup(){
  <label for="xDetailDate">Data e horário</label><input id="xDetailDate" type="datetime-local" value="${esc(draft.date)}" oninput="xDetailDraft.date=this.value" ${!editable?"disabled":""}><small>Horário de Brasília</small><div class="x-detail-status"><span>Status</span><span class="x-status ${p.status}">${xStatusLabels[p.status]||p.status}</span></div>
  ${p.last_error?`<p class="x-error">${esc(p.last_error)}</p>`:""}${p.meta?.publish_uncertain?'<p class="x-error">Confira a conta X antes de repetir este envio.</p>':""}
  ${editable?`<button class="x-primary-btn" onclick="xSaveDetail()" ${xPostingBusy?"disabled":""}>Salvar alterações</button>${p.status==="failed"?`<button class="x-subtle-btn" onclick="xPostingAction('retry','${p.id}')">Tentar novamente</button>`:""}<button class="x-subtle-btn" onclick="xPostingAction('skip','${p.id}')">Remover da agenda</button>`:""}
+ ${p.reply_text?`<p>Comentário: ${esc(p.reply_text)}</p><small>${esc(p.reply_status)}</small>${p.reply_error?`<p class="x-error">${esc(p.reply_error)}</p>`:""}${p.reply_status==='failed'?`<button class="x-subtle-btn" onclick="xPostingAction('retry-reply','${p.id}')">Repetir comentário</button>`:""}`:""}
  ${p.x_post_id?`<a class="x-primary-btn" href="https://x.com/i/status/${encodeURIComponent(p.x_post_id)}" target="_blank" rel="noopener">Ver postagem no X ↗</a>`:""}</aside>`;
 }
 function xQueueMarkup(overview=false){
  const rows=xAllPosts().filter(p=>overview?["queued","processing","failed"].includes(p.status):!p.scheduled_at);
  rows.sort((a,b)=>overview?new Date(a.scheduled_at||a.created_at)-new Date(b.scheduled_at||b.created_at):new Date(a.created_at)-new Date(b.created_at));
- return `<section class="x-list-panel"><div class="x-panel-title"><h3>${overview?"Próximas publicações":"Fila por intervalo"}</h3><span>${rows.length} vídeos</span></div><p class="x-muted">${overview?"Acompanhe os agendamentos e os vídeos que precisam de atenção.":"Vídeos sem horário individual seguem o intervalo definido em Configurações."}</p>${rows.length?rows.map(p=>`<button class="x-queue-row" onclick="xSelectPost('${p.id}')"><span class="x-queue-play">▷</span><span class="x-queue-copy"><strong>${esc(p.drive_file_name)}</strong><small>${esc(p.post_text)}</small></span><span class="x-queue-date">${p.scheduled_at?esc(new Date(p.scheduled_at).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})):"Por intervalo"}</span><span class="x-status ${p.status}">${p.status==="queued"&&!p.scheduled_at?"Na fila":xStatusLabels[p.status]}</span></button>`).join(""):'<div class="x-list-empty">Nenhum vídeo aqui ainda.<button class="x-primary-btn" onclick="xOpenComposer()">＋ Adicionar vídeo</button></div>'}</section>`;
+ return `<section class="x-list-panel"><div class="x-panel-title"><h3>${overview?"Próximas publicações":"Fila por intervalo"}</h3><span>${rows.length} vídeos</span></div><p class="x-muted">${overview?"Acompanhe os agendamentos e os vídeos que precisam de atenção.":"Vídeos sem horário individual seguem o intervalo definido em Configurações."}</p>${rows.length?rows.map(p=>`<button class="x-queue-row" onclick="xSelectPost('${p.id}')"><span class="x-queue-play">▷</span><span class="x-queue-copy"><strong>${esc(p.drive_file_name)}${xSelectedAccountId==='all'?' · @'+esc(xAccountList.find(a=>a.id===p.platform_account_id)?.username||''):''}</strong><small>${esc(p.post_text)}</small></span><span class="x-queue-date">${p.scheduled_at?esc(new Date(p.scheduled_at).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})):"Por intervalo"}</span><span class="x-status ${p.status}">${p.status==="queued"&&!p.scheduled_at?"Na fila":xStatusLabels[p.status]}</span></button>`).join(""):'<div class="x-list-empty">Nenhum vídeo aqui ainda.<button class="x-primary-btn" onclick="xOpenComposer()">＋ Adicionar vídeo</button></div>'}</section>`;
 }
 function xSettingsMarkup(){
  const cfg=xPostingData?.config||{};
@@ -10953,7 +11005,7 @@ function xSettingsMarkup(){
  <label for="xDailySlots">Vagas diárias do calendário</label><input id="xDailySlots" value="${esc(xSlotTimes().join(", "))}" placeholder="12:00, 18:00"><small>Separe os horários por vírgula. Até 15 vagas por dia.</small>
  <label for="xPostingInterval">Intervalo da fila (minutos)</label><input id="xPostingInterval" type="number" min="5" max="10080" value="${cfg.interval_minutes||120}" oninput="xPostingDraft.interval=Number(this.value)">
  <label for="xPostingStart">Próximo início da fila por intervalo</label><input id="xPostingStart" type="datetime-local" value="${esc(xPostingDraft.start)}" oninput="xPostingDraft.start=this.value"><small>Deixe vazio para manter o próximo envio da fila. Todos os horários são de Brasília.</small>
- <button class="x-primary-btn" onclick="saveXPosting(${Boolean(cfg.enabled)})" ${xPostingBusy?"disabled":""}>Salvar configurações</button><div class="x-settings-note"><strong>Conta conectada</strong><p>${esc(xPostingData?.x?.account?.username?"@"+xPostingData.x.account.username:"Nenhuma conta conectada")}</p><button class="x-subtle-btn" onclick="connectXOfficial()">${xPostingData?.x?.account?"Reconectar conta":"Conectar conta X"}</button></div>${cfg.last_error?`<p class="x-error">${esc(cfg.last_error)}</p>`:""}</section>`;
+ <button class="x-primary-btn" onclick="saveXPosting(${Boolean(cfg.enabled)})" ${xPostingBusy?"disabled":""}>Salvar configurações</button><div class="x-settings-note"><strong>Conta conectada</strong><p>${esc(xPostingData?.x?.account?.username?"@"+xPostingData.x.account.username:"Nenhuma conta conectada")}</p><button class="x-subtle-btn" onclick="connectXOfficial()">${xPostingData?.x?.account?"Reconectar conta":"Conectar conta X"}</button></div><button class="x-subtle-btn" onclick="connectXOfficial()" ${xAccountList.filter(a=>a.enabled).length>=7?"disabled":""}>＋ Adicionar conta (${xAccountList.filter(a=>a.enabled).length}/7)</button>${xSelectedAccountId&&xSelectedAccountId!=='all'?`<button class="x-subtle-btn" onclick="xDisconnectAccount(false)">Desconectar</button><button class="x-subtle-btn" onclick="xDisconnectAccount(true)">Remover conta</button>`:""}${cloudAccess?.role==='admin'?xMembersMarkup():""}${cfg.last_error?`<p class="x-error">${esc(cfg.last_error)}</p>`:""}</section>`;
 }
 function xStudioPage(){
  const root=$("#xStudio");if(!root)return;
@@ -10961,12 +11013,12 @@ function xStudioPage(){
  const data=cloudSession?xPostingData:null,cfg=data?.config||{},account=data?.x?.account,posts=xCalendarPosts(),active=cfg.enabled===true;
  const next=[data?.next_scheduled_at,...(data?.counts?.interval_queued&&cfg.next_publish_at?[cfg.next_publish_at]:[])].filter(Boolean).sort((a,b)=>new Date(a)-new Date(b))[0];
  const nextLabel=next?new Date(next).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Sem agendamento";
- root.innerHTML=`<div class="x-studio"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Vídeos e legendas, publicados no horário certo.</p></div><div class="x-header-actions"><span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${account?"Conectada":"Conecte sua conta"}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button><button class="x-primary-btn" onclick="${account?"xOpenComposer()":"connectXOfficial()"}">${account?"＋ Agendar vídeo":"Conectar conta X"}</button></div></header>
- <nav class="x-studio-tabs" aria-label="Abas do X Studio">${[["overview","Visão geral"],["calendar","Calendário"],["queue","Fila de vídeos"],["settings","Configurações"]].map(([id,label])=>`<button class="${xStudioTab===id?"active":""}" aria-selected="${xStudioTab===id}" onclick="xSetTab('${id}')">${label}</button>`).join("")}</nav>
+ root.innerHTML=`<div class="x-studio"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Vídeos e legendas, publicados no horário certo.</p></div><div class="x-header-actions">${xAccountSelectorMarkup()}<span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${esc(account?.status||"Selecione uma conta")}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button><button class="x-primary-btn" onclick="${account?"xOpenComposer()":"connectXOfficial()"}">${account?"＋ Agendar vídeo":"Conectar conta X"}</button></div></header>
+ <nav class="x-studio-tabs" aria-label="Abas do X Studio">${[["overview","Visão geral"],["calendar","Calendário"],["queue","Fila de vídeos"],["metrics","Métricas"],["settings","Configurações"]].map(([id,label])=>`<button class="${xStudioTab===id?"active":""}" aria-selected="${xStudioTab===id}" onclick="xSetTab('${id}')">${label}</button>`).join("")}</nav>
  ${!cloudSession?'<div class="x-notice">Entre no CloudentFlow para organizar suas publicações. <button class="x-subtle-btn" onclick="focusCloudLogin()">Entrar</button></div>':""}
  ${xPostingError?`<div class="x-notice x-error">${esc(xPostingError)} <button class="x-subtle-btn" onclick="refreshXPosting()">Tentar novamente</button></div>`:""}
  <div class="x-summary"><div><small>${xCalendarView==="month"?"Agendados neste mês":"Agendados nesta semana"}</small><b>${posts.filter(p=>["queued","processing"].includes(p.status)).length}</b><span>${data?.counts?.failed?data.counts.failed+" com falha · confira a agenda":"Seu calendário de publicações"}</span></div><div><small>Próxima publicação</small><b class="x-next-label">${active?esc(nextLabel):"Pausada"}</b><span>Horário de Brasília</span></div><div><small>Postagem automática</small><div class="x-automation-line"><b>${active?"Ativa":"Pausada"}</b><button class="x-toggle ${active?"on":""}" role="switch" aria-checked="${active}" aria-label="Postagem automática" onclick="xToggleAutomation()" ${!account||xPostingBusy?"disabled":""}><span></span></button></div><span>${active?"Calendário e fila ativados":"Ative para publicar os agendamentos"}</span></div></div>
- <div class="x-studio-content">${xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xQueueMarkup(xStudioTab==="overview")}${xComposeOpen?xComposerMarkup():xDetailMarkup()}</div></div>`;
+ <div class="x-studio-content">${xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xStudioTab==="metrics"?xMetricsMarkup():xQueueMarkup(xStudioTab==="overview")}${xComposeOpen?xComposerMarkup():xDetailMarkup()}</div></div>`;
  if(currentPage==="xStudio"&&!xPostingPoll)xPostingPoll=setInterval(()=>{
   if(currentPage!=="xStudio"){clearInterval(xPostingPoll);xPostingPoll=null;return;}
   if(!xPostingBusy&&!(root.contains(document.activeElement)&&document.activeElement.matches("input,textarea,select")))refreshXPosting();
@@ -11491,6 +11543,8 @@ function safeRenderPage(id,fn){
   }
 }
 function renderAll(){
+  if(cloudSession&&cloudAccess?.role!=="admin"&&currentPage!=="xStudio"){if(cloudAccess?.role==="x_user")currentPage="xStudio";else return;}
+
   // Renderiza somente a tela visível. Antes, cada atualização reconstruía as 11
   // páginas escondidas também, criando travadas perceptíveis durante navegação.
   const renderers={
@@ -11557,7 +11611,7 @@ async function init(){
     renderAll();
   }
 
-  await handleInstagramOAuthReturn().catch(err=>console.warn("Instagram OAuth return:",err));
+  if(cloudAccess?.role==='admin')await handleInstagramOAuthReturn().catch(err=>console.warn("Instagram OAuth return:",err));
   await handleXOAuthReturn().catch(err=>console.warn("X OAuth return:",err));
 
   const runDeferred=()=>loadDeferredCloudData();
@@ -11574,7 +11628,7 @@ async function init(){
   const newVideoBtn=$("#newVideoBtn");
   if(newVideoBtn)newVideoBtn.onclick=()=>{
     showPage("calendar");
-    setTimeout(openScheduleModal,0);
+    if(canAccessPage("calendar"))setTimeout(openScheduleModal,0);
   };
 
   document.addEventListener("keydown",e=>{
@@ -11583,6 +11637,46 @@ async function init(){
   });
   setInterval(()=>{if(cloudSession&&!document.hidden)refreshLiveData(false)},60000);
 }
+
+function xAccountSelectorMarkup(){return `<select class="x-account-select" aria-label="Conta do X" onchange="switchXAccount(this.value)" ${xPostingBusy?'disabled':''}><option value="">Selecionar conta</option><option value="all" ${xSelectedAccountId==='all'?'selected':''}>Todas as contas · visão agregada</option>${xAccountList.map(a=>`<option value="${esc(a.id)}" ${a.id===xSelectedAccountId?'selected':''}>@${esc(a.username)} · ${esc(a.status)}</option>`).join('')}</select>`;}
+async function switchXAccount(id){
+ if(xPostingBusy)return;
+ xAccountGeneration++;xSelectedAccountId=id;xPostingData=null;xPostingError='';xPostingLoaded=false;xPreviewCache.clear();xSelectedPost=null;xDetailDraft=null;xComposeOpen=false;xComposeDate='';xPostingFile=null;xPostingFiles=[];xBatchDrafts=[];xUploadTicket=null;xPostingDraft={caption:'',interval:120,start:''};xTargetAccounts=id&&id!=='all'?[id]:[];
+ const video=document.getElementById('xDetailVideo');if(video){video.pause();video.removeAttribute('src');video.load();}
+ xStudioPage();await loadXPostingStatus();xStudioPage();
+}
+function xTargetsMarkup(){return `<div class="x-targets">${xAccountList.filter(a=>a.enabled).map(a=>`<label><input type="checkbox" ${xTargetAccounts.includes(a.id)?'checked':''} onchange="xTargetAccounts=this.checked?[...new Set([...xTargetAccounts,'${a.id}'])]:xTargetAccounts.filter(id=>id!=='${a.id}')">@${esc(a.username)}</label>`).join('')}</div>`;}
+function xBatchMarkup(){return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>${xPostingFiles.length} vídeos</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div><label>Contas de destino</label>${xTargetsMarkup()}${xPostingFiles.map((file,i)=>`<div class="x-batch-row"><strong>${esc(file.name)}</strong><label>Legenda individual<textarea rows="2" oninput="xBatchDrafts[${i}].caption=this.value">${esc(xBatchDrafts[i].caption)}</textarea></label><label>Comentário opcional<textarea rows="2" oninput="xBatchDrafts[${i}].reply=this.value">${esc(xBatchDrafts[i].reply)}</textarea></label><label>Horário individual (vazio = fila)<input type="datetime-local" value="${esc(xBatchDrafts[i].date)}" onchange="xBatchDrafts[${i}].date=this.value"></label><small>${esc(xBatchDrafts[i].error||xBatchDrafts[i].status||'Aguardando')}</small></div>`).join('')}<button id="xAddPost" class="x-primary-btn" onclick="addXPostingBatch()" ${xPostingBusy?'disabled':''}>${xPostingBusy?'Enviando…':'Adicionar lote'}</button><p class="x-muted">Um post independente por vídeo e conta. Cada horário deve estar livre na conta escolhida.</p></aside>`;}
+async function xPutVideo(ticket,file){await new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('PUT',ticket.upload_url);xhr.setRequestHeader('Content-Type',ticket.content_type);xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Falha no upload: '+xhr.status));xhr.onerror=()=>reject(new Error('Falha de conexão no upload.'));xhr.send(file);});}
+async function addXPostingBatch(){
+ if(xPostingBusy)return;
+ const ids=[...xTargetAccounts],generation=xAccountGeneration,files=[...xPostingFiles],drafts=xBatchDrafts;
+ if(!ids.length){toast('Selecione as contas de destino.','err');return;}
+ if(drafts.some(d=>!d.caption.trim())){toast('Defina a legenda de cada vídeo.','err');return;}
+ xPostingBusy=true;
+ try{for(let i=0;i<files.length;i++){
+  const file=files[i],d=drafts[i];if(d.done)continue;
+  try{
+   if(generation!==xAccountGeneration)throw new Error('A conta foi alterada. Reabra o lote.');
+   const mime=file.type||(/\.mov$/i.test(file.name)?'video/quicktime':'video/mp4');
+   const scheduled=d.date?xScheduleIso(d.date):null;
+   if(!d.ticket){d.ticket=await xPostingRequest('upload-ticket',{platform_account_id:ids[0],size_bytes:file.size,mime_type:mime,file_name:file.name});await xPutVideo(d.ticket,file);d.uploaded=true;}
+   else if(!d.uploaded){await xPutVideo(d.ticket,file);d.uploaded=true;}
+   await xPostingRequest('upload-complete',{platform_account_id:ids[0],platform_account_ids:ids,object_path:d.ticket.object_path,provider:d.ticket.provider,size_bytes:file.size,mime_type:mime,file_name:file.name,caption:d.caption,reply_text:d.reply,scheduled_at:scheduled});
+   d.done=true;d.status='Adicionado';d.error='';
+  }catch(e){d.error=e.message;}
+ }}finally{xPostingBusy=false;await loadXPostingStatus();if(drafts.every(d=>d.done)){xPostingFiles=[];xPostingFile=null;xBatchDrafts=[];xComposeOpen=false;toast('Lote adicionado.','ok');}xStudioPage();}
+}
+async function xDisconnectAccount(remove){if(!xSelectedAccountId||xSelectedAccountId==='all')return;try{await xPostingRequest(remove?'account-remove':'account-status',{});await switchXAccount('');}catch(e){toast(e.message,'err');}}
+function xMetricsMarkup(){const posts=xAllPosts().filter(p=>p.status==='published'),metrics={};for(const p of posts)for(const [k,v] of Object.entries(p.metrics||{}))if(typeof v==='number')metrics[k]=(metrics[k]||0)+v;return `<section class="x-settings-panel"><h3>Métricas ${xSelectedAccountId==='all'?'das contas selecionadas':''}</h3><button class="x-subtle-btn" onclick="xSyncMetrics()" ${!xSelectedAccountId||xSelectedAccountId==='all'?'disabled':''}>Sincronizar conta ativa</button><div class="x-metric-grid">${Object.entries(metrics).map(([k,v])=>`<div><small>${esc(k)}</small><h3>${v}</h3></div>`).join('')||'<p>Sem métricas coletadas. Valores dependem da disponibilidade da API do X.</p>'}</div>${posts.map(p=>`<p>@${esc(xAccountList.find(a=>a.id===p.platform_account_id)?.username||'')} · ${esc(p.drive_file_name)} · ${p.metrics_synced_at?'Atualizado em '+esc(new Date(p.metrics_synced_at).toLocaleString('pt-BR')):'Aguardando coleta'}</p>`).join('')}</section>`;}
+async function xSyncMetrics(){try{await xPostingRequest('metrics',{});await refreshXPosting();}catch(e){toast(e.message,'err');}}
+let xMembersData=null;
+function xMembersMarkup(){return `<section class="x-settings-note"><h3>Usuários do X Studio</h3><label>Email do convidado<input id="xInviteEmail" type="email" placeholder="email@exemplo.com"></label><button class="x-subtle-btn" onclick="xCreateInvite()">Gerar convite de acesso ao X</button><p id="xInviteResult"></p><button class="x-subtle-btn" onclick="xLoadMembers()">Carregar usuários</button>${(xMembersData||[]).map(m=>`<div><p>${esc(m.email||m.user_id)} · ${esc(m.role)} · ${m.enabled?'Ativo':'Desativado'}</p>${m.role==='x_user'?`<button class="x-subtle-btn" onclick="xSetMember('${m.user_id}',${!m.enabled})">${m.enabled?'Desativar':'Ativar'}</button><button class="x-subtle-btn" onclick="xGrantSelected('${m.user_id}',true)">Autorizar conta ativa</button><button class="x-subtle-btn" onclick="xGrantSelected('${m.user_id}',false)">Revogar conta ativa</button>`:''}</div>`).join('')}</section>`;}
+async function xLoadMembers(){try{const data=await cloudFetch('?resource=members');xMembersData=data.members||[];xStudioPage();}catch(e){toast(e.message,'err');}}
+async function xSetMember(id,enabled){try{await cloudFetch('?resource=members&action=set-enabled',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:id,enabled})});await xLoadMembers();}catch(e){toast(e.message,'err');}}
+async function xGrantSelected(userId,grant){if(!xSelectedAccountId||xSelectedAccountId==='all'){toast('Selecione uma conta primeiro.','err');return;}try{await cloudFetch('?resource=members&action='+(grant?'grant-account':'revoke-account'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,platform_account_id:xSelectedAccountId})});toast('Permissão atualizada.','ok');}catch(e){toast(e.message,'err');}}
+async function xCreateInvite(){try{const email=document.getElementById('xInviteEmail').value;const r=await cloudFetch('?resource=members&action=invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const el=document.getElementById('xInviteResult');el.textContent='Convite válido por 24 horas: ';const a=document.createElement('a');a.href=r.url;a.textContent=r.url;el.appendChild(a);}catch(e){toast(e.message,'err');}}
+window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);if(cloudAccess?.role==='x_user'&&page&&page!=='xStudio')deniedPage();});
 
 init();
 </script>

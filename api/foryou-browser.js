@@ -15,11 +15,12 @@ async function validCloudentUser(req) {
   if (!auth.startsWith('Bearer ')) return false;
   const token = auth.slice(7).trim();
   if (!token) return false;
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/cloudent-api?resource=session`, {
     headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_KEY },
     cache: 'no-store',
   });
-  return response.ok;
+  if(!response.ok)return false;
+  const session=await response.json();return session.role==='admin';
 }
 
 export default async function handler(req, res) {

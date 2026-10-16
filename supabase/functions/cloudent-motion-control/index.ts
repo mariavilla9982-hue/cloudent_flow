@@ -75,6 +75,8 @@ Deno.serve(async(req)=>{
   try{
     const user=await userFromReq(admin,req);
     if(!user)return out({ok:false,error:"unauthorized"},401);
+    const {data:accessMember,error:accessError}=await admin.from("app_members").select("role,enabled").eq("user_id",user.id).maybeSingle();
+    if(accessError||!accessMember?.enabled||accessMember.role!=="admin")return out({error:"forbidden"},403);
     const url=new URL(req.url);
     const action=url.searchParams.get("action")||"";
     const resource=url.searchParams.get("resource")||"";
