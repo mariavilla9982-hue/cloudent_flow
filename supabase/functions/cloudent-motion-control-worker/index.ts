@@ -26,6 +26,22 @@ function cleanBase(v:any){
   const x=String(v||"https://www.runninghub.ai").replace(/\/$/,"");
   return x.startsWith("https://")?x:"https://www.runninghub.ai";
 }
+
+async function readMotionProviderCapacity(base:string,apiKey:string){
+  const response=await fetch(base+"/openapi/v2/queue/status",{
+    headers:{"Authorization":"Bearer "+apiKey},cache:"no-store",signal:AbortSignal.timeout(8000)
+  });
+  if(!response.ok)throw new Error("Motion Control: não foi possível consultar as vagas da RunningHub.");
+  const payload=await response.json(),data=payload?.data;
+  const integer=(value:any)=>value!==null&&value!==undefined&&String(value).trim()!==""&&Number.isSafeInteger(Number(value))&&Number(value)>=0;
+  if(Number(payload?.code)!==0||!data||!integer(data.concurrentLimit)||Number(data.concurrentLimit)<1||
+    !integer(data.runningCount)||!integer(data.queuedCount)||!integer(data.totalCurrentTasks)||
+    Number(data.totalCurrentTasks)<Number(data.runningCount)+Number(data.queuedCount))
+    throw new Error("Motion Control: resposta de capacidade inválida. Fila preservada.");
+  const capacity={concurrent_limit:Number(data.concurrentLimit),running:Number(data.runningCount),queued:Number(data.queuedCount),total:Number(data.totalCurrentTasks),checked_at:new Date().toISOString()};
+  return {...capacity,available:Math.max(0,capacity.concurrent_limit-capacity.total)};
+}
+
 function s3RegionFromEndpoint(endpoint:string){
   try{const m=new URL(endpoint).hostname.match(/^s3\.([^.]+)\.backblazeb2\.com$/i);return m?.[1]||"auto"}catch{return "auto"}
 }
@@ -162,11 +178,23 @@ Deno.serve(async(req:Request)=>{
       admin.from("production_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"]),
       admin.from("face_swap_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"])
     ]);
-    const active=Number(productionActive||0)+Number(faceActive||0),slots=Math.max(0,concurrency-active);
+    const active=Number(productionActive||0)+Number(faceActive||0);
+    let slots=Math.max(0,concurrency-active);
     if(slots<=0)return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency,message:"Aguardando vaga do RunningHub"});
 
     const {count:waiting}=await admin.from("production_jobs").select("*",{count:"exact",head:true}).eq("status","motion_waiting").contains("meta",{workflow_key:"motion_control"}).lte("next_attempt_at",new Date().toISOString());
     if(!Number(waiting||0))return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency});
+
+    // Account capacity includes tasks created outside CloudentFlow. Check before any claim or media read/upload.
+    let providerCapacity;
+    try{
+      providerCapacity=await readMotionProviderCapacity(base,apiKey);
+      await admin.from("app_settings").upsert({key:"motion_provider_capacity",value:providerCapacity,updated_at:new Date().toISOString()},{onConflict:"key"});
+    }catch{
+      return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency,provider_capacity_unknown:true,message:"Não foi possível confirmar vagas da RunningHub. Fila preservada; nova consulta automática."});
+    }
+    slots=Math.min(slots,providerCapacity.available);
+    if(slots<=0)return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency,provider_capacity:providerCapacity,provider_queue_waiting:true,message:"Aguardando vaga da RunningHub; retomada automática."});
 
     try{
       const info=await validateWorkflow(base,apiKey,cfg);
