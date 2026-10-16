@@ -8,7 +8,7 @@ O acesso ao Supabase foi restabelecido no projeto `dxrhvudvutmgrmfkmzxo`. A migr
 
 As Edge Functions foram implantadas a partir do commit fixo `b8372286641672c269d0ca01c51f326af6df10f3`, preservando o código exato da PR: `cloudent-api` v88, `cloudent-x-publish-worker` v6, `cloudent-x-oauth` v3, `cloudent-member-signup` v3, `cloudent-motion-control` v6, `cloudent-virals-foryou` v2, `instagram-status` v4, `instagram-publish-test` v6, `instagram-metrics-today` v7 e `instagram-followers-status` v4. O worker X novo foi observado em produção retornando HTTP 200 e usando `x_account_configs`, `cloudent_x_access` e `claim_x_account_post`.
 
-Advisors de segurança foram consultados depois da DDL. As tabelas novas de configuração permanecem backend-only, sem grants diretos para `anon`/`authenticated`. Não foi feita publicação real de teste no X. Convites só devem ser liberados após o deploy da UI e a confirmação do Vercel READY.
+Advisors de segurança foram consultados depois da DDL. O aviso de `search_path` do claim legado do X foi eliminado com a migration complementar `20261016194500_harden_x_legacy_claim_search_path.sql`. As tabelas novas de configuração permanecem backend-only, sem grants diretos para `anon`/`authenticated`. Não foi feita publicação real de teste no X. Convites só devem ser liberados após o deploy da UI e a confirmação do Vercel READY.
 
 ## Comportamento
 
