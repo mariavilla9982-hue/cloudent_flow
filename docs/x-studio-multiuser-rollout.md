@@ -1,6 +1,14 @@
 # X Studio: multiusuário e filas por conta
 
-Estado: preparado e validado localmente; NÃO implantado no Supabase ou em produção.
+Estado: código publicado em branch de revisão; NÃO implantado no Supabase ou em produção.
+
+## Atualização de envio — 16/10/2026
+
+O proprietário autorizou explicitamente o envio público após a revisão automática. Código publicado pela conexão GitHub na branch `codex/x-studio-multiuser-isolation`, commit `bb95c7d5dd50edbc38a6f7a647a56773405b3a1f`, com os 22 blobs conferidos contra os arquivos locais. PR de revisão: https://github.com/mariavilla9982-hue/cloudent_flow/pull/1 (draft, sem merge). O bloqueio de push descrito abaixo é histórico e já foi resolvido pela autorização.
+
+A nova tentativa de migração Supabase também retornou `Invalid or expired requestState`. Leitura posterior confirmou que `workspaces` e `x_account_configs` seguem ausentes. O plugin está instalado/habilitado e consultas funcionam; a causa da falha de migração não foi estabelecida. Produção e Edge Functions não foram alteradas. Não promover a interface antes da migração, APIs e testes reais.
+
+
 
 ## Comportamento
 
