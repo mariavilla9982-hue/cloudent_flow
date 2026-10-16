@@ -65,26 +65,67 @@
   }
 
   function patchMotionDraftPreview(){
-    let style=document.getElementById("cloudentMotionPreviewFitStyle");
-    if(!style){
-      style=document.createElement("style");
-      style.id="cloudentMotionPreviewFitStyle";
-      (document.head||document.documentElement).appendChild(style);
-    }
+    if(document.getElementById("cloudentMotionPreviewFitStyle"))return;
+    const style=document.createElement("style");
+    style.id="cloudentMotionPreviewFitStyle";
     style.textContent=`
-      #production.motion-control-mode .production-main-grid{grid-template-columns:minmax(0,1fr)!important;max-width:100%!important;min-width:0!important}
-      #production.motion-control-mode .production-upload-card{max-width:100%!important;min-width:0!important;overflow:hidden!important}
-      #production.motion-control-mode .production-input-grid{grid-template-columns:minmax(0,1fr)!important;width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;gap:8px!important}
-      #production.motion-control-mode .production-plus{height:18px!important;min-height:18px!important}
-      #production.motion-control-mode .production-drop-live{width:100%!important;max-width:100%!important;min-width:0!important;min-height:360px!important}
-      #production.motion-control-mode .production-upload-preview{background:#050505!important;overflow:hidden!important}
+      #production.motion-control-mode .production-input-grid{
+        grid-template-columns:minmax(0,220px) 22px minmax(0,220px)!important;
+        justify-content:flex-start!important;
+        align-items:start!important;
+        gap:12px!important;
+      }
+      #production.motion-control-mode .production-plus{
+        align-self:center!important;
+        height:auto!important;
+        padding-top:0!important;
+      }
+      #production.motion-control-mode .production-drop-live{
+        width:220px!important;
+        max-width:100%!important;
+        min-height:0!important;
+        aspect-ratio:9 / 16!important;
+        padding:0!important;
+        overflow:hidden!important;
+        border-radius:14px!important;
+      }
+      #production.motion-control-mode .production-upload-preview{
+        background:#050505!important;
+      }
       #production.motion-control-mode .production-upload-preview video,
-      #production.motion-control-mode .production-upload-preview img{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important;object-position:center!important;transform:none!important;background:#050505!important}
+      #production.motion-control-mode .production-upload-preview img{
+        width:100%!important;
+        height:100%!important;
+        object-fit:contain!important;
+        transform:none!important;
+        background:#050505!important;
+      }
       #production.motion-control-mode .production-drop-live:hover .production-upload-preview video,
-      #production.motion-control-mode .production-drop-live:hover .production-upload-preview img{transform:none!important}
+      #production.motion-control-mode .production-drop-live:hover .production-upload-preview img{
+        transform:none!important;
+      }
+      #production.motion-control-mode .production-upload-overlay{
+        padding:26px 10px 10px!important;
+      }
+      #production.motion-control-mode .production-upload-overlay b{
+        font-size:10px!important;
+      }
+      #production.motion-control-mode .production-upload-overlay small{
+        font-size:7px!important;
+      }
       @media(max-width:760px){
-        #production.motion-control-mode .production-drop-live{min-height:280px!important}
+        #production.motion-control-mode .production-input-grid{
+          grid-template-columns:1fr!important;
+          justify-items:start!important;
+        }
+        #production.motion-control-mode .production-plus{
+          display:none!important;
+        }
+        #production.motion-control-mode .production-drop-live{
+          width:200px!important;
+        }
       }`;
+    (document.head||document.documentElement).appendChild(style);
   }
 
   function applyExactVideo7Actions(){
@@ -137,7 +178,6 @@
       const number=Math.max(1,total-i);
       const scheduled=!!job?.meta?.scheduled;
 
-      // Same native Video 7 minutos grid. Calendar waits for backend finalization before submitting.
       readyActions.insertAdjacentHTML("beforeend",
         '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+id+'\','+number+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
         '<button class="danger" onclick="deleteProductionJob(\''+id+'\',this)">Excluir</button>'
