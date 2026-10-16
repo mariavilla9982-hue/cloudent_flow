@@ -96,19 +96,13 @@ begin
  update public.x_account_configs set next_publish_at=case when p.scheduled_at is null then now()+make_interval(mins=>interval_minutes) else next_publish_at end,last_worker_at=now(),last_error=null,updated_at=now() where platform_account_id=p_account_id;
 end $$;
 -- Disable legacy claim to keep old invocations from consuming account-scoped jobs.
-create or replace function public.claim_x_upload_post(p_user_id uuid,p_worker_id text) returns jsonb language sql security invoker as $$ select null::jsonb $$;
+create or replace function public.claim_x_upload_post(p_user_id uuid,p_worker_id text) returns jsonb language sql security invoker set search_path=public,pg_temp as $$ select null::jsonb $$;
 revoke all on function public.claim_x_account_post(uuid,text),public.complete_x_upload_post(uuid,text,uuid,text,text,text) from public,anon,authenticated;
 grant execute on function public.claim_x_account_post(uuid,text),public.complete_x_upload_post(uuid,text,uuid,text,text,text) to service_role;
 
 create table public.x_audit_log(id bigint generated always as identity primary key,workspace_id uuid not null references public.workspaces(id),user_id uuid references auth.users(id),platform_account_id uuid references public.platform_accounts(id),event_type text not null,metadata jsonb not null default '{}',created_at timestamptz not null default now());
 create table cloudent_private.rate_limits(user_id uuid not null,bucket text not null,window_start timestamptz not null,requests int not null,primary key(user_id,bucket,window_start));
-create function public.cloudent_rate_limit(p_user uuid,p_bucket text,p_limit int default 60) returns boolean language plpgsql security invoker set search_path=public,pg_temp as $$
-declare n int; w timestamptz:=date_trunc('minute',now());
-begin
- insert into cloudent_private.rate_limits values(p_user,p_bucket,w,1) on conflict(user_id,bucket,window_start) do update set requests=rate_limits.requests+1 returning requests into n;
- delete from cloudent_private.rate_limits where window_start<now()-interval '1 day';
- return n<=least(120,greatest(1,p_limit));
-end $$;
+create function public.cloudent_rate_limit(p_user uuid,p_bucket text,p_limit int default 60) returns boolean language plpgsql security invoker set search_path=public,pg_temp as $$declare n int; w timestamptz:=date_trunc('minute',now());begin insert into cloudent_private.rate_limits values(p_user,p_bucket,w,1) on conflict(user_id,bucket,window_start) do update set requests=rate_limits.requests+1 returning requests into n; delete from cloudent_private.rate_limits where window_start<now()-interval '1 day'; return n<=least(120,greatest(1,p_limit));end $$;
 revoke all on function public.cloudent_rate_limit(uuid,text,int) from public,anon,authenticated;
 grant execute on function public.cloudent_rate_limit(uuid,text,int) to service_role;
 
