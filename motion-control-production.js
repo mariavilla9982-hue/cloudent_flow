@@ -9,15 +9,15 @@
     window.CloudentAuthQuotaRecovery={installed:true};
     if(typeof signInCloud!=="function"||typeof authRequest!=="function")return;
 
-    const quotaError=/exceed_(?:cached_)?egress_quota|service for this project is restricted|upgrade their plan|removed caps|\b402\b/i;
+    const quotaError=/exceed_(?:cached_)?egress_quota|service for this project is restricted|upgrade their plan|removed caps|\b402\b|failed to fetch|networkerror|load failed/i;
     async function recoverCloudentSession(email,password){
-      const res=await fetch(SUPABASE_URL+"/functions/v1/cloudent-x-local-auth?action=login",{
+      const res=await fetch("/api/auth-recovery?action=login",{
         method:"POST",
-        headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({email,password})
       });
       let data=null;try{data=await res.json()}catch{}
-      if(!res.ok)throw new Error(data?.error==="invalid_credentials"?"Email ou senha incorretos.":(data?.error||"Não foi possível validar seu acesso."));
+      if(!res.ok)throw new Error(data?.error==="invalid_credentials"?"Email ou senha incorretos.":data?.error==="auth_recovery_unreachable"?"O acesso de emergência está temporariamente indisponível.":(data?.error||"Não foi possível validar seu acesso."));
       if(data?.mode==="supabase"&&data?.session?.access_token)return data.session;
       if(data?.mode==="local"&&data?.role==="admin"&&data?.token&&data?.user_id){
         const expMs=Date.parse(data.expires_at||"");
@@ -48,9 +48,9 @@
         const token=String(cloudSession?.access_token||"");
         if(cloudSession?.cloudent_local&&token.startsWith("cf_local_")){
           try{
-            await fetch(SUPABASE_URL+"/functions/v1/cloudent-x-local-auth?action=logout",{
+            await fetch("/api/auth-recovery?action=logout",{
               method:"POST",
-              headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json","x-cloudent-x-session":token.slice("cf_local_".length)},
+              headers:{"Content-Type":"application/json","x-cloudent-x-session":token.slice("cf_local_".length)},
               body:"{}"
             });
           }catch{}
