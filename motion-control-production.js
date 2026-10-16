@@ -64,6 +64,23 @@
     wrapped.__motionStorageSafe=true;loadProductionThumb=wrapped;
   }
 
+  function patchMotionDraftPreview(){
+    if(document.getElementById("cloudentMotionPreviewFitStyle"))return;
+    const style=document.createElement("style");
+    style.id="cloudentMotionPreviewFitStyle";
+    style.textContent=`
+      #production.motion-control-mode .production-drop-live{min-height:320px!important}
+      #production.motion-control-mode .production-upload-preview{background:#050505!important}
+      #production.motion-control-mode .production-upload-preview video,
+      #production.motion-control-mode .production-upload-preview img{object-fit:contain!important;transform:none!important;background:#050505}
+      #production.motion-control-mode .production-drop-live:hover .production-upload-preview video,
+      #production.motion-control-mode .production-drop-live:hover .production-upload-preview img{transform:none!important}
+      @media(max-width:760px){
+        #production.motion-control-mode .production-drop-live{min-height:260px!important}
+      }`;
+    (document.head||document.documentElement).appendChild(style);
+  }
+
   function applyExactVideo7Actions(){
     if(uiState.patched)return;
     if(typeof productionJobRow!=="function"){
@@ -125,11 +142,12 @@
 
     patchCalendarScheduling();
     patchMotionThumbFailures();
+    patchMotionDraftPreview();
     if(!document.getElementById("cloudentMotionStorageScript")){
       const storageScript=document.createElement("script");storageScript.id="cloudentMotionStorageScript";storageScript.src="/motion-storage-ui.js?v=1";storageScript.async=false;(document.head||document.documentElement).appendChild(storageScript);
     }
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=14}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=15}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 
