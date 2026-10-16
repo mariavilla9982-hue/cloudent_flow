@@ -4,6 +4,61 @@
 
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
+  function installAuthQuotaRecovery(){
+    if(window.CloudentAuthQuotaRecovery?.installed)return;
+    window.CloudentAuthQuotaRecovery={installed:true};
+    if(typeof signInCloud!=="function"||typeof authRequest!=="function")return;
+
+    const quotaError=/exceed_(?:cached_)?egress_quota|service for this project is restricted|upgrade their plan|removed caps|\b402\b/i;
+    async function recoverSupabaseSession(email,password){
+      const res=await fetch(SUPABASE_URL+"/functions/v1/cloudent-x-local-auth?action=login",{
+        method:"POST",
+        headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+        body:JSON.stringify({email,password})
+      });
+      let data=null;try{data=await res.json()}catch{}
+      if(!res.ok)throw new Error(data?.error==="invalid_credentials"?"Email ou senha incorretos.":(data?.error||"Não foi possível validar seu acesso."));
+      if(data?.mode!=="supabase"||!data?.session?.access_token){
+        throw new Error("O Supabase ainda está bloqueando a criação da sessão. O acesso e os dados da conta continuam preservados.");
+      }
+      return data.session;
+    }
+
+    signInCloud=async function(){
+      const email=$("#loginEmail")?.value?.trim()||$("#authEmail")?.value?.trim();
+      const password=$("#loginPassword")?.value||$("#authPassword")?.value||"";
+      if(!email||!password){setLoginMessage("Informe email e senha.","error");return}
+      setLoginMessage("Validando sua conta…");
+      setLoginBusy(true);
+      try{
+        let session=null;
+        try{
+          session=await authRequest("/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
+        }catch(error){
+          const message=String(error?.message||error||"");
+          if(!quotaError.test(message))throw error;
+          setLoginMessage("Cota do Supabase atingida. Recuperando sua sessão com segurança…");
+          session=await recoverSupabaseSession(email,password);
+        }
+        persistCloudSession(session);
+        cloudLoading=true;
+        await initCloud();
+        cloudLoading=false;
+        syncAuthGate();
+        renderAll();
+        loadDeferredCloudData();
+        await xPostingRequest("audit-session",{event:"login"}).catch(()=>{});
+        setLoginMessage("");
+      }catch(error){
+        persistCloudSession(null);
+        syncAuthGate();
+        setLoginMessage(error?.message||"Não foi possível entrar.","error");
+      }finally{
+        setLoginBusy(false);
+      }
+    };
+  }
+
   async function waitMotionReady(id){
     for(let attempt=0;attempt<12;attempt++){
       const current=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
@@ -198,6 +253,7 @@
   }
 
   function boot(){
+    installAuthQuotaRecovery();
     if(window.CloudentMotionControl?.version>=6){
       applyExactVideo7Actions();
       return;
