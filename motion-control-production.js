@@ -10,7 +10,7 @@
     if(typeof signInCloud!=="function"||typeof authRequest!=="function")return;
 
     const quotaError=/exceed_(?:cached_)?egress_quota|service for this project is restricted|upgrade their plan|removed caps|\b402\b/i;
-    async function recoverSupabaseSession(email,password){
+    async function recoverCloudentSession(email,password){
       const res=await fetch(SUPABASE_URL+"/functions/v1/cloudent-x-local-auth?action=login",{
         method:"POST",
         headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
@@ -18,10 +18,45 @@
       });
       let data=null;try{data=await res.json()}catch{}
       if(!res.ok)throw new Error(data?.error==="invalid_credentials"?"Email ou senha incorretos.":(data?.error||"Não foi possível validar seu acesso."));
-      if(data?.mode!=="supabase"||!data?.session?.access_token){
-        throw new Error("O Supabase ainda está bloqueando a criação da sessão. O acesso e os dados da conta continuam preservados.");
+      if(data?.mode==="supabase"&&data?.session?.access_token)return data.session;
+      if(data?.mode==="local"&&data?.role==="admin"&&data?.token&&data?.user_id){
+        const expMs=Date.parse(data.expires_at||"");
+        const expiresAt=Number.isFinite(expMs)?Math.floor(expMs/1000):Math.floor(Date.now()/1000)+2592000;
+        return {
+          access_token:"cf_local_"+String(data.token),
+          refresh_token:"",
+          token_type:"bearer",
+          expires_in:Math.max(60,expiresAt-Math.floor(Date.now()/1000)),
+          expires_at:expiresAt,
+          cloudent_local:true,
+          user:{
+            id:String(data.user_id),
+            email:String(data.email||email),
+            aud:"authenticated",
+            role:"authenticated",
+            app_metadata:{provider:"cloudent_local",providers:["cloudent_local"],cloudent_role:"admin"},
+            user_metadata:{cloudent_role:"admin"}
+          }
+        };
       }
-      return data.session;
+      throw new Error("Não foi possível recuperar sua sessão administrativa agora.");
+    }
+
+    const nativeSignOut=typeof signOutCloud==="function"?signOutCloud:null;
+    if(nativeSignOut){
+      signOutCloud=async function(){
+        const token=String(cloudSession?.access_token||"");
+        if(cloudSession?.cloudent_local&&token.startsWith("cf_local_")){
+          try{
+            await fetch(SUPABASE_URL+"/functions/v1/cloudent-x-local-auth?action=logout",{
+              method:"POST",
+              headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json","x-cloudent-x-session":token.slice("cf_local_".length)},
+              body:"{}"
+            });
+          }catch{}
+        }
+        return nativeSignOut();
+      };
     }
 
     signInCloud=async function(){
@@ -37,8 +72,8 @@
         }catch(error){
           const message=String(error?.message||error||"");
           if(!quotaError.test(message))throw error;
-          setLoginMessage("Cota do Supabase atingida. Recuperando sua sessão com segurança…");
-          session=await recoverSupabaseSession(email,password);
+          setLoginMessage("Cota do Supabase atingida. Recuperando seu acesso administrativo…");
+          session=await recoverCloudentSession(email,password);
         }
         persistCloudSession(session);
         cloudLoading=true;
