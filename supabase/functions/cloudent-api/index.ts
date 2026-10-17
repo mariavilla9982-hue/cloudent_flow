@@ -1691,7 +1691,8 @@ Deno.serve(async (req: Request) => {
         frameNodeId:String(raw.frameNodeId||""),
         frameFieldName:String(raw.frameFieldName||"image"),
         concurrency:Number(raw.concurrency||1),
-        apiKeyConfigured:!!raw.apiKeyCipher
+        apiKeyConfigured:!!raw.apiKeyCipher&&raw.apiKeyConfigured!==false,
+        reconnectRequired:raw.apiKeyConfigured===false
       };
       const online=!!worker?.last_heartbeat && new Date(worker.last_heartbeat).getTime()>Date.now()-3*60*1000;
       return json({
@@ -2513,7 +2514,7 @@ Deno.serve(async (req: Request) => {
         },
         workflow:{
           enabled:integration?.enabled!==false&&cfg.faceSwapEnabled!==false,
-          configured:!!(cfg.apiKeyCipher&&cfg.apiKeyIv&&cfg.faceSwapWorkflowId&&cfg.faceSwapReferenceNodeId),
+          configured:!!(cfg.apiKeyConfigured!==false&&cfg.apiKeyCipher&&cfg.apiKeyIv&&cfg.faceSwapWorkflowId&&cfg.faceSwapReferenceNodeId),
           workflow_id:String(cfg.faceSwapWorkflowId||""),
           character_node_id:String(cfg.faceSwapCharacterNodeId||"23"),
           reference_node_id:String(cfg.faceSwapReferenceNodeId||"17"),
@@ -4024,6 +4025,8 @@ Deno.serve(async (req: Request) => {
         cfg.apiKeyCipher=encrypted.cipher;
         cfg.apiKeyIv=encrypted.iv;
         cfg.apiKeyConfigured=true;
+        cfg.status="configured";
+        delete cfg.credential_migration;
       }
       cfg.baseUrl="https://www.runninghub.ai";
       const enabled=body.enabled!==undefined?!!body.enabled:!!current?.enabled;

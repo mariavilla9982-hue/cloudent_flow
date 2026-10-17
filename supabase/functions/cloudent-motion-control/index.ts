@@ -127,6 +127,11 @@ Deno.serve(async(req)=>{
       },runninghub:{enabled:integration?.enabled!==false,apiKeyConfigured:!!integration?.config?.apiKeyConfigured}});
     }
 
+    if(req.method==="POST"&&["upload-ticket","upload-complete","upload"].includes(action)){
+      const {data:credentials,error:credentialsError}=await admin.from("integrations").select("config").eq("provider","runninghub").maybeSingle();
+      if(credentialsError)throw credentialsError;
+      if(!credentials?.config?.apiKeyConfigured)return out({ok:false,error:"provider_reconnection_required",message:"Reconecte o RunningHub e o Backblaze em Configurações antes de iniciar uma nova geração."},409);
+    }
     if(req.method==="POST"&&action==="upload-ticket"){
       const body=await req.json();
       const videoSize=Math.max(0,Number(body.video_size_bytes||0));

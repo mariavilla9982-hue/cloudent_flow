@@ -4659,7 +4659,7 @@ async function initCloud(){
     backendOnline=true;currentPage="xStudio";
     await loadXPostingStatus();showPage("xStudio");if(location.hash&&location.hash!=="#xStudio")deniedPage();return;
   }
-  await withTimeout(testBackend(),4000,"conexão com servidor").catch(()=>{backendOnline=false});
+  await withTimeout(testBackend(),12000,"conexão com servidor").catch(()=>{backendOnline=false});
   if(!backendOnline)return;
 
   await withTimeout(loadPlatformAccounts(),4500,"contas");
@@ -11617,7 +11617,7 @@ async function init(){
   },5500);
 
   try{
-    await withTimeout(initCloud(),6000,"inicialização");
+    await withTimeout(initCloud(),20000,"inicialização");
   }catch(err){
     console.warn("Cloud boot continued in background:",err);
   }finally{
