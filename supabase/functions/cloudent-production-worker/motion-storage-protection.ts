@@ -57,20 +57,19 @@ export async function motionStorageHealth(admin:any){
     if(!r.ok||await r.text()!=="C")throw new Error("Armazenamento não confirmou a leitura de verificação.");
     return await storageRPC(admin,"motion_storage_finish_probe",{p_owner:owner,p_ok:true});
   }catch(e){
-    // A read failure may already have opened the breaker and invalidated this lease.
     return await storageRPC(admin,"motion_storage_finish_probe",{p_owner:owner,p_ok:false,p_reason:e instanceof MotionStorageSafetyError?e.code:"storage_unavailable",p_error:e instanceof Error?e.message:"Armazenamento indisponível."});
   }
 }
 export async function requireMotionStorage(admin:any){
   const state=await motionStorageHealth(admin);
-  if(!state?.allow_primary)throw new MotionStorageSafetyError("Proteção ativa: novas gerações aguardam a recuperação do armazenamento. Sua fila foi preservada.");
+  if(!state?.allow_primary)throw new MotionStorageSafetyError("Proteção ativa: novas gerações aguardam a recuperação do Backblaze. Sua fila foi preservada.");
   return state;
 }
-export async function reserveMotionStorage(admin:any,jobId:string,userId:string,inputBytes=0,outputBytes=RESERVE_OUTPUT_MAX){
-  if(inputBytes>RESERVE_INPUT_MAX||outputBytes>RESERVE_OUTPUT_MAX)throw new MotionStorageSafetyError("Reserva do Motion aceita entradas até 12 MB e resultado até 40 MB.","storage_reserve_file_limit");
-  const r=await storageRPC(admin,"motion_storage_reserve",{p_job_id:jobId,p_user_id:userId,p_input_bytes:inputBytes,p_output_bytes:outputBytes});
-  if(!r?.ok)throw new MotionStorageSafetyError("A reserva de armazenamento atingiu o teto de segurança. A fila foi preservada; aguarde a recuperação do armazenamento principal.","storage_reserve_full");
-  return r;
+export async function reserveMotionStorage(_admin:any,_jobId:string,_userId:string,_inputBytes=0,_outputBytes=RESERVE_OUTPUT_MAX){
+  throw new MotionStorageSafetyError(
+    "Backblaze B2 é obrigatório para mídia do Motion. A fila foi preservada; nenhum vídeo será salvo no Supabase.",
+    "backblaze_required"
+  );
 }
 export async function commitMotionStorage(admin:any,jobId:string,path:string,size:number){
   await storageRPC(admin,"motion_storage_commit",{p_job_id:jobId,p_result_path:path,p_result_bytes:size});
