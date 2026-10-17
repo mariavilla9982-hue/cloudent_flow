@@ -1,5 +1,5 @@
 // This route is reached only after native Auth/session and administrator checks.
-export async function handleXMembers(req:Request,admin:any,member:any,userId:string,url:URL,respond:any){
+async function handleXMembersImpl(req:Request,admin:any,member:any,userId:string,url:URL,respond:any){
   if(member.role!=="admin"||!member.enabled)return respond({error:"forbidden"},403);
   const workspace=member.workspace_id,action=url.searchParams.get("action");
   if(req.method==="GET"){
@@ -56,4 +56,14 @@ export async function handleXMembers(req:Request,admin:any,member:any,userId:str
     return respond({ok:true});
   }
   return respond({error:"not_found"},404);
+}
+
+export async function handleXMembers(req:Request,admin:any,member:any,userId:string,url:URL,respond:any){
+ try{return await handleXMembersImpl(req,admin,member,userId,url,respond);}catch(error:any){
+  const message=String(error?.message||"");
+  if(["forbidden","forbidden_account"].includes(message))return respond({error:"forbidden"},403);
+  if(["invite_role_conflict","cannot_change_self"].includes(message))return respond({error:message},409);
+  if(["member_not_found","invite_not_found"].includes(message))return respond({error:"not_found"},404);
+  throw error;
+ }
 }
