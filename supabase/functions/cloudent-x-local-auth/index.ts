@@ -1,78 +1,81 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const cors={
-  "Access-Control-Allow-Origin":"*",
-  "Access-Control-Allow-Headers":"content-type, apikey, x-client-info, x-cloudent-x-session, x-cloudent-worker-secret",
-  "Access-Control-Allow-Methods":"GET,POST,OPTIONS",
-  "Content-Type":"application/json",
-  "Cache-Control":"no-store"
-};
+// The legacy route name remains for frontend compatibility. All credentials and
+// sessions are verified by Supabase Auth in this function's own project.
+const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type,apikey,x-cloudent-x-session","Access-Control-Allow-Methods":"GET,POST,OPTIONS","Content-Type":"application/json","Cache-Control":"no-store"};
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
-const row=(value:any)=>Array.isArray(value)?value[0]||null:value||null;
-
-async function recoverSupabaseSession(admin:any,email:string){
-  const {data:link,error:linkError}=await admin.auth.admin.generateLink({type:"magiclink",email});
-  if(linkError)return {ok:false,stage:"generate_link",error:String(linkError.message||linkError)};
-  const hash=String((link as any)?.properties?.hashed_token||(link as any)?.properties?.hashedToken||"");
-  if(!hash)return {ok:false,stage:"generate_link",error:"missing_hash"};
-  const {data:verified,error:verifyError}=await admin.auth.verifyOtp({token_hash:hash,type:"email"});
-  if(verifyError||!verified?.session?.access_token)return {ok:false,stage:"verify_otp",error:String(verifyError?.message||"session_missing")};
-  return {ok:true,session:verified.session};
+const base=String(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"");
+const anon=String(Deno.env.get("SUPABASE_ANON_KEY")||"");
+const service=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"");
+async function call(path:string,method="GET",body?:unknown,token?:string,privileged=false){
+  const response=await fetch(base+path,{method,headers:{apikey:privileged?service:anon,Authorization:"Bearer "+(token||(privileged?service:anon)),"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
+  const data=await response.json().catch(()=>null);
+  return {response,data};
 }
-
-Deno.serve(async(req:Request)=>{
-  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
-  const url=new URL(req.url),action=url.searchParams.get("action")||"session";
-  const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
+async function member(token:string){
+  const {response,data:user}=await call("/auth/v1/user","GET",undefined,token);
+  if(!response.ok||!user?.id)return null;
+  let claims;
+  try{claims=JSON.parse(atob(token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")))}catch{return null;}
+  if(claims.iss!==base+"/auth/v1"||!claims.session_id)return null;
+  const active=await call("/rest/v1/rpc/cloudent_auth_session_active","POST",{p_session_id:claims.session_id,p_user_id:user.id},undefined,true);
+  if(!active.response.ok)throw new Error("session_check_unavailable");
+  if(active.data!==true)return null;
+  const m=await call("/rest/v1/app_members?select=user_id,role,enabled,workspace_id&user_id=eq."+encodeURIComponent(user.id),"GET",undefined,undefined,true);
+  if(!m.response.ok)throw new Error("membership_check_unavailable");
+  const access=m.data?.[0];
+  if(!access?.enabled||!["admin","x_user"].includes(access.role)||!access.workspace_id)return {forbidden:true};
+  return {user_id:user.id,email:user.email,role:access.role,workspace_id:access.workspace_id,expires_at:new Date(claims.exp*1000).toISOString()};
+}
+export async function handler(req:Request){
+  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
+  if(!base||!anon||!service)return json({ok:false,error:"auth_configuration_missing_or_invalid"},503);
+  const action=new URL(req.url).searchParams.get("action")||"session";
+  if(!["health","login","session","logout","recover","password"].includes(action))return json({ok:false,error:"not_found"},404);
+  if((action==="health"&&req.method!=="GET")||(action!=="health"&&req.method!=="POST"&&!(action==="session"&&req.method==="GET")))return json({ok:false,error:"method_not_allowed"},405);
   try{
-    if(action==="health"&&req.method==="GET"){
-      const {error}=await admin.from("workspaces").select("id",{count:"exact",head:true});
-      return json({ok:!error,service:"cloudent-x-local-auth",database:!error?"reachable":"unavailable"},error?503:200);
+    if(action==="health"){
+      const [db,auth]=await Promise.all([call("/rest/v1/workspaces?select=id&limit=0","GET",undefined,undefined,true),call("/auth/v1/settings")]);
+      const ok=db.response.ok&&auth.response.ok;
+      return json({ok,service:"cloudent-x-local-auth",database:db.response.ok?"reachable":"unavailable",auth:auth.response.ok?"reachable":"unavailable",project_ref:new URL(base).hostname.split(".")[0]},ok?200:503);
     }
-    if(action==="session-diagnostic"&&req.method==="POST"){
-      const supplied=String(req.headers.get("x-cloudent-worker-secret")||"");
-      const {data:expected,error:secretError}=await admin.rpc("get_cloudent_worker_secret");
-      if(secretError||!expected||supplied!==String(expected))return json({ok:false,error:"forbidden"},403);
-      const body=await req.json().catch(()=>({}));
-      const email=String(body.email||"").trim().toLowerCase();
-      if(!email)return json({ok:false,error:"missing_email"},400);
-      const recovered=await recoverSupabaseSession(admin,email);
-      if(!recovered.ok)return json({ok:false,stage:recovered.stage,error:recovered.error},503);
-      return json({ok:true,stage:"session_created"});
-    }
-    if(action==="login"&&req.method==="POST"){
-      const body=await req.json().catch(()=>({}));
+    const body=req.method==="POST"?await req.json().catch(()=>({})):{};
+    if(action==="login"){
       const email=String(body.email||"").trim().toLowerCase(),password=String(body.password||"");
-      if(!email||!password)return json({ok:false,error:"invalid_credentials"},401);
-      const {data,error}=await admin.rpc("cloudent_x_local_login",{p_email:email,p_password:password});
-      if(error)throw error;
-      const local=row(data);
-      if(!local?.session_token)return json({ok:false,error:"invalid_credentials"},401);
-      if(local.role==="admin"){
-        const recovered=await recoverSupabaseSession(admin,local.email);
-        if(recovered.ok)return json({ok:true,mode:"supabase",session:recovered.session,role:local.role,workspace_id:local.workspace_id});
-        console.warn("supabase_session_recovery_unavailable",recovered.stage,recovered.error);
+      if(!email||!password||email.length>320||password.length>4096)return json({ok:false,error:"invalid_credentials"},401);
+      const login=await call("/auth/v1/token?grant_type=password","POST",{email,password});
+      if(!login.response.ok||!login.data?.access_token)return json({ok:false,error:login.response.status===429?"rate_limited":"invalid_credentials"},login.response.status===429?429:401);
+      const access=await member(login.data.access_token);
+      if(!access||access.forbidden){
+        await call("/auth/v1/logout?scope=local","POST",{},login.data.access_token);
+        return json({ok:false,error:"forbidden"},403);
       }
-      return json({ok:true,mode:"local",token:local.session_token,expires_at:local.expires_at,user_id:local.user_id,workspace_id:local.workspace_id,role:local.role,email:local.email});
+      return json({ok:true,mode:"supabase",session:login.data,role:access.role,workspace_id:access.workspace_id});
     }
-    const token=String(req.headers.get("x-cloudent-x-session")||"").trim();
+    if(action==="recover"){
+      const email=String(body.email||"").trim().toLowerCase();
+      if(!/^\S+@\S+\.\S+$/.test(email)||email.length>320)return json({ok:false,error:"invalid_email"},400);
+      const result=await call("/auth/v1/recover?redirect_to="+encodeURIComponent("https://cloudent-flow.vercel.app/recuperar-acesso.html"),"POST",{email});
+      return result.response.ok?json({ok:true}):json({ok:false,error:result.response.status===429?"rate_limited":"recovery_email_unavailable"},result.response.status===429?429:503);
+    }
+    const token=String(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"").trim()||String(req.headers.get("x-cloudent-x-session")||"").trim();
     if(!token)return json({ok:false,error:"authentication_required"},401);
-    if(action==="session"&&(req.method==="GET"||req.method==="POST")){
-      const {data,error}=await admin.rpc("cloudent_x_local_session",{p_token:token});
-      if(error)throw error;
-      const session=row(data);
-      if(!session?.user_id)return json({ok:false,error:"invalid_session"},401);
-      return json({ok:true,...session});
+    const access=await member(token);
+    if(!access)return json({ok:false,error:"invalid_session"},401);
+    if(access.forbidden)return json({ok:false,error:"forbidden"},403);
+    if(action==="session")return json({ok:true,...access});
+    if(action==="logout"){
+      const out=await call("/auth/v1/logout?scope=local","POST",{},token);
+      return out.response.ok?json({ok:true,revoked:true}):json({ok:false,error:"logout_failed"},502);
     }
-    if(action==="logout"&&req.method==="POST"){
-      const {data,error}=await admin.rpc("cloudent_x_local_logout",{p_token:token});
-      if(error)throw error;
-      return json({ok:true,revoked:Boolean(data)});
+    if(action==="password"){
+      const password=String(body.password||"");
+      if(password.length<8||password.length>4096)return json({ok:false,error:"password_too_short"},400);
+      const update=await call("/auth/v1/user","PUT",{password},token);
+      return update.response.ok?json({ok:true}):json({ok:false,error:"password_update_failed"},400);
     }
-    return json({ok:false,error:"not_found"},404);
-  }catch(error:any){
-    console.error("local-auth",error?.message||error);
-    return json({ok:false,error:"auth_service_error"},500);
+  }catch{
+    // Never log passwords, bodies, JWTs, refresh tokens or upstream messages.
+    console.error("auth-service","upstream_or_membership_unavailable");
+    return json({ok:false,error:"auth_service_unavailable"},503);
   }
-});
+}
+Deno.serve(handler);

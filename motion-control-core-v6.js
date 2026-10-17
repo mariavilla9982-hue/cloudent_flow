@@ -16,7 +16,7 @@
   let activeMode=localStorage.getItem(MODE_KEY)===MOTION?MOTION:STANDARD;
   let motionConfig=null;
   let configLoadedAt=0;
-  const MOTION_EDGE="https://dxrhvudvutmgrmfkmzxo.supabase.co/functions/v1/cloudent-motion-control";
+  const MOTION_EDGE=(window.CloudentConfig?.supabaseUrl||"")+"/functions/v1/cloudent-motion-control";
 
   const isMotionJob=job=>String(job?.meta?.workflow_key||"")===MOTION;
   const belongsToMode=job=>activeMode===MOTION?isMotionJob(job):!isMotionJob(job);

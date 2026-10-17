@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script src="/api/auth-config"></script>
 <link rel="icon" type="image/png" href="data:image/png;base64,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">
 <link rel="apple-touch-icon" href="data:image/png;base64,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">
 <meta charset="utf-8">
@@ -4325,6 +4326,7 @@ body.trial-modal-open{overflow:hidden!important}
           </div>
           <div id="loginMessage" class="login-message" aria-live="polite"></div>
           <button id="loginSubmitBtn" class="login-submit" type="submit">Entrar no CloudentFlow</button>
+          <a href="/recuperar-acesso.html" style="color:inherit;text-align:center">Recuperar acesso / definir senha</a>
         </div>
         <div class="login-meta"><span><i></i> Supabase Auth</span><span>Sessão renovada automaticamente</span></div>
         <div class="login-mini"><b>Acesso restrito.</b> Esta tela usa a autenticação que já existe no CloudentFlow; publicação, filas e dados permanecem no backend atual.</div>
@@ -4434,8 +4436,8 @@ const navItems=[
   ["cloudentAI","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3 14.1 8.9 20 11l-5.9 2.1L12 19l-2.1-5.9L4 11l5.9-2.1L12 3Z\"></path><path d=\"m18 3 .8 2.2L21 6l-2.2.8L18 9l-.8-2.2L15 6l2.2-.8L18 3Z\"></path></svg>","Cloudent AI"],
   ["settings","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.08A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.08A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.08A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.39.28.7.63.88 1.08.17.44.21.92.12 1.39-.08.47-.29.9-.6 1.26-.11.13-.24.24-.4.34Z\"></path></svg>","Configurações"]
 ];
-const SUPABASE_URL="https://dxrhvudvutmgrmfkmzxo.supabase.co";
-const SUPABASE_KEY="sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI";
+const SUPABASE_URL=window.CloudentConfig?.supabaseUrl||"";
+const SUPABASE_KEY=window.CloudentConfig?.publishableKey||"";
 const EDGE_URL=SUPABASE_URL+"/functions/v1/cloudent-api";
 const IG_CONNECT_URL=SUPABASE_URL+"/functions/v1/instagram-connect";
 const IG_METRICS_URL=SUPABASE_URL+"/functions/v1/instagram-metrics-today";
@@ -4576,6 +4578,7 @@ function toggleLoginPassword(){
   input.type=input.type==="password"?"text":"password";
 }
 async function authRequest(path,options={}){
+  if(!SUPABASE_URL||!SUPABASE_KEY)throw new Error("Configuração de acesso indisponível. Tente novamente em instantes.");
   const headers={"apikey":SUPABASE_KEY,"Content-Type":"application/json",...(options.headers||{})};
   const res=await fetch(SUPABASE_URL+"/auth/v1"+path,{...options,headers});
   let data=null;try{data=await res.json()}catch{}
@@ -4583,6 +4586,7 @@ async function authRequest(path,options={}){
   return data;
 }
 function persistCloudSession(session){
+  if(cloudSession?.user?.id!==session?.user?.id)cloudAccess=null;
   cloudSession=session||null;
   if(session)localStorage.setItem(SESSION_KEY,JSON.stringify(session));
   else localStorage.removeItem(SESSION_KEY);
@@ -4594,7 +4598,7 @@ async function refreshCloudSession(){
       method:"POST",body:JSON.stringify({refresh_token:cloudSession.refresh_token})
     });
     persistCloudSession(r);
-    cloudAccess=null;return true;
+    return true;
   }catch(e){persistCloudSession(null);return false}
 }
 function withTimeout(promise,ms,label="operação"){
@@ -4637,13 +4641,18 @@ function deniedPage(){document.querySelectorAll(".page").forEach(el=>el.classLis
 async function initCloud(){
   try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
   if(!cloudSession)return;
+  try{
+    const claims=JSON.parse(atob(String(cloudSession.access_token||"").split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
+    if(claims.iss!==SUPABASE_URL+"/auth/v1")throw new Error("wrong_project");
+  }catch{persistCloudSession(null);return;}
 
   if(cloudSession?.expires_at && cloudSession.expires_at*1000<Date.now()+60000){
     await withTimeout(refreshCloudSession(),4000,"renovação da sessão").catch(()=>false);
   }
   if(!cloudSession)return;
 
-  cloudAccess=await cloudFetch("?resource=session");
+  try{cloudAccess=await authRecoveryRequest("session",{},cloudSession.access_token)}
+  catch(error){persistCloudSession(null);throw error;}
   document.body.classList.toggle("x-only",cloudAccess.role==="x_user");
   nav();
   if(cloudAccess.role==="x_user"){
@@ -5248,14 +5257,22 @@ async function signUpCloud(){
     }else toast("Conta criada. Se a confirmação por email estiver ativa, confirme seu email e depois entre.","info");
   }catch(e){toast(friendlyCloudentError(e.message),"err")}
 }
+async function authRecoveryRequest(action,body={},token=""){
+  const res=await fetch("/api/auth-recovery?action="+encodeURIComponent(action),{
+    method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify(body),cache:"no-store"
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.error==="invalid_credentials"?"Email ou senha incorretos. Se ainda não definiu a senha no novo acesso, use Recuperar acesso.":data.error==="forbidden"?"Sua conta não tem acesso ativo ao workspace.":data.error==="invalid_session"?"Sua sessão expirou. Entre novamente.":"Não foi possível validar seu acesso. Tente novamente em instantes.");
+  return data;
+}
 async function signInCloud(){
   const email=$("#loginEmail")?.value?.trim()||$("#authEmail")?.value?.trim(),password=$("#loginPassword")?.value||$("#authPassword")?.value||"";
   if(!email||!password){setLoginMessage("Informe email e senha.","error");return}
   setLoginMessage("Validando sua conta…");
   setLoginBusy(true);
   try{
-    const r=await authRequest("/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
-    persistCloudSession(r);
+    const r=await authRecoveryRequest("login",{email,password});
+    persistCloudSession(r.session);
     cloudLoading=true;
     await initCloud();
     cloudLoading=false;
@@ -5280,7 +5297,7 @@ async function signOutCloud(){
   for(const key of ["cloudentflow-stage4","cloudentflow-stage3"])localStorage.removeItem(key);
 
   if(cloudSession?.access_token){
-    try{await fetch(SUPABASE_URL+"/auth/v1/logout",{method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+cloudSession.access_token}})}catch{}
+    try{await authRecoveryRequest("logout",{},cloudSession.access_token)}catch{}
   }
   persistCloudSession(null);metricsAccountId="";metricsDataError="";metricsLastCollectedAt=null;metricsLoadVersion++;followerLoadVersion++;backendOnline=false;instagramIntegration=null;platformAccounts=[];liveInstagramMetrics=[];automationData=null;followerStats=null;
   syncAuthGate();renderAll();
@@ -11680,7 +11697,7 @@ window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);if(c
 
 init();
 </script>
-<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=14"></script>
+<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=15"></script>
 </body>
 </html>
 

@@ -1,5 +1,4 @@
-const UPSTREAM="https://dxrhvudvutmgrmfkmzxo.supabase.co/functions/v1/cloudent-x-local-auth";
-const PUBLISHABLE_KEY="sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI";
+import { supabaseConfig } from "../lib/supabase-config.js";
 
 function send(res,status,body){
   res.statusCode=status;
@@ -16,21 +15,25 @@ export default async function handler(req,res){
   }
 
   const action=String(req.query?.action||"").trim();
-  if(!["health","login","logout","session"].includes(action))return send(res,404,{ok:false,error:"not_found"});
+  if(!["health","login","logout","session","recover","password"].includes(action))return send(res,404,{ok:false,error:"not_found"});
   if(action==="health"&&req.method!=="GET")return send(res,405,{ok:false,error:"method_not_allowed"});
   if(action!=="health"&&req.method!=="POST")return send(res,405,{ok:false,error:"method_not_allowed"});
 
+  let config;
+  try{config=supabaseConfig()}catch{return send(res,503,{ok:false,error:"auth_configuration_missing_or_invalid"})}
   const headers={
-    apikey:PUBLISHABLE_KEY,
+    apikey:config.key,
     "Content-Type":"application/json"
   };
+  const authorization=String(req.headers.authorization||"").trim();
+  if(authorization)headers.Authorization=authorization;
   const localSession=String(req.headers["x-cloudent-x-session"]||"").trim();
   if(localSession)headers["x-cloudent-x-session"]=localSession;
 
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),12000);
   try{
-    const upstream=await fetch(UPSTREAM+"?action="+encodeURIComponent(action),{
+    const upstream=await fetch(config.url+"/functions/v1/cloudent-x-local-auth"+"?action="+encodeURIComponent(action),{
       method:req.method,
       headers,
       body:req.method==="POST"?JSON.stringify(req.body||{}):undefined,
@@ -41,7 +44,7 @@ export default async function handler(req,res){
     try{payload=text?JSON.parse(text):{}}catch{payload={ok:false,error:"invalid_upstream_response"};}
     return send(res,upstream.status,payload);
   }catch(error){
-    console.error("auth-recovery-proxy",String(error?.message||error).slice(0,180));
+    console.error("auth-recovery-proxy",error?.name==="AbortError"?"upstream_timeout":"upstream_network_error");
     return send(res,503,{ok:false,error:"auth_recovery_unreachable"});
   }finally{
     clearTimeout(timeout);

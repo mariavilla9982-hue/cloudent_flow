@@ -238,6 +238,13 @@ Deno.serve(async (req: Request) => {
 
     const { data: userData, error: userError } = await admin.auth.getUser(token);
     if (userError || !userData?.user) return json({ ok: false, error: "invalid_user_session" }, 401);
+    let claims:any;
+    try{claims=JSON.parse(atob(token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")))}catch{return json({error:"invalid_user_session"},401);}
+    if(claims.iss!==supabaseUrl+"/auth/v1"||!claims.session_id)return json({error:"invalid_user_session"},401);
+    const {data:activeSession,error:sessionError}=await admin.rpc("cloudent_auth_session_active",{p_session_id:claims.session_id,p_user_id:userData.user.id});
+    if(sessionError)throw sessionError;
+    if(!activeSession)return json({error:"invalid_user_session"},401);
+
 
     const url = new URL(req.url);
     const resource = url.searchParams.get("resource");

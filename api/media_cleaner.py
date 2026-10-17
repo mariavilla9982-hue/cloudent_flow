@@ -11,7 +11,7 @@ import imageio_ffmpeg
 import requests
 
 
-SUPABASE_URL = "https://dxrhvudvutmgrmfkmzxo.supabase.co"
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 MAX_HARD_BYTES = 300 * 1024 * 1024
 
 
@@ -45,7 +45,7 @@ def _allowed_signed_source_url(value):
         host = (parsed.hostname or "").lower()
         if parsed.scheme != "https":
             return False
-        if host == "dxrhvudvutmgrmfkmzxo.supabase.co":
+        if SUPABASE_URL and host == urllib.parse.urlparse(SUPABASE_URL).hostname:
             return True
         return host.endswith(".r2.cloudflarestorage.com") or host.endswith(".backblazeb2.com")
     except Exception:

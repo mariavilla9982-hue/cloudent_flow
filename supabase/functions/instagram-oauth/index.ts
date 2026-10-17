@@ -41,7 +41,7 @@ async function readState(state:string){
   }catch{return null}
 }
 function frontendUrl(){return String(Deno.env.get("CLOUDENT_FRONTEND_URL")||"https://cloudent-flow.vercel.app").replace(/\/$/,"")}
-function redirectUri(){return String(Deno.env.get("SUPABASE_URL")||"https://dxrhvudvutmgrmfkmzxo.supabase.co").replace(/\/$/,"")+"/functions/v1/instagram-oauth"}
+function redirectUri(){return String(Deno.env.get("SUPABASE_URL")||"").replace(/\/$/,"")+"/functions/v1/instagram-oauth"}
 function oauthConfig(){
   const id=envFirst("INSTAGRAM_APP_ID","IG_APP_ID","META_INSTAGRAM_APP_ID");
   const secret=envFirst("INSTAGRAM_APP_SECRET","IG_APP_SECRET","META_INSTAGRAM_APP_SECRET");

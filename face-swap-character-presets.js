@@ -43,9 +43,9 @@
   async function rpc(name,retry=true){
     const token=session()?.access_token;
     if(!token)throw new Error('Entre no CloudentFlow novamente.');
-    const res=await fetch('https://dxrhvudvutmgrmfkmzxo.supabase.co/rest/v1/rpc/set_face_swap_character_preset',{
+    const res=await fetch((window.CloudentConfig?.supabaseUrl||'')+'/rest/v1/rpc/set_face_swap_character_preset',{
       method:'POST',cache:'no-store',
-      headers:{apikey:'sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI',Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      headers:{apikey:window.CloudentConfig?.publishableKey||'',Authorization:'Bearer '+token,'Content-Type':'application/json'},
       body:JSON.stringify({p_preset:name})
     });
     if(res.status===401&&retry&&typeof refreshCloudSession==='function'&&await refreshCloudSession())return rpc(name,false);

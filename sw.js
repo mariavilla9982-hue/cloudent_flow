@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v36";
+const CACHE="cloudentflow-pwa-v37";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -12,6 +12,9 @@ async function injectCalendarPatch(response){
   if(!type.includes("text/html"))return response;
   try{
     let html=await response.text();
+    html=html.replace(/const SUPABASE_URL\s*=\s*["']https:\/\/[^"']+\.supabase\.co["'];/, 'const SUPABASE_URL=window.CloudentConfig?.supabaseUrl||"";')
+      .replace(/const SUPABASE_KEY\s*=\s*["'][^"']+["'];/, 'const SUPABASE_KEY=window.CloudentConfig?.publishableKey||"";');
+    if(!html.includes('src="/api/auth-config"'))html=html.replace('<head>','<head><script src="/api/auth-config"></script>');
     const calendarTag='<script src="/calendar-connect-patch.js?v=8"></script>';
     const mobileScheduleTag='<script src="/production-schedule-mobile-patch.js?v=3"></script>';
     const timeHotfixTag='<script src="/production-schedule-time-hotfix.js?v=1"></script>';
@@ -21,7 +24,7 @@ async function injectCalendarPatch(response){
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
     const backblazeGuardTag='<script src="/backblaze-media-guard.js?v=1"></script>';
-    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=14"></script>';
+    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=15"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;

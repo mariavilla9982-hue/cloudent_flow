@@ -1,7 +1,7 @@
 import { ensureForYouBrowser } from '../lib/foryou-browser.js';
 
-const SUPABASE_URL = 'https://dxrhvudvutmgrmfkmzxo.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI';
+import { supabaseConfig } from "../lib/supabase-config.js";
+const {url:SUPABASE_URL,key:SUPABASE_KEY}=supabaseConfig();
 
 function send(res, status, body) {
   res.statusCode = status;

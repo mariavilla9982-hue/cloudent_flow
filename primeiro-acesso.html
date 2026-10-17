@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script src="/api/auth-config"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#050505">
@@ -50,8 +51,8 @@
   </main>
 <script>
 (() => {
-  const SUPABASE_URL = "https://dxrhvudvutmgrmfkmzxo.supabase.co";
-  const PUBLISHABLE_KEY = "sb_publishable_eu6EGnAw7H-Y5q6w6pmSKQ_88GUR9HI";
+  const SUPABASE_URL = window.CloudentConfig?.supabaseUrl||"";
+  const PUBLISHABLE_KEY = window.CloudentConfig?.publishableKey||"";
   const params = new URLSearchParams(location.search);
   const inviteToken = params.get("token") || "";
   const invitedEmail = (params.get("email") || "").trim().toLowerCase();

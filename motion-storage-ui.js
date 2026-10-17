@@ -1,7 +1,7 @@
 (()=>{
   if(window.CloudentMotionStorage)return;
   const CACHE="cloudent-motion-thumbnails-v1",TTL=7*86400000,MAX=128,MAX_BYTES=8*1024*1024;
-  const EDGE="https://dxrhvudvutmgrmfkmzxo.supabase.co/functions/v1/cloudent-motion-control";
+  const EDGE=(window.CloudentConfig?.supabaseUrl||"")+"/functions/v1/cloudent-motion-control";
   const inflight=new Map(),failed=new Map(),urls=new Map();
   let health=null,lastRefresh=0,refreshing=null;
   const userId=()=>String(typeof cloudSession!=="undefined"?cloudSession?.user?.id||"":"");

@@ -35,7 +35,7 @@
     });
   }
   function isSupabaseFunction(url,slug){
-    return !!url&&url.hostname==="dxrhvudvutmgrmfkmzxo.supabase.co"&&url.pathname.includes("/functions/v1/"+slug);
+    return !!url&&url.origin===window.CloudentConfig?.supabaseUrl&&url.pathname.includes("/functions/v1/"+slug);
   }
 
   window.fetch=async function(input,init){
