@@ -53,6 +53,22 @@ Deno.serve(async(req:Request)=>{
   const action=String(url.searchParams.get("action")||"");
 
   try{
+    let userRes:any,member:any;
+    if(req.method==="POST"&&action==="start"){
+      const authHeader=String(req.headers.get("authorization")||"");
+      const token=authHeader.replace(/^Bearer\s+/i,"").trim();
+      if(!token)return json({error:"unauthorized"},401);
+      const {data:verified,error:userError}=await admin.auth.getUser(token);
+      if(userError||!verified?.user)return json({error:"unauthorized"},401);
+
+      userRes=verified;
+      let claims:any;try{claims=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));}catch{return json({error:"unauthorized"},401);}
+      if(claims.iss!==supabaseUrl+"/auth/v1"||!claims.session_id)return json({error:"unauthorized"},401);
+      const {data:active,error:sessionError}=await admin.rpc("cloudent_auth_session_active",{p_session_id:claims.session_id,p_user_id:userRes.user.id});if(sessionError||!active)return json({error:"unauthorized"},401);
+      const {data:membership}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",userRes.user.id).maybeSingle();
+      member=membership;
+      if(!member?.enabled||member.role!=="admin")return json({error:"forbidden"},403);
+    }
     const {data:master,error:masterError}=await admin.rpc("get_cloudent_worker_secret");
     if(masterError||!master)throw masterError||new Error("worker_secret_missing");
 
@@ -71,14 +87,6 @@ Deno.serve(async(req:Request)=>{
     const callbackUrl=supabaseUrl+"/functions/v1/cloudent-x-oauth?action=callback";
 
     if(req.method==="POST"&&action==="start"){
-      const authHeader=String(req.headers.get("authorization")||"");
-      const token=authHeader.replace(/^Bearer\s+/i,"").trim();
-      if(!token)return json({error:"unauthorized"},401);
-      const {data:userRes,error:userError}=await admin.auth.getUser(token);
-      if(userError||!userRes?.user)return json({error:"unauthorized"},401);
-
-      const {data:member}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",userRes.user.id).maybeSingle();
-      if(!member?.enabled||!["admin","x_user"].includes(member.role))return json({error:"forbidden"},403);
       const {data:allowed}=await admin.rpc("cloudent_rate_limit",{p_user:userRes.user.id,p_bucket:"x-oauth",p_limit:10});if(!allowed)return json({error:"rate_limit"},429);
       await admin.from("x_oauth_states").delete().lt("expires_at",new Date().toISOString());
 
@@ -130,7 +138,7 @@ Deno.serve(async(req:Request)=>{
       }
 
       const {data:member}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",row.user_id).maybeSingle();
-      if(!member?.enabled||!["admin","x_user"].includes(member.role))return redirectBack({x_error:"forbidden"});
+      if(!member?.enabled||member.role!=="admin")return redirectBack({x_error:"forbidden"});
       const {data:consumed,error:consumeError}=await admin.from("x_oauth_states").delete().eq("id",row.id).select("id").maybeSingle();
       if(consumeError||!consumed)return redirectBack({x_error:"oauth_state_invalid"});
       const verifier=await decryptSecret(String(row.verifier_cipher),String(row.verifier_iv),String(master));

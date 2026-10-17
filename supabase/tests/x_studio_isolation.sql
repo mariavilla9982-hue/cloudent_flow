@@ -21,6 +21,9 @@ select a1,'x','qa-'||a1,'QA A',true,'{"status":"connected"}'::jsonb,w,u1 from x_
 union all select a2,'x','qa-'||a2,'QA B',true,'{"status":"connected"}'::jsonb,w,u2 from x_test_context
 union all select aa,'x','qa-'||aa,'QA ADMIN',true,'{"status":"connected"}'::jsonb,w,ua from x_test_context;
 
+insert into public.x_account_access(workspace_id,user_id,platform_account_id)
+select w,u1,a1 from x_test_context union all select w,u2,a2 from x_test_context;
+
 insert into public.x_account_configs(platform_account_id,workspace_id,user_id,enabled)
 select a1,w,u1,true from x_test_context
 union all select a2,w,u2,true from x_test_context;
@@ -34,7 +37,7 @@ do $$ declare t record; p jsonb; begin
  if public.cloudent_x_access(t.u1,t.a2) then raise exception 'cross_account_access';end if;
  if not public.cloudent_x_access(t.u1,t.a1) then raise exception 'own_account_denied';end if;
  if not public.cloudent_x_read_access(t.ua,t.a1) then raise exception 'admin_view_denied';end if;
- if public.cloudent_x_access(t.ua,t.a1) then raise exception 'admin_cross_account_write_allowed';end if;
+ if not public.cloudent_x_access(t.ua,t.a1) then raise exception 'admin_full_access_denied';end if;
  if not public.cloudent_x_access(t.ua,t.aa) then raise exception 'admin_own_account_write_denied';end if;
  begin insert into public.x_drive_posts(user_id,platform_account_id,drive_file_id,drive_file_name,status,post_text) values(t.u1,null,'missing','missing.mp4','queued','qa');raise exception 'missing_account_accepted';exception when raise_exception then if sqlerrm='missing_account_accepted' then raise;end if;end;
  begin insert into public.x_drive_posts(user_id,platform_account_id,drive_file_id,drive_file_name,status,post_text) values(t.u1,t.a2,'cross','cross.mp4','queued','qa');raise exception 'cross_account_accepted';exception when raise_exception then if sqlerrm='cross_account_accepted' then raise;end if;end;
@@ -46,6 +49,21 @@ do $$ declare t record; p jsonb; begin
  if has_function_privilege('authenticated','public.claim_x_account_post(uuid,text)','EXECUTE') then raise exception 'worker_rpc_exposed';end if;
 end $$;
 
+-- Invitations are single-use and grants can be revoked even from an account owner.
+do $$ declare t record;begin
+ select * into t from x_test_context;
+ perform public.configure_x_invite(t.ua,'x-qa-a@example.invalid','qa-hash',array[t.a1]);
+ perform public.accept_x_invite(t.u1,'x-qa-a@example.invalid','qa-hash');
+ if not public.cloudent_x_access(t.u1,t.a1) then raise exception 'invite_grants_missing';end if;
+ begin perform public.accept_x_invite(t.u1,'x-qa-a@example.invalid','qa-hash');raise exception 'invite_replayed';exception when raise_exception then if sqlerrm='invite_replayed' then raise;end if;end;
+ perform public.set_x_user_access(t.ua,t.u1,null,array[]::uuid[]);
+ if public.cloudent_x_access(t.u1,t.a1) or public.cloudent_x_read_access(t.u1,t.a1) then raise exception 'revoked_owner_still_authorized';end if;
+ perform public.set_x_user_access(t.ua,t.u1,false,array[t.a1]);
+ if public.cloudent_x_access(t.u1,t.a1) then raise exception 'disabled_user_still_authorized';end if;
+ perform public.set_x_user_access(t.ua,t.u1,true,null);
+ if has_function_privilege('authenticated','public.set_x_user_access(uuid,uuid,boolean,uuid[])','execute') then raise exception 'admin_rpc_exposed';end if;
+end $$;
+
 -- Verify actual RLS under authenticated with an impersonated X user.
 select set_config('request.jwt.claim.sub',(select u1::text from x_test_context),true);
 set local role authenticated;
@@ -55,7 +73,7 @@ do $$ begin
 end $$;
 reset role;
 
--- Admin can inspect another user's X data through RLS, but write authorization remains false.
+-- Admin can inspect another user's X data through RLS, with full authorization in the same workspace.
 select set_config('request.jwt.claim.sub',(select ua::text from x_test_context),true);
 set local role authenticated;
 do $$ begin
@@ -64,5 +82,5 @@ do $$ begin
 end $$;
 reset role;
 
-select 'PASS: independent slots, ownership, admin read-only view, missing-account rejection, atomic claim, replay protection and RLS' as result;
+select 'PASS: independent slots, ownership, admin full access, missing-account rejection, atomic claim, replay protection and RLS' as result;
 rollback;

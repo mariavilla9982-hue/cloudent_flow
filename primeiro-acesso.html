@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
+<head><meta name="referrer" content="no-referrer">
 <script src="/api/auth-config"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -24,10 +24,10 @@
 </head>
 <body>
   <main class="shell">
-    <div class="brand"><div class="mark">C</div><div><b>CloudentFlow</b><span>Acesso de membro</span></div></div>
+    <div class="brand"><div class="mark">C</div><div><b>CloudentFlow</b><span>Acesso ao X Studio</span></div></div>
     <section class="card">
       <h1>Primeiro acesso</h1>
-      <p class="lead">Crie sua senha usando o convite enviado pelo administrador. Este cadastro libera somente o perfil de membro.</p>
+      <p class="lead">Crie sua senha usando o convite enviado pelo administrador. Este cadastro libera somente o X Studio.</p>
       <form id="form" autocomplete="off">
         <label for="email">E-mail convidado</label>
         <input class="field" id="email" type="email" inputmode="email" autocomplete="email" required>
@@ -42,7 +42,7 @@
           <input class="field" id="confirm" type="password" autocomplete="new-password" minlength="8" required>
           <button class="toggle" type="button" data-target="confirm">Mostrar</button>
         </div>
-        <button class="btn" id="submit" type="submit">Criar acesso de membro</button>
+        <button class="btn" id="submit" type="submit">Criar acesso ao X Studio</button>
         <div class="status" id="status" role="status" aria-live="polite"></div>
       </form>
       <div class="security"><i>◈</i><span>O link é individual e expira. Ele não concede permissão de administrador.</span></div>
@@ -56,6 +56,9 @@
   const params = new URLSearchParams(location.search);
   const inviteToken = params.get("token") || "";
   const invitedEmail = (params.get("email") || "").trim().toLowerCase();
+  const fragment=new URLSearchParams(location.hash.slice(1));
+  const nativeInviteToken=fragment.get("access_token")||"";
+  if(nativeInviteToken)history.replaceState(null,"",location.pathname+location.search);
   const email = document.getElementById("email");
   const password = document.getElementById("password");
   const confirm = document.getElementById("confirm");
@@ -64,7 +67,7 @@
   const status = document.getElementById("status");
 
   if (invitedEmail) { email.value = invitedEmail; email.readOnly = true; }
-  if (!inviteToken) show("Este link de primeiro acesso está incompleto ou inválido. Peça um novo convite ao administrador.", "err");
+  if (!inviteToken&&!nativeInviteToken) show("Este link de primeiro acesso está incompleto ou inválido. Peça um novo convite ao administrador.", "err");
 
   document.querySelectorAll(".toggle").forEach(btn => btn.addEventListener("click", () => {
     const input = document.getElementById(btn.dataset.target);
@@ -92,9 +95,11 @@
     return map[code] || "Não foi possível concluir o primeiro acesso. Tente novamente.";
   }
 
+  let completed=false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!inviteToken) return show("Este link não contém um convite válido.", "err");
+    if(completed){location.href="/";return;}
+    if (!inviteToken&&!nativeInviteToken) return show("Este link não contém um convite válido.", "err");
     const normalizedEmail = email.value.trim().toLowerCase();
     if (!normalizedEmail) return show("Informe o e-mail.", "err");
     if (password.value.length < 8) return show("A senha precisa ter pelo menos 8 caracteres.", "err");
@@ -102,13 +107,14 @@
 
     submit.disabled = true;
     submit.textContent = "Criando acesso…";
-    show("Validando convite e criando seu perfil de membro…");
+    show("Validando convite e criando seu X Studio…");
     try {
       const response = await fetch(`${SUPABASE_URL}/functions/v1/cloudent-member-signup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "apikey": PUBLISHABLE_KEY
+          "apikey": PUBLISHABLE_KEY,
+          ...(nativeInviteToken?{Authorization:"Bearer "+nativeInviteToken}:{})
         },
         body: JSON.stringify({ email: normalizedEmail, password: password.value, invite_token: inviteToken })
       });
@@ -117,11 +123,11 @@
       show("Acesso criado. Agora você pode entrar no CloudentFlow com este e-mail e a senha que acabou de definir.", "ok");
       submit.textContent = "Ir para o login";
       submit.disabled = false;
-      form.onsubmit = (e) => { e.preventDefault(); location.href = "/"; };
+      completed=true;
     } catch (error) {
       show(friendly(error.message), "err");
       submit.disabled = false;
-      submit.textContent = "Criar acesso de membro";
+      submit.textContent = "Criar acesso ao X Studio";
     }
   });
 })();

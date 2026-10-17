@@ -10812,7 +10812,7 @@ function xPostingCaptionCount(el){
 }
 function xPostingPickFile(el){
  xPostingFiles=Array.from(el.files||[]);xPostingFile=xPostingFiles[0]||null;xUploadTicket=null;
- xBatchDrafts=xPostingFiles.map(file=>({caption:"",reply:"",date:""}));
+ xBatchDrafts=xPostingFiles.map(file=>({caption:"",reply:"",date:"",account_ids:[...xTargetAccounts]}));
  xStudioPage();
  const name=$("#xPostingFileName");if(name)name.textContent=xPostingFile?xPostingFile.name+" · "+(xPostingFile.size/1048576).toFixed(1)+" MB":"Nenhum vídeo selecionado";
 }
@@ -10839,10 +10839,11 @@ async function addXPostingVideo(){
    xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error("Falha ao enviar vídeo ("+xhr.status+")."));
    xhr.onerror=()=>reject(new Error("O envio falhou. Confira sua conexão e tente novamente."));xhr.send(file);
   });
+  if(!ticket.thumbnail_path)ticket.thumbnail_path=await xUploadThumbnail(ticket,file);
   xUploadTicket={file,ticket};
   if(xComposeDate)scheduled=xScheduleIso(xComposeDate);
   if(capturedGeneration!==xAccountGeneration)throw new Error("A conta foi alterada. Reabra o envio.");
-  await xPostingRequest("upload-complete",{platform_account_id:capturedAccount,platform_account_ids:xTargetAccounts.length?xTargetAccounts:[capturedAccount],reply_text:document.getElementById("xPostReply")?.value||"",scheduled_at:scheduled,provider:ticket.provider,object_path:ticket.object_path,file_name:file.name,mime_type:mime,size_bytes:file.size,caption});
+  await xPostingRequest("upload-complete",{platform_account_id:capturedAccount,platform_account_ids:xTargetAccounts.length?xTargetAccounts:[capturedAccount],reply_text:document.getElementById("xPostReply")?.value||"",scheduled_at:scheduled,provider:ticket.provider,object_path:ticket.object_path,thumbnail_path:ticket.thumbnail_path,file_name:file.name,mime_type:mime,size_bytes:file.size,caption});
   xPostingFiles=[];xBatchDrafts=[];xPostingFile=null;xUploadTicket=null;xPostingDraft.caption="";xComposeOpen=false;await loadXPostingStatus();toast(scheduled?"Vídeo agendado no X.":"Vídeo adicionado à fila do X.","ok");
  }catch(e){toast(e.message,"err")}
  finally{xPostingBusy=false;if(currentPage==="xStudio")xStudioPage();}
@@ -10925,7 +10926,7 @@ function xCloseDetail(){if(xPostingBusy)return;xComposeOpen=false;xSelectedPost=
 function xSelectPost(id){
  if(xSelectedAccountId==='all'){const p=xAllPosts().find(p=>p.id===id);if(p){switchXAccount(p.platform_account_id);return;}}
  const p=xAllPosts().find(p=>p.id===id);if(!p)return;
- xSelectedPost=id;xComposeOpen=false;xDetailDraft={id,caption:p.post_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()};
+ xSelectedPost=id;xComposeOpen=false;xDetailDraft={id,caption:p.post_text||"",reply:p.reply_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()};
  xStudioPage();
 }
 async function xLoadPreview(id){
@@ -10942,7 +10943,7 @@ async function xSaveDetail(){
  if(xPostingBusy||!xDetailDraft)return;
  const draft=xDetailDraft;let scheduled;try{scheduled=xScheduleIso(draft.date);}catch(e){toast(e.message,"err");return;}
  xPostingBusy=true;
- try{await xPostingRequest("schedule",{id:draft.id,caption:draft.caption,scheduled_at:scheduled});await loadXPostingStatus();toast("Legenda e horário salvos.","ok");}
+ try{await xPostingRequest("schedule",{id:draft.id,caption:draft.caption,reply_text:draft.reply,scheduled_at:scheduled});await loadXPostingStatus();toast("Legenda e horário salvos.","ok");}
  catch(e){toast(e.message,"err");}
  finally{xPostingBusy=false;xStudioPage();}
 }
@@ -10967,7 +10968,7 @@ async function xToggleAutomation(){
 function xPostCard(p,compact=false){
  const selected=xSelectedPost===p.id;
  return `<button type="button" class="x-post-card ${selected?"selected":""} ${compact?"compact":""}" onclick="xSelectPost('${p.id}')" draggable="${Boolean(xEditable(p)&&xSelectedAccountId!=='all')}" ondragstart="xDragPost(event,'${p.id}')">
- ${!compact?`<span class="x-video-art"><span class="x-play-mark">▷</span><span class="x-video-format">VÍDEO</span></span>`:""}
+ ${!compact?`<span class="x-video-art">${p.thumbnail_url?`<img src="${esc(p.thumbnail_url)}" alt="Thumbnail do vídeo" loading="lazy" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0">`:""}<span class="x-play-mark">▷</span><span class="x-video-format">VÍDEO</span></span>`:""}
  <strong title="${esc(p.drive_file_name)}">${esc(p.drive_file_name||"Vídeo")}${xSelectedAccountId==='all'?' · @'+esc(xAccountList.find(a=>a.id===p.platform_account_id)?.username||''):''}</strong><span class="x-card-caption">${esc(p.post_text||"Sem legenda")}</span><span class="x-card-foot"><span class="x-status ${p.status}">${xStatusLabels[p.status]||esc(p.status)}</span><span>${xTimeKey(p.scheduled_at)}</span></span></button>`;
 }
 function xCalendarDay(date,month=false){
@@ -11002,14 +11003,14 @@ async function xAddToIntervalQueue(){const date=xComposeDate;xComposeDate="";awa
 function xDetailMarkup(){
  const p=xAllPosts().find(p=>p.id===xSelectedPost);
  if(!p)return `<aside class="x-detail-panel x-detail-empty"><span class="x-play-mark">▷</span><h3>Sua próxima publicação</h3><p>Selecione um vídeo para ver o preview e editar a legenda e o horário.</p><button class="x-primary-btn" onclick="xOpenComposer()">＋ Agendar vídeo</button></aside>`;
- const draft=xEditable(p)&&xDetailDraft?.id===p.id?xDetailDraft:{caption:p.post_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()},editable=xEditable(p),cached=xPreviewCache.get(p.id);
+ const draft=xEditable(p)&&xDetailDraft?.id===p.id?xDetailDraft:{caption:p.post_text||"",reply:p.reply_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()},editable=xEditable(p),cached=xPreviewCache.get(p.id);
  return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>Detalhes da publicação</h3><button class="x-icon-btn" aria-label="Fechar" onclick="xCloseDetail()">×</button></div><div class="x-detail-preview"><video id="xDetailVideo" controls playsinline preload="none" ${cached&&cached.expires>Date.now()?`src="${esc(cached.url)}"`:"hidden"}></video><button id="xPreviewButton" onclick="xLoadPreview('${p.id}')" ${cached&&cached.expires>Date.now()?"hidden":""}>▷ Ver preview</button></div>
  <strong class="x-detail-name">${esc(p.drive_file_name)}</strong><label for="xDetailCaption">Legenda</label><textarea id="xDetailCaption" rows="4" ${!editable?"disabled":""} oninput="xDetailDraft.caption=this.value;document.getElementById('xDetailCount').textContent=Array.from(this.value.trim()).length+' / 280'">${esc(draft.caption)}</textarea><small id="xDetailCount" class="x-char-count">${Array.from(draft.caption.trim()).length} / 280</small>
- <label for="xDetailDate">Data e horário</label><input id="xDetailDate" type="datetime-local" value="${esc(draft.date)}" oninput="xDetailDraft.date=this.value" ${!editable?"disabled":""}><small>Horário de Brasília</small><div class="x-detail-status"><span>Status</span><span class="x-status ${p.status}">${xStatusLabels[p.status]||p.status}</span></div>
+ <label for="xDetailReply">Comentário opcional</label><textarea id="xDetailReply" rows="2" ${!editable?"disabled":""} oninput="xDetailDraft.reply=this.value">${esc(draft.reply||p.reply_text||"")}</textarea><label for="xDetailDate">Data e horário</label><input id="xDetailDate" type="datetime-local" value="${esc(draft.date)}" oninput="xDetailDraft.date=this.value" ${!editable?"disabled":""}><small>Horário de Brasília</small><div class="x-detail-status"><span>Status</span><span class="x-status ${p.status}">${xStatusLabels[p.status]||p.status}</span></div>
  ${p.last_error?`<p class="x-error">${esc(p.last_error)}</p>`:""}${p.meta?.publish_uncertain?'<p class="x-error">Confira a conta X antes de repetir este envio.</p>':""}
  ${editable?`<button class="x-primary-btn" onclick="xSaveDetail()" ${xPostingBusy?"disabled":""}>Salvar alterações</button>${p.status==="failed"?`<button class="x-subtle-btn" onclick="xPostingAction('retry','${p.id}')">Tentar novamente</button>`:""}<button class="x-subtle-btn" onclick="xPostingAction('skip','${p.id}')">Remover da agenda</button>`:""}
  ${p.reply_text?`<p>Comentário: ${esc(p.reply_text)}</p><small>${esc(p.reply_status)}</small>${p.reply_error?`<p class="x-error">${esc(p.reply_error)}</p>`:""}${p.reply_status==='failed'?`<button class="x-subtle-btn" onclick="xPostingAction('retry-reply','${p.id}')">Repetir comentário</button>`:""}`:""}
- ${p.x_post_id?`<a class="x-primary-btn" href="https://x.com/i/status/${encodeURIComponent(p.x_post_id)}" target="_blank" rel="noopener">Ver postagem no X ↗</a>`:""}</aside>`;
+ <button class="x-subtle-btn" onclick="xDuplicatePost('${p.id}')" ${!xSelectedAccountId||xSelectedAccountId==='all'?'disabled':''}>Duplicar para a fila</button>${p.x_post_id?`<a class="x-primary-btn" href="https://x.com/i/status/${encodeURIComponent(p.x_post_id)}" target="_blank" rel="noopener">Ver postagem no X ↗</a>`:""}</aside>`;
 }
 function xQueueMarkup(overview=false){
  const rows=xAllPosts().filter(p=>overview?["queued","processing","failed"].includes(p.status):!p.scheduled_at);
@@ -11022,7 +11023,7 @@ function xSettingsMarkup(){
  <label for="xDailySlots">Vagas diárias do calendário</label><input id="xDailySlots" value="${esc(xSlotTimes().join(", "))}" placeholder="12:00, 18:00"><small>Separe os horários por vírgula. Até 15 vagas por dia.</small>
  <label for="xPostingInterval">Intervalo da fila (minutos)</label><input id="xPostingInterval" type="number" min="5" max="10080" value="${cfg.interval_minutes||120}" oninput="xPostingDraft.interval=Number(this.value)">
  <label for="xPostingStart">Próximo início da fila por intervalo</label><input id="xPostingStart" type="datetime-local" value="${esc(xPostingDraft.start)}" oninput="xPostingDraft.start=this.value"><small>Deixe vazio para manter o próximo envio da fila. Todos os horários são de Brasília.</small>
- <button class="x-primary-btn" onclick="saveXPosting(${Boolean(cfg.enabled)})" ${xPostingBusy?"disabled":""}>Salvar configurações</button><div class="x-settings-note"><strong>Conta conectada</strong><p>${esc(xPostingData?.x?.account?.username?"@"+xPostingData.x.account.username:"Nenhuma conta conectada")}</p><button class="x-subtle-btn" onclick="connectXOfficial()">${xPostingData?.x?.account?"Reconectar conta":"Conectar conta X"}</button></div><button class="x-subtle-btn" onclick="connectXOfficial()" ${xAccountList.filter(a=>a.enabled).length>=7?"disabled":""}>＋ Adicionar conta (${xAccountList.filter(a=>a.enabled).length}/7)</button>${xSelectedAccountId&&xSelectedAccountId!=='all'?`<button class="x-subtle-btn" onclick="xDisconnectAccount(false)">Desconectar</button><button class="x-subtle-btn" onclick="xDisconnectAccount(true)">Remover conta</button>`:""}${cloudAccess?.role==='admin'?xMembersMarkup():""}${cfg.last_error?`<p class="x-error">${esc(cfg.last_error)}</p>`:""}</section>`;
+ <button class="x-primary-btn" onclick="saveXPosting(${Boolean(cfg.enabled)})" ${xPostingBusy?"disabled":""}>Salvar configurações</button><div class="x-settings-note"><strong>Conta conectada</strong><p>${esc(xPostingData?.x?.account?.username?"@"+xPostingData.x.account.username:"Nenhuma conta conectada")}</p></div>${cloudAccess?.role==='admin'?`<button class="x-subtle-btn" onclick="connectXOfficial()">${xPostingData?.x?.account?"Reconectar conta":"Conectar conta X"}</button><button class="x-subtle-btn" onclick="connectXOfficial()" ${xAccountList.filter(a=>a.enabled).length>=7?"disabled":""}>＋ Adicionar conta (${xAccountList.filter(a=>a.enabled).length}/7)</button>${xSelectedAccountId&&xSelectedAccountId!=='all'?`<button class="x-subtle-btn" onclick="xDisconnectAccount(false)">Desconectar</button><button class="x-subtle-btn" onclick="xDisconnectAccount(true)">Remover conta</button>`:""}`+xMembersMarkup():""}${cfg.last_error?`<p class="x-error">${esc(cfg.last_error)}</p>`:""}</section>`;
 }
 function xStudioPage(){
  const root=$("#xStudio");if(!root)return;
@@ -11663,23 +11664,29 @@ async function switchXAccount(id){
  xStudioPage();await loadXPostingStatus();xStudioPage();
 }
 function xTargetsMarkup(){return `<div class="x-targets">${xAccountList.filter(a=>a.enabled).map(a=>`<label><input type="checkbox" ${xTargetAccounts.includes(a.id)?'checked':''} onchange="xTargetAccounts=this.checked?[...new Set([...xTargetAccounts,'${a.id}'])]:xTargetAccounts.filter(id=>id!=='${a.id}')">@${esc(a.username)}</label>`).join('')}</div>`;}
-function xBatchMarkup(){return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>${xPostingFiles.length} vídeos</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div><label>Contas de destino</label>${xTargetsMarkup()}${xPostingFiles.map((file,i)=>`<div class="x-batch-row"><strong>${esc(file.name)}</strong><label>Legenda individual<textarea rows="2" oninput="xBatchDrafts[${i}].caption=this.value">${esc(xBatchDrafts[i].caption)}</textarea></label><label>Comentário opcional<textarea rows="2" oninput="xBatchDrafts[${i}].reply=this.value">${esc(xBatchDrafts[i].reply)}</textarea></label><label>Horário individual (vazio = fila)<input type="datetime-local" value="${esc(xBatchDrafts[i].date)}" onchange="xBatchDrafts[${i}].date=this.value"></label><small>${esc(xBatchDrafts[i].error||xBatchDrafts[i].status||'Aguardando')}</small></div>`).join('')}<button id="xAddPost" class="x-primary-btn" onclick="addXPostingBatch()" ${xPostingBusy?'disabled':''}>${xPostingBusy?'Enviando…':'Adicionar lote'}</button><p class="x-muted">Um post independente por vídeo e conta. Cada horário deve estar livre na conta escolhida.</p></aside>`;}
+function xBatchTargetsMarkup(i){const d=xBatchDrafts[i];return `<div class="x-targets">${xAccountList.filter(a=>a.enabled).map(a=>`<label><input type="checkbox" ${d.account_ids.includes(a.id)?'checked':''} ${d.done?'disabled':''} onchange="xBatchDrafts[${i}].account_ids=this.checked?[...new Set([...xBatchDrafts[${i}].account_ids,'${a.id}'])]:xBatchDrafts[${i}].account_ids.filter(id=>id!=='${a.id}')">@${esc(a.username)}</label>`).join('')}</div>`;}
+function xBatchMarkup(){return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>${xPostingFiles.length} vídeos</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div>${xPostingFiles.map((file,i)=>`<div class="x-batch-row"><strong>${esc(file.name)}</strong><label>Contas de destino</label>${xBatchTargetsMarkup(i)}<label>Legenda individual<textarea rows="2" oninput="xBatchDrafts[${i}].caption=this.value">${esc(xBatchDrafts[i].caption)}</textarea></label><label>Comentário opcional<textarea rows="2" oninput="xBatchDrafts[${i}].reply=this.value">${esc(xBatchDrafts[i].reply)}</textarea></label><label>Horário individual (vazio = fila)<input type="datetime-local" value="${esc(xBatchDrafts[i].date)}" onchange="xBatchDrafts[${i}].date=this.value"></label><small>${esc(xBatchDrafts[i].error||xBatchDrafts[i].status||'Aguardando')}</small></div>`).join('')}<button id="xAddPost" class="x-primary-btn" onclick="addXPostingBatch()" ${xPostingBusy?'disabled':''}>${xPostingBusy?'Enviando…':'Adicionar lote'}</button><p class="x-muted">Um post independente por vídeo e conta. Cada horário deve estar livre na conta escolhida.</p></aside>`;}
+async function xUploadThumbnail(ticket,file){
+ if(!ticket.thumbnail)return null;
+ let src;try{const blob=await new Promise((resolve,reject)=>{const video=document.createElement('video');video.muted=true;video.preload='auto';src=URL.createObjectURL(file);const timeout=setTimeout(()=>{video.removeAttribute('src');reject(new Error('preview timeout'));},10000);video.onerror=()=>{clearTimeout(timeout);reject(new Error('preview unavailable'));};video.onloadeddata=()=>{const canvas=document.createElement('canvas'),scale=Math.min(1,480/video.videoWidth);canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);clearTimeout(timeout);canvas.toBlob(b=>b?resolve(b):reject(new Error('preview unavailable')),'image/jpeg',0.75);video.removeAttribute('src');};video.src=src;});await xPutVideo(ticket.thumbnail,blob);return ticket.thumbnail.object_path;}catch{return null;}finally{if(src)URL.revokeObjectURL(src);}
+}
 async function xPutVideo(ticket,file){await new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('PUT',ticket.upload_url);xhr.setRequestHeader('Content-Type',ticket.content_type);xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error('Falha no upload: '+xhr.status));xhr.onerror=()=>reject(new Error('Falha de conexão no upload.'));xhr.send(file);});}
 async function addXPostingBatch(){
  if(xPostingBusy)return;
- const ids=[...xTargetAccounts],generation=xAccountGeneration,files=[...xPostingFiles],drafts=xBatchDrafts;
- if(!ids.length){toast('Selecione as contas de destino.','err');return;}
+ const generation=xAccountGeneration,files=[...xPostingFiles],drafts=xBatchDrafts;
+ if(drafts.some(d=>!d.account_ids.length)){toast('Selecione as contas de destino.','err');return;}
  if(drafts.some(d=>!d.caption.trim())){toast('Defina a legenda de cada vídeo.','err');return;}
  xPostingBusy=true;
  try{for(let i=0;i<files.length;i++){
-  const file=files[i],d=drafts[i];if(d.done)continue;
+  const file=files[i],d=drafts[i],ids=[...d.account_ids];if(d.done)continue;
   try{
    if(generation!==xAccountGeneration)throw new Error('A conta foi alterada. Reabra o lote.');
    const mime=file.type||(/\.mov$/i.test(file.name)?'video/quicktime':'video/mp4');
    const scheduled=d.date?xScheduleIso(d.date):null;
    if(!d.ticket){d.ticket=await xPostingRequest('upload-ticket',{platform_account_id:ids[0],size_bytes:file.size,mime_type:mime,file_name:file.name});await xPutVideo(d.ticket,file);d.uploaded=true;}
    else if(!d.uploaded){await xPutVideo(d.ticket,file);d.uploaded=true;}
-   await xPostingRequest('upload-complete',{platform_account_id:ids[0],platform_account_ids:ids,object_path:d.ticket.object_path,provider:d.ticket.provider,size_bytes:file.size,mime_type:mime,file_name:file.name,caption:d.caption,reply_text:d.reply,scheduled_at:scheduled});
+   if(!d.ticket.thumbnail_path)d.ticket.thumbnail_path=await xUploadThumbnail(d.ticket,file);
+   await xPostingRequest('upload-complete',{platform_account_id:ids[0],platform_account_ids:ids,object_path:d.ticket.object_path,provider:d.ticket.provider,thumbnail_path:d.ticket.thumbnail_path,size_bytes:file.size,mime_type:mime,file_name:file.name,caption:d.caption,reply_text:d.reply,scheduled_at:scheduled});
    d.done=true;d.status='Adicionado';d.error='';
   }catch(e){d.error=e.message;}
  }}finally{xPostingBusy=false;await loadXPostingStatus();if(drafts.every(d=>d.done)){xPostingFiles=[];xPostingFile=null;xBatchDrafts=[];xComposeOpen=false;toast('Lote adicionado.','ok');}xStudioPage();}
@@ -11688,11 +11695,17 @@ async function xDisconnectAccount(remove){if(!xSelectedAccountId||xSelectedAccou
 function xMetricsMarkup(){const posts=xAllPosts().filter(p=>p.status==='published'),metrics={};for(const p of posts)for(const [k,v] of Object.entries(p.metrics||{}))if(typeof v==='number')metrics[k]=(metrics[k]||0)+v;return `<section class="x-settings-panel"><h3>Métricas ${xSelectedAccountId==='all'?'das contas selecionadas':''}</h3><button class="x-subtle-btn" onclick="xSyncMetrics()" ${!xSelectedAccountId||xSelectedAccountId==='all'?'disabled':''}>Sincronizar conta ativa</button><div class="x-metric-grid">${Object.entries(metrics).map(([k,v])=>`<div><small>${esc(k)}</small><h3>${v}</h3></div>`).join('')||'<p>Sem métricas coletadas. Valores dependem da disponibilidade da API do X.</p>'}</div>${posts.map(p=>`<p>@${esc(xAccountList.find(a=>a.id===p.platform_account_id)?.username||'')} · ${esc(p.drive_file_name)} · ${p.metrics_synced_at?'Atualizado em '+esc(new Date(p.metrics_synced_at).toLocaleString('pt-BR')):'Aguardando coleta'}</p>`).join('')}</section>`;}
 async function xSyncMetrics(){try{await xPostingRequest('metrics',{});await refreshXPosting();}catch(e){toast(e.message,'err');}}
 let xMembersData=null;
-function xMembersMarkup(){return `<section class="x-settings-note"><h3>Usuários do X Studio</h3><label>Email do convidado<input id="xInviteEmail" type="email" placeholder="email@exemplo.com"></label><button class="x-subtle-btn" onclick="xCreateInvite()">Gerar convite de acesso ao X</button><p id="xInviteResult"></p><button class="x-subtle-btn" onclick="xLoadMembers()">Carregar usuários</button>${(xMembersData||[]).map(m=>`<div><p>${esc(m.email||m.user_id)} · ${esc(m.role)} · ${m.enabled?'Ativo':'Desativado'}</p>${m.role==='x_user'?`<button class="x-subtle-btn" onclick="xSetMember('${m.user_id}',${!m.enabled})">${m.enabled?'Desativar':'Ativar'}</button><button class="x-subtle-btn" onclick="xGrantSelected('${m.user_id}',true)">Autorizar conta ativa</button><button class="x-subtle-btn" onclick="xGrantSelected('${m.user_id}',false)">Revogar conta ativa</button>`:''}</div>`).join('')}</section>`;}
-async function xLoadMembers(){try{const data=await cloudFetch('?resource=members');xMembersData=data.members||[];xStudioPage();}catch(e){toast(e.message,'err');}}
-async function xSetMember(id,enabled){try{await cloudFetch('?resource=members&action=set-enabled',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:id,enabled})});await xLoadMembers();}catch(e){toast(e.message,'err');}}
-async function xGrantSelected(userId,grant){if(!xSelectedAccountId||xSelectedAccountId==='all'){toast('Selecione uma conta primeiro.','err');return;}try{await cloudFetch('?resource=members&action='+(grant?'grant-account':'revoke-account'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId,platform_account_id:xSelectedAccountId})});toast('Permissão atualizada.','ok');}catch(e){toast(e.message,'err');}}
-async function xCreateInvite(){try{const email=document.getElementById('xInviteEmail').value;const r=await cloudFetch('?resource=members&action=invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const el=document.getElementById('xInviteResult');el.textContent='Convite válido por 24 horas: ';const a=document.createElement('a');a.href=r.url;a.textContent=r.url;el.appendChild(a);}catch(e){toast(e.message,'err');}}
+function xPermissionChecks(prefix,ids=[]){return `<div class="x-targets">${(xMembersData?.accounts||xAccountList).map(a=>`<label><input type="checkbox" data-x-permission="${esc(prefix)}" value="${a.id}" ${ids.includes(a.id)?'checked':''}>${esc(a.account_label||a.username||a.id)}</label>`).join('')||'<small>Nenhuma conta X cadastrada.</small>'}</div>`;}
+function xCheckedPermissions(prefix){return [...document.querySelectorAll('[data-x-permission="'+prefix+'"]:checked')].map(el=>el.value);}
+function xMembersMarkup(){return `<section class="x-settings-note"><h3>Usuários do X Studio</h3><label>Email do convidado<input id="xInviteEmail" type="email" placeholder="email@exemplo.com"></label>${xPermissionChecks('invite')}<label><input id="xInviteSendEmail" type="checkbox" checked> Enviar convite por email</label><button class="x-subtle-btn" onclick="xCreateInvite()">Convidar para o X Studio</button><p id="xInviteResult"></p><button class="x-subtle-btn" onclick="xLoadMembers()">Atualizar usuários e permissões</button>${(xMembersData?.members||[]).map(m=>`<div class="x-batch-row"><p>${esc(m.email||m.user_id)} · ${m.enabled?'Ativo':'Desativado'}</p>${m.role==='x_user'?`${xPermissionChecks(m.user_id,m.account_ids)}<button class="x-subtle-btn" onclick="xSaveMemberAccounts('${m.user_id}')">Salvar contas autorizadas</button><button class="x-subtle-btn" onclick="xSetMember('${m.user_id}',${!m.enabled})">${m.enabled?'Desativar':'Ativar'}</button><button class="x-subtle-btn" onclick="xRemoveMember('${m.user_id}')">Remover acesso</button>`:'<small>Administrador · acesso total</small>'}</div>`).join('')}${(xMembersData?.invitations||[]).map((m,i)=>`<div class="x-batch-row"><p>${esc(m.email)} · ${m.status==='pending'?'Convite pendente':'Desativado / expirado'}</p>${xPermissionChecks('pending'+i,m.account_ids)}<button class="x-subtle-btn" onclick="xUpdateInvite(${i},false)">Salvar contas do convite</button><button class="x-subtle-btn" onclick="xUpdateInvite(${i},true)">Revogar convite</button></div>`).join('')}</section>`;}
+async function xMembersAction(action,body){return cloudFetch('?resource=members&action='+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+async function xLoadMembers(){try{xMembersData=await cloudFetch('?resource=members');xStudioPage();}catch(e){toast(e.message,'err');}}
+async function xSetMember(id,enabled){try{await xMembersAction('set-enabled',{user_id:id,enabled});await xLoadMembers();}catch(e){toast(e.message,'err');}}
+async function xSaveMemberAccounts(id){try{await xMembersAction('set-accounts',{user_id:id,account_ids:xCheckedPermissions(id)});await xLoadMembers();toast('Permissões atualizadas.','ok');}catch(e){toast(e.message,'err');}}
+async function xRemoveMember(id){try{await xMembersAction('remove-access',{user_id:id});await xLoadMembers();}catch(e){toast(e.message,'err');}}
+async function xUpdateInvite(i,revoke){const m=xMembersData.invitations[i];try{await xMembersAction(revoke?'revoke-invite':'invite-accounts',{email:m.email,account_ids:xCheckedPermissions('pending'+i)});await xLoadMembers();}catch(e){toast(e.message,'err');}}
+async function xCreateInvite(){try{const email=document.getElementById('xInviteEmail').value;const r=await xMembersAction('invite',{email,account_ids:xCheckedPermissions('invite'),send_email:document.getElementById('xInviteSendEmail').checked});const el=document.getElementById('xInviteResult');el.textContent=(r.email_sent?'Convite enviado. ':r.email_error?r.email_error+' ':'')+'Link individual válido por 24 horas: ';const a=document.createElement('a');a.href=r.url;a.textContent='Abrir convite';a.rel='noreferrer';el.appendChild(a);xMembersData=null;}catch(e){toast(e.message,'err');}}
+async function xDuplicatePost(id){try{await xPostingRequest('duplicate',{id});await refreshXPosting();toast('Cópia adicionada à fila.','ok');}catch(e){toast(e.message,'err');}}
 window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);if(cloudAccess?.role==='x_user'&&page&&page!=='xStudio')deniedPage();});
 
 init();

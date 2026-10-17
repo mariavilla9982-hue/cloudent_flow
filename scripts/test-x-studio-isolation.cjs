@@ -10,13 +10,15 @@ class Query{
 }
 function context(path,admin){const c={crypto,TextEncoder,TextDecoder,URL,Request,Response,Headers,fetch:async()=>{throw Error('External request forbidden in tests');},console,setTimeout,clearTimeout,Uint8Array,Buffer,btoa,atob,createClient:()=>admin,twitterText:{parseTweet:t=>({valid:t.length>0&&t.length<=280})},Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://test':''},serve:f=>{c.handler=f;}}};vm.createContext(c);const js=stripTypeScriptTypes(fs.readFileSync(path,'utf8')).replace(/^import .*;\n/gm,'');vm.runInContext(js,c);vm.runInContext('globalThis.HttpError=typeof HttpError!=="undefined"?HttpError:Error',c);return c;}
 (async()=>{
- const db={app_members:[{user_id:U,role:'x_user',enabled:true,workspace_id:'w'}],platform_accounts:[{id:A,platform:'x',owner_user_id:U,workspace_id:'w',enabled:true,config:{status:'connected'}},{id:B,platform:'x',owner_user_id:V,workspace_id:'w',enabled:true,config:{status:'connected'}}],x_account_access:[],x_drive_posts:[],x_account_configs:[],activity_logs:[]};
+ const db={app_members:[{user_id:U,role:'x_user',enabled:true,workspace_id:'w'}],platform_accounts:[{id:A,platform:'x',owner_user_id:U,workspace_id:'w',enabled:true,config:{status:'connected'}},{id:B,platform:'x',owner_user_id:V,workspace_id:'w',enabled:true,config:{status:'connected'}}],x_account_access:[{user_id:U,workspace_id:"w",platform_account_id:A}],x_drive_posts:[],x_account_configs:[],activity_logs:[]};
  const admin={auth:{getUser:async()=>({data:{user:{id:U}},error:null})},from:t=>new Query(db,t),rpc:async(n,p)=>({data:n==='cloudent_x_access'?p.p_user===U&&p.p_account===A:['cloudent_rate_limit','cloudent_auth_session_active'].includes(n)?true:null,error:null})};
  const api=context('supabase/functions/cloudent-api/index.ts',admin);
  const validToken='header.'+Buffer.from(JSON.stringify({iss:'https://test/auth/v1',session_id:'active-session'})).toString('base64url')+'.signature';
  for(const resource of ['platform-accounts','queue','production','integrations','media-url']){const r=await api.handler(new Request('https://test/?resource='+resource,{headers:{Authorization:'Bearer '+validToken}}));assert.equal(r.status,403,resource);}
  const session=await api.handler(new Request('https://test/?resource=session',{headers:{Authorization:'Bearer '+validToken}}));assert.equal((await session.json()).role,'x_user');
  const x=context('supabase/functions/cloudent-x-publish-worker/index.ts',admin);
+ assert.equal((await x.requireUser(admin,new Request('https://test/',{headers:{Authorization:'Bearer '+validToken}}))).id,U);
+ await assert.rejects(x.requireUser(admin,new Request('https://test/',{headers:{Authorization:'Bearer malformed'}})),/unauthorized/);
  await assert.rejects(x.resolveXAccount(admin,U,{}),/platform_account_id_required/);await assert.rejects(x.resolveXAccount(admin,U,{platform_account_id:B}),/forbidden/);
  assert.equal((await x.resolveXAccount(admin,U,{platform_account_id:A})).id,A);
  const payload=await x.statusPayload(admin,U,'',new URL('https://test/?platform_account_id='+A));assert.equal(payload.accounts.length,1);assert.equal(JSON.stringify(payload).includes('Cipher'),false);
