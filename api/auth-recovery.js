@@ -14,7 +14,7 @@ export default async function handler(req,res){
     return res.end();
   }
 
-  const action=String(req.query?.action||"").trim();
+  const action=String(new URL(req.url||"/","https://cloudent.invalid").searchParams.get("action")||"").trim();
   if(!["health","login","logout","session","recover","password"].includes(action))return send(res,404,{ok:false,error:"not_found"});
   if(action==="health"&&req.method!=="GET")return send(res,405,{ok:false,error:"method_not_allowed"});
   if(action!=="health"&&req.method!=="POST")return send(res,405,{ok:false,error:"method_not_allowed"});
