@@ -6,6 +6,13 @@ export async function imagePipelineApi(d:any){
   if(!String(action||resource).startsWith('image-pipeline'))return null;
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const owner=async(id:string)=>check(await admin.from('face_swap_jobs').select('*').eq('id',id).eq('user_id',user.id).contains('meta',{pipeline_version:2}).maybeSingle());
+  if(req.method==='GET'&&resource==='image-pipeline-model'){
+    const path=user.id+'/face-swap-characters/fixed-'+ROOT_IMAGE_SHA+'.jpg';
+    const bytes=Uint8Array.from(atob(ROOT_IMAGE_B64),c=>c.charCodeAt(0));
+    const upload=await admin.storage.from('production').upload(path,bytes,{contentType:'image/jpeg',upsert:false});
+    if(upload.error&&!/already exists|duplicate/i.test(upload.error.message))throw upload.error;
+    return json({url:await signGet('supabase',path),name:'modelo_raiz.jpg',type:'image/jpeg',sha256:ROOT_IMAGE_SHA});
+  }
   if(req.method==='GET'&&resource==='image-pipeline'){
     const rows=check(await admin.from('face_swap_jobs').select('*').eq('user_id',user.id).contains('meta',{pipeline_version:2}).is('hidden_at',null).order('created_at',{ascending:false}).limit(100));
     for(const j of rows||[]){

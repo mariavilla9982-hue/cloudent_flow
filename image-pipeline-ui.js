@@ -37,6 +37,22 @@
       return '<article class="card"><strong>'+e(j.original_file_name)+'</strong><p>'+e(label(j))+'</p>'+(j.last_error?'<p class="muted">'+e(j.last_error)+'</p>':'')+'<div class="toolbar">'+(ready?'<button class="btn" data-open="'+j.id+'">Ver resultado</button><button class="btn" data-download="'+j.id+'">Baixar</button>':'')+(ready&&j.meta.source==='face_swap_natural'?'<button class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(retry?'<button class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button class="btn" data-delete="'+j.id+'">Excluir</button></div><div data-result="'+j.id+'"></div></article>';
     }).join(''):'<p class="muted">Nenhum job neste fluxo.</p>';
   }
+  async function loadPinnedModel(root){
+    const page='faceSwapPhoto',uid=owner;
+    const draft=drafts[page]||(drafts[page]={id:crypto.randomUUID(),urls:{}});
+    if(draft.original)return;
+    const originalRevision=draft.id;
+    try{
+      const saved=await cloudFetch('?resource=image-pipeline-model');
+      const response=await fetch(saved.url);if(!response.ok)throw new Error('Não foi possível carregar a modelo fixada.');
+      const blob=await response.blob();
+      if(uid!==cloudSession?.user?.id||drafts[page]!==draft||draft.id!==originalRevision||draft.original)return;
+      draft.original=new File([blob],saved.name,{type:saved.type});draft.urls.original=URL.createObjectURL(blob);
+      const preview=root.querySelector('[data-preview="original"]');
+      preview.innerHTML='<img alt="Modelo raiz fixada" style="max-width:100%;max-height:220px"><small>Modelo raiz fixada</small>';
+      preview.querySelector('img').src=draft.urls.original;
+    }catch(err){if(uid===cloudSession?.user?.id)root.querySelector('[data-pipeline-error]').textContent=err.message;}
+  }
   function render(page){
     resetOwner();if(!sources[page])return;
     const root=document.getElementById(page);if(!root)return;
@@ -44,7 +60,7 @@
     root.dataset.pipelineMounted='true';
     const photo=page==='faceSwapPhoto',natural=page==='faceSwap';
     const tabs='<div class="toolbar" role="tablist" aria-label="Modo de produção">'+[['faceSwap','Vídeo automático'],['faceSwapPhoto','Foto'],['upscale','Upscale']].map(([id,label])=>'<button type="button" role="tab" aria-selected="'+(id===page)+'" class="btn '+(id===page?'primary':'')+'" data-mode="'+id+'">'+label+'</button>').join('')+'</div>';
-    root.innerHTML='<div class="face-swap-shell">'+tabs+'<div class="face-swap-hero"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie um vídeo. Modelo raiz fixa → Face Swap → Upscale → Control Motion V7.':photo?'Escolha a modelo e a referência. Face Swap e Upscale entregam a foto final.':'Envie uma imagem para ampliar e baixar o resultado.')+'</p></div></div><div class="card"><form data-pipeline-form><div class="face-swap-grid"><label>'+(natural?'Vídeo original':photo?'Foto da modelo raiz':'Imagem')+'<input name="original" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" required><div data-preview="original"></div><button class="btn" type="button" data-remove="original">Remover</button></label>'+(photo?'<label>Foto de referência<input name="reference" type="file" accept="image/jpeg,image/png,image/webp" required><div data-preview="reference"></div><button class="btn" type="button" data-remove="reference">Remover</button></label>':'')+'</div><button class="btn primary" type="submit">'+(natural?'Gerar vídeo':photo?'Gerar Face Swap':'Gerar Upscale')+'</button><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div><div class="toolbar"><button class="btn" data-refresh>Atualizar</button></div><div class="face-swap-jobs" data-pipeline-jobs></div></div>';
+    root.innerHTML='<div class="face-swap-shell">'+tabs+'<div class="face-swap-hero"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie um vídeo. Modelo raiz fixa → Face Swap → Upscale → Control Motion V7.':photo?'Sua modelo fica fixada. Envie a foto de referência para gerar a imagem final.':'Envie uma imagem para ampliar e baixar o resultado.')+'</p></div></div><div class="card"><form data-pipeline-form><div class="face-swap-grid"><label>'+(natural?'Vídeo original':photo?'Foto da modelo raiz':'Imagem')+'<input name="original" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" '+(photo?'':'required')+'><div data-preview="original"></div><button class="btn" type="button" data-remove="original">Remover</button></label>'+(photo?'<label>Foto de referência<input name="reference" type="file" accept="image/jpeg,image/png,image/webp" required><div data-preview="reference"></div><button class="btn" type="button" data-remove="reference">Remover</button></label>':'')+'</div><button class="btn primary" type="submit">'+(natural?'Gerar vídeo':photo?'Gerar Face Swap':'Gerar Upscale')+'</button><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div><div class="toolbar"><button class="btn" data-refresh>Atualizar</button></div><div class="face-swap-jobs" data-pipeline-jobs></div></div>';
     root.onchange=evt=>{
       const f=evt.target.files?.[0];if(!f)return;
       const d=drafts[page]||(drafts[page]={id:crypto.randomUUID(),urls:{}});d.id=crypto.randomUUID();d[evt.target.name]=f;
@@ -69,6 +85,7 @@
         if(b.dataset.calendar){await loadProductionData();await openProductionScheduleModal(b.dataset.calendar,1);}
       }catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}finally{b.disabled=false;}
     };
+    if(photo)loadPinnedModel(root);
     drawJobs();refresh();
     if(!timer)timer=setInterval(()=>{resetOwner();if(sources[currentPage]&&cloudSession)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
   }
@@ -91,7 +108,12 @@
         status.textContent='Confirmando envio…';if(submitOwner!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');await request('image-pipeline-complete',{job_id:ticket.job_id});
       }
       status.textContent='Arquivos enviados. O processamento continua automaticamente.';
-      Object.values(d.urls).forEach(url=>URL.revokeObjectURL(url));delete drafts[page];form.reset();root.querySelectorAll('[data-preview]').forEach(p=>p.replaceChildren());await refresh();
+      if(page==='faceSwapPhoto'){
+        if(d.urls.reference)URL.revokeObjectURL(d.urls.reference);delete d.urls.reference;delete d.reference;d.id=crypto.randomUUID();form.reset();root.querySelector('[data-preview="reference"]').replaceChildren();
+      }else{
+        Object.values(d.urls).forEach(url=>URL.revokeObjectURL(url));delete drafts[page];form.reset();root.querySelectorAll('[data-preview]').forEach(p=>p.replaceChildren());
+      }
+      await refresh();
     }catch(err){error.textContent=err.message;status.textContent='Envio não concluído.';}
     finally{busy.delete(page);form.querySelectorAll('input,button').forEach(x=>x.disabled=false);}
   }
