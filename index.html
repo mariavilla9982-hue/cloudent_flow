@@ -4395,6 +4395,8 @@ body.trial-modal-open{overflow:hidden!important}
   <section id="trialReels" class="page hidden"></section>
   <section id="bulkPublish" class="page hidden"></section>
   <section id="faceSwap" class="page hidden"></section>
+  <section id="upscale" class="page hidden"></section>
+  <section id="faceSwapPhoto" class="page hidden"></section>
   <section id="production" class="page hidden"></section>
   <section id="frameExtractor" class="page hidden"></section>
   <section id="xStudio" class="page hidden"></section>
@@ -4425,7 +4427,9 @@ const navItems=[
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
   ["bulkPublish","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 5h14v14H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M3 8V3h5M21 16v5h-5\"></path></svg>","Postagem em lote"],
-  ["faceSwap","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 4.5a5 5 0 0 0 0 10\"></path><path d=\"M15.5 19.5a5 5 0 0 0 0-10\"></path><circle cx=\"9\" cy=\"9\" r=\"1\"></circle><circle cx=\"15\" cy=\"15\" r=\"1\"></circle><path d=\"M6 18c2.2 2 9.8 2 12 0\"></path><path d=\"M17 4l2 2-2 2M7 20l-2-2 2-2\"></path></svg>","Face Swap"],
+  ["faceSwap","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 4.5a5 5 0 0 0 0 10\"></path><path d=\"M15.5 19.5a5 5 0 0 0 0-10\"></path><circle cx=\"9\" cy=\"9\" r=\"1\"></circle><circle cx=\"15\" cy=\"15\" r=\"1\"></circle><path d=\"M6 18c2.2 2 9.8 2 12 0\"></path><path d=\"M17 4l2 2-2 2M7 20l-2-2 2-2\"></path></svg>","Face Swap Natural"],
+  ["upscale","↑","Upscale"],
+  ["faceSwapPhoto","◈","Face Swap Foto"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
   ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrator de frames"],
   ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X Studio"],
@@ -5783,7 +5787,7 @@ function renderMobileNav(){
       '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
 }
 function mobileMoreItems(){
-  return ["trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+  return ["trialReels","faceSwap","upscale","faceSwapPhoto","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
 }
 function toggleMobileMore(force){
   const host=$("#mobileMoreHost");if(!host)return;
@@ -5827,7 +5831,7 @@ function nav(){
 
   const groups=[
     {label:"Planejamento",pages:["overview","calendar","trialReels","bulkPublish"]},
-    {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
+    {label:"Produção",pages:["faceSwap","upscale","faceSwapPhoto","production","frameExtractor"]},
     {label:"Canais",pages:["xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
@@ -5874,7 +5878,7 @@ function showPage(id){
   toggleMobileMore(false);
   renderMobileNav();
   renderAll();
-  if(id==="faceSwap"&&cloudSession){loadFaceSwapData().then(()=>faceSwapPage()).catch(e=>toast(e.message,"err"))}
+  if(["faceSwap","upscale","faceSwapPhoto"].includes(id)&&cloudSession){window.ImagePipeline?.render(id)}
   if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
   if((id==="automation"||id==="smartTimes")&&cloudSession){
@@ -9992,6 +9996,7 @@ function ensureFaceSwapTicker(){
   },10000);
 }
 function faceSwapPage(){
+  if(window.ImagePipeline)return window.ImagePipeline.render("faceSwap");
   const root=$("#faceSwap");if(!root)return;
   const jobs=faceSwapData?.jobs||[];
   const wf=faceSwapData?.workflow||{};
@@ -11580,6 +11585,8 @@ function renderAll(){
     trialReels:trialReelsPage,
     bulkPublish:bulkPublishPage,
     faceSwap:faceSwapPage,
+    upscale:()=>window.ImagePipeline?.render("upscale"),
+    faceSwapPhoto:()=>window.ImagePipeline?.render("faceSwapPhoto"),
     production:productionPage,
     frameExtractor:frameExtractorPage,
     xStudio:xStudioPage,
@@ -11768,6 +11775,7 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=16"></script>
+<script src="/image-pipeline-ui.js?v=1"></script>
 </body>
 </html>
 

@@ -254,6 +254,7 @@ Deno.serve(async(req)=>{
       const {data:job,error}=await admin.from("production_jobs").select("*").eq("id",id).eq("user_id",user.id).maybeSingle();
       if(error)throw error;
       if(!job||!isMotion(job))return out({ok:false,error:"Motion Control job não encontrado."},404);
+      if(job.meta?.image_pipeline_version===2)return out({error:"Use a aba Face Swap Natural para gerenciar este pipeline."},409);
       if(operation==="cancel"){
         await admin.from("production_jobs").update({status:"cancelled",locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",id).eq("user_id",user.id);
         return out({ok:true,cancelled:true});

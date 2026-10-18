@@ -1,3 +1,4 @@
+import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
 import {motionStorageHealth,motionStorageRead,requireMotionStorage,reserveMotionStorage,commitMotionStorage,putMotionPrimary,MotionStorageSafetyError} from "./motion-storage-protection.ts";
 import {isMotionStatusJob,readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 
@@ -565,12 +566,38 @@ Deno.serve(async(req:Request)=>{
       });
     }
 
+    await runImagePipeline({admin,workerId,rhJson,prepareInput,concurrency,
+      validateStage:async(stage)=>{
+        const workflowId=stage==="face_swap"?"2111452526003380225":"2111453733402390530";
+        const response=await rhJson("/api/openapi/getJsonApiFormat",{workflowId});
+        let graph=response.data;if(typeof graph==="string")graph=JSON.parse(graph);if(graph?.prompt)graph=typeof graph.prompt==="string"?JSON.parse(graph.prompt):graph.prompt;
+        const required=stage==="face_swap"?{"23":"LoadImage","17":"LoadImage","240":"SaveImage"}:{"130":"LoadImage","131":"SaveImage"};
+        for(const [id,type] of Object.entries(required))if(graph?.[id]?.class_type!==type)throw new Error("Workflow incompatível: node "+id);
+      },
+      hasProviderCapacity:async()=>{
+        try{const r=await fetch(base+"/openapi/v2/queue/status",{headers:{Authorization:"Bearer "+apiKey}});const p=await r.json();const c=p.data||p;
+          return r.ok&&Number.isFinite(Number(c.concurrentLimit))&&Number.isFinite(Number(c.totalCurrentTasks))&&Number(c.totalCurrentTasks)<Number(c.concurrentLimit);
+        }catch{return false;}
+      },
+      saveBlob:async(job,stage,item)=>{
+        const r=await fetch(String(item.fileUrl||item.url));if(!r.ok)throw new Error("Falha ao obter imagem "+stage);
+        const blob=await r.blob();if(!blob.size||blob.size>40*1024*1024)throw new Error("Imagem de saída inválida");
+        const ext=imageExtFrom(String(item.fileUrl||item.url),item.fileType),mime=imageMimeFor(ext);
+        const path=job.user_id+"/face-swap-results/pipeline/"+job.id+"/"+stage+"."+ext;
+        if(job.storage_provider==="r2"){const config=await getCloudentR2Config(admin);if(!config)throw new Error("r2_not_configured");await putAndVerifyR2(config,path,blob,mime);}
+        else{const {error}=await admin.storage.from("production").upload(path,blob,{contentType:mime,upsert:true});if(error)throw error;}
+        return {path,name:stage+"."+ext,mime,size:blob.size,task_id:job.runninghub_task_id};
+      },
+      wakeMotion:async()=>{await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
+    });
+
     let touched=0;
     const {data:activeFaceSwap,error:faceActiveError}=await admin.from("face_swap_jobs")
       .select("*").in("status",["queued","running"]).order("created_at",{ascending:true}).limit(50);
     if(faceActiveError)throw faceActiveError;
 
     for(const job of activeFaceSwap||[]){
+      if(isPipeline(job))continue;
       try{
         let handledByV2=false;
         try{

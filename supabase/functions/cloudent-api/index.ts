@@ -1,3 +1,4 @@
+import {imagePipelineApi} from '../_shared/image-pipeline-api.ts';
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {handleCalendarTrial} from "./calendar-trial.ts";
@@ -2296,6 +2297,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if(op==="retry"){
+        if(job.meta?.image_pipeline_version===2)return json({error:"Repita a etapa pela aba Face Swap Natural."},409);
         if(!["failed","cancelled"].includes(job.status))return json({error:"retry_not_allowed"},409);
         const {error}=await admin.from("production_jobs").update({
           status:"waiting",progress:0,runninghub_task_id:null,runninghub_video_file:null,runninghub_frame_file:null,
@@ -2399,6 +2401,15 @@ Deno.serve(async (req: Request) => {
       });
       return created.id;
     }
+
+    const pipelineResponse=await imagePipelineApi({req,url,admin,user:userData.user,json,
+      objectConfig:()=>getCloudentR2Config(admin),
+      removePaths:(provider,paths)=>storageDeletePathsBucket(admin,provider,paths,"production"),
+      signPut:(config,path)=>r2PresignedUrl(config,"PUT",path,1800),
+      signGet:(provider,path)=>storageSignedGetBucket(admin,String(provider||"supabase"),String(path),3600,"production"),
+      wake:()=>wakeProductionWorkerNow({image_pipeline:true})
+    });
+    if(pipelineResponse)return pipelineResponse;
 
     const characterSettingKey="face_swap_character_"+userData.user.id;
     async function selectedFaceSwapCharacter(required=false){
@@ -2655,6 +2666,7 @@ Deno.serve(async (req: Request) => {
       const {data:job,error:readError}=await admin.from("face_swap_jobs")
         .select("*").eq("id",id).eq("user_id",userData.user.id).maybeSingle();
       if(readError)throw readError;if(!job)return json({error:"face_swap_job_not_found"},404);
+      if(job.meta?.pipeline_version===2)return json({error:"Use as ações do pipeline de imagem."},409);
 
       if(op==="retry"||op==="run"){
         if(op==="retry"&&!["failed","cancelled"].includes(job.status))return json({error:"retry_not_allowed"},409);
@@ -2698,6 +2710,7 @@ Deno.serve(async (req: Request) => {
       const {data:job,error:readError}=await admin.from("face_swap_jobs")
         .select("*").eq("id",id).eq("user_id",userData.user.id).maybeSingle();
       if(readError)throw readError;if(!job)return json({error:"face_swap_job_not_found"},404);
+      if(job.meta?.pipeline_version===2)return json({error:"Use as ações do pipeline de imagem."},409);
       if(["uploading","queued","running"].includes(job.status))return json({error:"face_swap_job_active_cancel_first"},409);
 
       if(job.production_job_id){

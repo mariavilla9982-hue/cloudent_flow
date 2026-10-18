@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v38";
+const CACHE="cloudentflow-pwa-v39";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -164,6 +164,7 @@ self.addEventListener("fetch",event=>{
     url.pathname==="/face-swap-queue-patch.js"||
     url.pathname==="/backblaze-media-guard.js"||
     url.pathname==="/motion-control-production.js"||
+    url.pathname==="/image-pipeline-ui.js"||
     url.pathname==="/motion-control-core-v6.js"||
     url.pathname==="/motion-storage-ui.js"
   ){
