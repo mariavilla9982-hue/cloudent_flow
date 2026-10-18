@@ -15,3 +15,11 @@ assert.equal(results.find(r=>r.id==='unknown').state,'publishing');assert.equal(
 assert.equal(rows[0].scheduled_at,old);assert.equal(rows[0].linked_schedule_id,'normal');assert(rows[0].meta.late_trial_authorized);assert.equal(calls.length,2);
 await assert.rejects(()=>c.queueAuthorizedLateTrials(admin,{platform_account_id:'a',trial_ids:[]},now));
 console.log('PASS overdue Trial recovery: explicit IDs/account, owner, existing container, uncertain/published skips, no normal/time changes');
+const block=s.slice(s.indexOf('        const {data:publishLock,error:publishLockError}'),s.indexOf('        await admin.from("activity_logs").insert({level:"info",event_type:"trial_reel_published"'));
+async function publishGuard(hasLease,reply){let calls=0,saved=[];const admin={from(){let values;const q={update(v){values=v;return q},eq(){return q},select(){return q},async maybeSingle(){return {data:hasLease?{id:'job'}:null,error:null}},then(ok,bad){saved.push(values);return Promise.resolve({error:null}).then(ok,bad)}};return q}};
+const ctx=vm.createContext({admin,job:{id:'job',meta:{}},r:{base:'https://test',igId:'own',token:'test'},worker:'worker',container:'same',publishing:false,Date,Error,Number,String,graph:async()=>{calls++;return reply}});
+let error;try{await vm.runInContext(stripTypeScriptTypes('(async()=>{'+block+'})()'),ctx)}catch(e){error=e}return {calls,saved,error};}
+let result=await publishGuard(false,{id:'media'});assert(result.error);assert.equal(result.calls,0);
+result=await publishGuard(true,{});assert(result.error);assert(!result.saved.some(x=>x.status==='published'));
+result=await publishGuard(true,{id:'real-media'});assert(!result.error);assert.equal(result.calls,1);assert.equal(result.saved[0].instagram_media_id,'real-media');
+console.log('PASS publication guard: lost lease never sends, missing media ID stays unconfirmed, actual ID persisted');
