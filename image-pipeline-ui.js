@@ -3,7 +3,13 @@
   const style=document.createElement('style');style.textContent='[data-pipeline-mounted] form{display:grid;gap:18px}[data-pipeline-mounted] form label{display:grid;gap:10px;min-width:0}[data-pipeline-mounted] input[type=file]{max-width:100%;width:100%;font-size:12px}[data-pipeline-mounted] article{min-width:0;overflow-wrap:anywhere}[data-pipeline-mounted] .toolbar{flex-wrap:wrap}';document.head.appendChild(style);
   const sources={faceSwap:'face_swap_natural',upscale:'upscale_manual',faceSwapPhoto:'face_swap_photo'};
   const titles={faceSwap:'Face Swap Natural',upscale:'Upscale',faceSwapPhoto:'Face Swap Foto'};
-  const drafts={},busy=new Set();let jobs=[],loading=false,timer=null,generation=0;
+  const drafts={},busy=new Set();let jobs=[],loading=false,timer=null,generation=0,owner=cloudSession?.user?.id||'';
+  function resetOwner(){
+    const id=cloudSession?.user?.id||'';if(id===owner)return;
+    owner=id;generation++;jobs=[];
+    for(const [key,d] of Object.entries(drafts)){Object.values(d.urls||{}).forEach(url=>URL.revokeObjectURL(url));delete drafts[key];}
+    for(const id of Object.keys(sources)){const root=document.getElementById(id);if(root){root.replaceChildren();delete root.dataset.pipelineMounted;}}
+  }
   const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const request=(action,body,method='POST')=>cloudFetch('?action='+action,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   async function refresh(){
@@ -32,22 +38,23 @@
     }).join(''):'<p class="muted">Nenhum job neste fluxo.</p>';
   }
   function render(page){
-    if(!sources[page])return;
+    resetOwner();if(!sources[page])return;
     const root=document.getElementById(page);if(!root)return;
     if(root.dataset.pipelineMounted==='true'){drawJobs();refresh();return;}
     root.dataset.pipelineMounted='true';
     const photo=page==='faceSwapPhoto',natural=page==='faceSwap';
-    root.innerHTML='<div class="face-swap-shell"><div class="face-swap-hero"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie um vídeo. Modelo raiz fixa → Face Swap → Upscale → Control Motion V7.':photo?'Escolha a modelo e a referência. Face Swap e Upscale entregam a foto final.':'Envie uma imagem para ampliar e baixar o resultado.')+'</p></div></div><div class="card"><form data-pipeline-form><div class="face-swap-grid"><label>'+(natural?'Vídeo original':photo?'Foto da modelo raiz':'Imagem')+'<input name="original" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" required><div data-preview="original"></div></label>'+(photo?'<label>Foto de referência<input name="reference" type="file" accept="image/jpeg,image/png,image/webp" required><div data-preview="reference"></div></label>':'')+'</div><button class="btn primary" type="submit">'+(natural?'Gerar vídeo':photo?'Gerar Face Swap':'Gerar Upscale')+'</button><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div><div class="toolbar"><button class="btn" data-refresh>Atualizar</button></div><div class="face-swap-jobs" data-pipeline-jobs></div></div>';
-    root.addEventListener('change',evt=>{
+    root.innerHTML='<div class="face-swap-shell"><div class="face-swap-hero"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie um vídeo. Modelo raiz fixa → Face Swap → Upscale → Control Motion V7.':photo?'Escolha a modelo e a referência. Face Swap e Upscale entregam a foto final.':'Envie uma imagem para ampliar e baixar o resultado.')+'</p></div></div><div class="card"><form data-pipeline-form><div class="face-swap-grid"><label>'+(natural?'Vídeo original':photo?'Foto da modelo raiz':'Imagem')+'<input name="original" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" required><div data-preview="original"></div><button class="btn" type="button" data-remove="original">Remover</button></label>'+(photo?'<label>Foto de referência<input name="reference" type="file" accept="image/jpeg,image/png,image/webp" required><div data-preview="reference"></div><button class="btn" type="button" data-remove="reference">Remover</button></label>':'')+'</div><button class="btn primary" type="submit">'+(natural?'Gerar vídeo':photo?'Gerar Face Swap':'Gerar Upscale')+'</button><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div><div class="toolbar"><button class="btn" data-refresh>Atualizar</button></div><div class="face-swap-jobs" data-pipeline-jobs></div></div>';
+    root.onchange=evt=>{
       const f=evt.target.files?.[0];if(!f)return;
       const d=drafts[page]||(drafts[page]={id:crypto.randomUUID(),urls:{}});d.id=crypto.randomUUID();d[evt.target.name]=f;
       const k=evt.target.name;if(d.urls[k])URL.revokeObjectURL(d.urls[k]);d.urls[k]=URL.createObjectURL(f);
       const p=root.querySelector('[data-preview="'+k+'"]');p.innerHTML=f.type.startsWith('video/')?'<video controls style="max-width:100%;max-height:220px"></video>':'<img alt="Prévia da imagem selecionada" style="max-width:100%;max-height:220px">';p.firstChild.src=d.urls[k];
-    });
+    };
     root.querySelector('form').addEventListener('submit',evt=>{evt.preventDefault();submit(page,root);});
-    root.addEventListener('click',async evt=>{
+    root.onclick=async evt=>{
       const b=evt.target.closest('button');if(!b||(b.closest('form')&&b.type==='submit'))return;
       try{
+        if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();return;}
         if(b.hasAttribute('data-refresh'))return await refresh();
         const id=b.dataset.open||b.dataset.download;
         if(id){
@@ -59,26 +66,27 @@
         if(b.dataset.delete){b.disabled=true;await request('image-pipeline-job',{id:b.dataset.delete},'DELETE');await refresh();}
         if(b.dataset.calendar){await loadProductionData();await openProductionScheduleModal(b.dataset.calendar,1);}
       }catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}finally{b.disabled=false;}
-    });
+    };
     drawJobs();refresh();
-    if(!timer)timer=setInterval(()=>{if(sources[currentPage]&&cloudSession)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
+    if(!timer)timer=setInterval(()=>{resetOwner();if(sources[currentPage]&&cloudSession)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
   }
   async function submit(page,root){
     if(busy.has(page))return;busy.add(page);
     const form=root.querySelector('form'),button=form.querySelector('button'),status=form.querySelector('[data-pipeline-status]'),error=form.querySelector('[data-pipeline-error]');
     form.querySelectorAll('input,button').forEach(x=>x.disabled=true);error.textContent='';
     try{
-      const d=drafts[page];if(!d?.original)throw new Error('Selecione o arquivo de entrada.');
+      const submitOwner=owner;const d=drafts[page];if(!d?.original)throw new Error('Selecione o arquivo de entrada.');
       let reference=d.reference;
       if(page==='faceSwap'){status.textContent='Extraindo primeiro frame…';reference=new File([await extractFirstFrameBlob(d.urls.original)],'primeiro-frame.jpg',{type:'image/jpeg'});}
       const describe=f=>({name:f.name,size:f.size,type:f.type});
       status.textContent='Preparando envio…';
+      if(submitOwner!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os arquivos novamente.');
       const ticket=await request('image-pipeline-ticket',{source:sources[page],job_id:d.id,original:describe(d.original),reference:reference?describe(reference):null});
       if(!ticket.registered){
         status.textContent='Enviando arquivos…';
         await uploadFaceSwapPart(ticket.original,d.original,()=>{});
         if(!ticket.same_input)await uploadFaceSwapPart(ticket.reference,reference,()=>{});
-        status.textContent='Confirmando envio…';await request('image-pipeline-complete',{job_id:ticket.job_id});
+        status.textContent='Confirmando envio…';if(submitOwner!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');await request('image-pipeline-complete',{job_id:ticket.job_id});
       }
       status.textContent='Arquivos enviados. O processamento continua automaticamente.';
       Object.values(d.urls).forEach(url=>URL.revokeObjectURL(url));delete drafts[page];form.reset();root.querySelectorAll('[data-preview]').forEach(p=>p.replaceChildren());await refresh();
