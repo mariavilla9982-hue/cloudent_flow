@@ -2192,10 +2192,11 @@ Deno.serve(async (req: Request) => {
       if(job.result_video_id){
         const {count,error:countError}=await admin.from("schedules")
           .select("*",{count:"exact",head:true})
-          .or("video_id.eq."+job.result_video_id+",trial_video_id.eq."+job.result_video_id)
-          .neq("status","cancelled");
+          .or("video_id.eq."+job.result_video_id+",trial_video_id.eq."+job.result_video_id);
         if(countError)throw countError;
-        preserveResult=(count||0)>0;
+        const {count:trialCount,error:trialCountError}=await admin.from("reel_test_publications").select("id",{count:"exact",head:true}).eq("source_video_id",job.result_video_id).is("storage_deleted_at",null);
+        if(trialCountError)throw trialCountError;
+        preserveResult=(count||0)>0||(trialCount||0)>0;
       }
 
       const inputPaths=[
