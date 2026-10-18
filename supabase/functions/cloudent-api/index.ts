@@ -1675,8 +1675,19 @@ Deno.serve(async (req: Request) => {
         reconnectRequired:raw.apiKeyConfigured===false
       };
       const online=!!worker?.last_heartbeat && new Date(worker.last_heartbeat).getTime()>Date.now()-3*60*1000;
+      let imagePipelineQueue:any=null;
+      if((jobs||[]).some((j:any)=>j.meta?.image_pipeline_version===2&&j.status==="motion_waiting")){
+        const {data:images,error:imagesError}=await admin.from("face_swap_jobs")
+          .select("status,stage:meta->>stage").eq("user_id",userData.user.id).is("hidden_at",null)
+          .contains("meta",{pipeline_version:2}).in("status",["waiting","uploading","queued","running"]).limit(101);
+        if(!imagesError)imagePipelineQueue={
+          face_swap:(images||[]).filter((j:any)=>j.stage==="face_swap").length,
+          upscale:(images||[]).filter((j:any)=>j.stage==="upscale").length,
+          truncated:(images||[]).length===101,checked_at:new Date().toISOString()
+        };
+      }
       return json({
-        jobs:jobs||[],
+        jobs:jobs||[],imagePipelineQueue,
         integration:{enabled:!!integration?.enabled,account_label:integration?.account_label||"RunningHub",config},
         worker:worker?{...worker,online}:null
       });

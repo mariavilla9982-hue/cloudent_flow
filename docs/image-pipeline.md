@@ -42,3 +42,11 @@ The Motion claim excludes NEW chained pipeline v2 jobs while any eligible image 
 The provider currently permits two concurrent tasks across this key, not two per workflow. The two previously running Motion tasks still occupy those slots and are not cancelled. Once a slot becomes available, the new priority applies. No paid QA create, new media copy or broad job reset was used for validation.
 
 Migration20261018173033_image_pipeline_stage_queues changes only the two existing service-only claim/lease functions. SQL tests inside ROLLBACK verify Face Swap before older Upscale, FIFO, duplicate lease exclusion, chained Motion deferred through queued/running fast stages, eligibility after image completion, standalone Motion compatibility and grants. UI labels and counters show the three stage queues separately, including stage-relative positions and saved intermediate results.
+
+## Motion waiting UI and provider failure diagnosis — 2026-10-18
+
+Task2111862866127663105 was confirmed FAILED by both v2 query and legacy outputs (805), with generic message and empty failedReason. The exact provider cause is unknown; do not claim timeout, OOM, invalid nodes or recovery of a final video. The failed task is retained; no automatic paid retry is introduced.
+
+The screenshot exposed misleading native UI: a chained motion_waiting row was mapped to waiting and displayed Execute/Ready for new attempt even while the fast-image priority was active. The native renderer now recognizes chained Motion, shows automatic queue status, omits Run/Prioritize and explains the number of pending image stages. The production API reads only stage/status for the authenticated owner's active pipeline jobs, bounded101, only when chained Motion is waiting. No media or provider calls are added to UI polling; failure of the explanatory count preserves the normal response. Standard production controls remain.
+
+Generic workflow failures no longer promise automatic retry. The failed task's ID, completed Face Swap and Upscale remain associated for an explicit Motion-only retry through the existing guarded action. New integration tests exercise automatic waiting controls, real upstream counts, own-user scope, standard controls, no fake retry and graceful count failure. Existing scheduler/priority functions are unchanged by this reporting patch.

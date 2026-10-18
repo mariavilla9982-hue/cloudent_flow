@@ -9404,13 +9404,19 @@ function productionFriendlyError(message){
   const raw=String(message||"");
   if(!raw)return "";
   if(raw.toUpperCase().includes("TASK_QUEUE_MAXED"))return "Fila cheia · vai iniciar quando a vaga atual liberar.";
-  if(raw.includes("工作流运行失败"))return "Tentativa anterior falhou; retry automático.";
-  if(/workflow.*failed|runninghub falhou/i.test(raw))return "Tentativa anterior falhou; retry automático.";
+  if(raw.includes("工作流运行失败"))return "Falha do workflow na RunningHub. Sem nova tentativa automática.";
+  if(/workflow.*failed|runninghub falhou/i.test(raw))return "Falha do workflow na RunningHub. Sem nova tentativa automática.";
   return friendlyCloudentError(raw);
 }
 function productionJobRow(j,i,total){
   const otherActive=(productionData?.jobs||[]).some(x=>x.id!==j.id&&["uploading","queued","running"].includes(x.status));
-  const st=j.status==="waiting"&&otherActive
+  const automaticMotion=j.meta?.workflow_key==="motion_control"&&j.meta?.image_pipeline_version===2&&["waiting","motion_waiting"].includes(j.status);
+  const imageQueue=productionData?.imagePipelineQueue;
+  const imagesPending=Number(imageQueue?.face_swap||0)+Number(imageQueue?.upscale||0);
+  const automaticWait=imagesPending>0
+    ? "Fila automática · aguardando imagens: Face Swap "+Number(imageQueue.face_swap||0)+", Upscale "+Number(imageQueue.upscale||0)+"."
+    : "Fila automática · inicia quando houver vaga na RunningHub.";
+  const st=automaticMotion?{label:"Na fila automática",cls:"waiting"}:j.status==="waiting"&&otherActive
     ? {label:"Aguardando vaga",cls:"waiting"}
     : productionStatusMeta(j.status);
   const live=["uploading","queued","running"].includes(j.status);
@@ -9433,6 +9439,8 @@ function productionJobRow(j,i,total){
       '<button data-id="'+esc(j.id)+'" data-op="retry" onclick="productionActionFromButton(this)">↻ Retry</button>'+
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\',this)">Excluir</button>'+
     '</div>';
+  }else if(automaticMotion){
+    action='<div class="production-wait-actions"><span class="production-wait-detail">Início automático</span><button data-id="'+esc(j.id)+'" data-op="cancel" onclick="productionActionFromButton(this)">Cancelar</button></div>';
   }else if(j.status==="waiting"){
     action='<div class="production-wait-actions">'+
       '<button class="run-now" data-id="'+esc(j.id)+'" data-op="run" onclick="productionActionFromButton(this)">'+(otherActive?"★ Priorizar na fila":"▶ Executar")+'</button>'+
@@ -9445,7 +9453,9 @@ function productionJobRow(j,i,total){
   const friendlyError=productionFriendlyError(j.last_error);
   const err=friendlyError?'<em title="'+esc(j.last_error||friendlyError)+'">'+esc(friendlyError.slice(0,90))+'</em>':"";
   const task=j.runninghub_task_id?"Task "+esc(String(j.runninghub_task_id).slice(-8)):"Tentativa "+j.attempt_count+"/"+j.max_attempts;
-  const elapsed=j.status==="waiting"
+  const elapsed=automaticMotion
+    ? '<span class="production-wait-detail">'+esc(automaticWait)+'</span>'
+    : j.status==="waiting"
     ? '<span class="production-wait-detail">'+(otherActive?"Vai iniciar quando a vaga atual liberar":"Pronto para nova tentativa")+'</span>'
     : j.started_at
       ? '<span class="production-elapsed" data-started="'+new Date(j.started_at).getTime()+'" data-completed="'+(j.completed_at?new Date(j.completed_at).getTime():0)+'" data-runtime="'+Number(j.runninghub_runtime_seconds||0)+'" data-done="'+(j.status==="ready"?"1":"0")+'">'+(j.status==="ready"?"Tempo total ":"Decorrido ")+formatProductionSeconds(productionElapsedSeconds(j))+'</span>'
@@ -11806,7 +11816,7 @@ async function saveProductionTrial(button){
 
 init();
 </script>
-<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=17"></script>
+<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=18"></script>
 <script src="/image-pipeline-ui.js?v=5"></script>
 </body>
 </html>
