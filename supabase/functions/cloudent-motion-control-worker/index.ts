@@ -221,6 +221,7 @@ Deno.serve(async(req:Request)=>{
           updated_at:new Date().toISOString()
         }).eq("id",job.id).eq("locked_by",workerId);
         if(hardwareError)throw hardwareError;
+        job.meta={...(job.meta||{}),execution_instance_type:"plus",execution_instance_used:"plus",execution_instance_vram_gb:48,execution_instance_policy:"motion_default_48gb",execution_instance_authorized:false,workflow_id:String(cfg.workflowId)};
         const videoInput=await prepareInput(admin,base,apiKey,job,job.original_storage_path,job.original_file_name,job.original_mime_type||"video/mp4");
         await admin.from("production_jobs").update({progress:15,runninghub_video_file:videoInput,updated_at:new Date().toISOString()}).eq("id",job.id);
         const frameInput=await prepareInput(admin,base,apiKey,job,job.frame_storage_path,job.frame_file_name,job.frame_mime_type||"image/jpeg");
