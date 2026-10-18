@@ -29,3 +29,16 @@ Pipeline v2 scans jobs by created_at/id, oldest first. A capacity check happens 
 Queued tasks use provider status and keep started_at null. RUNNING starts the stage clock once; polling preserves it. Unknown API states do not infer RUNNING. The existing minute cron resumes waiting jobs when capacity permits; no extra cron or media cache was added. Only the specific existing TASK_QUEUE_MAXED Upscale rejection without a task/output was repaired, preserving the Face Swap result and original inputs. Genuine failures remain visible.
 
 Cards group processing, queued, completed and attention states. Queue positions are relative to the currently loaded mode, not the provider's global queue. Waiting stages have no running animation or error badge; completed stages retain checkmarks. Existing actions, preview ownership, X Studio and calendar behavior remain intact. Tests include explicit rejection/resume, blocked dispatch with active polling, stable started_at, queue UI ordering and genuine error visibility. Browser rendering was not verified: local Chromium unavailable and browser download failed. No paid QA generation was initiated; existing user jobs resume under their original automation.
+
+
+## Independent stage buffers and fast-stage priority — 2026-10-18
+
+User clarified that Face Swap must continue processing the input backlog while completed faces wait in the Upscale buffer, and completed upscales must move into the Motion waiting buffer. This supersedes whole-job FIFO dispatch priority.
+
+The worker now reads bounded active, Face Swap waiting, Upscale waiting and Motion waiting queues independently, polls existing tasks first, then dispatches Face Swap before Upscale. SQL lease selection enforces that priority and FIFO within each stage under the same advisory lock used by all claims. A backlog of Motion parents cannot hide later Face Swap candidates behind a global LIMIT.
+
+The Motion claim excludes NEW chained pipeline v2 jobs while any eligible image stage remains waiting/uploading/queued/running. Standalone Motion retains its current scheduling rules. Existing Motion task IDs, running tasks, output384 capture, hardware and graphs are untouched. An upscale result is still saved and immediately registered in production_jobs as motion_waiting; registration does not occupy a provider slot. The same minute cron drives processing in the cloud. Continuous arrival of image work can delay chained Motion under this explicit fast-stage priority; no separate provider capacity is invented.
+
+The provider currently permits two concurrent tasks across this key, not two per workflow. The two previously running Motion tasks still occupy those slots and are not cancelled. Once a slot becomes available, the new priority applies. No paid QA create, new media copy or broad job reset was used for validation.
+
+Migration20261018173033_image_pipeline_stage_queues changes only the two existing service-only claim/lease functions. SQL tests inside ROLLBACK verify Face Swap before older Upscale, FIFO, duplicate lease exclusion, chained Motion deferred through queued/running fast stages, eligibility after image completion, standalone Motion compatibility and grants. UI labels and counters show the three stage queues separately, including stage-relative positions and saved intermediate results.

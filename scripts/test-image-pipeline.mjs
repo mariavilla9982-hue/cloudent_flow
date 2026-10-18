@@ -53,3 +53,10 @@ mixed.deps.hasProviderCapacity=async()=>false;let polled=0;
 mixed.deps.rhJson=async(path)=>{polled++;return path.endsWith('status')?{code:0,data:'QUEUED'}:{code:813};};
 await runImagePipeline(mixed.deps);assert.equal(polled,2);assert.equal(mixed.reads.length,0);assert.equal(mixed.rows[1].runninghub_task_id,'existing-task');
 console.log('PASS: explicit queue rejection resumes; no duplicate task; full queue still polls; true QUEUED/RUNNING and stable started_at');
+
+const priority=harness([{...job('older-up','upscale_manual'),created_at:'2026-10-17'}, {...job('new-face'),created_at:'2026-10-18'}]);
+priority.deps.hasProviderCapacity=async()=>priority.creates.length<1;
+await runImagePipeline(priority.deps);
+assert.equal(priority.creates.length,1);assert.equal(priority.creates[0].workflowId,'2111452526003380225','Face Swap queue has priority over older Upscale');
+assert.equal(priority.rows[0].status,'waiting');assert.equal(priority.rows[1].status,'queued');
+console.log('PASS stage queues: newer Face Swap uses available slot before older Upscale; completed images remain buffered');

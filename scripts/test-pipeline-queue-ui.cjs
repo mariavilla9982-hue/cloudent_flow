@@ -15,12 +15,14 @@ const make=(id,status,stage='upscale')=>({id,status,created_at:'2026-10-18T10:0'
  assert(html.indexOf('Em processamento')<html.indexOf('Na fila'));
  assert(html.indexOf('video-1.mp4')<html.indexOf('video-3.mp4'),'FIFO within waiting group');
  const waiting=html.slice(html.indexOf('<h3 class="pipeline-group-title">Na fila'),html.indexOf('<h3 class="pipeline-group-title">Concluídos'));
- assert(waiting.includes('AGUARDANDO VAGA'));assert(waiting.includes('FILA 01'));assert(waiting.includes('FILA 02'));
+ assert(waiting.includes('NA FILA'));assert(waiting.includes('FILA 01'));assert(waiting.includes('FILA 02'));
  assert(!waiting.includes('pipeline-stage-segment active'));assert(!waiting.includes('pipeline-job-error'));assert(!waiting.includes('ATENÇÃO'));assert(waiting.includes('pipeline-step done'));
  assert(html.includes('Precisam de atenção'));assert(html.includes('Workflow incompatível: node 131'));
  rows=[{...make('6','waiting','control_motion'),production:{status:'running',meta:{provider_queue_waiting:false}}}];
- await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('PROCESSANDO'));assert(!list.innerHTML.includes('AGUARDANDO VAGA'));
+ await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('PROCESSANDO'));assert(!list.innerHTML.includes('NA FILA'));
  rows[0].production.status='queued';rows[0].production.meta.provider_queue_waiting=true;
- await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('AGUARDANDO VAGA'));assert(!list.innerHTML.includes('pipeline-stage-segment active'));
+ await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('NA FILA'));assert(!list.innerHTML.includes('pipeline-stage-segment active'));
+ rows=[{...make('7','waiting'),created_at:'2020-01-01'}, {...make('8','waiting','face_swap'),created_at:'2026-01-01',meta:{...make('8','waiting','face_swap').meta,face_swap_result:null}}];
+ await context.window.ImagePipeline.refresh();assert(list.innerHTML.indexOf('video-8.mp4')<list.innerHTML.indexOf('video-7.mp4'));assert(list.innerHTML.includes('Fila de Face Swap'));assert(list.innerHTML.includes('Fila de Upscale'));assert.equal((list.innerHTML.match(/FILA 01/g)||[]).length,2,'positions restart per stage');
  console.log('PASS UI: ordered groups, FIFO numbering, preserved completed stages, no false error/animation while queued, real failures visible, Motion uses child status');
 })().catch(e=>{console.error(e);process.exitCode=1});

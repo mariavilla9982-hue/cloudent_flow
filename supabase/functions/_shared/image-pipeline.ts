@@ -17,8 +17,15 @@ export async function runImagePipeline(d:any){
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const patch=async(j:any,values:any)=>{check(await admin.from('face_swap_jobs').update({...values,updated_at:new Date().toISOString()}).eq('id',j.id).eq('locked_by',workerId));Object.assign(j,values);};
   // Lease only serializes polling/storage; dispatch intent is durable and never expires.
-  const {data:rows,error}=await admin.from('face_swap_jobs').select('*').contains('meta',{pipeline_version:2}).in('status',['waiting','uploading','queued','running']).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(50);
-  if(error)throw error;
+  // Independent bounded stage queues: a backlog in Motion cannot hide waiting images.
+  const read=(stage?:string)=>{
+    const q=admin.from('face_swap_jobs').select('*').contains('meta',stage?{pipeline_version:2,stage}:{pipeline_version:2});
+    return (stage?q.in('status',['waiting']):q.in('status',['uploading','queued','running'])).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(50);
+  };
+  const batches=await Promise.all([read(),read('face_swap'),read('upscale'),read('control_motion')]);
+  const rows=batches.flatMap(r=>check(r)||[]);
+  const priority=(j:any)=>j.runninghub_task_id||j.meta.stage==='control_motion'?0:j.meta.stage==='face_swap'?1:2;
+  rows.sort((a:any,b:any)=>priority(a)-priority(b)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
   let providerFull=false;
   for(const row of rows||[]){
     // Continue reconciling existing tasks even when dispatch is paused.
@@ -87,7 +94,7 @@ export async function runImagePipeline(d:any){
       const saved=await saveBlob(j,stage,item);
       m={...m,[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
       if(stage==='face_swap'){
-        await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'FACE_SWAP_COMPLETED'},last_error:null});
+        await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'UPSCALE_WAITING'},last_error:null});
       }else if(m.source==='face_swap_natural'){
         // Reuse exactly the production_jobs contract consumed by the existing Motion V7 worker.
         const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
@@ -99,7 +106,7 @@ export async function runImagePipeline(d:any){
             status:'motion_waiting',progress:0,max_attempts:1,attempt_count:0,
             meta:{workflow_key:'motion_control',workflow_label:'Motion Control V7',workflow_nodes:{video:'275',frame:'299',output:'285'},manual_run:true,auto_chained:true,image_pipeline_version:2,face_swap_job_id:j.id}}));
         }
-        await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_RUNNING'},last_error:null});
+        await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_WAITING'},last_error:null});
         await d.wakeMotion();
       }else{
         await patch(j,{status:'ready',result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED'},last_error:null});

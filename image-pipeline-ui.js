@@ -88,25 +88,30 @@
   function drawJobs(){
     const node=document.querySelector('#'+currentPage+' [data-pipeline-jobs]');if(!node)return;
     const rank=j=>j.status==='ready'||j.production?.status==='ready'?2:j.status==='failed'||j.production?.status==='failed'?3:queueState(j)?1:0;
-    const rows=jobs.filter(j=>j.meta.source===sources[currentPage]).sort((a,b)=>rank(a)-rank(b)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
+    const stageRank=j=>({face_swap:0,upscale:1,control_motion:2}[j.meta?.stage]??3);
+    const rows=jobs.filter(j=>j.meta.source===sources[currentPage]).sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?stageRank(a)-stageRank(b):0)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
     const signature=JSON.stringify(rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.meta?.face_swap_result?.path,j.meta?.upscale_result?.path,j.last_error,j.meta?.provider_queue_waiting,j.production?.meta?.provider_queue_waiting,j.production?.status,j.production?.progress]));
     if(node.dataset.signature===signature)return;node.dataset.signature=signature;
     const groups=['Em processamento','Na fila','Concluídos','Precisam de atenção'];
     const counts=groups.map((_,i)=>rows.filter(j=>rank(j)===i).length);
-    let previous=-1,queuePosition=0;
-    const summary='<div class="pipeline-queue-summary" role="status">'+['Processando','Aguardando','Concluídos','Atenção'].map((name,i)=>'<span><strong>'+counts[i]+'</strong> '+name+'</span>').join('')+'</div>';
+    let previous=-1,previousStage='',queuePositions={};
+    const stageNames={face_swap:'Face Swap',upscale:'Upscale',control_motion:'Motion V7'};
+    const stageSummary='<div class="pipeline-queue-summary" aria-label="Filas por etapa">'+Object.entries(stageNames).map(([stage,name])=>'<span>'+name+' · <strong>'+rows.filter(j=>rank(j)<2&&j.meta.stage===stage).length+'</strong> pendentes</span>').join('')+'</div>';
+    const summary=stageSummary+'<div class="pipeline-queue-summary" role="status">'+['Processando','Aguardando','Concluídos','Atenção'].map((name,i)=>'<span><strong>'+counts[i]+'</strong> '+name+'</span>').join('')+'</div>';
     node.innerHTML=rows.length?summary+rows.map((j,index)=>{ 
-      const group=rank(j),heading=previous!==group?'<h3 class="pipeline-group-title">'+groups[group]+'</h3>':'';previous=group;
+      const group=rank(j),stage=j.meta.stage;let heading=previous!==group?'<h3 class="pipeline-group-title">'+groups[group]+'</h3>':'';
+      if(group===1&&(previous!==group||previousStage!==stage))heading+='<h4 class="pipeline-group-title">Fila de '+e(stageNames[stage]||'processamento')+'</h4>';
+      previous=group;previousStage=stage;
       const state=pipelineSteps(j),{ready,failed,steps,queued}=state;
       const retry=j.status==='failed'&&j.meta.provider_failed&&!j.meta.dispatch_uncertain;
       const current=state.current>=0?steps[state.current].name:'';
-      if(queued)queuePosition++;
-      const title=ready?(j.meta.source==='face_swap_natural'?'Vídeo final pronto':'Imagem final pronta'):failed?'Falha em '+current:queued?'Aguardando vaga · '+current:current+' em processamento';
-      const subtitle=ready?'Concluído · resultado disponível para visualizar e baixar':failed?'As etapas concluídas foram preservadas':queued?'Na fila · retomada automática quando houver vaga. Etapas concluídas preservadas.':state.done+' de '+steps.length+' etapas concluídas · processamento automático';
+      if(queued)queuePositions[stage]=(queuePositions[stage]||0)+1;
+      const title=ready?(j.meta.source==='face_swap_natural'?'Vídeo final pronto':'Imagem final pronta'):failed?'Falha em '+current:queued?'Na fila de '+current:current+' em processamento';
+      const subtitle=ready?'Concluído · resultado disponível para visualizar e baixar':failed?'As etapas concluídas foram preservadas':queued?(stage==='upscale'?(j.meta.source==='upscale_manual'?'Imagem enviada · aguardando sua vez no Upscale.':'Face Swap salvo · aguardando sua vez no Upscale.'):stage==='control_motion'?'Imagem final salva · aguardando na fila do Motion V7.':'Fila própria de Face Swap · inicia quando houver vaga na RunningHub.'):state.done+' de '+steps.length+' etapas concluídas · processamento automático';
       const deletable=['ready','failed','cancelled'].includes(j.status)&&!j.meta.dispatch_uncertain;
       return heading+'<article class="card pipeline-job" style="--stages:'+steps.length+'">'+
         '<figure class="pipeline-job-preview" data-pipeline-preview="'+j.id+'"><div class="pipeline-job-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m4 17 5-5 4 4 3-3 5 5"/><circle cx="15" cy="8" r="2"/></svg><span>Carregando prévia</span></div><figcaption class="pipeline-preview-tag">Prévia</figcaption></figure>'+
-        '<div class="pipeline-job-info"><div class="pipeline-job-head"><span class="pipeline-job-number">'+(queued?'FILA '+String(queuePosition).padStart(2,'0'):'VÍDEO '+String(jobs.filter(x=>x.meta.source===sources[currentPage]).slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id)).findIndex(x=>x.id===j.id)+1).padStart(2,'0'))+'</span><strong class="pipeline-job-name" title="'+e(j.original_file_name)+'">'+e(j.original_file_name)+'</strong><span class="pipeline-job-badge '+(ready?'ready':failed?'failed':'')+'">'+(ready?'CONCLUÍDO':failed?'ATENÇÃO':queued?'AGUARDANDO VAGA':'PROCESSANDO')+'</span></div>'+
+        '<div class="pipeline-job-info"><div class="pipeline-job-head"><span class="pipeline-job-number">'+(queued?'FILA '+String(queuePositions[stage]).padStart(2,'0'):'VÍDEO '+String(jobs.filter(x=>x.meta.source===sources[currentPage]).slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id)).findIndex(x=>x.id===j.id)+1).padStart(2,'0'))+'</span><strong class="pipeline-job-name" title="'+e(j.original_file_name)+'">'+e(j.original_file_name)+'</strong><span class="pipeline-job-badge '+(ready?'ready':failed?'failed':'')+'">'+(ready?'CONCLUÍDO':failed?'ATENÇÃO':queued?'NA FILA':'PROCESSANDO')+'</span></div>'+
         '<p class="pipeline-job-current"><span class="pipeline-status-dot"></span>'+e(title)+'</p><p class="pipeline-job-subtitle">'+e(subtitle)+'</p>'+
         '<div class="pipeline-stage-track" role="progressbar" aria-label="Etapas concluídas" aria-valuemin="0" aria-valuemax="'+steps.length+'" aria-valuenow="'+state.done+'" aria-valuetext="'+e(title)+'">'+steps.map(step=>'<span class="pipeline-stage-segment '+step.state+'"></span>').join('')+'</div>'+
         '<ol class="pipeline-step-list">'+steps.map((step,i)=>'<li class="pipeline-step '+step.state+'" '+(step.state==='active'?'aria-current="step"':'')+'><span class="pipeline-step-icon">'+(step.done?'✓':step.state==='failed'?'!':i+1)+'</span><span>'+step.name+'</span></li>').join('')+'</ol>'+
