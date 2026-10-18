@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v47";
+const CACHE="cloudentflow-pwa-v48";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 

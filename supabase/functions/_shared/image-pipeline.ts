@@ -17,9 +17,12 @@ export async function runImagePipeline(d:any){
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const patch=async(j:any,values:any)=>{check(await admin.from('face_swap_jobs').update({...values,updated_at:new Date().toISOString()}).eq('id',j.id).eq('locked_by',workerId));Object.assign(j,values);};
   // Lease only serializes polling/storage; dispatch intent is durable and never expires.
-  const {data:rows,error}=await admin.from('face_swap_jobs').select('*').contains('meta',{pipeline_version:2}).in('status',['waiting','uploading','queued','running']).limit(50);
+  const {data:rows,error}=await admin.from('face_swap_jobs').select('*').contains('meta',{pipeline_version:2}).in('status',['waiting','uploading','queued','running']).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(50);
   if(error)throw error;
+  let providerFull=false;
   for(const row of rows||[]){
+    // Continue reconciling existing tasks even when dispatch is paused.
+    if(providerFull&&!row.runninghub_task_id&&row.meta.stage!=='control_motion')continue;
     const claim=check(await admin.rpc('lease_image_pipeline',{p_id:row.id,p_worker:workerId,p_limit:concurrency}));
     const j=Array.isArray(claim)?claim[0]:claim;if(!j)continue;
     try{
@@ -35,8 +38,8 @@ export async function runImagePipeline(d:any){
       if(!j.runninghub_task_id){
         // Ambiguous network outcome MUST NOT cause another billable create.
         if(m.dispatch_intent){await patch(j,{status:'failed',last_error:'Envio sem confirmação. Reconcilie a tarefa no provedor antes de tentar novamente.',meta:{...m,dispatch_uncertain:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});continue;}
+        if(!await d.hasProviderCapacity()){providerFull=true;await patch(j,{status:'waiting',started_at:null,last_error:null,meta:{...m,provider_queue_waiting:true,queue_reason:'provider_capacity',pipeline_status:stage.toUpperCase()+'_WAITING'}});continue;}
         await d.validateStage(stage);
-        if(!await d.hasProviderCapacity()){await patch(j,{status:"waiting"});continue;}
         const path=stage==='upscale'?(m.face_swap_result?.path||j.frame_storage_path):j.frame_storage_path;
         const input=stage==='upscale'&&m.face_swap_result?m.face_swap_result:{name:j.frame_file_name,mime:j.frame_mime_type};
         const reference=await prepareInput(path,input.name||stage+'.jpg',input.mime||'image/jpeg',j.storage_provider);
@@ -46,27 +49,45 @@ export async function runImagePipeline(d:any){
           if(!c?.storage_path||!String(c.storage_path).startsWith(j.user_id+'/face-swap-characters/'))throw new Error('Modelo raiz inválida');
           model=await prepareInput(c.storage_path,'modelo.jpg',c.mime_type||'image/jpeg','supabase',{expected_sha256:c.sha256});
         }
-        m={...m,dispatch_intent:crypto.randomUUID(),pipeline_status:stage.toUpperCase()+'_RUNNING'};
+        m={...m,dispatch_intent:crypto.randomUUID(),provider_queue_waiting:false,queue_reason:null,pipeline_status:stage.toUpperCase()+'_SUBMITTING'};
         await patch(j,{status:'uploading',meta:m}); // durable BEFORE create
         let created;
         try{created=await rhJson('/task/openapi/create',{...stageInputs(j,reference,model),addMetadata:true});}
         catch{await patch(j,{status:'failed',meta:{...m,dispatch_uncertain:true,error_stage:stage},last_error:'Resposta de criação incerta; tarefa não será repetida automaticamente.'});continue;}
         if(Number(created?.code)!==0||!created?.data?.taskId){
-          // Queue rejection is definitive. Other responses remain uncertain.
+          // Only an explicit rejection without any task ID permits automatic dispatch later.
+          if(Number(created?.code)!==0&&String(created?.msg||'').trim()==='TASK_QUEUE_MAXED'&&!created?.data?.taskId){
+            providerFull=true;
+            await patch(j,{status:'waiting',started_at:null,last_error:null,meta:{...m,dispatch_intent:null,dispatch_uncertain:false,provider_failed:false,error_stage:null,provider_queue_waiting:true,queue_reason:'provider_capacity',last_dispatch_rejection:'TASK_QUEUE_MAXED',pipeline_status:stage.toUpperCase()+'_WAITING'}});
+            continue;
+          }
+          // Unknown/ambiguous outcomes still block another create.
           await patch(j,{status:'failed',meta:{...m,dispatch_uncertain:true,error_stage:stage},last_error:String(created?.msg||'Criação sem taskId; verificar no provedor.')});continue;
         }
         const id=String(created.data.taskId);
-        await patch(j,{status:'queued',runninghub_task_id:id,meta:{...m,[stage+'_task_id']:id},last_error:null});
+        await patch(j,{status:'queued',started_at:null,runninghub_task_id:id,meta:{...m,[stage+'_task_id']:id,provider_status:'QUEUED',provider_queue_waiting:true,pipeline_status:stage.toUpperCase()+'_QUEUED'},last_error:null});
         continue;
       }
       const result=await rhJson('/task/openapi/outputs',{taskId:j.runninghub_task_id});
       if(Number(result?.code)===805){await patch(j,{status:'failed',last_error:String(result?.msg||'Workflow falhou'),meta:{...m,dispatch_uncertain:false,provider_failed:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});continue;}
-      if(Number(result?.code)!==0||!Array.isArray(result.data)||!result.data.length){await patch(j,{status:Number(result?.code)===813?'queued':'running'});continue;}
+      if(Number(result?.code)!==0||!Array.isArray(result.data)||!result.data.length){
+        // Never infer RUNNING from an arbitrary API error or empty outputs.
+        const response=await rhJson('/task/openapi/status',{taskId:j.runninghub_task_id});
+        const provider=Number(response?.code)===0?String(response.data?.status||response.data||'').toUpperCase():'';
+        if(provider==='QUEUED'||!['RUNNING','SUCCESS','FAILED'].includes(provider)&&Number(result?.code)===813){
+          await patch(j,{status:'queued',started_at:null,last_error:null,meta:{...m,provider_status:'QUEUED',provider_queue_waiting:true,pipeline_status:stage.toUpperCase()+'_QUEUED'}});
+        }else if(provider==='RUNNING'){
+          await patch(j,{status:'running',started_at:j.started_at||new Date().toISOString(),last_error:null,meta:{...m,provider_status:'RUNNING',provider_queue_waiting:false,pipeline_status:stage.toUpperCase()+'_RUNNING'}});
+        }else if(provider==='FAILED'){
+          await patch(j,{status:'failed',last_error:String(result?.msg||'Workflow falhou'),meta:{...m,provider_status:'FAILED',provider_queue_waiting:false,dispatch_uncertain:false,provider_failed:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});
+        }
+        continue;
+      }
       const item=exactOutput(result.data,stage==='face_swap'?'240':'131');
       const saved=await saveBlob(j,stage,item);
-      m={...m,[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null};
+      m={...m,[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
       if(stage==='face_swap'){
-        await patch(j,{status:'waiting',runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'FACE_SWAP_COMPLETED'},last_error:null});
+        await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'FACE_SWAP_COMPLETED'},last_error:null});
       }else if(m.source==='face_swap_natural'){
         // Reuse exactly the production_jobs contract consumed by the existing Motion V7 worker.
         const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
@@ -78,7 +99,7 @@ export async function runImagePipeline(d:any){
             status:'motion_waiting',progress:0,max_attempts:1,attempt_count:0,
             meta:{workflow_key:'motion_control',workflow_label:'Motion Control V7',workflow_nodes:{video:'275',frame:'299',output:'285'},manual_run:true,auto_chained:true,image_pipeline_version:2,face_swap_job_id:j.id}}));
         }
-        await patch(j,{status:'waiting',production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_RUNNING'},last_error:null});
+        await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_RUNNING'},last_error:null});
         await d.wakeMotion();
       }else{
         await patch(j,{status:'ready',result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED'},last_error:null});
