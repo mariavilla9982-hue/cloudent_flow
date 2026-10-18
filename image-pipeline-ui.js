@@ -3,6 +3,7 @@
   const style=document.createElement('style');style.textContent='[data-pipeline-mounted] form{display:grid;gap:18px}[data-pipeline-mounted] form label{display:grid;gap:10px;min-width:0}[data-pipeline-mounted] input[type=file]{max-width:100%;width:100%;font-size:12px}[data-pipeline-mounted] article{min-width:0;overflow-wrap:anywhere}[data-pipeline-mounted] .toolbar{flex-wrap:wrap}';document.head.appendChild(style);
   style.textContent+=`.pipeline-job{display:grid;grid-template-columns:120px minmax(0,1fr);gap:20px;padding:18px!important;background:#0d0d0d;border:1px solid #292929;border-radius:16px;overflow:hidden}
 .pipeline-job-preview{position:relative;aspect-ratio:3/4;border-radius:11px;overflow:hidden;background:#171717;margin:0;align-self:start;border:1px solid #292929}
+.pipeline-job-preview a{display:block;width:100%;height:100%;cursor:zoom-in}.pipeline-job-preview a:focus-visible{outline:2px solid #fff;outline-offset:-3px}
 .pipeline-job-preview img,.pipeline-job-preview video{width:100%;height:100%;object-fit:cover;display:block}
 .pipeline-job-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#777;font-size:10px;text-align:center;padding:8px}
 .pipeline-job-placeholder svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.4}
@@ -67,11 +68,13 @@
         }
         const preview=await saved.pending;
         if(uid!==cloudSession?.user?.id||!target.isConnected)continue;
-        let img=target.querySelector('img');if(!img){img=document.createElement('img');img.alt='Prévia do processamento';img.loading='lazy';target.prepend(img);}
+        let link=target.querySelector('a');if(!link){link=document.createElement('a');link.target='_blank';link.rel='noopener noreferrer';target.prepend(link);}
+        link.href=preview.url;link.title='Abrir imagem em tamanho original';link.setAttribute('aria-label','Abrir '+preview.label+' em tamanho original (nova aba)');
+        let img=link.querySelector('img');if(!img){img=document.createElement('img');img.alt='Prévia do processamento';img.loading='lazy';link.append(img);}
         img.onload=()=>target.querySelector('.pipeline-job-placeholder')?.remove();
         img.onerror=()=>{img.remove();const hint=target.querySelector('.pipeline-job-placeholder span');if(hint)hint.textContent='Prévia indisponível';};
         img.src=preview.url;
-        const tag=target.querySelector('.pipeline-preview-tag');if(tag)tag.textContent=preview.label;
+        const tag=target.querySelector('.pipeline-preview-tag');if(tag)tag.textContent=preview.label+' · Ampliar ↗';
       }catch{previewCache.delete(key);const hint=target.querySelector('.pipeline-job-placeholder span');if(hint)hint.textContent='Prévia indisponível';}
     }
   }
