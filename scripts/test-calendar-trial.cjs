@@ -1,0 +1,23 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),{stripTypeScriptTypes}=require('node:module');
+const {webcrypto:crypto}=require('crypto');
+class Q{
+ constructor(db,t){this.db=db;this.t=t;this.f=[];this.patch=null;}select(){return this;}eq(k,v){this.f.push(r=>r[k]===v);return this;}in(k,v){this.f.push(r=>v.includes(r[k]));return this;}is(k,v){return this.eq(k,v);}not(){return this;}lte(k,v){this.f.push(r=>r[k]<=v);return this;}or(){return this;}order(){return this;}limit(){return this;}update(p){this.patch=p;return this;}upsert(){return this;}insert(){return this;}
+ async run(){const rows=(this.db[this.t]||[]).filter(r=>this.f.every(f=>f(r)));if(this.patch)rows.forEach(r=>Object.assign(r,this.patch));return {data:rows.map(r=>({...r})),error:null};}then(a,b){return this.run().then(a,b);}throwOnError(){return this;}async maybeSingle(){const r=await this.run();return {...r,data:r.data[0]||null};}single(){return this.maybeSingle();}
+}
+function boot(file,admin,fetch){let handler;const c={console,crypto,URL,URLSearchParams,Request,Response,Headers,AbortSignal,Date,createClient:()=>admin,fetch,Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://test':'key'},serve:f=>handler=f}};vm.createContext(c);vm.runInContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/'+file+'/index.ts','utf8')).replace(/^import .*;\n/gm,''),c);return handler;}
+const request=id=>new Request('https://test',{method:'POST',headers:{'x-cloudent-worker-secret':'secret','Content-Type':'application/json'},body:JSON.stringify({schedule_id:id})});
+(async()=>{
+ for(const timeout of [false,true]){
+ const db={schedules:[{id:'s',video_id:'v',status:'scheduled',platform_account_id:'a'}],videos:[{id:'v',storage_provider:'r2',media_clean_status:'ready',caption:'caption'}],platform_accounts:[{id:'a',platform:'instagram',enabled:true,external_account_id:'ig',config:{}}],job_queue:[{id:'j',status:'pending',payload:{container_id:'container'},attempts:0}],activity_logs:[]};let sent=0;
+ const admin={from:t=>new Q(db,t),rpc:async(n,p)=>{if(n==='get_cloudent_worker_secret')return {data:'secret'};if(n==='claim_calendar_publish_schedule'){const j=db.job_queue[0];if(j.locked_by||j.status==='done')return {data:[]};j.locked_by=p.p_worker;return {data:[{...j}]};}if(n==='get_instagram_page_token_for_account')return {data:'token'};return {data:null};}};
+ const handler=boot('cloudent-instagram-publish-recovery',admin,async(url)=>{if(String(url).includes('/media_publish')){sent++;await new Promise(r=>setTimeout(r,10));if(timeout)throw Error('timeout after accepted');return Response.json({id:'published'});}return Response.json({status_code:'FINISHED'});});
+ await Promise.all([handler(request('s')),handler(request('s'))]);await handler(request('s'));assert.equal(sent,1,'concurrent or replayed main publish');if(timeout)assert(db.job_queue[0].payload.publish_started_at);else assert.equal(db.schedules[0].status,'published');
+ }
+ for(const mismatch of [false,true]){
+ const db={reel_test_publications:[{id:'t',status:'scheduled',scheduled_at:new Date(Date.now()-60000).toISOString(),container_id:'trialcontainer',meta:{linked_schedule_id:'s',platform_account_id:mismatch?'wrong':'a'}}],schedules:[{id:'s',scheduled_at:new Date(Date.now()+3600000).toISOString(),status:'scheduled',platform_account_id:'a'},{id:'normal',scheduled_at:new Date(Date.now()-1000).toISOString(),platform:'instagram',status:'scheduled',instagram_media_id:null}],platform_accounts:[{id:'a',platform:'instagram',enabled:true,external_account_id:'ig',config:{}}]};let sent=0,normal=0;
+ const admin={from:t=>new Q(db,t),rpc:async(n,p)=>{if(n==='get_cloudent_worker_secret')return {data:'secret'};if(n==='get_instagram_page_token_for_account')return {data:'token'};if(n==='claim_due_trial_reels'){const j=db.reel_test_publications[0];if(j.locked_by||j.status==='published'||j.status==='publishing')return {data:[]};j.status='processing';j.locked_by=p.p_worker;return {data:[{...j}]};}return {data:null};}};
+ const handler=boot('cloudent-posting-scheduler-recovery',admin,async(url)=>{if(String(url).includes('/functions/')){normal++;return Response.json({ok:true});}if(String(url).includes('/media_publish')){sent++;throw Error('uncertain response');}return Response.json({status_code:'FINISHED'});});
+ await handler(request());await handler(request());assert.equal(sent,mismatch?0:1);assert(normal>=1,'trial failure blocks main');if(!mismatch)assert.equal(db.reel_test_publications[0].status,'publishing');
+ }
+ console.log('PASS concurrent claims, uncertain publication replay, trial failure isolation, exact account routing');
+})().catch(e=>{console.error(e);process.exitCode=1;});

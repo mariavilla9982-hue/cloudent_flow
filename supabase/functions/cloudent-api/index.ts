@@ -1,5 +1,6 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {handleCalendarTrial} from "./calendar-trial.ts";
 import {handleXMembers} from "./x-members.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
@@ -255,6 +256,7 @@ Deno.serve(async (req: Request) => {
     if(!accessMember?.enabled||!["admin","x_user"].includes(accessMember.role))return json({error:"forbidden"},403);
     if(resource==="session"&&req.method==="GET")return json({user_id:userData.user.id,role:accessMember.role,workspace_id:accessMember.workspace_id});
     if(accessMember.role!=="admin")return json({error:"forbidden",user_message:"Seu acesso está limitado ao X Studio."},403);
+    if(resource==="calendar-trial")return handleCalendarTrial(req,admin,accessMember,userData.user.id,url,json);
     if(resource==="members")return handleXMembers(req,admin,accessMember,userData.user.id,url,json);
 
 
@@ -360,8 +362,8 @@ Deno.serve(async (req: Request) => {
       const fromParam=String(url.searchParams.get("from")||"").trim();
       const compactQueue=url.searchParams.get("compact")==="1";
       const queueSelect=compactQueue
-        ?"id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
-        :"id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
+        ?"id,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
+        :"id,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
       let queueQuery=admin
         .from("schedules")
         .select(queueSelect)
@@ -383,7 +385,7 @@ Deno.serve(async (req: Request) => {
         const [{data:snapshots,error:snapError},{data:pretrials,error:pretrialError}]=await Promise.all([
           admin.rpc("get_recent_schedule_metrics",{p_schedule_ids:ids,p_limit:6}),
           admin.from("reel_test_publications")
-            .select("id,linked_schedule_id,scheduled_at,status,published_at,published_as_trial,instagram_media_id,last_error,attempt_count,max_attempts,meta")
+            .select("id,linked_schedule_id,source_video_id,file_name,container_id,scheduled_at,status,published_at,published_as_trial,instagram_media_id,last_error,attempt_count,max_attempts,meta")
             .eq("trial_kind","prepost")
             .in("linked_schedule_id",ids)
         ]);
@@ -2095,7 +2097,7 @@ Deno.serve(async (req: Request) => {
       if(!schedule){
         const {data,error}=await admin.from("schedules")
           .select("id,video_id,status,scheduled_at")
-          .eq("video_id",job.result_video_id)
+          .or("video_id.eq."+job.result_video_id+",trial_video_id.eq."+job.result_video_id)
           .neq("status","cancelled")
           .order("created_at",{ascending:false})
           .limit(1)
@@ -2190,7 +2192,7 @@ Deno.serve(async (req: Request) => {
       if(job.result_video_id){
         const {count,error:countError}=await admin.from("schedules")
           .select("*",{count:"exact",head:true})
-          .eq("video_id",job.result_video_id)
+          .or("video_id.eq."+job.result_video_id+",trial_video_id.eq."+job.result_video_id)
           .neq("status","cancelled");
         if(countError)throw countError;
         preserveResult=(count||0)>0;
@@ -4248,7 +4250,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: updated, error: updatedError } = await admin
         .from("schedules")
-        .select("id,video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,videos(file_name,caption,storage_path,size_bytes,mime_type)")
+        .select("id,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,videos(file_name,caption,storage_path,size_bytes,mime_type)")
         .eq("id", id).single();
       if (updatedError) throw updatedError;
 
@@ -4286,6 +4288,9 @@ Deno.serve(async (req: Request) => {
         .single();
       if (readError) throw readError;
 
+      const {count:trialReferences,error:trialReferenceError}=await admin.from("schedules").select("id",{count:"exact",head:true}).eq("trial_video_id",sched.video_id);
+      if(trialReferenceError)throw trialReferenceError;
+      if(trialReferences)return json({error:"video_is_linked_calendar_trial",user_message:"Este vídeo está associado como Reels Teste. Remova a associação antes de excluir."},409);
       const storagePath = (sched as any)?.videos?.storage_path;
       const originalPath = (sched as any)?.videos?.original_storage_path;
       const provider=String((sched as any)?.videos?.storage_provider||"supabase");
@@ -4316,3 +4321,4 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: message }, 500);
   }
 });
+

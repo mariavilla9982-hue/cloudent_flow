@@ -4598,6 +4598,7 @@ async function refreshCloudSession(){
       method:"POST",body:JSON.stringify({refresh_token:cloudSession.refresh_token})
     });
     persistCloudSession(r);
+    await authRecoveryRequest("session",{},r.access_token);
     return true;
   }catch(e){persistCloudSession(null);return false}
 }
@@ -4657,8 +4658,10 @@ async function initCloud(){
   nav();
   if(cloudAccess.role==="x_user"){
     backendOnline=true;currentPage="xStudio";
-    await loadXPostingStatus();showPage("xStudio");if(location.hash&&location.hash!=="#xStudio")deniedPage();return;
+    history.replaceState(null,"","/x-studio");await loadXPostingStatus();showPage("xStudio");return;
   }
+  const initialRoute=({"/x-studio":"xStudio","/calendar":"calendar","/production":"production","/face-swap":"faceSwap","/settings":"settings","/dashboard":"dashboard","/metrics":"metrics"})[location.pathname];
+  if(initialRoute&&canAccessPage(initialRoute))currentPage=initialRoute;
   await withTimeout(testBackend(),12000,"conexão com servidor").catch(()=>{backendOnline=false});
   if(!backendOnline)return;
 
@@ -5439,7 +5442,7 @@ async function syncFromBackend(rows=null){
       thumbnailPath:v.thumbnail_storage_path||"",
       coverOffsetMs:Number(v.cover_offset_ms||3500),coverStrategy:v.cover_strategy||"auto_after_3s",
       time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
-      instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,pretrial:row.pretrial||null,
+      instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,pretrial:row.pretrial||null,trialVideoId:row.trial_video_id||null,
       platform:row.platform||"instagram",platformAccountId:row.platform_account_id||null,smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
     };
   }
@@ -5861,6 +5864,7 @@ function showPage(id){
   const page=$("#"+id),meta=navItems.find(x=>x[0]===id);
   if(!page||!meta)return;
   currentPage=id;
+  if(cloudAccess?.role==="x_user")history.replaceState(null,"","/x-studio");
   document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
   page.classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
@@ -7177,6 +7181,7 @@ async function refreshCalendarLiveData(){
     x.instagramMediaId=row.instagram_media_id||null;
     x.calendarMetrics=row.calendar_metrics||null;
     x.pretrial=row.pretrial||null;
+    x.trialVideoId=row.trial_video_id||null;
   }
   save();
   if(structural){
@@ -7294,6 +7299,7 @@ function renderSlot(date,i){
         <summary title="Ações do vídeo" aria-label="Ações do vídeo">•••</summary>
         <div class="slot-menu-pop">
           <button onclick="previewScheduled('${date}',${i})"><span>▶</span> Ver preview</button>
+          <button onclick="openCalendarTrialModal('${x.scheduleId}')"><span>◈</span> Reels Teste</button>
           <button onclick="openEditScheduleModal('${date}',${i})"><span>✎</span> Editar</button>
           <button class="danger-link" onclick="removeSlot('${date}',${i},this)"><span>×</span> Excluir</button>
         </div>
@@ -7303,8 +7309,10 @@ function renderSlot(date,i){
     <div class="ui31-slot-bottom">
       <span class="badge calendar-status-badge ${statusClass(st)} status-${st}">${statusLabel(st)}</span>
       ${smartBadge}
-      ${i<base?calendarPretrialBadge(x):""}
+      ${calendarPretrialBadge(x)}
     </div>
+    <div class="slot-caption-preview"><span>REELS PRINCIPAL · ${esc(x.time)}</span><b>${esc(x.name)}</b></div>
+    <button class="btn" onclick="event.stopPropagation();openCalendarTrialModal('${x.scheduleId}')">◈ Reels Teste ${x.trialVideoId?'separado':'automático'} · ${esc(x.trialVideoId?x.pretrial?.file_name||'Vídeo separado':'Mesmo vídeo')} · ${x.pretrial?.scheduled_at?new Date(x.pretrial.scheduled_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'-20m'}</button>
     ${x.caption?'<div class="slot-caption-preview" title="Mesma frase usada na legenda e no primeiro comentário"><span>LEGENDA + COMENTÁRIO</span><b>'+esc(x.caption)+'</b></div>':""}
     <div class="calendar-schedule-live-host">${calendarScheduleLive(x)}</div>
     <div class="calendar-performance-host" data-views="${Number(performance?.views||0)}">${calendarSlotPerformance(x,date)}</div>
@@ -9410,6 +9418,7 @@ function productionJobRow(j,i,total){
       '<label class="production-job-select '+(productionSelectedJobs.has(String(j.id))?'selected':'')+'" title="Selecionar para excluir"><input type="checkbox" '+(productionSelectedJobs.has(String(j.id))?'checked':'')+' onchange="toggleProductionJobSelection(\''+esc(j.id)+'\',this.checked)"><span class="production-checkmark">✓</span><span>Selecionar</span></label>'+
       '<button data-id="'+esc(j.id)+'" data-kind="result" onclick="productionPreviewFromButton(this)">▶ Ver resultado</button>'+
       '<button onclick="downloadProductionResult(\''+esc(j.id)+'\','+n+')">↓ Baixar</button>'+
+      '<button onclick="openProductionTrialModal(\''+esc(j.id)+'\')">◈ Adicionar como Reels Teste</button>'+
       '<button class="calendar-job-toggle '+(scheduled?'scheduled':'')+'" onclick="openProductionScheduleModal(\''+esc(j.id)+'\','+n+')">'+(scheduled?'📅 No calendário':'📅 Calendário')+'</button>'+
       (!scheduled?'<button class="bulk-job-send" onclick="sendProductionResultToBulk(\''+esc(j.id)+'\',this)">⚡ Mandar para lote</button>':'')+
       '<button class="danger" onclick="deleteProductionJob(\''+esc(j.id)+'\')">Excluir</button>'+
@@ -11708,9 +11717,57 @@ async function xCreateInvite(){try{const email=document.getElementById('xInviteE
 async function xDuplicatePost(id){try{await xPostingRequest('duplicate',{id});await refreshXPosting();toast('Cópia adicionada à fila.','ok');}catch(e){toast(e.message,'err');}}
 window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);if(cloudAccess?.role==='x_user'&&page&&page!=='xStudio')deniedPage();});
 
+let calendarTrialDraft=null;
+async function openCalendarTrialModal(scheduleId){
+  try{
+    const [queue,options]=await Promise.all([cloudFetch('?resource=queue'),cloudFetch('?resource=calendar-trial')]);
+    const row=queue.find(s=>s.id===scheduleId);if(!row)throw new Error('Publicação não encontrada.');
+    calendarTrialDraft={row,videos:options.videos||[]};
+    const locked=!['scheduled','queued'].includes(row.status)||Date.parse(row.scheduled_at)<=Date.now()||row.pretrial?.container_id||['processing','container_created','publishing','published'].includes(row.pretrial?.status);
+    const account=calendarInstagramAccounts().find(a=>a.id===row.platform_account_id);
+    const candidates=calendarTrialDraft.videos.filter(v=>!v.platform_account_id||v.platform_account_id===row.platform_account_id);
+    $('#modalHost').innerHTML=`<div class="modal"><div class="modal-box"><div class="modal-head"><b>Reels Teste</b><button class="btn" onclick="closeModal()">Fechar</button></div>
+      <p>${esc(account?.account_label||'Instagram')} · Reels principal: ${esc(row.videos?.file_name||'Vídeo')} · ${new Date(row.scheduled_at).toLocaleString('pt-BR')}</p>
+      <p>Teste: ${row.pretrial?.scheduled_at?new Date(row.pretrial.scheduled_at).toLocaleString('pt-BR'):'20 minutos antes'} · ${esc(row.pretrial?.status||'aguardando')}</p>
+      <div class="field"><label><input type="radio" name="trialMode" value="same" ${!row.trial_video_id?'checked':''} ${locked?'disabled':''} onchange="document.getElementById('trialVideoChoice').disabled=true"> Usar mesmo vídeo</label>
+      <label><input type="radio" name="trialMode" value="separate" ${row.trial_video_id?'checked':''} ${locked?'disabled':''} onchange="document.getElementById('trialVideoChoice').disabled=false"> Escolher vídeo separado</label></div>
+      <div class="field"><label>Vídeo pronto da Produção IA</label><select id="trialVideoChoice" ${locked||!row.trial_video_id?'disabled':''}><option value="">Escolha um vídeo</option>${candidates.map(v=>`<option value="${esc(v.id)}" ${v.id===row.trial_video_id?'selected':''}>${esc(v.file_name)}</option>`).join('')}</select></div>
+      ${locked?'<p>Este teste já começou ou a publicação está encerrada.</p>':'<button class="btn primary" onclick="saveCalendarTrial(this)">Salvar Reels Teste</button>'}
+      <p class="muted">O vídeo principal e seu horário permanecem os mesmos.</p></div></div>`;
+  }catch(e){toast(e.message,'err');}
+}
+async function saveCalendarTrial(button){
+  const separate=document.querySelector('input[name="trialMode"]:checked')?.value==='separate';
+  const videoId=separate?$('#trialVideoChoice').value:null;
+  if(separate&&!videoId){toast('Escolha um vídeo pronto.','warn');return;}
+  actionButtonBusy(button,true,'Salvando…');
+  try{await cloudFetch('?resource=calendar-trial',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({schedule_id:calendarTrialDraft.row.id,video_id:videoId})});closeModal();await syncFromBackend();calendarPage();toast('Reels Teste atualizado.','ok');}catch(e){toast(e.message,'err');}finally{actionButtonBusy(button,false);}
+}
+let productionTrialDraft=null;
+async function openProductionTrialModal(jobId){
+  try{
+    const [queue,options]=await Promise.all([cloudFetch('?resource=queue'),cloudFetch('?resource=calendar-trial')]);
+    const video=options.videos.find(v=>v.production_job_id===jobId);if(!video)throw new Error('Vídeo pronto indisponível.');
+    productionTrialDraft={video,queue:queue.filter(s=>s.platform==='instagram'&&['scheduled','queued'].includes(s.status)&&Date.parse(s.scheduled_at)>Date.now())};
+    const accounts=calendarInstagramAccounts().filter(a=>!video.platform_account_id||a.id===video.platform_account_id);
+    $('#modalHost').innerHTML=`<div class="modal"><div class="modal-box"><div class="modal-head"><b>Adicionar como Reels Teste</b><button class="btn" onclick="closeModal()">Fechar</button></div><p>${esc(video.file_name)}</p><div class="formgrid"><div class="field"><label>Conta</label><select id="productionTrialAccount" onchange="updateProductionTrialPosts()">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.account_label||'Instagram')}</option>`).join('')}</select></div><div class="field"><label>Dia</label><input id="productionTrialDay" type="date" value="${localISO(new Date())}" onchange="updateProductionTrialPosts()"></div><div class="field full"><label>Publicação principal</label><select id="productionTrialPost"></select></div></div><button class="btn primary" onclick="saveProductionTrial(this)">Associar Reels Teste</button></div></div>`;
+    updateProductionTrialPosts();
+  }catch(e){toast(e.message,'err');}
+}
+function updateProductionTrialPosts(){
+  const account=$('#productionTrialAccount').value,day=$('#productionTrialDay').value;
+  const rows=productionTrialDraft.queue.filter(s=>s.platform_account_id===account&&localISO(new Date(s.scheduled_at))===day);
+  $('#productionTrialPost').innerHTML='<option value="">Escolha a publicação principal</option>'+rows.map(s=>`<option value="${esc(s.id)}">${new Date(s.scheduled_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} — ${esc(s.videos?.file_name||'Vídeo')}</option>`).join('');
+}
+async function saveProductionTrial(button){
+  const id=$('#productionTrialPost').value;if(!id){toast('Escolha uma publicação principal.','warn');return;}
+  actionButtonBusy(button,true,'Associando…');
+  try{await cloudFetch('?resource=calendar-trial',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({schedule_id:id,video_id:productionTrialDraft.video.id})});closeModal();await syncFromBackend();toast('Vídeo associado como Reels Teste.','ok');}catch(e){toast(e.message,'err');}finally{actionButtonBusy(button,false);}
+}
+
 init();
 </script>
-<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=15"></script>
+<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=16"></script>
 </body>
 </html>
 

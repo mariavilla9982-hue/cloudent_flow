@@ -34,6 +34,7 @@ async function pickFirstComment(admin:any,caption:string,scheduleId:string){
 
 Deno.serve(async(req:Request)=>{
   const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
+  let leasedJob:string|null=null;const worker="calendar-main-"+crypto.randomUUID();
   try{
     if(req.method!=="POST")return out({ok:false,error:"method_not_allowed"},405);
     const supplied=req.headers.get("x-cloudent-worker-secret")||"";
@@ -47,6 +48,9 @@ Deno.serve(async(req:Request)=>{
     if(s.instagram_media_id||s.status==="published")return out({ok:true,state:"already_published",instagram_media_id:s.instagram_media_id});
     if(!s.platform_account_id)throw new Error("schedule_without_platform_account");
 
+    const {data:claims,error:claimError}=await admin.rpc("claim_calendar_publish_schedule",{p_schedule_id:scheduleId,p_worker:worker});if(claimError)throw claimError;
+    const j=claims?.[0];if(!j)return out({ok:true,state:"not_due_or_claimed"});leasedJob=j.id;
+
     const {data:v,error:ve}=await admin.from("videos").select("id,storage_provider,storage_path,file_name,caption,media_clean_status,status").eq("id",s.video_id).single();if(ve)throw ve;
     if(String(v.storage_provider||"")!=="r2")throw new Error("unsupported_storage_provider");
     if(!["ready","skipped","legacy"].includes(String(v.media_clean_status||"")))throw new Error("video_not_clean_ready");
@@ -57,7 +61,7 @@ Deno.serve(async(req:Request)=>{
     const igId=String(pa.external_account_id||"");if(!igId)throw new Error("instagram_external_id_missing");
     const base=String(pa.config?.api_mode||"instagram_login")==="facebook_login"?"https://graph.facebook.com/v26.0":"https://graph.instagram.com/v26.0";
 
-    const {data:j,error:je}=await admin.from("job_queue").select("id,status,attempts,max_attempts,payload").eq("schedule_id",scheduleId).eq("job_type","publish_reel").order("created_at",{ascending:false}).limit(1).maybeSingle();if(je)throw je;if(!j)throw new Error("publish_job_missing");
+
     let payload:any={...(j.payload||{})};
     let containerId=String(payload.container_id||"");
     const caption=String(v.caption||"").slice(0,2200);
@@ -71,12 +75,16 @@ Deno.serve(async(req:Request)=>{
       const created=await graph(base,igId+"/media",String(token),"POST",{media_type:"REELS",video_url:mediaUrl,caption,share_to_feed:"false",thumb_offset:String(coverOffsetMs)});
       containerId=String(created.id);
       payload={...payload,container_id:containerId,container_created_at:now,cover_offset_ms:coverOffsetMs,platform_account_id:String(pa.id),first_comment_message:firstCommentMessage,share_to_feed:false};
-      await admin.from("job_queue").update({status:"running",attempts:Math.max(1,Number(j.attempts||0)+1),locked_at:now,locked_by:"recovery-"+scheduleId,last_error:null,payload,updated_at:now}).eq("id",j.id);
+      await admin.from("job_queue").update({status:"running",attempts:Math.max(1,Number(j.attempts||0)+1),locked_at:now,locked_by:worker,last_error:null,payload,updated_at:now}).eq("id",j.id);
       await admin.from("schedules").update({status:"processing",attempt_count:Math.max(1,Number(s.attempt_count||0)+1),last_error:null}).eq("id",scheduleId);
       return out({ok:true,state:"container_created",container_id:containerId,first_comment_message:firstCommentMessage,share_to_feed:false});
     }
 
-    const st=await graph(base,containerId+"?fields=status_code,status",String(token),"GET");
+    if(payload.publish_started_at&&!payload.instagram_media_id){
+      await admin.from("schedules").update({status:"failed",last_error:"Confirmação da publicação necessária antes de repetir."}).eq("id",scheduleId);
+      return out({ok:false,state:"confirmation_required",error:"Publicação enviada; confirmação necessária antes de repetir."},409);
+    }
+    const st=payload.instagram_media_id?{status_code:"FINISHED"}:await graph(base,containerId+"?fields=status_code,status",String(token),"GET");
     const code=String(st.status_code||"");
     if(code!=="FINISHED"){
       if(code==="ERROR"||code==="EXPIRED"){
@@ -90,6 +98,9 @@ Deno.serve(async(req:Request)=>{
 
     let mediaId=String(payload.instagram_media_id||"");
     if(!mediaId){
+      if(payload.publish_started_at)return out({ok:false,state:"confirmation_required",error:"Publicação enviada; confirmação necessária antes de repetir."},409);
+      payload={...payload,publish_started_at:new Date().toISOString(),idempotency_key:"calendar-main:"+scheduleId};
+      await admin.from("job_queue").update({payload}).eq("id",j.id).eq("locked_by",worker).throwOnError();
       const pub=await graph(base,igId+"/media_publish",String(token),"POST",{creation_id:containerId});
       mediaId=String(pub.id);
       payload={...payload,instagram_media_id:mediaId,published_at:new Date().toISOString()};
@@ -117,4 +128,5 @@ Deno.serve(async(req:Request)=>{
     if(firstCommentId)await admin.from("activity_logs").insert({level:"info",event_type:"automatic_first_comment_published",message:"Primeiro comentário automático publicado no Reel",meta:{schedule_id:scheduleId,instagram_media_id:mediaId,platform_account_id:pa.id,instagram_comment_id:firstCommentId,message:comment}});
     return out({ok:true,state:"published",instagram_media_id:mediaId,first_comment_id:firstCommentId,first_comment_message:comment||null,first_comment_error:firstCommentError,share_to_feed:false});
   }catch(e:any){return out({ok:false,error:e instanceof Error?e.message:String(e),detail:e?.payload||null},500);}
+  finally{if(leasedJob)await admin.from("job_queue").update({locked_at:null,locked_by:null}).eq("id",leasedJob).eq("locked_by",worker);}
 });

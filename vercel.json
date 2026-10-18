@@ -84,5 +84,43 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/x-studio",
+      "destination": "/api/route-guard?path=x-studio"
+    },
+    {
+      "source": "/calendar",
+      "destination": "/api/route-guard?path=calendar"
+    },
+    {
+      "source": "/production",
+      "destination": "/api/route-guard?path=production"
+    },
+    {
+      "source": "/face-swap",
+      "destination": "/api/route-guard?path=face-swap"
+    },
+    {
+      "source": "/settings",
+      "destination": "/api/route-guard?path=settings"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/api/route-guard?path=dashboard"
+    },
+    {
+      "source": "/instagram",
+      "destination": "/api/route-guard?path=instagram"
+    },
+    {
+      "source": "/extraction",
+      "destination": "/api/route-guard?path=extraction"
+    },
+    {
+      "source": "/metrics",
+      "destination": "/api/route-guard?path=metrics"
+    }
   ]
 }

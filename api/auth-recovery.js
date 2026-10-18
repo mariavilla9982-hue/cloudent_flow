@@ -42,6 +42,11 @@ export default async function handler(req,res){
     const text=await upstream.text();
     let payload=null;
     try{payload=text?JSON.parse(text):{}}catch{payload={ok:false,error:"invalid_upstream_response"};}
+    if(upstream.ok){
+      const access=action==="login"?payload?.session?.access_token:action==="session"?authorization.replace(/^Bearer\s+/i,""):null;
+      if(access)res.setHeader("Set-Cookie","cf_access="+access+"; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600");
+      if(action==="logout")res.setHeader("Set-Cookie","cf_access=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+    }
     return send(res,upstream.status,payload);
   }catch(error){
     console.error("auth-recovery-proxy",error?.name==="AbortError"?"upstream_timeout":"upstream_network_error");

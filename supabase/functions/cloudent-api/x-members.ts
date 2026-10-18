@@ -26,7 +26,7 @@ async function handleXMembersImpl(req:Request,admin:any,member:any,userId:string
     const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(raw));
     const hash=Array.from(new Uint8Array(bytes)).map(x=>x.toString(16).padStart(2,"0")).join("");
     const {error}=await admin.rpc("configure_x_invite",{p_actor:userId,p_email:email,p_hash:hash,p_accounts:body.account_ids||[]});if(error)throw error;
-    const frontend=String(Deno.env.get("CLOUDENT_FRONTEND_URL")||"https://cloudent-flow.vercel.app").replace(/\/$/,"");
+    const frontend="https://cloudent-flow.vercel.app";
     const link=frontend+"/primeiro-acesso.html?email="+encodeURIComponent(email)+"&token="+encodeURIComponent(raw);
     let email_sent=false,email_error=null;
     if(body.send_email===true){
@@ -67,3 +67,4 @@ export async function handleXMembers(req:Request,admin:any,member:any,userId:str
   throw error;
  }
 }
+

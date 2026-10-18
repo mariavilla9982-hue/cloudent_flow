@@ -98,7 +98,7 @@
   let completed=false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if(completed){location.href="/";return;}
+    if(completed){location.href="/x-studio";return;}
     if (!inviteToken&&!nativeInviteToken) return show("Este link não contém um convite válido.", "err");
     const normalizedEmail = email.value.trim().toLowerCase();
     if (!normalizedEmail) return show("Informe o e-mail.", "err");
