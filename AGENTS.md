@@ -28,3 +28,11 @@ Este repositório não deve ser tratado isoladamente. O repositório `mariavilla
 ## Regra de sincronização
 
 O Brain possui auto-sync técnico do HEAD do GitHub. Isso não substitui a atualização semântica após patches: o agente continua responsável por documentar o que mudou, por quê e o estado funcional resultante.
+
+## Proteção obrigatória do Supabase — 2026-10-18
+
+- Antes de atender qualquer pedido, avaliar impacto em banco Postgres, Storage, egress, funções e cotas do Supabase. Medir uso e confirmar limites atuais do plano; não tratar tamanho do banco como prova de folga em egress/Storage.
+- Se houver risco concreto de exceder limite, bloquear a ação de risco e informar uso, limite, impacto estimado e alternativa econômica. Só prosseguir após autorização específica para aquela ação; autorizações gerais anteriores não cobrem ultrapassar cotas, aumentar plano ou assumir cobranças.
+- Se o consumo/limite necessário não puder ser verificado, não executar cargas grandes ou migrações de mídia para Supabase às cegas. Trabalhar em alternativa que caiba no limite e preservar serviço/dados existentes.
+- Não apagar vídeos, calendário, métricas ou aprendizado para liberar espaço sem autorização específica. Priorizar mídia no Backblaze e evitar duplicações e leituras repetidas.
+- Esta regra é política operacional persistente. Registro em app_settings não constitui, por si só, bloqueio automático universal; não afirmar cobertura técnica que não foi implementada/testada.
