@@ -1,3 +1,4 @@
+import {retryPipelineMotion} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
 export async function uploadedObjectMatches(address:string,size:number){
   // A presigned GET URL cannot be reused for HEAD: S3 signs the HTTP method.
@@ -101,14 +102,12 @@ export async function imagePipelineApi(d:any){
   }
   if(req.method==='PATCH'&&action==='image-pipeline-retry'){
     const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);
-    if(j.status!=='failed'||j.meta.dispatch_uncertain||!j.meta.provider_failed)return json({error:'A tarefa ainda está ativa ou exige reconciliação com o provedor. Nenhuma geração foi repetida.'},409);
     if(j.meta.stage==='control_motion'){
-      const p=check(await admin.from('production_jobs').select('*').eq('id',j.id).eq('user_id',user.id).maybeSingle());
-      if(!p||p.status!=='failed'||p.meta?.provider_status!=='FAILED'||p.meta?.provider_status_task_id!==p.runninghub_task_id||p.meta?.pipeline_dispatch_uncertain)return json({error:'Motion exige confirmação da falha no provedor.'},409);
-      check(await admin.from('production_jobs').update({status:'motion_waiting',runninghub_task_id:null,attempt_count:0,last_error:null,meta:{...p.meta,pipeline_dispatch_intent:null,pipeline_dispatch_uncertain:false}}).eq('id',j.id).eq('status','failed').eq('runninghub_task_id',p.runninghub_task_id));
-      check(await admin.from('face_swap_jobs').update({status:'waiting',last_error:null,meta:{...j.meta,provider_failed:false,error_stage:null}}).eq('id',j.id).eq('status','failed'));
-      await wake();return json({ok:true});
+      const r=await retryPipelineMotion(admin,user.id,j.id);
+      if(r.ok)await wake();
+      return json(r,r.status||200);
     }
+    if(j.status!=='failed'||j.meta.dispatch_uncertain||!j.meta.provider_failed)return json({error:'A tarefa ainda está ativa ou exige reconciliação com o provedor. Nenhuma geração foi repetida.'},409);
     const m={...j.meta,dispatch_intent:null,provider_failed:false,error_stage:null};
     let retry=admin.from('face_swap_jobs').update({status:'waiting',runninghub_task_id:null,last_error:null,meta:m}).eq('id',j.id).eq('status','failed');
     retry=j.runninghub_task_id?retry.eq('runninghub_task_id',j.runninghub_task_id):retry.is('runninghub_task_id',null);check(await retry);

@@ -150,7 +150,8 @@
         active&&!confirmedRunning?{...job,status:"running",started_at:null}:job;
       let html=motionRow.call(this,displayJob,...rest);
       if(typeof html==="string"){
-        if(queued)html=html.replace(/Na fila do RunningHub/g,"Aguardando vaga");
+        if(active&&job.meta?.motion_execution_phase==="waiting_loop"&&String(job.meta?.motion_execution_task_id)===String(job.runninghub_task_id))html=html.replace(/>Gerando</g,">Aguardando saída #384<");
+        else if(queued)html=html.replace(/Na fila do RunningHub/g,"Aguardando vaga");
         else if(active&&!confirmedRunning)html=html.replace(/>Gerando</g,job.meta?.provider_status==="SUCCESS"?">Salvando resultado<":">Consultando RunningHub<");
       }
       const recovered=isMotion&&job.status==="ready"&&!!job.result_video_id&&
@@ -196,7 +197,7 @@
       const storageScript=document.createElement("script");storageScript.id="cloudentMotionStorageScript";storageScript.src="/motion-storage-ui.js?v=1";storageScript.async=false;(document.head||document.documentElement).appendChild(storageScript);
     }
     uiState.patched=true;
-    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=16}catch{}
+    try{if(window.CloudentMotionControl)window.CloudentMotionControl.version=17}catch{}
     try{if(typeof currentPage!=="undefined"&&currentPage==="production"&&typeof productionPage==="function")productionPage()}catch{}
   }
 

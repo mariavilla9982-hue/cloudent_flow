@@ -30,6 +30,16 @@ async function route(admin:any,accountId:string){
   return {token:String(token),base,igId:String(a.external_account_id||""),label:String(a.account_label||"")};
 }
 
+function trialReconcileDecision(job:any,code:string,normalAt:string|undefined,now:number){
+  if(code==="PUBLISHED")return {state:"confirmed_published",patch:{status:"published",published_as_trial:true,next_attempt_at:null,last_error:null},meta:{publish_confirmed_by_container:true}};
+  const terminal=["FINISHED","ERROR","EXPIRED"].includes(code);
+  if(!terminal)return {state:"confirmation_pending",patch:{last_error:"Instagram ainda não confirmou a publicação; nenhuma repetição enviada."},meta:{}};
+  if(normalAt&&Date.parse(normalAt)<=now)return {state:"closed_late",patch:{status:"failed",next_attempt_at:null,last_error:"Instagram não confirmou o Trial antes do Reel normal. Envio atrasado encerrado."},meta:{publish_not_confirmed:true}};
+  const retries=Number(job.meta?.publish_resume_count||0);
+  if(code!=="FINISHED"||retries>=3)return {state:"failed",patch:{status:"failed",next_attempt_at:null,last_error:"Container Trial "+code+"; publicação não repetida."},meta:{}};
+  return {state:"resume_same_container",patch:{status:"processing",next_attempt_at:new Date(now+60000).toISOString(),last_error:null},meta:{publish_resume_count:retries+1}};
+}
+
 Deno.serve(async(req:Request)=>{
   const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
   try{
@@ -38,6 +48,27 @@ Deno.serve(async(req:Request)=>{
     if(!supplied||!expected||supplied!==expected)return out({ok:false,error:"unauthorized"},401);
     const now=new Date().toISOString(),results:any[]=[];
     for(const worker of ["automation","instagram_publish","trial_reels"]){await admin.from("worker_runtime").upsert({worker_name:worker,last_heartbeat:now,updated_at:now},{onConflict:"worker_name"})}
+
+    // Reconcile an uncertain publish against the SAME container before any retry.
+    const {data:uncertain}=await admin.from("reel_test_publications").select("*").eq("status","publishing").is("locked_at",null).lte("updated_at",new Date(Date.now()-120000).toISOString()).limit(5);
+    for(const t of uncertain||[]){
+      const lease="trial-confirm-"+crypto.randomUUID();
+      const {data:claimed}=await admin.from("reel_test_publications").update({locked_at:now,locked_by:lease}).eq("id",t.id).eq("status","publishing").is("locked_at",null).select("id").maybeSingle();
+      if(!claimed)continue;
+      try{
+        const accountId=String(t.meta?.platform_account_id||"");
+        const {data:s}=t.linked_schedule_id?await admin.from("schedules").select("platform_account_id,scheduled_at").eq("id",t.linked_schedule_id).maybeSingle():{data:null};
+        if(!accountId||s&&accountId!==String(s.platform_account_id))throw new Error("trial_account_mismatch");
+        if(!t.container_id)throw new Error("trial_confirmation_without_container");
+        const r=await route(admin,accountId),st=await graph(r.base,String(t.container_id)+"?fields=status_code,status",r.token);
+        const decision=trialReconcileDecision(t,String(st.status_code||""),s?.scheduled_at,Date.now());
+        const meta={...t.meta,publish_container_status:String(st.status_code||""),publish_reconciled_at:now,...decision.meta};
+        await admin.from("reel_test_publications").update({...decision.patch,meta,updated_at:now}).eq("id",t.id).eq("locked_by",lease).eq("container_id",t.container_id).throwOnError();
+        results.push({type:"trial",id:t.id,state:decision.state});
+      }catch(e:any){
+        await admin.from("reel_test_publications").update({last_error:"Confirmação pendente; não reenviado: "+String(e.message||e).slice(0,500),updated_at:now}).eq("id",t.id).eq("locked_by",lease);
+      }finally{await admin.from("reel_test_publications").update({locked_at:null,locked_by:null}).eq("id",t.id).eq("locked_by",lease);}
+    }
 
     // If a pre-trial was missed and the normal post time has already arrived, close the stale trial.
     const {data:stale}=await admin.from("reel_test_publications").select("id,linked_schedule_id").eq("status","scheduled").is("locked_at",null).is("container_id",null).lte("scheduled_at",now).not("linked_schedule_id","is",null).limit(20);

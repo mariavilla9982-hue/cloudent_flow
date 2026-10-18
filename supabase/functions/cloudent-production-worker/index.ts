@@ -140,7 +140,7 @@ async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:s
   EdgeRuntime.waitUntil(work);
 }
 async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,master:string,lease:string){
-  let captured=false,continueWatching=false;const began=Date.now();
+  let captured=false,continueWatching=false,loopSeen=false;const began=Date.now();
   try{
     const r=await fetch(base+"/task/openapi/outputs",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},body:JSON.stringify({apiKey,taskId:job.runninghub_task_id}),signal:AbortSignal.timeout(10000)});
     const j=await r.json(),wss=j?.data?.netWssUrl;
@@ -156,6 +156,11 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
       ws.onmessage=async event=>{
         if(finished||typeof event.data!=="string")return;
         let message:any;try{message=JSON.parse(event.data)}catch{return;}
+        if(!loopSeen&&message.type==="executing"&&String(message.data?.prompt_id)===String(job.runninghub_task_id)&&["378","379","380"].includes(String(message.data?.display_node||message.data?.node))){
+          loopSeen=true;
+          const {data:current}=await admin.from("production_jobs").select("meta,runninghub_task_id").eq("id",job.id).maybeSingle();
+          if(!finished&&current&&String(current.runninghub_task_id)===String(job.runninghub_task_id))await admin.from("production_jobs").update({meta:{...current.meta,motion_execution_phase:"waiting_loop",motion_execution_task_id:String(job.runninghub_task_id),motion_execution_node:String(message.data?.display_node||message.data?.node)},updated_at:new Date().toISOString()}).eq("id",job.id).eq("locked_by",lease).eq("runninghub_task_id",job.runninghub_task_id);
+        }
         const file=motionPreviewFile(message,String(job.runninghub_task_id));
         if(!file)return;
         // Persist only the file descriptor. Provider credentials stay server-side.
