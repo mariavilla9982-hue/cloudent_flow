@@ -81,6 +81,15 @@ async function uploadedVideoMatches(source:string,size:number){
  return valid;
 }
 
+async function uploadedThumbnailMatches(source:string){
+ try{
+  const r=await fetch(source,{method:"GET",headers:{Range:"bytes=0-2"},signal:AbortSignal.timeout(10000)});
+  const range=String(r.headers.get("content-range")||"").match(/^bytes 0-2\/(\d+)$/i);
+  if(r.status!==206||!range||Number(range[1])<3||Number(range[1])>1048576||!String(r.headers.get("content-type")).toLowerCase().startsWith("image/jpeg")){await r.body?.cancel();return false;}
+  const bytes=new Uint8Array(await r.arrayBuffer());return bytes.length===3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+ }catch{return false;}
+}
+
 async function uploadRange(source:string,start:number,end:number){
  const r=await fetch(source,{headers:{Range:`bytes=${start}-${end}`}});
  if(r.status!==206) {await r.body?.cancel();throw new HttpError("Armazenamento não retornou o trecho solicitado do vídeo.",502);}
@@ -283,7 +292,7 @@ async function requireXMember(admin:any,userId:string){
  const {data,error}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",userId).maybeSingle();
  if(error)throw error;if(!data?.enabled||!["admin","x_user"].includes(data.role))throw new HttpError("forbidden",403);return data;
 }
-function safeAccount(a:any){return {id:a.id,label:a.account_label,username:a.config?.username||a.account_label,avatar_url:a.config?.profile_image_url||null,enabled:a.enabled,status:a.config?.status||"disconnected",token_expires_at:a.config?.tokenExpiresAt||null};}
+function safeAccount(a:any){return {id:a.id,label:a.account_label,username:a.config?.username||a.account_label,avatar_url:a.config?.profile_image_url||null,public_metrics:a.config?.public_metrics||null,enabled:a.enabled,status:a.config?.status||"disconnected",token_expires_at:a.config?.tokenExpiresAt||null};}
 async function auditX(admin:any,member:any,userId:string,accountId:string|null,event:string,metadata:any={}){
  await admin.from("x_audit_log").insert({workspace_id:member.workspace_id,user_id:userId,platform_account_id:accountId,event_type:event,metadata});
 }
@@ -419,31 +428,54 @@ async function statusPayload(admin:any,userId:string,master:string,url:URL){
  const active=accounts.find((a:any)=>a.id===selected);
  const from=new Date(url.searchParams.get("from")||Date.now()-7*86400000),to=new Date(url.searchParams.get("to")||Date.now()+35*86400000);
  if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to<=from||to.getTime()-from.getTime()>43*86400000)throw new HttpError("invalid_period",400);
- let posts:any[]=[],cfg:any={enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
+ let captions:any[]=[];let posts:any[]=[],cfg:any={enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
  if(ids.length){
- const {data:rows,error:pe}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(2000);if(pe)throw pe;posts=rows||[];
+ const {data:rows,error:pe}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(500);if(pe)throw pe;posts=rows||[];
  if(active){const {data:c,error:ce}=await admin.from("x_account_configs").select("*").eq("platform_account_id",active.id).maybeSingle();if(ce)throw ce;if(c)cfg=c;}
  }
+ if(active){const {data:captionRows,error:captionError}=await admin.from("x_caption_queue").select("id,caption,status,created_at").eq("platform_account_id",active.id).eq("user_id",userId).eq("workspace_id",member.workspace_id).in("status",["pending","reserved"]).order("created_at").limit(100);if(captionError)throw captionError;captions=captionRows||[];}
  const thumbConfig=posts.some(p=>p.meta?.thumbnail_path)?await getCloudentR2Config(admin):null;
  if(thumbConfig)await Promise.all(posts.slice(0,200).map(async p=>{const path=String(p.meta?.thumbnail_path||"");if(path&&path===String(p.meta?.storage_path)+".jpg"&&path.startsWith(p.user_id+"/x-uploads/"))p.thumbnail_url=await r2PresignedUrl(thumbConfig,"GET",path,3600);}));
  const calendar=posts.filter(p=>p.scheduled_at&&new Date(p.scheduled_at)>=from&&new Date(p.scheduled_at)<to&&p.status!=="skipped");
  const counts:any={total:posts.length};for(const st of ["queued","processing","published","failed"])counts[st]=posts.filter(p=>p.status===st).length;
  counts.interval_queued=posts.filter(p=>p.status==="queued"&&!p.scheduled_at).length;
  const next=posts.filter(p=>p.status==="queued"&&p.scheduled_at).map(p=>p.scheduled_at).sort()[0]||null;
- return {ok:true,accounts:accounts.map(safeAccount),x:{account:active?safeAccount(active):null,connected:Boolean(active?.enabled)},config:cfg,counts,posts,calendar_posts:calendar,next_scheduled_at:next,aggregate:selected==="all",truncated:posts.length===2000};
+ return {ok:true,accounts:accounts.map(safeAccount),x:{account:active?safeAccount(active):null,connected:Boolean(active?.enabled)},config:cfg,captions,counts,posts,calendar_posts:calendar,next_scheduled_at:next,aggregate:selected==="all",truncated:posts.length===500};
 }
 
+function metricError(e:any){
+ const status=Number(e?.status||0);
+ if(status===429)return 'O X limitou as consultas. Aguarde antes de sincronizar novamente.';
+ if(status===401)return 'Reconecte esta conta X para renovar a autorização.';
+ if(status===402||status===403)return 'A API do X não autorizou a leitura de métricas. Confira as permissões e o acesso do aplicativo no X.';
+ return cleanError(e);
+}
 async function syncAccountMetrics(admin:any,account:any,master:string){
- const {data:posts,error}=await admin.from("x_drive_posts").select("id,x_post_id").eq("platform_account_id",account.id).eq("status","published").order("published_at",{ascending:false}).limit(100);if(error)throw error;
- if(!posts?.length)return {ok:true,updated:0};
- const token=await usableXToken(admin,account,master);
- const base="/2/tweets?ids="+posts.map((p:any)=>p.x_post_id).join(",")+"&expansions=attachments.media_keys&media.fields=public_metrics&tweet.fields=";
- let result:any;try{result=await xJson(base+"public_metrics,non_public_metrics,organic_metrics",token);}catch(e:any){if(![400,403].includes(e.status))throw e;result=await xJson(base+"public_metrics",token);}
- const media=new Map((result.includes?.media||[]).map((m:any)=>[m.media_key,m.public_metrics||{}]));
- for(const tweet of result.data||[]){const metrics:any={...(tweet.public_metrics||{}),...(tweet.non_public_metrics||{}),...(tweet.organic_metrics||{})};let views=0,found=false;for(const key of tweet.attachments?.media_keys||[]){const m:any=media.get(key);if(typeof m?.view_count==="number"){views+=m.view_count;found=true;}}if(found)metrics.view_count=views;
- if(metrics.impression_count>0)metrics.engagement_rate=(Number(metrics.like_count||0)+Number(metrics.reply_count||0)+Number(metrics.retweet_count||0)+Number(metrics.quote_count||0))/metrics.impression_count;
- const {error:saveError}=await admin.from("x_drive_posts").update({metrics,metrics_synced_at:new Date().toISOString()}).eq("platform_account_id",account.id).eq("x_post_id",tweet.id);if(saveError)throw saveError;}
- return {ok:true,updated:result.data?.length||0};
+ const {data:config,error:ce}=await admin.from('x_account_configs').select('last_metrics_at,metrics_snapshot').eq('platform_account_id',account.id).maybeSingle();if(ce)throw ce;
+ if(config?.last_metrics_at&&Date.now()-Date.parse(config.last_metrics_at)<60000)return {ok:true,cached:true,updated:0};
+ const at=new Date().toISOString();
+ await admin.from('x_account_configs').update({last_metrics_at:at}).eq('platform_account_id',account.id);
+ try{
+  const token=await usableXToken(admin,account,master);
+  const profile=await xJson('/2/users/'+encodeURIComponent(account.external_account_id)+'?user.fields=public_metrics',token);
+  if(String(profile.data?.id)!==String(account.external_account_id))throw new HttpError('metrics_account_mismatch',403);
+  const snapshot:any={account:profile.data.public_metrics||{},synced_at:at,recent_posts:[],posts_error:null};
+  try{
+   const result=await xJson('/2/users/'+encodeURIComponent(account.external_account_id)+'/tweets?max_results=20&exclude=retweets,replies&tweet.fields=public_metrics,created_at,author_id,attachments&expansions=attachments.media_keys&media.fields=public_metrics',token);
+   if(result.errors?.length&&!result.data?.length)throw new HttpError("A API do X não retornou métricas dos posts.",403);
+   const media=new Map((result.includes?.media||[]).map((m:any)=>[m.media_key,m.public_metrics||{}]));
+   for(const post of result.data||[]){
+    if(String(post.author_id)!==String(account.external_account_id))continue;
+    const metrics:any={...(post.public_metrics||{})};
+    let views=0,hasViews=false;for(const key of post.attachments?.media_keys||[]){const m:any=media.get(key);if(typeof m?.view_count==='number'){views+=m.view_count;hasViews=true;}}
+    if(hasViews)metrics.view_count=views;
+    snapshot.recent_posts.push({id:String(post.id),created_at:post.created_at,metrics});
+    const {error}=await admin.from('x_drive_posts').update({metrics,metrics_synced_at:at}).eq('platform_account_id',account.id).eq('x_post_id',String(post.id));if(error)throw error;
+   }
+  }catch(e){snapshot.posts_error=metricError(e);}
+  const {error}=await admin.from('x_account_configs').update({metrics_snapshot:snapshot,metrics_error:snapshot.posts_error,last_metrics_at:at}).eq('platform_account_id',account.id);if(error)throw error;
+  return {ok:true,updated:snapshot.recent_posts.length,partial:!!snapshot.posts_error,user_message:snapshot.posts_error};
+ }catch(e){const message=metricError(e);await admin.from('x_account_configs').update({metrics_error:message}).eq('platform_account_id',account.id);throw new HttpError(message,Number((e as any)?.status)||502);}
 }
 
 async function publishReply(admin:any,file:any,master:string){
@@ -560,6 +592,18 @@ Deno.serve(async(req:Request)=>{
       await admin.from("x_account_configs").update({enabled:false}).eq("platform_account_id",account.id);
       await auditX(admin,member,userId,account.id,action==="account-remove"?"account_removed":"account_disconnected");return json({ok:true});
     }
+    if(action==="caption-add"||action==="caption-remove"){
+      const account=await resolveXAccount(admin,userId,body);
+      if(action==="caption-add"){
+        const caption=captionValue(body.caption);
+        const {count,error:countError}=await admin.from("x_caption_queue").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("platform_account_id",account.id).in("status",["pending","reserved"]);if(countError)throw countError;
+        if((count||0)>=500)return json({error:"Limite de 500 legendas pendentes por conta."},409);
+        const {error}=await admin.from("x_caption_queue").insert({user_id:userId,workspace_id:member.workspace_id,platform_account_id:account.id,caption});if(error)throw error;
+      }else{
+        const {data,error}=await admin.from("x_caption_queue").update({status:"removed"}).eq("id",body.id).eq("user_id",userId).eq("platform_account_id",account.id).eq("status","pending").select("id").maybeSingle();if(error)throw error;if(!data)return json({error:"Legenda já reservada ou indisponível."},409);
+      }
+      return json({ok:true});
+    }
     if(action==="metrics"){
       const account=await resolveXAccount(admin,userId,body);return json(await syncAccountMetrics(admin,account,master));
     }
@@ -644,9 +688,13 @@ Deno.serve(async(req:Request)=>{
       const path=String(body.object_path||""),provider=String(body.provider||"");
       if(!new RegExp("^"+userId+"/x-uploads/[0-9a-f-]{36}\\.(mp4|mov)$").test(path)||!["r2","supabase"].includes(provider))return json({error:"invalid_upload_path"},403);
       let thumbnail_path=null;
-      if(body.thumbnail_path){if(String(body.thumbnail_path)!==path+".jpg"||provider!=="r2")return json({error:"invalid_thumbnail_path"},403);const head=await fetch(await uploadReadUrl(admin,provider,String(body.thumbnail_path)),{method:"HEAD"});if(!head.ok||Number(head.headers.get("content-length"))>1048576||!String(head.headers.get("content-type")).startsWith("image/jpeg"))return json({error:"invalid_thumbnail"},400);thumbnail_path=String(body.thumbnail_path);}
-      const scheduled=scheduleValue(body.scheduled_at);
-      const text=captionValue(body.caption),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
+      if(body.thumbnail_path){
+        if(String(body.thumbnail_path)!==path+".jpg"||provider!=="r2")return json({error:"invalid_thumbnail_path"},403);
+        if(await uploadedThumbnailMatches(await uploadReadUrl(admin,provider,String(body.thumbnail_path))))thumbnail_path=String(body.thumbnail_path);
+      }
+      const scheduled=body.gallery===true?null:scheduleValue(body.scheduled_at);
+      const gallery=body.gallery===true;
+      const text=gallery&&!String(body.caption||"").trim()?"":captionValue(body.caption),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
       if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video"},400);
       const source=await uploadReadUrl(admin,provider,path);
       if(!await uploadedVideoMatches(source,size))return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
@@ -654,29 +702,39 @@ Deno.serve(async(req:Request)=>{
       if(!ids.length||ids.length>100)return json({error:"invalid_accounts"},400);
       const accounts=[];for(const id of ids){const a=await resolveXAccount(admin,userId,{platform_account_id:id});if(!a.enabled)throw new HttpError("x_disconnected",409);accounts.push(a);}
       const reply=String(body.reply_text||"").trim();if(reply)captionValue(reply);
-      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path}}));
+      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path,gallery}}));
       const {data,error}=await admin.from("x_drive_posts").upsert(rows,{onConflict:"user_id,drive_file_id,platform_account_id",ignoreDuplicates:true}).select("id,platform_account_id");
       if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Horário já ocupado nesta conta."},409);throw error;}
       for(const a of accounts)await auditX(admin,member,userId,a.id,"post_created",{count:1});
-      return json({ok:true,jobs:data||[]});
+      return json({ok:true,jobs:data||[],thumbnail_warning:!!body.thumbnail_path&&!thumbnail_path});
     }
 
     if(action==="edit-caption"||action==="skip"){
       const text=action==="edit-caption"?captionValue(body.caption):null;
+      if(action==="skip"){
+        const {data:original,error:oe}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();if(oe)throw oe;
+        if(original?.meta?.publish_uncertain)return json({error:"Confira a publicação incerta no X antes de remover."},409);
+      }
       const patch=action==="skip"?{status:"skipped"}:{post_text:text};
       const {data,error}=await admin.from("x_drive_posts").update({...patch,updated_at:new Date().toISOString()}).eq("id",String(body.id||"")).eq("user_id",userId).in("status",["queued","failed"]).select("id").maybeSingle();
-      if(error)throw error;if(!data)return json({error:"post_locked",user_message:"Essa postagem já está sendo enviada ou foi finalizada."},409);return json({ok:true});
+      if(error)throw error;if(!data)return json({error:"post_locked",user_message:"Essa postagem já está sendo enviada ou foi finalizada."},409);
+      if(action==="skip"){const {error:releaseError}=await admin.from("x_caption_queue").update({status:"pending",post_id:null}).eq("post_id",String(body.id||"")).eq("user_id",userId).eq("status","reserved");if(releaseError)throw releaseError;}
+      return json({ok:true});
     }
     if(action==="save-config"){
-      const interval=Number(body.interval_minutes||120),enabled=body.enabled===true;
-      if(!Number.isInteger(interval)||interval<5||interval>10080)return json({error:"invalid_interval",user_message:"Escolha um intervalo entre 5 e 10080 minutos."},400);
-      const x=await resolveXAccount(admin,userId,body);if(enabled&&!x)return json({error:"x_not_connected",user_message:"Conecte a conta X antes de iniciar."},409);
-      const now=new Date().toISOString();
-      const next=body.next_publish_at?new Date(body.next_publish_at):new Date();
-      if(Number.isNaN(next.getTime()))return json({error:"invalid_start"},400);
-      const slots=body.daily_slots===undefined?undefined:Array.isArray(body.daily_slots)?[...new Set(body.daily_slots.map(String))].sort():[];
-      if(slots&&(!slots.length||slots.length>15||slots.some((t:any)=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t))))return json({error:"invalid_slots",user_message:"Defina entre 1 e 15 horários no formato HH:MM."},400);
-      const row={...(slots?{daily_slots:slots}:{}),user_id:userId,workspace_id:member.workspace_id,platform_account_id:x.id,enabled,interval_minutes:interval,timezone:String(body.timezone||"America/Recife"),next_publish_at:enabled?next.toISOString():null,last_error:null,updated_at:now};
+      const x=await resolveXAccount(admin,userId,body);
+      const {data:old,error:oldError}=await admin.from("x_account_configs").select("*").eq("platform_account_id",x.id).maybeSingle();if(oldError)throw oldError;
+      const interval=Number(body.interval_minutes??old?.interval_minutes??120),enabled=body.enabled===undefined?old?.enabled===true:body.enabled===true;
+      if(!Number.isInteger(interval)||interval<5||interval>10080)return json({error:"Escolha um intervalo entre 5 e 10080 minutos."},400);
+      const slots=body.daily_slots===undefined?(old?.daily_slots||["12:00","18:00"]):Array.isArray(body.daily_slots)?[...new Set(body.daily_slots.map(String))].sort():[];
+      if(!slots.length||slots.length>15||slots.some((t:any)=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)))return json({error:"Defina entre 1 e 15 horários no formato HH:MM."},400);
+      const mode=body.queue_mode??old?.queue_mode??"daily_slots";if(!["daily_slots","interval"].includes(mode))return json({error:"invalid_queue_mode"},400);
+      const now=new Date().toISOString();let next:any=body.next_publish_at||old?.next_publish_at||now;
+      if(!Number.isFinite(Date.parse(next)))return json({error:"invalid_start"},400);
+      if(enabled&&mode==="daily_slots"){
+        const {data:slot,error:slotError}=await admin.rpc("x_next_daily_slot",{p_slots:slots,p_after:now});if(slotError)throw slotError;next=slot;
+      }
+      const row={daily_slots:slots,queue_mode:mode,user_id:userId,workspace_id:member.workspace_id,platform_account_id:x.id,enabled,interval_minutes:interval,timezone:"America/Sao_Paulo",next_publish_at:enabled?next:null,last_error:null,updated_at:now};
       const {error}=await admin.from("x_account_configs").upsert(row,{onConflict:"platform_account_id"});if(error)throw error;
       if(enabled)bg(fetch(`${supabaseUrl}/functions/v1/cloudent-x-publish-worker?action=worker`,{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":master},body:"{}"}));
       return json({ok:true,config:row});
