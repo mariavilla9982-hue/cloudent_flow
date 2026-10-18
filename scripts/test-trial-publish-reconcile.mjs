@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
 const source=fs.readFileSync('supabase/functions/cloudent-posting-scheduler-recovery/index.ts','utf8');
-const code=source.slice(source.indexOf('function trialReconcileDecision'),source.indexOf('Deno.serve'));
+const code=source.slice(source.indexOf('function isAuthorizedLateTrial'),source.indexOf('Deno.serve'));
 const decide=vm.runInNewContext(stripTypeScriptTypes(code)+';trialReconcileDecision',{Date});
 const now=Date.now(),future=new Date(now+600000).toISOString(),past=new Date(now-600000).toISOString();
 assert.equal(decide({},'PUBLISHED',past,now).state,'confirmed_published');
@@ -14,3 +14,9 @@ assert.equal(decide({meta:{publish_resume_count:3}},'FINISHED',future,now).state
 for(const state of ['IN_PROGRESS','UNKNOWN',''])assert.equal(decide({},state,future,now).state,'confirmation_pending');
 for(const state of ['ERROR','EXPIRED'])assert.equal(decide({},state,future,now).patch.status,'failed');
 console.log('PASS: published confirmation, same-container bounded retry, unknown status preserved and late Trial closed without republishing');
+
+const late={meta:{platform_account_id:'account-a',late_trial_account_id:'account-a',late_trial_authorized:true}};
+assert.equal(decide(late,'FINISHED',past,now).state,'resume_same_container');
+assert.equal(decide({meta:{...late.meta,late_trial_account_id:'account-b'}},'FINISHED',past,now).state,'closed_late');
+assert.equal(decide({...late,meta:{...late.meta,publish_resume_count:3}},'FINISHED',past,now).state,'failed');
+console.log('PASS explicit late recovery: exact account authorization overrides late cutoff only for selected jobs, same-container retry remains bounded');

@@ -1,0 +1,17 @@
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {stripTypeScriptTypes} from 'node:module';
+const s=fs.readFileSync('supabase/functions/cloudent-posting-scheduler-recovery/index.ts','utf8');
+const code=stripTypeScriptTypes(s.slice(s.indexOf('function isAuthorizedLateTrial'),s.indexOf('Deno.serve')));
+const now=new Date().toISOString(),old='2026-01-01T00:00:00Z';
+const base=(id)=>({id,user_id:'owner',is_trial:true,hidden_at:null,status:'failed',scheduled_at:old,updated_at:old,locked_at:null,container_id:null,linked_schedule_id:'normal',meta:{platform_account_id:'a'}});
+const rows=[base('new'),{...base('reuse'),container_id:'same',meta:{platform_account_id:'a',publish_started_at:old}}, {...base('published'),status:'published',instagram_media_id:'posted'}, {...base('wrong'),meta:{platform_account_id:'b'}},{...base('unknown'),container_id:'unknown',meta:{platform_account_id:'a',publish_started_at:old}},{...base('missing'),meta:{platform_account_id:'a',publish_started_at:old}}];
+const calls=[],writes=[];
+const c=vm.createContext({Date,Set,String,Number,Error,route:async(_,id)=>{assert.equal(id,'a');return {base:'https://test',token:'test'}},graph:async(_,path)=>{calls.push(path);return {status_code:path.startsWith('unknown')?'IN_PROGRESS':'FINISHED'}}});
+vm.runInContext(code,c);
+const admin={from(table){let filters=[],values;const q={select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},update(v){values=v;return q},async maybeSingle(){const data=table==='platform_accounts'?[{id:'a',owner_user_id:'owner',platform:'instagram',enabled:true}]:table==='schedules'?[{id:'normal',platform_account_id:'a'}]:rows;const found=data.find(r=>filters.every(f=>f(r)));if(values&&found){writes.push(found.id);Object.assign(found,structuredClone(values));}return {data:found?structuredClone(found):null,error:null}}};return q}};
+const results=await c.queueAuthorizedLateTrials(admin,{platform_account_id:'a',trial_ids:rows.map(r=>r.id)},now);
+assert.equal(results.find(r=>r.id==='new').state,'scheduled');assert.equal(results.find(r=>r.id==='reuse').state,'processing');assert.equal(rows[1].container_id,'same');
+assert.equal(results.find(r=>r.id==='published').state,'already_published');assert(!writes.includes('published'));assert.equal(results.find(r=>r.id==='wrong').state,'rejected_scope');assert(!writes.includes('wrong'));
+assert.equal(results.find(r=>r.id==='unknown').state,'publishing');assert.equal(rows[4].container_id,'unknown');assert.equal(results.find(r=>r.id==='missing').state,'uncertain_without_container');
+assert.equal(rows[0].scheduled_at,old);assert.equal(rows[0].linked_schedule_id,'normal');assert(rows[0].meta.late_trial_authorized);assert.equal(calls.length,2);
+await assert.rejects(()=>c.queueAuthorizedLateTrials(admin,{platform_account_id:'a',trial_ids:[]},now));
+console.log('PASS overdue Trial recovery: explicit IDs/account, owner, existing container, uncertain/published skips, no normal/time changes');
