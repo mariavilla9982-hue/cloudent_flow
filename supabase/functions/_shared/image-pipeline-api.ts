@@ -2,6 +2,7 @@ import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
 export async function imagePipelineApi(d:any){
   const {req,url,admin,user,json,signGet,objectConfig,signPut,removePaths,wake}=d;
   const action=url.searchParams.get('action'),resource=url.searchParams.get('resource');
+  if(['face-swap-upload-ticket','face-swap-upload-complete','face-swap-upload'].includes(action||''))return json({error:'Atualize a página para usar o novo Face Swap Natural.'},409);
   if(!String(action||resource).startsWith('image-pipeline'))return null;
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const owner=async(id:string)=>check(await admin.from('face_swap_jobs').select('*').eq('id',id).eq('user_id',user.id).contains('meta',{pipeline_version:2}).maybeSingle());

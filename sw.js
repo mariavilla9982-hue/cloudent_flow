@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v39";
+const CACHE="cloudentflow-pwa-v40";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -60,7 +60,9 @@ async function injectCalendarPatch(response){
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
-    if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
+    // The staged pipeline owns its queue. Keep the old decorator only for legacy documents.
+    if(html.includes('image-pipeline-ui.js'))html=html.replace(oldFaceSwapQueue,'');
+    else if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
     else html=html.includes("</body>")?html.replace("</body>",faceSwapQueueTag+"</body>"):html+faceSwapQueueTag;
 
     // Media guard must run before Motion/production upload controllers.

@@ -1,5 +1,6 @@
 /* Shared controller for three image/video pipelines. */
 (()=>{
+  const style=document.createElement('style');style.textContent='[data-pipeline-mounted] form{display:grid;gap:18px}[data-pipeline-mounted] form label{display:grid;gap:10px;min-width:0}[data-pipeline-mounted] input[type=file]{max-width:100%;width:100%;font-size:12px}[data-pipeline-mounted] article{min-width:0;overflow-wrap:anywhere}[data-pipeline-mounted] .toolbar{flex-wrap:wrap}';document.head.appendChild(style);
   const sources={faceSwap:'face_swap_natural',upscale:'upscale_manual',faceSwapPhoto:'face_swap_photo'};
   const titles={faceSwap:'Face Swap Natural',upscale:'Upscale',faceSwapPhoto:'Face Swap Foto'};
   const drafts={},busy=new Set();let jobs=[],loading=false,timer=null,generation=0;
