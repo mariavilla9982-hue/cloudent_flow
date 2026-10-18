@@ -67,7 +67,7 @@ Deno.serve(async(req:Request)=>{
       const {data:active,error:sessionError}=await admin.rpc("cloudent_auth_session_active",{p_session_id:claims.session_id,p_user_id:userRes.user.id});if(sessionError||!active)return json({error:"unauthorized"},401);
       const {data:membership}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",userRes.user.id).maybeSingle();
       member=membership;
-      if(!member?.enabled||member.role!=="admin")return json({error:"forbidden"},403);
+      if(!member?.enabled||!["admin","x_user"].includes(member.role)||!member.workspace_id)return json({error:"forbidden"},403);
     }
     const {data:master,error:masterError}=await admin.rpc("get_cloudent_worker_secret");
     if(masterError||!master)throw masterError||new Error("worker_secret_missing");
@@ -138,7 +138,7 @@ Deno.serve(async(req:Request)=>{
       }
 
       const {data:member}=await admin.from("app_members").select("role,enabled,workspace_id").eq("user_id",row.user_id).maybeSingle();
-      if(!member?.enabled||member.role!=="admin")return redirectBack({x_error:"forbidden"});
+      if(!member?.enabled||!["admin","x_user"].includes(member.role)||!member.workspace_id)return redirectBack({x_error:"forbidden"});
       const {data:consumed,error:consumeError}=await admin.from("x_oauth_states").delete().eq("id",row.id).select("id").maybeSingle();
       if(consumeError||!consumed)return redirectBack({x_error:"oauth_state_invalid"});
       const verifier=await decryptSecret(String(row.verifier_cipher),String(row.verifier_iv),String(master));
@@ -228,6 +228,12 @@ Deno.serve(async(req:Request)=>{
         }).select().single();
         if(error)throw error;
         platformAccount=data;
+      }
+
+      // Explicit grant for the authenticated owner; never grant an existing foreign account.
+      if(member.role==="x_user"){
+        const {error:grantError}=await admin.from("x_account_access").upsert({workspace_id:member.workspace_id,user_id:row.user_id,platform_account_id:platformAccount.id},{onConflict:"user_id,platform_account_id"});
+        if(grantError)throw grantError;
       }
 
       const {error:configError}=await admin.from("x_account_configs").upsert({platform_account_id:platformAccount.id,user_id:row.user_id,workspace_id:member.workspace_id},{onConflict:"platform_account_id",ignoreDuplicates:true});
