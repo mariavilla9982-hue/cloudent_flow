@@ -28,6 +28,15 @@ export async function imagePipelineApi(d:any){
     }
     return json({jobs:rows});
   }
+  if(req.method==='GET'&&resource==='image-pipeline-preview'){
+    const j=await owner(url.searchParams.get('id')||'');if(!j)return json({error:'Job não encontrado'},404);
+    const original=url.searchParams.get('kind')==='original';
+    const result=j.meta?.upscale_result||j.meta?.face_swap_result;
+    const path=original?j.original_storage_path:result?.path||j.frame_storage_path;
+    if(!path||!String(path).startsWith(user.id+'/'))return json({error:'Prévia indisponível'},404);
+    const provider=original&&j.meta?.source==='face_swap_photo'?'supabase':j.storage_provider;
+    return json({url:await signGet(provider,path),type:original&&j.original_mime_type?.startsWith('video/')?'video':'image',label:original?'Vídeo original':j.meta?.upscale_result?'Upscale pronto':j.meta?.face_swap_result?'Face Swap pronto':j.meta?.source==='face_swap_natural'?'Primeiro frame':'Referência'});
+  }
   if(req.method==='GET'&&resource==='image-pipeline-result'){
     const j=await owner(url.searchParams.get('id')||'');if(!j)return json({error:'Job não encontrado'},404);
     if(j.meta.source==='face_swap_natural'){

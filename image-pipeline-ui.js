@@ -1,12 +1,26 @@
 /* Shared controller for three image/video pipelines. */
 (()=>{
   const style=document.createElement('style');style.textContent='[data-pipeline-mounted] form{display:grid;gap:18px}[data-pipeline-mounted] form label{display:grid;gap:10px;min-width:0}[data-pipeline-mounted] input[type=file]{max-width:100%;width:100%;font-size:12px}[data-pipeline-mounted] article{min-width:0;overflow-wrap:anywhere}[data-pipeline-mounted] .toolbar{flex-wrap:wrap}';document.head.appendChild(style);
+  style.textContent+=`.pipeline-job{display:grid;grid-template-columns:120px minmax(0,1fr);gap:20px;padding:18px!important;background:#0d0d0d;border:1px solid #292929;border-radius:16px;overflow:hidden}
+.pipeline-job-preview{position:relative;aspect-ratio:3/4;border-radius:11px;overflow:hidden;background:#171717;margin:0;align-self:start;border:1px solid #292929}
+.pipeline-job-preview img,.pipeline-job-preview video{width:100%;height:100%;object-fit:cover;display:block}
+.pipeline-job-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#777;font-size:10px;text-align:center;padding:8px}
+.pipeline-job-placeholder svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.4}
+.pipeline-preview-tag{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:22px 8px 8px;font-size:9px;letter-spacing:.04em;color:#eee;pointer-events:none}
+.pipeline-job-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.pipeline-job-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:#f5f5f5}.pipeline-job-badge{white-space:nowrap;font-size:9px;font-weight:700;letter-spacing:.08em;padding:5px 8px;border:1px solid #383838;border-radius:6px;color:#bbb}.pipeline-job-badge.ready{background:#eee;color:#111;border-color:#eee}.pipeline-job-badge.failed{color:#f3a5a5;border-color:#543434}
+.pipeline-job-current{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:#eee;margin:0 0 5px}.pipeline-status-dot{width:7px;height:7px;flex:none;border-radius:50%;background:#eee;box-shadow:0 0 0 4px #ffffff0a}.pipeline-job-subtitle{font-size:11px;color:#8a8a8a;margin:0 0 18px}
+.pipeline-stage-track{display:grid;grid-template-columns:repeat(var(--stages),minmax(0,1fr));gap:5px;margin-bottom:12px}.pipeline-stage-segment{height:5px;border-radius:8px;background:#262626;position:relative;overflow:hidden}.pipeline-stage-segment.done{background:#eee}.pipeline-stage-segment.active::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,#aaa,transparent);transform:translateX(-100%);animation:pipeline-stage-sweep 1.8s linear infinite}.pipeline-stage-segment.failed{background:#8c5454}
+.pipeline-step-list{display:grid;grid-template-columns:repeat(var(--stages),minmax(0,1fr));list-style:none;padding:0;margin:0 0 18px;gap:5px}.pipeline-step{display:flex;gap:6px;align-items:center;min-width:0;color:#686868;font-size:10px}.pipeline-step-icon{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid #333;flex:none;font-size:9px}.pipeline-step.done{color:#ccc}.pipeline-step.done .pipeline-step-icon{background:#ddd;border-color:#ddd;color:#111}.pipeline-step.active{color:#fff}.pipeline-step.active .pipeline-step-icon{border-color:#aaa}.pipeline-step.failed{color:#e9a3a3}.pipeline-job-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-top:1px solid #222;padding-top:13px}.pipeline-job-actions .btn{font-size:11px;min-height:33px}.pipeline-job-actions .pipeline-delete{margin-left:auto;color:#888}.pipeline-job-error{font-size:11px;line-height:1.5;color:#dea5a5;background:#201616;border:1px solid #3e2929;border-radius:8px;padding:10px;margin:10px 0}.pipeline-job [data-result]:not(:empty){grid-column:1/-1;padding-top:8px}.pipeline-job [data-result] img,.pipeline-job [data-result] video{border-radius:10px}
+@keyframes pipeline-stage-sweep{to{transform:translateX(100%)}}
+@media(max-width:600px){.pipeline-job{grid-template-columns:74px minmax(0,1fr);gap:12px;padding:12px!important}.pipeline-job-head{flex-wrap:wrap;gap:6px;margin-bottom:10px}.pipeline-job-name{width:100%;font-size:11px}.pipeline-job-current{font-size:12px}.pipeline-job-subtitle{font-size:10px;margin-bottom:14px}.pipeline-step{flex-direction:column;align-items:flex-start;gap:5px;font-size:9px}.pipeline-job-actions{gap:6px}.pipeline-job-actions .btn{font-size:10px;padding:6px 9px}.pipeline-job-actions .pipeline-delete{margin-left:0}}
+@media(prefers-reduced-motion:reduce){.pipeline-stage-segment.active::after{animation:none;transform:none;background:#777}}
+`;
   const sources={faceSwap:'face_swap_natural',upscale:'upscale_manual',faceSwapPhoto:'face_swap_photo'};
   const titles={faceSwap:'Face Swap Natural',upscale:'Upscale',faceSwapPhoto:'Face Swap Foto'};
-  const drafts={},busy=new Set();let jobs=[],loading=false,timer=null,generation=0,owner=cloudSession?.user?.id||'';
+  const drafts={},busy=new Set(),previewCache=new Map();let jobs=[],loading=false,timer=null,generation=0,owner=cloudSession?.user?.id||'';
   function resetOwner(){
     const id=cloudSession?.user?.id||'';if(id===owner)return;
-    owner=id;generation++;jobs=[];
+    owner=id;generation++;jobs=[];previewCache.clear();
     for(const [key,d] of Object.entries(drafts)){Object.values(d.urls||{}).forEach(url=>URL.revokeObjectURL(url));delete drafts[key];}
     for(const id of Object.keys(sources)){const root=document.getElementById(id);if(root){root.replaceChildren();delete root.dataset.pipelineMounted;}}
   }
@@ -26,16 +40,64 @@
     if(j.status==='failed'||j.production?.status==='failed')return 'Falha em '+({face_swap:'Face Swap',upscale:'Upscale',control_motion:'Control Motion'}[m.error_stage||m.stage]||'processamento');
     return {UPLOADING:'Aguardando upload',UPLOADED:'Arquivos enviados',FACE_SWAP_RUNNING:'Face Swap processando…',FACE_SWAP_COMPLETED:'Face Swap ✓ · Upscale aguardando',UPSCALE_RUNNING:'Face Swap ✓ · Upscale processando…',CONTROL_MOTION_RUNNING:'Face Swap ✓ · Upscale ✓ · Control Motion processando…',COMPLETED:'Concluído'}[m.pipeline_status]||'Aguardando';
   }
+  function pipelineSteps(j){
+    const m=j.meta||{},ready=j.status==='ready'||j.production?.status==='ready';
+    const natural=m.source==='face_swap_natural',manual=m.source==='upscale_manual';
+    const steps=[{key:'upload',name:manual?'Imagem':natural?'Upload':'Imagens',done:m.stage!=='upload'}];
+    if(!manual)steps.push({key:'face_swap',name:'Face Swap',done:!!m.face_swap_result});
+    steps.push({key:'upscale',name:'Upscale',done:!!m.upscale_result||ready&&!natural});
+    if(natural)steps.push({key:'control_motion',name:'Motion V7',done:ready});
+    if(ready)steps.forEach(step=>step.done=true);
+    const failed=j.status==='failed'||j.production?.status==='failed';
+    const current=steps.findIndex(step=>!step.done);
+    steps.forEach((step,index)=>step.state=step.done?'done':index===current?(failed?'failed':'active'):'waiting');
+    return {steps,ready,failed,done:steps.filter(step=>step.done).length,current};
+  }
+  async function fillJobPreviews(node,rows){
+    const uid=owner;
+    for(const j of rows){
+      const target=node.querySelector('[data-pipeline-preview="'+j.id+'"]');if(!target)continue;
+      const version=j.meta?.upscale_result?.path||j.meta?.face_swap_result?.path||j.frame_storage_path;
+      const key=uid+':'+j.id+':'+version;
+      try{
+        let saved=previewCache.get(key);
+        if(!saved||saved.expires<Date.now()){
+          const pending=cloudFetch('?resource=image-pipeline-preview&id='+encodeURIComponent(j.id));
+          saved={pending,expires:Date.now()+15*60*1000};previewCache.set(key,saved);
+        }
+        const preview=await saved.pending;
+        if(uid!==cloudSession?.user?.id||!target.isConnected)continue;
+        let img=target.querySelector('img');if(!img){img=document.createElement('img');img.alt='Prévia do processamento';img.loading='lazy';target.prepend(img);}
+        img.onload=()=>target.querySelector('.pipeline-job-placeholder')?.remove();
+        img.onerror=()=>{img.remove();const hint=target.querySelector('.pipeline-job-placeholder span');if(hint)hint.textContent='Prévia indisponível';};
+        img.src=preview.url;
+        const tag=target.querySelector('.pipeline-preview-tag');if(tag)tag.textContent=preview.label;
+      }catch{previewCache.delete(key);const hint=target.querySelector('.pipeline-job-placeholder span');if(hint)hint.textContent='Prévia indisponível';}
+    }
+  }
   function drawJobs(){
     const node=document.querySelector('#'+currentPage+' [data-pipeline-jobs]');if(!node)return;
     const rows=jobs.filter(j=>j.meta.source===sources[currentPage]);
-    const signature=JSON.stringify(rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.last_error,j.production?.status,j.production?.progress]));
+    const signature=JSON.stringify(rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.meta?.face_swap_result?.path,j.meta?.upscale_result?.path,j.last_error,j.production?.status,j.production?.progress]));
     if(node.dataset.signature===signature)return;node.dataset.signature=signature;
     node.innerHTML=rows.length?rows.map(j=>{
-      const ready=j.status==='ready'||j.production?.status==='ready';
+      const state=pipelineSteps(j),{ready,failed,steps}=state;
       const retry=j.status==='failed'&&j.meta.provider_failed&&!j.meta.dispatch_uncertain;
-      return '<article class="card"><strong>'+e(j.original_file_name)+'</strong><p>'+e(label(j))+'</p>'+(j.last_error?'<p class="muted">'+e(j.last_error)+'</p>':'')+'<div class="toolbar">'+(ready?'<button class="btn" data-open="'+j.id+'">Ver resultado</button><button class="btn" data-download="'+j.id+'">Baixar</button>':'')+(ready&&j.meta.source==='face_swap_natural'?'<button class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(retry?'<button class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button class="btn" data-delete="'+j.id+'">Excluir</button></div><div data-result="'+j.id+'"></div></article>';
-    }).join(''):'<p class="muted">Nenhum job neste fluxo.</p>';
+      const current=state.current>=0?steps[state.current].name:'';
+      const queued=j.meta.stage==='control_motion'?['motion_waiting','waiting'].includes(j.production?.status):['waiting','queued'].includes(j.status);
+      const title=ready?(j.meta.source==='face_swap_natural'?'Vídeo final pronto':'Imagem final pronta'):failed?'Falha em '+current:queued?'Aguardando '+current:current+' em processamento';
+      const subtitle=ready?'Concluído · resultado disponível para visualizar e baixar':failed?'As etapas concluídas foram preservadas':state.done+' de '+steps.length+' etapas concluídas · processamento automático';
+      const deletable=['ready','failed','cancelled'].includes(j.status)&&!j.meta.dispatch_uncertain;
+      return '<article class="card pipeline-job" style="--stages:'+steps.length+'">'+
+        '<figure class="pipeline-job-preview" data-pipeline-preview="'+j.id+'"><div class="pipeline-job-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m4 17 5-5 4 4 3-3 5 5"/><circle cx="15" cy="8" r="2"/></svg><span>Carregando prévia</span></div><figcaption class="pipeline-preview-tag">Prévia</figcaption></figure>'+
+        '<div class="pipeline-job-info"><div class="pipeline-job-head"><strong class="pipeline-job-name" title="'+e(j.original_file_name)+'">'+e(j.original_file_name)+'</strong><span class="pipeline-job-badge '+(ready?'ready':failed?'failed':'')+'">'+(ready?'CONCLUÍDO':failed?'ERRO':queued?'NA FILA':'PROCESSANDO')+'</span></div>'+
+        '<p class="pipeline-job-current"><span class="pipeline-status-dot"></span>'+e(title)+'</p><p class="pipeline-job-subtitle">'+e(subtitle)+'</p>'+
+        '<div class="pipeline-stage-track" role="progressbar" aria-label="Etapas concluídas" aria-valuemin="0" aria-valuemax="'+steps.length+'" aria-valuenow="'+state.done+'" aria-valuetext="'+e(title)+'">'+steps.map(step=>'<span class="pipeline-stage-segment '+step.state+'"></span>').join('')+'</div>'+
+        '<ol class="pipeline-step-list">'+steps.map((step,i)=>'<li class="pipeline-step '+step.state+'" '+(step.state==='active'?'aria-current="step"':'')+'><span class="pipeline-step-icon">'+(step.done?'✓':step.state==='failed'?'!':i+1)+'</span><span>'+step.name+'</span></li>').join('')+'</ol>'+
+        (j.last_error?'<p class="pipeline-job-error">'+e(j.last_error)+'</p>':'')+
+        '<div class="pipeline-job-actions">'+(j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-original="'+j.id+'">▷ Vídeo original</button>':'')+(ready?'<button type="button" class="btn primary" data-open="'+j.id+'">Ver resultado</button><button type="button" class="btn" data-download="'+j.id+'">↓ Baixar</button>':'')+(ready&&j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(retry?'<button type="button" class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button type="button" class="btn pipeline-delete" data-delete="'+j.id+'" '+(deletable?'':'disabled title="Disponível após o processamento"')+'>Excluir</button></div></div><div data-result="'+j.id+'"></div></article>';
+    }).join(''):'<div class="card"><p class="muted">Envie um arquivo para acompanhar as etapas e a prévia aqui.</p></div>';
+    fillJobPreviews(node,rows);
   }
   async function loadPinnedModel(root){
     const page='faceSwapPhoto',uid=owner;
@@ -74,6 +136,11 @@
         if(b.dataset.mode){showPage(b.dataset.mode);return;}
         if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();return;}
         if(b.hasAttribute('data-refresh'))return await refresh();
+        if(b.dataset.original){
+          b.disabled=true;const id=b.dataset.original;
+          const r=await cloudFetch('?resource=image-pipeline-preview&kind=original&id='+encodeURIComponent(id));
+          const box=root.querySelector('[data-result="'+id+'"]');box.innerHTML='<video controls preload="metadata" style="width:100%;max-height:520px"></video>';box.querySelector('video').src=r.url;return;
+        }
         const id=b.dataset.open||b.dataset.download;
         if(id){
           b.disabled=true;const r=await cloudFetch('?resource=image-pipeline-result&id='+encodeURIComponent(id));
