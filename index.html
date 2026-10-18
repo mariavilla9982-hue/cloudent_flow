@@ -4427,7 +4427,7 @@ const navItems=[
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
   ["bulkPublish","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 5h14v14H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M3 8V3h5M21 16v5h-5\"></path></svg>","Postagem em lote"],
-  ["faceSwap","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 4.5a5 5 0 0 0 0 10\"></path><path d=\"M15.5 19.5a5 5 0 0 0 0-10\"></path><circle cx=\"9\" cy=\"9\" r=\"1\"></circle><circle cx=\"15\" cy=\"15\" r=\"1\"></circle><path d=\"M6 18c2.2 2 9.8 2 12 0\"></path><path d=\"M17 4l2 2-2 2M7 20l-2-2 2-2\"></path></svg>","Face Swap Natural"],
+  ["faceSwap","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 4.5a5 5 0 0 0 0 10\"></path><path d=\"M15.5 19.5a5 5 0 0 0 0-10\"></path><circle cx=\"9\" cy=\"9\" r=\"1\"></circle><circle cx=\"15\" cy=\"15\" r=\"1\"></circle><path d=\"M6 18c2.2 2 9.8 2 12 0\"></path><path d=\"M17 4l2 2-2 2M7 20l-2-2 2-2\"></path></svg>","Face Swap"],
   ["upscale","↑","Upscale"],
   ["faceSwapPhoto","◈","Face Swap Foto"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
@@ -5787,7 +5787,7 @@ function renderMobileNav(){
       '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
 }
 function mobileMoreItems(){
-  return ["trialReels","faceSwap","upscale","faceSwapPhoto","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+  return ["trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
 }
 function toggleMobileMore(force){
   const host=$("#mobileMoreHost");if(!host)return;
@@ -5831,7 +5831,7 @@ function nav(){
 
   const groups=[
     {label:"Planejamento",pages:["overview","calendar","trialReels","bulkPublish"]},
-    {label:"Produção",pages:["faceSwap","upscale","faceSwapPhoto","production","frameExtractor"]},
+    {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
     {label:"Canais",pages:["xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
@@ -5871,7 +5871,7 @@ function showPage(id){
   if(cloudAccess?.role==="x_user")history.replaceState(null,"","/x-studio");
   document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
   page.classList.remove("hidden");
-  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===(["upscale","faceSwapPhoto"].includes(id)?"faceSwap":id)));
   $("#pageTitle").textContent=meta[2];
   const subtitle=$("#pageSubtitle");if(subtitle)subtitle.textContent=pageSubtitles[id]||"CloudentFlow Content Operating System";
   const mobileTitle=$("#mobilePageTitle");if(mobileTitle)mobileTitle.textContent=meta[2];
@@ -11775,7 +11775,7 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=16"></script>
-<script src="/image-pipeline-ui.js?v=1"></script>
+<script src="/image-pipeline-ui.js?v=2"></script>
 </body>
 </html>
 
