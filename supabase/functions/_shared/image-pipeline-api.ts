@@ -1,4 +1,12 @@
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
+export async function uploadedObjectMatches(address:string,size:number){
+  // A presigned GET URL cannot be reused for HEAD: S3 signs the HTTP method.
+  const r=await fetch(address,{method:'GET',headers:{Range:'bytes=0-0'},signal:AbortSignal.timeout(15000)});
+  const range=r.headers.get('content-range')||'';
+  const actual=r.status===206?Number(range.match(/\/(\d+)$/)?.[1]):Number(r.headers.get('content-length'));
+  try{await r.body?.cancel();}catch{}
+  return r.ok&&Number.isSafeInteger(actual)&&actual===Number(size)&&actual>0;
+}
 export async function imagePipelineApi(d:any){
   const {req,url,admin,user,json,signGet,objectConfig,signPut,removePaths,wake}=d;
   const action=url.searchParams.get('action'),resource=url.searchParams.get('resource');
@@ -70,8 +78,8 @@ export async function imagePipelineApi(d:any){
     const b=await req.json(),j=await owner(String(b.job_id||''));if(!j)return json({error:'Job não encontrado'},404);
     if(j.meta.stage!=='upload')return json({ok:true,job:j});
     for(const [path,size,provider] of [[j.original_storage_path,j.original_size_bytes,j.meta.source==='face_swap_photo'?'supabase':j.storage_provider],[j.frame_storage_path,j.frame_size_bytes,j.storage_provider]]){
-      const address=await signGet(provider,path),r=await fetch(address,{method:'HEAD'});
-      if(!r.ok||Number(r.headers.get('content-length'))!==Number(size))return json({error:'Upload incompleto; selecione novamente os arquivos.'},409);
+      const address=await signGet(provider,path);
+      if(!await uploadedObjectMatches(address,Number(size)))return json({error:'Upload incompleto; selecione novamente os arquivos.'},409);
     }
     const m={...j.meta,stage:j.meta.source==='upscale_manual'?'upscale':'face_swap',pipeline_status:'UPLOADED'};
     if(m.source==='face_swap_photo'){
