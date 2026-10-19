@@ -1,0 +1,37 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {stripTypeScriptTypes} from 'node:module';
+const source=fs.readFileSync('supabase/functions/cloudent-calendar-cover-worker/index.ts','utf8');
+const base=source.slice(0,source.indexOf('Deno.serve')).replace(/^import .*;\n/gm,'');
+let statuses=new Map(),getCalls=[];
+const cfg={endpoint:'https://store.example',bucket:'bucket',access_key_id:'test',secret_access_key:'test'};
+const sandbox={Date,URL,Request,AbortSignal,Uint8Array,TextEncoder,TextDecoder,atob,Map,
+ AwsClient:class {async sign(req){return req}},
+ fetch:async(u,o={})=>{getCalls.push([String(u),o]);return {status:statuses.get(new URL(u).pathname)??404,ok:(statuses.get(new URL(u).pathname)??404)===200,body:{cancel:async()=>{}}}}};
+const funcs=vm.runInNewContext(stripTypeScriptTypes(base)+';({coverFailure,coverRetryDue,resolveSource,supabaseSource})',sandbox);
+const v={id:'v',storage_path:'owner/video',storage_provider:'r2',media_clean_report:{input_sha256:'preserve'}};
+const now=Date.now(),f=funcs.coverFailure(v,null,'source_object_missing_everywhere',now);
+assert.equal(f.notify,true);assert.equal(Date.parse(f.state.next_retry_at)-now,6*3600000);
+v.media_clean_report.cover_repair=f.state;
+assert.equal(funcs.coverRetryDue(v,null,now+600000),false);
+assert.equal(funcs.coverRetryDue(v,null,now+6*3600000),true);
+assert.equal(funcs.coverFailure(v,null,'source_object_missing_everywhere',now).notify,false);
+assert.equal(funcs.coverRetryDue({...v,storage_path:'owner/new'},null,now),true);
+const transient=funcs.coverFailure(v,null,'storage_source_temporarily_unavailable',now);
+assert.equal(Date.parse(transient.state.next_retry_at)-now,15*60000);
+const admin={storage:{from:()=>({createSignedUrl:async()=>({error:{statusCode:404,message:'Object not found'}})})}};
+await assert.rejects(()=>funcs.resolveSource(admin,cfg,null,v,null),/source_object_missing_everywhere/);
+statuses.set('/bucket/owner/video',403);
+await assert.rejects(()=>funcs.resolveSource(admin,cfg,null,v,null),/storage_source_temporarily_unavailable/);
+statuses.set('/bucket/owner/video',200);
+assert.equal((await funcs.resolveSource(admin,cfg,null,v,null)).provider,'r2');
+statuses.set('/source',200);
+await funcs.supabaseSource({storage:{from:()=>({createSignedUrl:async()=>({data:{signedUrl:'https://store.example/source'}})})}},'videos','owner/video');
+assert.equal(getCalls.at(-1)[1].method,undefined);assert.equal(getCalls.at(-1)[1].headers.Range,'bytes=0-0');
+const html=fs.readFileSync('index.html','utf8');
+const fn=html.slice(html.indexOf('function activityFeedItems('),html.indexOf('function workerVisualState('));
+const logs=[{created_at:'2026-01-01T02:00Z',event_type:'calendar_cover_repair_error',level:'error',message:'source_object_missing_everywhere',meta:{video_id:'one'}},{created_at:'2026-01-01T01:00Z',event_type:'calendar_cover_repair_error',level:'error',message:'source_object_missing_everywhere',meta:{video_id:'one'}},{created_at:'2026-01-01T01:30Z',event_type:'calendar_cover_repair_error',level:'error',message:'source_object_missing_everywhere',meta:{video_id:'two'}},{created_at:'2026-01-01T01:20Z',event_type:'other',level:'error',message:'Other active failure'}];
+const items=vm.runInNewContext(fn+';activityFeedItems(40)',{serverLogs:logs,state:{logs:[]},Date,Map,activityDetail:()=>''});
+assert.equal(items.length,3);assert(items[0].detail.includes('2 ocorrência'));assert(items.some(x=>x.title==='Other active failure'));assert.equal(logs.length,4);
+console.log('PASS: bounded retry, recovery after source change, one alert per incident, 403 differs from missing404, GET Range validation, repeated warnings grouped while preserving active failures/history');

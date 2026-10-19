@@ -5560,10 +5560,22 @@ function activityDetail(l){
   return "Servidor";
 }
 function activityFeedItems(limit=20){
-  const server=(serverLogs||[]).map(l=>{
+  const coverGroups=new Map();
+  const grouped=[];
+  for(const l of serverLogs||[]){
+    if(l.event_type!=="calendar_cover_repair_error"||!l.meta?.video_id){grouped.push(l);continue;}
+    const key=String(l.meta.video_id),old=coverGroups.get(key);
+    if(old){old.occurrences++;if(new Date(l.created_at)>new Date(old.created_at)){old.created_at=l.created_at;old.message=l.message;old.meta=l.meta;}}
+    else{const entry={...l,occurrences:1};coverGroups.set(key,entry);grouped.push(entry);}
+  }
+  const server=grouped.map(l=>{
     const ev=String(l.event_type||"");
     const type=l.level==="error"?"error":l.level==="warn"?"warn":ev.includes("publish")?"publish":ev.includes("metric")?"metric":(ev.includes("schedul")||ev.includes("calendar"))?"smart":"info";
-    return {time:l.created_at,type,title:l.message||l.event_type||"Atividade",detail:activityDetail(l)};
+    const cover=ev==="calendar_cover_repair_error";
+    const code=l.meta?.error_code||l.message;
+    const title=cover&&code==="source_object_missing_everywhere"?"Vídeo não localizado: "+(l.meta?.file_name||String(l.meta?.video_id||"").slice(0,8)):l.message||l.event_type||"Atividade";
+    const detail=cover?"Capa do calendário · "+(l.occurrences||1)+" ocorrência(s) neste histórico · "+(code==="source_object_missing_everywhere"?"reenvio ou recuperação necessário":"verificação pendente"):activityDetail(l);
+    return {time:l.created_at,type,title,detail};
   });
   const local=(state.logs||[]).map(l=>({time:l.t,type:l.type==="warn"?"warn":l.type==="error"?"error":"info",title:l.m,detail:"Interface"}));
   return [...server,...local].filter(x=>x.time).sort((a,b)=>new Date(b.time)-new Date(a.time)).slice(0,limit);
