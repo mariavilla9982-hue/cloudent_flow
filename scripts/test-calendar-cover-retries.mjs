@@ -15,6 +15,7 @@ const now=Date.now(),f=funcs.coverFailure(v,null,'source_object_missing_everywhe
 assert.equal(f.notify,true);assert.equal(Date.parse(f.state.next_retry_at)-now,6*3600000);
 v.media_clean_report.cover_repair=f.state;
 assert.equal(funcs.coverRetryDue(v,null,now+600000),false);
+assert.equal(funcs.coverRetryDue({...v,media_clean_report:{},cover_repair_retry:f.state},null,now+600000),false);
 assert.equal(funcs.coverRetryDue(v,null,now+6*3600000),true);
 assert.equal(funcs.coverFailure(v,null,'source_object_missing_everywhere',now).notify,false);
 assert.equal(funcs.coverRetryDue({...v,storage_path:'owner/new'},null,now),true);
