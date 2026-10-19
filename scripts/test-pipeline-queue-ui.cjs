@@ -15,9 +15,11 @@ const make=(id,status,stage='upscale')=>({id,status,created_at:'2026-10-18T10:0'
  assert(html.indexOf('Em processamento')<html.indexOf('Na fila'));
  assert(html.indexOf('video-1.mp4')<html.indexOf('video-3.mp4'),'FIFO within waiting group');
  const waiting=html.slice(html.indexOf('<h3 class="pipeline-group-title">Na fila'),html.indexOf('<h3 class="pipeline-group-title">Concluídos'));
- assert(waiting.includes('NA FILA'));assert(waiting.includes('FILA 01'));assert(waiting.includes('FILA 02'));
+ assert(waiting.includes('PREPARANDO'));assert(waiting.includes('encaminhamento automático'));assert(waiting.includes('FILA 01'));assert(waiting.includes('FILA 02'));
  assert(!waiting.includes('pipeline-stage-segment active'));assert(!waiting.includes('pipeline-job-error'));assert(!waiting.includes('ATENÇÃO'));assert(waiting.includes('pipeline-step done'));
  assert(html.includes('Precisam de atenção'));assert(html.includes('Workflow incompatível: node 131'));
+ rows=[{...make('cap','waiting'),meta:{...make('cap','waiting').meta,provider_queue_waiting:true,queue_reason:'provider_capacity'}}];
+ await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('NA FILA'));assert(list.innerHTML.includes('aguardando vaga confirmada'));assert(!list.innerHTML.includes('PREPARANDO'));
  rows=[{...make('6','waiting','control_motion'),production:{status:'running',meta:{provider_queue_waiting:false}}}];
  await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('PROCESSANDO'));assert(!list.innerHTML.includes('NA FILA'));
  rows[0].production.status='queued';rows[0].production.meta.provider_queue_waiting=true;

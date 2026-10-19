@@ -27,6 +27,7 @@ export async function runImagePipeline(d:any){
   const priority=(j:any)=>j.runninghub_task_id||j.meta.stage==='control_motion'?0:j.meta.stage==='face_swap'?1:2;
   rows.sort((a:any,b:any)=>priority(a)-priority(b)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
   let providerFull=false;
+  const handoffs=new Set<string>();
   for(const row of rows||[]){
     // Continue reconciling existing tasks even when dispatch is paused.
     if(providerFull&&!row.runninghub_task_id&&row.meta.stage!=='control_motion')continue;
@@ -95,6 +96,10 @@ export async function runImagePipeline(d:any){
       m={...m,[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
       if(stage==='face_swap'){
         await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'UPSCALE_WAITING'},last_error:null});
+        // One bounded handoff after releasing this lease; the database still enforces
+        // stage FIFO, shared capacity and unique dispatch intent.
+        if(!handoffs.has(j.id)){handoffs.add(j.id);rows.push({...j,locked_by:null,locked_at:null});}
+
       }else if(m.source==='face_swap_natural'){
         // Reuse exactly the production_jobs contract consumed by the existing Motion V7 worker.
         const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
