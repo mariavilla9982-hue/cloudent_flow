@@ -32,9 +32,21 @@ async function pickFirstComment(admin:any,caption:string,scheduleId:string){
   return text&&text!==String(caption||"").trim()?text:null;
 }
 
+class MediaGuardError extends Error{
+  code:string;
+  constructor(code:string,message:string){super(message);this.code=code;}
+}
+function mediaFingerprint(v:any){return JSON.stringify([v.storage_provider,v.storage_path,v.size_bytes]);}
+async function verifyMediaReadable(url:string){
+  let r:Response;
+  try{r=await fetch(url,{headers:{Range:"bytes=0-15"},signal:AbortSignal.timeout(15000)})}catch{throw new MediaGuardError("media_unavailable","Não foi possível ler o vídeo no armazenamento. Nova verificação automática em 5 minutos.");}
+  const status=r.status;try{await r.body?.cancel()}catch{}
+  if(status===404)throw new MediaGuardError("media_missing","Arquivo do vídeo não encontrado. Reenvie ou recupere a mídia deste agendamento.");
+  if(!r.ok)throw new MediaGuardError("media_unavailable","Armazenamento indisponível (HTTP "+status+"). Nova verificação automática em 5 minutos.");
+}
 Deno.serve(async(req:Request)=>{
   const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
-  let leasedJob:string|null=null;const worker="calendar-main-"+crypto.randomUUID();
+  let leasedJob:string|null=null,schedule:any=null,video:any=null;const worker="calendar-main-"+crypto.randomUUID();
   try{
     if(req.method!=="POST")return out({ok:false,error:"method_not_allowed"},405);
     const supplied=req.headers.get("x-cloudent-worker-secret")||"";
@@ -47,12 +59,17 @@ Deno.serve(async(req:Request)=>{
     if(!s)return out({ok:false,error:"schedule_not_found"},404);
     if(s.instagram_media_id||s.status==="published")return out({ok:true,state:"already_published",instagram_media_id:s.instagram_media_id});
     if(!s.platform_account_id)throw new Error("schedule_without_platform_account");
+    schedule=s;
+    const {data:v,error:ve}=await admin.from("videos").select("id,storage_provider,storage_path,size_bytes,file_name,caption,media_clean_status,status").eq("id",s.video_id).single();if(ve)throw ve;
+    video=v;
+    const {data:blocked,error:blockError}=await admin.from("app_settings").select("value").eq("key","calendar_media_block_"+s.id).maybeSingle();if(blockError)throw blockError;
+    if(blocked?.value?.source_key===mediaFingerprint(v)&&Date.parse(blocked.value.next_retry_at)>Date.now())return out({ok:false,state:"media_required",error:blocked.value.message,next_retry_at:blocked.value.next_retry_at},409);
+
 
     const {data:claims,error:claimError}=await admin.rpc("claim_calendar_publish_schedule",{p_schedule_id:scheduleId,p_worker:worker});if(claimError)throw claimError;
     const j=claims?.[0];if(!j)return out({ok:true,state:"not_due_or_claimed"});leasedJob=j.id;
 
-    const {data:v,error:ve}=await admin.from("videos").select("id,storage_provider,storage_path,file_name,caption,media_clean_status,status").eq("id",s.video_id).single();if(ve)throw ve;
-    if(String(v.storage_provider||"")!=="r2")throw new Error("unsupported_storage_provider");
+    if(!j.payload?.container_id&&String(v.storage_provider||"")!=="r2")throw new MediaGuardError("media_storage_invalid","Vídeo vinculado ao armazenamento antigo. Recupere ou reenvie o arquivo para o Backblaze.");
     if(!["ready","skipped","legacy"].includes(String(v.media_clean_status||"")))throw new Error("video_not_clean_ready");
 
     const {data:pa,error:pe}=await admin.from("platform_accounts").select("id,platform,external_account_id,account_label,enabled,config").eq("id",s.platform_account_id).single();if(pe)throw pe;
@@ -69,6 +86,8 @@ Deno.serve(async(req:Request)=>{
 
     if(!containerId){
       const mediaUrl=await signedMediaUrl(admin,String(v.storage_path),7200);
+      await verifyMediaReadable(mediaUrl);
+      await admin.from("app_settings").delete().eq("key","calendar_media_block_"+scheduleId);
       const coverOffsetMs=3500;
       const firstCommentMessage=await pickFirstComment(admin,caption,scheduleId);
       // Normal Reels must appear only in the Reels tab, never in the main profile/feed grid.
@@ -127,6 +146,18 @@ Deno.serve(async(req:Request)=>{
     await admin.from("activity_logs").insert({level:"info",event_type:"automatic_reel_published",message:"Reel publicado automaticamente pelo worker 24/7",meta:{job_id:j.id,worker_id:"recovery-"+scheduleId,schedule_id:scheduleId,account_label:pa.account_label,cover_strategy:"thumb_offset",cover_offset_ms:3500,share_to_feed:false,first_comment_id:firstCommentId,first_comment_message:comment||null,instagram_media_id:mediaId,first_comment_error:firstCommentError,platform_account_id:pa.id}});
     if(firstCommentId)await admin.from("activity_logs").insert({level:"info",event_type:"automatic_first_comment_published",message:"Primeiro comentário automático publicado no Reel",meta:{schedule_id:scheduleId,instagram_media_id:mediaId,platform_account_id:pa.id,instagram_comment_id:firstCommentId,message:comment}});
     return out({ok:true,state:"published",instagram_media_id:mediaId,first_comment_id:firstCommentId,first_comment_message:comment||null,first_comment_error:firstCommentError,share_to_feed:false});
-  }catch(e:any){return out({ok:false,error:e instanceof Error?e.message:String(e),detail:e?.payload||null},500);}
+  }catch(e:any){
+    if(e instanceof MediaGuardError&&schedule&&video&&leasedJob){
+      const now=new Date().toISOString(),key="calendar_media_block_"+schedule.id;
+      const {data:previous}=await admin.from("app_settings").select("value").eq("key",key).maybeSingle();
+      const value={code:e.code,message:e.message,source_key:mediaFingerprint(video),checked_at:now,next_retry_at:new Date(Date.now()+5*60000).toISOString()};
+      await admin.from("app_settings").upsert({key,value,updated_at:now},{onConflict:"key"}).throwOnError();
+      await admin.from("job_queue").update({status:"failed",last_error:e.message,updated_at:now}).eq("id",leasedJob).eq("locked_by",worker).throwOnError();
+      await admin.from("schedules").update({status:"failed",last_error:e.message,updated_at:now}).eq("id",schedule.id).is("instagram_media_id",null).throwOnError();
+      if(previous?.value?.source_key!==value.source_key||previous?.value?.code!==value.code)await admin.from("activity_logs").insert({level:"error",event_type:"calendar_media_blocked",message:e.message,meta:{schedule_id:schedule.id,video_id:video.id,file_name:video.file_name,error_code:e.code}});
+      return out({ok:false,state:"media_required",error:e.message,next_retry_at:value.next_retry_at},409);
+    }
+    return out({ok:false,error:e instanceof Error?e.message:String(e),detail:e?.payload||null},500);
+  }
   finally{if(leasedJob)await admin.from("job_queue").update({locked_at:null,locked_by:null}).eq("id",leasedJob).eq("locked_by",worker);}
 });
