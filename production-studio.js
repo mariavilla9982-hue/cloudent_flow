@@ -3,6 +3,24 @@
   const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const user=()=>typeof cloudSession==='undefined'?'':cloudSession?.user?.id||'';
   let owner=user(),selected='',mode='',revision=0,mediaURL='',dockNode=null;
+  let modelFilter='all';
+  const models=[{id:'jujuh',name:'Jujuh'},{id:'sahry_japah',name:'Sahry Japah'},{id:'sahry_gravida',name:'Sahry Grávida'}];
+  const normalizeModel=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+  function modelOf(job){
+    const m=job.meta||{},id=m.character_id||m.character?.id;
+    if(id)return models.some(c=>c.id===id)?id:'';
+    const aliases={jujuh:'jujuh','sahry japah':'sahry_japah','sahry gravida':'sahry_gravida','sahry gravidinha':'sahry_gravida'};
+    const name=aliases[normalizeModel(m.character_name||m.character?.name)];if(name)return name;
+    const tags=new Set((Array.isArray(m.tags)?m.tags:[]).map(t=>aliases[normalizeModel(t)]).filter(Boolean));
+    return tags.size===1?[...tags][0]:'';
+  }
+  function filterRows(rows){if(owner!==user())modelFilter='all';return modelFilter==='all'?rows:rows.filter(j=>modelOf(j)===modelFilter);}
+  function setModelFilter(id){
+    if(id!=='all'&&!models.some(m=>m.id===id)||id===modelFilter)return;
+    modelFilter=id;selected='';dockNode=null;revision++;releaseMedia();
+    if(typeof productionSelectedJobs!=='undefined')productionSelectedJobs.clear();
+    if(typeof productionPage==='function')productionPage();
+  }
   const busyButtons=new WeakSet();
   function busy(button,value){
     if(!button)return;
@@ -18,13 +36,14 @@
     for(const img of images)img.addEventListener('error',()=>{container.innerHTML='<p class="studio-empty" role="status">Não foi possível carregar a comparação. Tente abrir o resultado novamente.</p>';},{once:true});
   }
   function releaseMedia(){if(mediaURL){URL.revokeObjectURL(mediaURL);mediaURL='';}}
-  function currentJobs(){
+  function modeJobs(){
     if(typeof productionData==='undefined')return [];
     const scope=typeof productionPanelScope==='function'?productionPanelScope():'production_standard';
     const rows=typeof panelVisibleRows==='function'?panelVisibleRows(scope,productionData?.jobs||[]):productionData?.jobs||[];
     const motion=document.getElementById('production')?.classList.contains('motion-control-mode');
     return rows.filter(j=>(j.meta?.workflow_key==='motion_control')===!!motion);
   }
+  function currentJobs(){return filterRows(modeJobs());}
   function resultMarkup(job){
     return '<div class="studio-result-head"><div><span class="studio-eyebrow">RESULTADO</span><h3>'+safe(job?.meta?.character_name||'Prévia do vídeo')+'</h3></div></div><div class="studio-result-canvas" data-studio-canvas>'+(job?'<button type="button" class="studio-play" data-studio-play="'+safe(job.id)+'" aria-label="Carregar e reproduzir vídeo final"><span>▶</span><b>Ver vídeo final</b><small>Carregar prévia</small></button>':'<div class="studio-empty"><span>▷</span><b>Seu resultado aparece aqui</b><p>Selecione um vídeo concluído na lista abaixo.</p></div>')+'</div><p class="studio-result-name">'+safe(job?.original_file_name||'Vídeo + frame → resultado')+'</p>'+(job?'<div class="studio-result-actions"><button class="btn" type="button" onclick="previewProductionJob(\''+safe(job.id)+'\')">Ampliar</button><button class="btn" type="button" onclick="downloadProductionResult(\''+safe(job.id)+'\',1)">Baixar vídeo</button><button class="btn" type="button" onclick="openProductionScheduleModal(\''+safe(job.id)+'\',1)">Calendário</button></div>':'');
   }
@@ -49,10 +68,27 @@
   }
   function enhanceProduction(){
     const root=document.getElementById('production');if(!root||typeof currentPage==='undefined'||currentPage!=='production')return;
-    if(owner!==user()){owner=user();selected='';dockNode=null;revision++;releaseMedia();}
+    if(owner!==user()){owner=user();modelFilter='all';selected='';dockNode=null;revision++;releaseMedia();}
     const nextMode=root.classList.contains('motion-control-mode')?'motion':'standard';
     if(mode!==nextMode){mode=nextMode;selected='';dockNode=null;revision++;releaseMedia();}
     root.classList.add('studio-page');
+    const queue=root.querySelector('.production-queue');
+    if(queue&&!root.querySelector('.studio-model-filters')){
+      const all=modeJobs(),bar=document.createElement('div');bar.className='studio-model-filters';
+      bar.setAttribute('role','group');bar.setAttribute('aria-label','Filtrar vídeos por modelo');
+      bar.innerHTML=[{id:'all',name:'Todos'},...models].map(m=>'<button type="button" class="btn" data-studio-model="'+m.id+'" aria-pressed="'+(modelFilter===m.id)+'">'+m.name+'<span>'+ (m.id==='all'?all.length:all.filter(j=>modelOf(j)===m.id).length)+'</span></button>').join('')+(all.some(j=>!modelOf(j))?'<small>Vídeos sem modelo identificada aparecem em Todos.</small>':'');
+      queue.before(bar);
+    }
+    // Global cleanup endpoints do not accept a model. Require Todos for those actions.
+    root.querySelectorAll('[data-panel-clear],button[onclick*="clearCompletedProductionJobs"]').forEach(b=>{
+      if(modelFilter!=='all'){b.disabled=true;b.title='Selecione Todos para limpar a aba inteira.';}
+    });
+    if(!root.dataset.modelFilterNative&&modelFilter!=='all')root.querySelectorAll('input[onchange*="toggleAllReadyProduction"]').forEach(b=>b.disabled=true);
+    const filteredIds=new Set(currentJobs().map(j=>String(j.id)));
+    const countHeading=root.querySelector('.production-queue-card .ui3-panel-head h3');if(countHeading)countHeading.textContent=filteredIds.size+' vídeo(s)';
+    if(!filteredIds.size&&modelFilter!=='all'){
+      const empty=root.querySelector('.production-empty b');if(empty)empty.textContent='Nenhum vídeo desta modelo neste fluxo';
+    }
     const head=root.querySelector('.production-head');if(head?.querySelector('h2'))head.querySelector('h2').textContent='Produção IA';
     const subtitle=head?.querySelector('p');if(subtitle)subtitle.textContent='Prepare seus arquivos, acompanhe a fila e confira o resultado.';
     root.querySelectorAll('.production-workflow-tab').forEach((b,i)=>{b.textContent=i?'Motion Control v7':'Vídeo 7 minutos';b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});
@@ -82,6 +118,7 @@
     root.querySelectorAll('.production-job').forEach(row=>{
       if(!row.dataset.productionId)row.dataset.productionId=row.querySelector('[data-id]')?.dataset.id||'';
       const id=row.dataset.productionId,job=currentJobs().find(j=>j.id===id);
+      row.hidden=!filteredIds.has(String(id));
       const actions=row.querySelector('.production-job-actions');
       const frame=row.querySelector('.production-media-cell.frame');
       if(frame&&actions){frame.className='btn studio-frame-action';frame.textContent='Ver frame';actions.append(frame);}
@@ -113,12 +150,13 @@
     const button=evt.target.closest('button');if(!button)return;
     if(button.dataset.studioSelect)showProduction(button.dataset.studioSelect);
     if(button.dataset.studioPlay)playProduction(button);
+    if(button.dataset.studioModel)setModelFilter(button.dataset.studioModel);
   });
   let scheduled=false;
   const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;observer.disconnect();enhanceProduction();observe();});});
   function observe(){const root=document.getElementById('production');if(root)observer.observe(root,{childList:true,subtree:true});}
   observe();installFeedback();enhanceProduction();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)enhanceProduction();});
-  setInterval(()=>{if(owner!==user()){owner=user();selected='';dockNode=null;revision++;releaseMedia();document.querySelector('.studio-production-result')?.replaceChildren();}},2000);
-  window.CloudentStudio={comparison,busy,enhanceProduction};
+  setInterval(()=>{if(owner!==user()){owner=user();modelFilter='all';selected='';dockNode=null;revision++;releaseMedia();document.querySelector('.studio-production-result')?.replaceChildren();}},2000);
+  window.CloudentStudio={comparison,busy,enhanceProduction,filterRows,currentJobs,setModelFilter,modelOf};
 })();
