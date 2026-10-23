@@ -30,14 +30,68 @@
     try{
       if(!characterRequest)characterRequest=cloudFetch('?resource=image-pipeline-characters').catch(err=>{characterRequest=null;throw err;});
       const r=await characterRequest;if(uid!==cloudSession?.user?.id||!root.isConnected)return;
-      for(const c of r.characters||[]){const img=root.querySelector('[data-character-preview="'+c.id+'"]');if(!img)continue;img.src=c.preview_url;img.hidden=false;const a=root.querySelector('[data-character-open="'+c.id+'"]');a.href=c.preview_url;a.hidden=false;a.onclick=evt=>{evt.preventDefault();evt.stopPropagation();const win=window.open('','_blank');if(win){win.opener=null;const image=win.document.createElement('img');image.src=c.preview_url;image.style.maxWidth='100%';win.document.body.append(image);}};}
+      for(const c of r.characters||[]){for(const img of root.querySelectorAll('[data-character-preview="'+c.id+'"]')){img.src=c.preview_url;img.hidden=false;const a=img.parentElement.querySelector('[data-character-open="'+c.id+'"]');a.href=c.preview_url;a.hidden=false;a.onclick=evt=>{evt.preventDefault();evt.stopPropagation();const win=window.open('','_blank');if(win){win.opener=null;const image=win.document.createElement('img');image.src=c.preview_url;image.style.maxWidth='100%';win.document.body.append(image);}};}}
     }catch(err){if(uid===cloudSession?.user?.id)root.querySelector('[data-pipeline-error]').textContent='Não foi possível carregar as folhas: '+err.message;}
   }
+  style.textContent+='[data-batch-list]{display:grid;gap:16px}.pipeline-upload-entry{border:1px solid #303030;background:#111;border-radius:12px;padding:14px;display:grid;gap:12px;min-width:0}.pipeline-upload-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.pipeline-upload-head strong{min-width:0;font-size:12px;overflow-wrap:anywhere}.pipeline-upload-head .btn{flex:none;font-size:11px}.pipeline-upload-entry [data-entry-status]{font-size:12px;color:#aaa;margin:0}@media(max-width:420px){.pipeline-upload-head{align-items:flex-start;flex-direction:column}.pipeline-upload-entry{padding:10px}}';
   const drafts={},busy=new Set(),previewCache=new Map();let jobs=[],loading=false,timer=null,generation=0,owner=cloudSession?.user?.id||'';
+  function batchDraft(){return drafts.faceSwap||(drafts.faceSwap={id:crypto.randomUUID(),urls:{},entries:[]});}
+  function addBatchFiles(files){
+    const d=batchDraft();d.entries=d.entries||[];
+    for(const f of files){
+      if(!f.type.startsWith('video/'))throw new Error('Selecione somente vídeos.');
+      if(!f.size||f.size>500*1024*1024)throw new Error('Cada vídeo deve ter até 500 MB.');
+    }
+    for(const f of files){if(d.entries.some(x=>x.original.name===f.name&&x.original.size===f.size&&x.original.lastModified===f.lastModified))continue;d.entries.push({id:crypto.randomUUID(),original:f,urls:{original:URL.createObjectURL(f)},characters:[],variantIds:{}});}
+  }
+  function drawBatch(root){
+    const list=root.querySelector('[data-batch-list]');if(!list)return;
+    const entries=drafts.faceSwap?.entries||[];
+    list.innerHTML=entries.map((d,i)=>'<article class="pipeline-upload-entry" data-entry="'+d.id+'"><div class="pipeline-upload-head"><strong>'+String(i+1).padStart(2,'0')+' · '+e(d.original.name)+'</strong><button type="button" class="btn" data-remove-entry="'+d.id+'">Remover vídeo</button></div><video controls preload="none" src="'+e(d.urls.original)+'" style="width:100%;max-height:180px"></video>'+characterSelector()+'<p role="status" data-entry-status>'+e(d.error||'Aguardando envio')+'</p></article>').join('')||'<p class="muted">Selecione vários vídeos. Cada um terá seu próprio seletor de modelos.</p>';
+    for(const d of entries){const row=list.querySelector('[data-entry="'+d.id+'"]');for(const c of row.querySelectorAll('input[name=character]'))c.checked=d.characters.includes(c.value);row.querySelector('[data-character-count]').textContent=d.characters.length?d.characters.length+' vídeo(s) serão gerados para este arquivo.':'Escolha pelo menos uma modelo.';}
+    if(entries.length)loadCharacters(list);
+  }
+  async function submitBatch(root){
+    if(busy.has('faceSwap'))return;
+    const form=root.querySelector('form'),status=form.querySelector('[data-pipeline-status]'),error=form.querySelector('[data-pipeline-error]');
+    const d=drafts.faceSwap,entries=d?.entries||[],uid=owner;
+    error.textContent='';
+    if(!entries.length){error.textContent='Selecione os vídeos.';return;}
+    const missing=entries.find(x=>!x.characters.length);if(missing){error.textContent='Escolha pelo menos uma modelo para '+missing.original.name+'.';return;}
+    busy.add('faceSwap');form.querySelectorAll('input,button').forEach(x=>x.disabled=true);
+    let completed=0,failures=0;
+    const describe=f=>({name:f.name,size:f.size,type:f.type});
+    try{
+      for(const [index,entry] of entries.entries()){
+        const row=root.querySelector('[data-entry="'+entry.id+'"] [data-entry-status]');
+        try{
+          if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os vídeos novamente.');
+          status.textContent='Vídeo '+(index+1)+' de '+entries.length+' · '+entry.original.name;
+          if(row)row.textContent='Preparando envio…';
+          entry.reference=entry.reference||new File([await extractFirstFrameBlob(entry.urls.original)],'primeiro-frame.jpg',{type:'image/jpeg'});
+          for(const c of characters.filter(c=>entry.characters.includes(c.id))){
+            if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
+            const id=entry.variantIds[c.id]||(entry.variantIds[c.id]=crypto.randomUUID());
+            if(row)row.textContent='Enviando para '+c.name+'…';
+            const ticket=await request('image-pipeline-ticket',{source:sources.faceSwap,job_id:id,character_id:c.id,original:describe(entry.original),reference:describe(entry.reference)});
+            if(!ticket.registered){await uploadFaceSwapPart(ticket.original,entry.original,()=>{});if(!ticket.same_input)await uploadFaceSwapPart(ticket.reference,entry.reference,()=>{});if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');await request('image-pipeline-complete',{job_id:ticket.job_id});}
+          }
+          entry.sent=true;entry.error='';completed++;if(row)row.textContent='Envio confirmado. Processamento automático na fila.';
+        }catch(err){failures++;entry.error=err.message;if(row)row.textContent=err.message;if(uid!==cloudSession?.user?.id)break;}
+      }
+      if(uid===cloudSession?.user?.id&&drafts.faceSwap===d){
+        for(const entry of entries.filter(x=>x.sent))Object.values(entry.urls).forEach(url=>URL.revokeObjectURL(url));
+        d.entries=entries.filter(x=>!x.sent);drawBatch(root);
+        status.textContent=completed+' vídeo(s) enviado(s).'+(failures?' '+failures+' com envio pendente; tente novamente.':' O processamento continua automaticamente.');
+        if(failures)error.textContent='Os envios confirmados foram preservados. Confira os vídeos restantes.';
+      }
+      await refresh();
+    }finally{busy.delete('faceSwap');form.querySelectorAll('input,button').forEach(x=>x.disabled=false);}
+  }
   function resetOwner(){
     const id=cloudSession?.user?.id||'';if(id===owner)return;
     owner=id;generation++;jobs=[];previewCache.clear();characterRequest=null;
-    for(const [key,d] of Object.entries(drafts)){Object.values(d.urls||{}).forEach(url=>URL.revokeObjectURL(url));delete drafts[key];}
+    for(const [key,d] of Object.entries(drafts)){Object.values(d.urls||{}).forEach(url=>URL.revokeObjectURL(url));for(const entry of d.entries||[])Object.values(entry.urls||{}).forEach(url=>URL.revokeObjectURL(url));delete drafts[key];}
     for(const id of Object.keys(sources)){const root=document.getElementById(id);if(root){root.replaceChildren();delete root.dataset.pipelineMounted;}}
   }
   const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -155,13 +209,17 @@
   function render(page){
     resetOwner();if(!sources[page])return;
     const root=document.getElementById(page);if(!root)return;
-    if(root.dataset.pipelineMounted==='true'){drawJobs();refresh();return;}
-    root.dataset.pipelineMounted='true';
+    if(root.dataset.pipelineMounted==='9'){drawJobs();refresh();return;}
+    root.dataset.pipelineMounted='9';
     const photo=page==='faceSwapPhoto',natural=page==='faceSwap';
     const tabs='<div class="toolbar" role="tablist" aria-label="Modo de produção">'+[['faceSwap','Vídeo automático'],['faceSwapPhoto','Foto'],['upscale','Upscale']].map(([id,label])=>'<button type="button" role="tab" aria-selected="'+(id===page)+'" class="btn '+(id===page?'primary':'')+'" data-mode="'+id+'">'+label+'</button>').join('')+'</div>';
-    root.innerHTML='<div class="face-swap-shell">'+tabs+'<div class="face-swap-hero"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie um vídeo e escolha as modelos. Face Swap → Upscale → Control Motion V7.':photo?'Sua modelo fica fixada. Envie a foto de referência para gerar a imagem final.':'Envie uma imagem para ampliar e baixar o resultado.')+'</p></div></div><div class="card"><form data-pipeline-form><div class="face-swap-grid"><label>'+(natural?'Vídeo original':photo?'Foto da modelo raiz':'Imagem')+'<input name="original" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" '+(photo?'':'required')+'><div data-preview="original"></div><button class="btn" type="button" data-remove="original">Remover</button></label>'+(photo?'<label>Foto de referência<input name="reference" type="file" accept="image/jpeg,image/png,image/webp" required><div data-preview="reference"></div><button class="btn" type="button" data-remove="reference">Remover</button></label>':'')+'</div>'+(natural?characterSelector():'')+'<button class="btn primary" type="submit">'+(natural?'Gerar vídeos':photo?'Gerar Face Swap':'Gerar Upscale')+'</button><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div><div class="toolbar"><button class="btn" data-refresh>Atualizar</button></div><div class="face-swap-jobs" data-pipeline-jobs></div></div>';
+    root.innerHTML='<div class="face-swap-shell">'+tabs+'<div class="face-swap-hero"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>'+titles[page]+'</h2><p>'+(natural?'Selecione vários vídeos e escolha as modelos de cada um. Face Swap → Upscale → Control Motion V7.':photo?'Sua modelo fica fixada. Envie a foto de referência para gerar a imagem final.':'Envie uma imagem para ampliar e baixar o resultado.')+'</p></div></div><div class="card"><form data-pipeline-form><div class="face-swap-grid"><label>'+(natural?'Vídeos originais':photo?'Foto da modelo raiz':'Imagem')+'<input name="original" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" '+(natural?'multiple':photo?'':'required')+'><div data-preview="original"></div><button class="btn" type="button" data-remove="original">Remover</button></label>'+(photo?'<label>Foto de referência<input name="reference" type="file" accept="image/jpeg,image/png,image/webp" required><div data-preview="reference"></div><button class="btn" type="button" data-remove="reference">Remover</button></label>':'')+'</div>'+(natural?'<div data-batch-list></div>':'')+'<button class="btn primary" type="submit">'+(natural?'Enviar vídeos selecionados':photo?'Gerar Face Swap':'Gerar Upscale')+'</button><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div><div class="toolbar"><button class="btn" data-refresh>Atualizar</button></div><div class="face-swap-jobs" data-pipeline-jobs></div></div>';
     root.onchange=evt=>{
       if(busy.has(page))return;
+      if(page==='faceSwap'&&evt.target.name==='original'){try{addBatchFiles([...evt.target.files]);evt.target.value='';drawBatch(root);}catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}return;}
+      if(page==='faceSwap'&&evt.target.name==='character'){
+        const entry=drafts.faceSwap?.entries?.find(x=>x.id===evt.target.closest('[data-entry]')?.dataset.entry);if(!entry)return;const row=evt.target.closest('[data-entry]');entry.characters=[...row.querySelectorAll('input[name=character]:checked')].map(x=>x.value);row.querySelector('[data-character-count]').textContent=entry.characters.length?entry.characters.length+' vídeo(s) serão gerados para este arquivo.':'Escolha pelo menos uma modelo.';return;
+      }
       if(evt.target.name==='character'){
         const d=drafts[page]||(drafts[page]={id:crypto.randomUUID(),urls:{}});d.characters=[...root.querySelectorAll('input[name=character]:checked')].map(x=>x.value);
         root.querySelector('[data-character-count]').textContent=d.characters.length?d.characters.length+' modelo(s) selecionada(s) · '+d.characters.length+' vídeo(s) serão gerados.':'Escolha pelo menos uma modelo.';return;
@@ -175,6 +233,9 @@
     root.onclick=async evt=>{
       const b=evt.target.closest('button');if(!b||(b.closest('form')&&b.type==='submit')||b.hasAttribute('data-panel-clear')||b.hasAttribute('data-panel-restore'))return;
       try{
+        if(busy.has(page)&&b.closest('form'))return;
+        if(b.dataset.removeEntry){const d=drafts.faceSwap,entry=d?.entries?.find(x=>x.id===b.dataset.removeEntry);if(entry){Object.values(entry.urls).forEach(url=>URL.revokeObjectURL(url));d.entries=d.entries.filter(x=>x!==entry);drawBatch(root);}return;}
+        if(page==='faceSwap'&&b.dataset.remove==='original'){for(const entry of drafts.faceSwap?.entries||[])Object.values(entry.urls).forEach(url=>URL.revokeObjectURL(url));if(drafts.faceSwap)drafts.faceSwap.entries=[];drawBatch(root);return;}
         if(b.dataset.mode){if(busy.has(page))return;showPage(b.dataset.mode);return;}
         if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();d.variantIds={};}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();return;}
         if(b.hasAttribute('data-refresh'))return await refresh();
@@ -195,11 +256,12 @@
       }catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}finally{b.disabled=false;}
     };
     if(photo)loadPinnedModel(root);
-    if(natural)loadCharacters(root);
+    if(natural)drawBatch(root);
     drawJobs();refresh();
     if(!timer)timer=setInterval(()=>{resetOwner();if(sources[currentPage]&&cloudSession)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
   }
   async function submit(page,root){
+    if(page==='faceSwap'&&drafts.faceSwap?.entries)return submitBatch(root);
     if(busy.has(page))return;busy.add(page);
     const form=root.querySelector('form'),button=form.querySelector('button'),status=form.querySelector('[data-pipeline-status]'),error=form.querySelector('[data-pipeline-error]');
     form.querySelectorAll('input,button').forEach(x=>x.disabled=true);error.textContent='';

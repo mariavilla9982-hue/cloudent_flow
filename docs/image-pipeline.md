@@ -53,6 +53,8 @@ Generic workflow failures no longer promise automatic retry. The failed task's I
 
 ## Named character variants — 2026-10-23
 
+Follow-up: automatic video now accepts multiple files per picker selection. Each pending video has a separate preview, remove action and character selector. Reopening the picker adds files to the pending list; repeated name/size/lastModified is skipped while pending. Every file must have a character choice before any upload begins. Sends are sequential, one extracted frame cached per source, independent stable model UUIDs, and errors isolated per file. Confirmed videos leave the pending list; failed videos stay for retry without recreating confirmed variants. Logout releases all pending object URLs. Existing backend API, jobs, workers, workflows and calendar are unchanged. UI v9/SWv55.
+
 Automatic video now requires one or more explicit choices: Jujuh, Sahry japah, Sahry grávida. The three original uploaded sheets are bundled byte-for-byte in image-pipeline-characters.ts, with fixed IDs and SHA256 hashes. Registry previews are served only behind the existing authenticated API. No global mutable active model is consulted.
 
 Each selected model gets an independent job with immutable character snapshot, character_id, character_name and tags; the source filename is retained in meta. The chosen sheet is copied to the existing private per-user character prefix with a content-addressed path, never overwritten. Deleting cards/jobs does not delete these named sheets. Existing jobs retain original references and retry rules. New tickets without a selection fail closed; obsolete clients must refresh.

@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v54";
+const CACHE="cloudentflow-pwa-v55";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -60,7 +60,7 @@ async function injectCalendarPatch(response){
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
-    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=8');
+    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=9');
     // The staged pipeline owns its queue. Keep the old decorator only for legacy documents.
     if(html.includes('image-pipeline-ui.js'))html=html.replace(oldFaceSwapQueue,'');
     else if(oldFaceSwapQueue.test(html))html=html.replace(oldFaceSwapQueue,faceSwapQueueTag);
