@@ -6440,7 +6440,7 @@ function trialTimesForDate(date){
   const fallback=Array.isArray(trialReelsMeta?.settings?.fallback_times)
     ? trialReelsMeta.settings.fallback_times.map(x=>String(x).slice(0,5))
     : TRIAL_NIGHT_TIMES;
-  return Array.from({length:TRIALS_PER_NIGHT},(_,i)=>recs[i]||fallback[i]||TRIAL_NIGHT_MES[i]);
+  return Array.from({length:TRIALS_PER_NIGHT},(_,i)=>recs[i]||fallback[i]||TRIAL_NIGHT_TIMES[i]);
 }
 function trialRowForSlot(date,index){
   const rows=trialRowsForDate(date);
@@ -7103,7 +7103,7 @@ function calendarSlotPerformance(x,date){
   const p=calendarMetricSummary(x,date);
   if(!p)return "";
   const trend=p.velocity===null
-    ? '<spanclass="calendar-trend neutral">→ 1ª leitura</span>'
+    ? '<span class="calendar-trend neutral">→ 1ª leitura</span>'
     : p.fast
       ? '<span class="calendar-trend fast">⚡ '+calendarCompactNumber(Math.round(p.velocity))+'/h</span>'
       : p.velocity>0
@@ -7851,7 +7851,7 @@ function openScheduleModal(presetDate=null,extraManual=false){
   const dates=weekDates();
   const auto=smartSchedulerEnabled()&&!extraManual;
   $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
-    <div class="modal-head"><div><b>${extraManual?"Adicionar vídeo extra":"Agendar vídeo"}</b><div class="muted">${extraManual?"Post extra manual: o Smart Scheduler não altera esse horário.":"O Smart Scheduler usa o histórico real para escolher um horário estável."}</div></div><class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="modal-head"><div><b>${extraManual?"Adicionar vídeo extra":"Agendar vídeo"}</b><div class="muted">${extraManual?"Post extra manual: o Smart Scheduler não altera esse horário.":"O Smart Scheduler usa o histórico real para escolher um horário estável."}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
     <input id="modalExtra" type="hidden" value="${extraManual?"1":"0"}">
     <div class="formgrid">
       <div class="field"><label>Dia</label><select id="modalDay" onchange="updateScheduleModalSmartTime()">${dates.map(d=>{const iso=localISO(d);return `<option value="${iso}" ${presetDate===iso?"selected":""}>${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`}).join("")}</select></div>
@@ -8597,6 +8597,7 @@ async function clearPanelView(scope,button,restore=false){
     const ids=panelRowsForScope(scope).map(row=>String(row.id)).slice(0,1000);
     const r=await cloudFetch('?resource=panel-view',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope,operation:restore?'restore':'clear',ids})});
     if(uid!==cloudSession?.user?.id)return;
+    panelViewsRevision++;
     panelViews[r.scope]=r.value;panelViewsLoadedAt=Date.now();
     if(scope.startsWith('production_')){productionSelectedJobs.clear();productionPage();}
     else if(scope.startsWith('bulkPublish:'))bulkPublishPage();
@@ -9897,7 +9898,7 @@ async function getFaceSwapAssetUrl(id,kind="frame"){
   if(cached&&cached.expires>Date.now()+60000)return cached.url;
   const r=await cloudFetch("?resource=face-swap-preview&id="+encodeURIComponent(id)+"&kind="+encodeURIComponent(kind));
   if(!r?.url)return null;
-  faceSwapFrameUhe.set(key,{url:r.url,expires:Date.now()+50*60*1000});
+  faceSwapFrameUrlCache.set(key,{url:r.url,expires:Date.now()+50*60*1000});
   return r.url;
 }
 async function loadFaceSwapAssetThumb(el){
@@ -11533,7 +11534,7 @@ function settings(){
           <div><span>X API · OAuth 2.0</span><h3>${xIntegrationConfig?.configured?"App configurado":"Configurar App X"}</h3></div>
           <span class="status-pill ${xIntegrationConfig?.connected_accounts?"ok":"warn"}">${xIntegrationConfig?.connected_accounts?xIntegrationConfig.connected_accounts+" conta(s)":xIntegrationConfig?.configured?"Pronto para autorizar":"Pendente"}</span>
         </div>
-        <p class="muted">Use um único App do X e autorize cada conta por OAuth 2.0 PKCE. O ClouentFlow guarda tokens criptografados e pede <code>offline.access</code> para renovação 24/7.</p>
+        <p class="muted">Use um único App do X e autorize cada conta por OAuth 2.0 PKCE. O CloudentFlow guarda tokens criptografados e pede <code>offline.access</code> para renovação 24/7.</p>
         <div class="runninghub-settings-grid">
           <div class="field full">
             <label>Callback URL</label>
