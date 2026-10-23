@@ -1,3 +1,4 @@
+import {panelViewApi} from './panel-view.ts';
 import {imagePipelineApi} from '../_shared/image-pipeline-api.ts';
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -257,6 +258,8 @@ Deno.serve(async (req: Request) => {
     if(!accessMember?.enabled||!["admin","x_user"].includes(accessMember.role))return json({error:"forbidden"},403);
     if(resource==="session"&&req.method==="GET")return json({user_id:userData.user.id,role:accessMember.role,workspace_id:accessMember.workspace_id});
     if(accessMember.role!=="admin")return json({error:"forbidden",user_message:"Seu acesso está limitado ao X Studio."},403);
+    const panelViewResponse=await panelViewApi(req,url,admin,userData.user.id,json);
+    if(panelViewResponse)return panelViewResponse;
     if(resource==="calendar-trial")return handleCalendarTrial(req,admin,accessMember,userData.user.id,url,json);
     if(resource==="members")return handleXMembers(req,admin,accessMember,userData.user.id,url,json);
 
@@ -363,8 +366,8 @@ Deno.serve(async (req: Request) => {
       const fromParam=String(url.searchParams.get("from")||"").trim();
       const compactQueue=url.searchParams.get("compact")==="1";
       const queueSelect=compactQueue
-        ?"id,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
-        :"id,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
+        ?"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
+        :"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
       let queueQuery=admin
         .from("schedules")
         .select(queueSelect)
@@ -4346,4 +4349,5 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: message }, 500);
   }
 });
+
 

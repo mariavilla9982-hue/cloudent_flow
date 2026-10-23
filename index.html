@@ -6440,7 +6440,7 @@ function trialTimesForDate(date){
   const fallback=Array.isArray(trialReelsMeta?.settings?.fallback_times)
     ? trialReelsMeta.settings.fallback_times.map(x=>String(x).slice(0,5))
     : TRIAL_NIGHT_TIMES;
-  return Array.from({length:TRIALS_PER_NIGHT},(_,i)=>recs[i]||fallback[i]||TRIAL_NIGHT_TIMES[i]);
+  return Array.from({length:TRIALS_PER_NIGHT},(_,i)=>recs[i]||fallback[i]||TRIAL_NIGHT_MES[i]);
 }
 function trialRowForSlot(date,index){
   const rows=trialRowsForDate(date);
@@ -6625,6 +6625,7 @@ function bulkOpenPicker(){
 function bulkStatusLabel(s){return ({scheduled:"Agendado",queued:"Na fila",processing:"Publicando",published:"Publicado",failed:"Erro",cancelled:"Cancelado"})[String(s||"scheduled")]||String(s||"Agendado")}
 async function loadBulkPublishRows(){
   if(!cloudSession)return;
+  await loadPanelViews();
   try{
     const from=new Date(Date.now()-24*3600000).toISOString();
     const rows=await cloudFetch("?resource=queue&from="+encodeURIComponent(from));
@@ -6650,10 +6651,12 @@ function updateBulkCountdownDom(){
   if(clock)clock.textContent=x.text;if(label)label.textContent=x.label;
 }
 function bulkPublishPage(){
+  const panelScope=bulkPanelScope(),displayRows=panelVisibleRows(panelScope,bulkPublishRows);
   const cd=bulkCountdown();
   const pct=bulkPublishProgress.total?Math.round(bulkPublishProgress.done/bulkPublishProgress.total*100):0;
   $("#bulkPublish").innerHTML=`
     <div class="ui3-page-head"><div><span class="ui3-eyebrow">PUBLICAÇÃO RÁPIDA</span><h2>Postagem em lote</h2><p>Vários vídeos em fila. Cada vídeo vai primeiro para Reels Teste e depois para o Reel normal.</p></div><button class="btn primary" onclick="bulkOpenPicker()" ${bulkPublishUploading?"disabled":""}>＋ Selecionar vídeos</button></div>
+    ${panelViewToolbar(panelScope,displayRows)}
     <div class="bulk-publish-layout">
       <div class="card bulk-launch-card">
         <div class="bulk-drop" onclick="bulkOpenPicker()"><b>Selecionar vários vídeos</b><span>MP4, MOV ou M4V · seleção múltipla</span></div>
@@ -6664,9 +6667,9 @@ function bulkPublishPage(){
       </div>
       <div class="card bulk-queue-card">
         <div class="ui3-panel-head"><div><span>FILA</span><h3>Vídeos preparados</h3></div><button class="btn btn-sm" onclick="loadBulkPublishRows().then(bulkPublishPage)">↻ Atualizar</button></div>
-        <div class="bulk-queue-list">${bulkPublishRows.length?bulkPublishRows.map((r,i)=>{
+        <div class="bulk-queue-list">${displayRows.length?displayRows.map((r,i)=>{
           const t=r.pretrial||{},trialDone=t.status==="published",normalDone=r.status==="published";
-          return '<div class="bulk-row"><div class="bulk-num">'+(bulkPublishRows.length-i)+'</div><div class="bulk-copy"><b>'+esc(r.videos?.file_name||"Vídeo")+'</b><small>'+new Date(r.scheduled_at).toLocaleString("pt-BR")+'</small></div>'+
+          return '<div class="bulk-row"><div class="bulk-num">'+(displayRows.length-i)+'</div><div class="bulk-copy"><b>'+esc(r.videos?.file_name||"Vídeo")+'</b><small>'+new Date(r.scheduled_at).toLocaleString("pt-BR")+'</small></div>'+
             '<div class="bulk-stage '+(trialDone?"done":t.status==="processing"||t.status==="container_created"?"active":"")+'"><span>Reels Teste</span><b>'+esc(bulkStatusLabel(t.status||"scheduled"))+'</b></div>'+
             '<div class="bulk-stage '+(normalDone?"done":r.status==="processing"?"active":"")+'"><span>Reel normal</span><b>'+esc(bulkStatusLabel(r.status))+'</b></div></div>';
         }).join(""):'<div class="ui3-empty"><span>Selecione vários vídeos para iniciar a fila.</span></div>'}</div>
@@ -7100,7 +7103,7 @@ function calendarSlotPerformance(x,date){
   const p=calendarMetricSummary(x,date);
   if(!p)return "";
   const trend=p.velocity===null
-    ? '<span class="calendar-trend neutral">→ 1ª leitura</span>'
+    ? '<spanclass="calendar-trend neutral">→ 1ª leitura</span>'
     : p.fast
       ? '<span class="calendar-trend fast">⚡ '+calendarCompactNumber(Math.round(p.velocity))+'/h</span>'
       : p.velocity>0
@@ -7848,7 +7851,7 @@ function openScheduleModal(presetDate=null,extraManual=false){
   const dates=weekDates();
   const auto=smartSchedulerEnabled()&&!extraManual;
   $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
-    <div class="modal-head"><div><b>${extraManual?"Adicionar vídeo extra":"Agendar vídeo"}</b><div class="muted">${extraManual?"Post extra manual: o Smart Scheduler não altera esse horário.":"O Smart Scheduler usa o histórico real para escolher um horário estável."}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
+    <div class="modal-head"><div><b>${extraManual?"Adicionar vídeo extra":"Agendar vídeo"}</b><div class="muted">${extraManual?"Post extra manual: o Smart Scheduler não altera esse horário.":"O Smart Scheduler usa o histórico real para escolher um horário estável."}</div></div><class="btn" onclick="closeModal()">Fechar</button></div>
     <input id="modalExtra" type="hidden" value="${extraManual?"1":"0"}">
     <div class="formgrid">
       <div class="field"><label>Dia</label><select id="modalDay" onchange="updateScheduleModalSmartTime()">${dates.map(d=>{const iso=localISO(d);return `<option value="${iso}" ${presetDate===iso?"selected":""}>${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`}).join("")}</select></div>
@@ -8545,8 +8548,67 @@ function automationPage(){
 }
 
 
+// Persistent, per-user view cleanup. Underlying jobs/media remain authoritative.
+let panelViewsOwner='',panelViews={},panelViewsLoadedAt=0,panelViewsPending=null,panelViewsRevision=0;
+function resetPanelViews(){
+  const uid=cloudSession?.user?.id||'';
+  if(uid!==panelViewsOwner){panelViewsOwner=uid;panelViews={};panelViewsLoadedAt=0;panelViewsPending=null;panelViewsRevision++;}
+  return uid;
+}
+async function loadPanelViews(){
+  const uid=resetPanelViews();if(!uid)return;
+  if(Date.now()-panelViewsLoadedAt<30000)return;
+  if(panelViewsPending)return panelViewsPending;
+  const revision=panelViewsRevision;
+  const pending=cloudFetch('?resource=panel-view').then(r=>{
+    if(uid!==cloudSession?.user?.id||revision!==panelViewsRevision)return;
+    panelViews=r.views||{};panelViewsLoadedAt=Date.now();
+  }).catch(e=>console.warn('Não foi possível atualizar a limpeza das listas:',e.message)).finally(()=>{if(panelViewsPending===pending)panelViewsPending=null;});
+  panelViewsPending=pending;return pending;
+}
+function panelVisibleRows(scope,rows){
+  resetPanelViews();const view=panelViews[scope];if(!view?.before)return rows||[];
+  const cutoff=Date.parse(view.before),ids=new Set(view.ids||[]);
+  return (rows||[]).filter(row=>{
+    if(ids.has(String(row.id)))return false;
+    const at=Date.parse(row.created_at||'');
+    return !Number.isFinite(at)||at>cutoff;
+  });
+}
+function productionPanelScope(){return window.CloudentMotionControl?.mode==='motion_control'?'production_motion':'production_standard';}
+function bulkPanelScope(){return 'bulkPublish:'+String(calendarEnsureAccount()||'');}
+function panelViewToolbar(scope,rows){
+  resetPanelViews();const hidden=!!panelViews[scope]?.before;
+  return '<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-sm danger" data-panel-clear="'+esc(scope)+'" onclick="clearPanelView(this.dataset.panelClear,this)" '+((rows||[]).length?'':'disabled')+'>Excluir tudo desta aba</button>'+
+    (hidden?'<button type="button" class="btn btn-sm" data-panel-restore="'+esc(scope)+'" onclick="clearPanelView(this.dataset.panelRestore,this,true)">Desfazer limpeza</button>':'')+
+    '<small class="muted">Limpa somente esta lista. Arquivos e agendamentos permanecem salvos.</small></div>';
+}
+function panelRowsForScope(scope){
+  if(scope.startsWith('production_'))return (productionData?.jobs||[]).filter(j=>(j.meta?.workflow_key==='motion_control')===(scope==='production_motion'));
+  if(scope.startsWith('bulkPublish:'))return bulkPublishRows||[];
+  return window.ImagePipeline?.rowsForPage(scope)||[];
+}
+async function clearPanelView(scope,button,restore=false){
+  const uid=resetPanelViews();if(!uid||button?.disabled)return;
+  if(!restore&&!confirm('Excluir todos os itens da lista desta aba? Os arquivos, o calendário e as outras abas serão preservados. Gerações em andamento continuam no servidor. Você poderá desfazer a limpeza.'))return;
+  if(button)button.disabled=true;
+  try{
+    panelViewsRevision++;
+    const ids=panelRowsForScope(scope).map(row=>String(row.id)).slice(0,1000);
+    const r=await cloudFetch('?resource=panel-view',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope,operation:restore?'restore':'clear',ids})});
+    if(uid!==cloudSession?.user?.id)return;
+    panelViews[r.scope]=r.value;panelViewsLoadedAt=Date.now();
+    if(scope.startsWith('production_')){productionSelectedJobs.clear();productionPage();}
+    else if(scope.startsWith('bulkPublish:'))bulkPublishPage();
+    else window.ImagePipeline?.draw();
+    toast(restore?'Limpeza desfeita.':'Lista limpa. Arquivos e agendamentos preservados.','ok');
+  }catch(e){toast(e.message,'err');}
+  finally{if(button?.isConnected)button.disabled=false;}
+}
+
 async function loadProductionData(forcePreviews=false){
   if(!cloudSession){productionData=null;return}
+  await loadPanelViews();
   const [queue,status]=await Promise.all([
     cloudFetch("?resource=production"),
     cloudFetch("?resource=runninghub-status").catch(e=>({error:e.message}))
@@ -9537,7 +9599,8 @@ function productionCreditDashboard(){
 function productionPage(){
   const root=$("#production");
   if(!root)return;
-  const jobs=productionData?.jobs||[];
+  const panelScope=productionPanelScope();
+  const jobs=panelVisibleRows(panelScope,productionData?.jobs||[]);
   const worker=productionData?.worker;
   const rh=productionData?.runninghubStatus||{};
   const c=productionCounts();
@@ -9596,6 +9659,7 @@ function productionPage(){
         '<div class="production-note">Adicione quantos pares quiser. Depois use “Executar fila” para disparar na hora.</div>'+
       '</div>'+
     '</div>'+
+    panelViewToolbar(panelScope,jobs)+
     '<div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3>'+jobs.length+' jobs</h3></div><div class="production-queue-head-actions">'+(jobs.some(j=>j.status==="ready")?'<label class="production-select-all"><input type="checkbox" onchange="toggleAllReadyProduction(this.checked)"> Selecionar prontos</label><button class="btn btn-sm danger" id="productionDeleteSelected" onclick="deleteSelectedProductionJobs()" '+(productionSelectedJobs.size?'':'disabled')+'>🗑 Excluir selecionados ('+productionSelectedJobs.size+')</button><button class="btn btn-sm" onclick="clearCompletedProductionJobs()">🧹 Limpar concluídos</button>':'')+'</div></div><div class="production-queue">'+rows+'</div></div>';
   ensureProductionTicker();
   setTimeout(()=>{
@@ -9833,7 +9897,7 @@ async function getFaceSwapAssetUrl(id,kind="frame"){
   if(cached&&cached.expires>Date.now()+60000)return cached.url;
   const r=await cloudFetch("?resource=face-swap-preview&id="+encodeURIComponent(id)+"&kind="+encodeURIComponent(kind));
   if(!r?.url)return null;
-  faceSwapFrameUrlCache.set(key,{url:r.url,expires:Date.now()+50*60*1000});
+  faceSwapFrameUhe.set(key,{url:r.url,expires:Date.now()+50*60*1000});
   return r.url;
 }
 async function loadFaceSwapAssetThumb(el){
@@ -10293,6 +10357,8 @@ function previewExtractedVideo(index){
     </div>`;
 }
 function clearFrameExtractor(){
+  if(frameExtractorBusy){toast("Aguarde a extração terminar antes de limpar esta aba.","warn");return;}
+  if(frameExtractorResults.length&&!confirm("Excluir todos os resultados desta aba? Calendário e Produção IA permanecem salvos."))return;
   frameExtractorResults.forEach(releaseFrameResult);
   frameExtractorResults=[];frameExtractorLinksText="";frameExtractorBusy=false;frameExtractorPage();
 }
@@ -10361,7 +10427,7 @@ function frameExtractorPage(){
       <div class="frame-head-actions">
         <span class="status-pill ${instagramWebSession?.configured?"ok":"warn"}">${instagramWebSession?.configured?"Sessão IG ativa":"Modo público"}</span>
         ${ready?'<button class="btn success" onclick="downloadAllExtractedFrames()">↓ Baixar frames prontos</button>':""}
-        <button class="btn" onclick="clearFrameExtractor()">Limpar</button>
+        <button class="btn" onclick="clearFrameExtractor()" ${frameExtractorBusy?"disabled":""}>Excluir tudo desta aba</button>
       </div>
     </div>
 
@@ -11467,7 +11533,7 @@ function settings(){
           <div><span>X API · OAuth 2.0</span><h3>${xIntegrationConfig?.configured?"App configurado":"Configurar App X"}</h3></div>
           <span class="status-pill ${xIntegrationConfig?.connected_accounts?"ok":"warn"}">${xIntegrationConfig?.connected_accounts?xIntegrationConfig.connected_accounts+" conta(s)":xIntegrationConfig?.configured?"Pronto para autorizar":"Pendente"}</span>
         </div>
-        <p class="muted">Use um único App do X e autorize cada conta por OAuth 2.0 PKCE. O CloudentFlow guarda tokens criptografados e pede <code>offline.access</code> para renovação 24/7.</p>
+        <p class="muted">Use um único App do X e autorize cada conta por OAuth 2.0 PKCE. O ClouentFlow guarda tokens criptografados e pede <code>offline.access</code> para renovação 24/7.</p>
         <div class="runninghub-settings-grid">
           <div class="field full">
             <label>Callback URL</label>
@@ -11829,7 +11895,8 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=18"></script>
-<script src="/image-pipeline-ui.js?v=6"></script>
+<script src="/image-pipeline-ui.js?v=7"></script>
 </body>
 </html>
+
 
