@@ -1,0 +1,71 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||process.cwd()]}));
+const html=fs.readFileSync('index.html','utf8');
+const main=[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].find(m=>m[2].includes('const navItems='))[2].replace(/\ninit\(\);\s*$/,'\n');
+const styles=[...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m=>m[1]).join('\n');
+const png='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#777"/></svg>').toString('base64');
+(async()=>{
+ const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
+ try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html><head></head><body><div id="modalHost"></div><div id="toast"></div><main style="padding:28px;max-width:1440px;margin:auto"><section id="faceSwap"></section><section id="faceSwapPhoto"></section><section id="upscale"></section><section id="production"></section></main></body></html>'}));
+ await page.goto('https://studio.test/');await page.addStyleTag({content:styles});await page.addStyleTag({content:fs.readFileSync('production-studio.css','utf8')});
+ await page.addScriptTag({content:main});
+ await page.evaluate(png=>{
+   window.testCalls=[];window.feedback=[];window.png=png;
+   cloudSession={user:{id:'owner'},access_token:'fixture'};cloudAccess={role:'admin'};currentPage='faceSwapPhoto';
+   const base={created_at:'2026-10-23T12:00:00Z',original_file_name:'referencia.png',status:'ready',result_storage_path:'owner/final',meta:{source:'face_swap_photo',pipeline_status:'COMPLETED',stage:'upscale',upscale_result:{path:'owner/upscale'}}};
+   window.fixtureJobs=[{...base,id:'photo'}, {...base,id:'upscale',meta:{...base.meta,source:'upscale_manual'}},{...base,id:'natural',original_file_name:'vídeo da Jujuh.mp4',meta:{...base.meta,source:'face_swap_natural',character_name:'Jujuh'}},{...base,id:'waiting',status:'waiting',original_file_name:'na fila.mp4',result_storage_path:null,meta:{source:'face_swap_natural',stage:'face_swap',pipeline_status:'UPLOADED'}}];
+   cloudFetch=async(path,opts)=>{testCalls.push(path);if(path.includes('image-pipeline-result')){await new Promise(r=>setTimeout(r,80));return {url:png,type:path.includes('natural')?'video':'image'};}if(path.includes('face-swap-preview'))return {url:png};if(path.includes('image-pipeline-preview'))return {url:png,label:'Upscale pronto'};if(path.includes('image-pipeline-characters'))return {characters:[]};if(path.includes('image-pipeline-model'))return {url:png,name:'modelo.png',type:'image/png'};if(path.includes('resource=image-pipeline'))return {jobs:fixtureJobs};return {};};
+   loadPanelViews=async()=>{};ensureProductionTicker=()=>{};setupProductionThumbs=()=>{};calendarEnsureAccount=()=>null;toast=(m)=>feedback.push(m);
+   showPage=id=>{currentPage=id;document.querySelectorAll('section').forEach(n=>n.style.display=n.id===id?'block':'none');if(id==='production')productionPage();else ImagePipeline.render(id);};
+   loadProductionData=async()=>{};
+ },png);
+ await page.addScriptTag({content:fs.readFileSync('production-studio.js','utf8')});
+ await page.addScriptTag({content:fs.readFileSync('image-pipeline-ui.js','utf8')});
+ await page.evaluate(()=>showPage('faceSwapPhoto'));
+ await page.locator('#faceSwapPhoto [data-open="photo"]').evaluate(b=>{b.click();b.click();if(b.getAttribute('aria-busy')!=='true')throw Error('missing immediate busy feedback');});
+ await page.waitForSelector('#faceSwapPhoto .studio-compare input',{state:'attached',timeout:4000}).catch(async e=>{console.log(await page.locator('#faceSwapPhoto [data-studio-result]').innerHTML());console.log(errors);throw e;});
+ assert.equal(await page.evaluate(()=>testCalls.filter(p=>p==='?resource=image-pipeline-result&id=photo').length),1,'rapid clicks must coalesce');
+ assert(await page.evaluate(()=>testCalls.includes('?resource=face-swap-preview&kind=frame&id=photo')),'comparison must use actual target frame');
+ const range=page.locator('#faceSwapPhoto .studio-compare input');await range.fill('73');await range.dispatchEvent('input');
+ assert.equal(await page.locator('#faceSwapPhoto .studio-compare').evaluate(n=>n.style.getPropertyValue('--split')),'73%');
+ await page.locator('#faceSwapPhoto [data-refresh]').click();assert.equal(await range.inputValue(),'73','refresh preserves open comparison and slider');
+ await range.focus();await page.keyboard.press('ArrowLeft');assert.equal(await range.inputValue(),'72','keyboard comparison');
+ await page.screenshot({path:'studio-photo-desktop.png',fullPage:true});
+ await page.evaluate(()=>showPage('upscale'));await page.locator('#upscale [data-open="upscale"]').click();await page.waitForSelector('#upscale .studio-compare');
+ await page.evaluate(()=>showPage('faceSwap'));
+ const buffer=Buffer.from('fixture');await page.locator('#faceSwap input[name=original]').setInputFiles([{name:'um.mp4',mimeType:'video/mp4',buffer},{name:'dois.mp4',mimeType:'video/mp4',buffer}]);
+ assert.equal(await page.locator('#faceSwap [data-entry]').count(),2);
+ await page.locator('#faceSwap [data-entry]').first().locator('input[value=jujuh]').check();await page.locator('#faceSwap [data-entry]').nth(1).locator('input[value=sahry_japah]').check();
+ assert.equal(await page.locator('#faceSwap .studio-entry-tags').first().textContent(),'Jujuh');
+ await page.locator('#faceSwap [data-filter=ready]').click();assert.equal(await page.locator('#faceSwap .pipeline-job').count(),1);
+ await page.locator('#faceSwap [data-filter=all]').click();await page.locator('#faceSwap [data-pipeline-search]').fill('jujuh');assert.equal(await page.locator('#faceSwap .pipeline-job').count(),1);
+ await page.locator('#faceSwap [data-pipeline-search]').fill('');await page.locator('#faceSwap [data-compare=natural]').click();await page.waitForSelector('#faceSwap .studio-compare');
+ await page.screenshot({path:'studio-batch-desktop.png',fullPage:true});
+ await page.addScriptTag({content:fs.readFileSync('motion-control-core-v6.js','utf8')});
+ await page.evaluate(()=>{productionData={jobs:[{id:'standard',status:'ready',progress:100,original_file_name:'padrão.mp4',original_size_bytes:10,frame_size_bytes:10,result_video_id:'video-standard',meta:{}},{id:'motion',status:'ready',progress:100,original_file_name:'motion.mp4',original_size_bytes:10,frame_size_bytes:10,result_video_id:'video-motion',meta:{workflow_key:'motion_control',character_name:'Sahry grávida'}}],integration:{enabled:true,config:{}},runninghubStatus:{enabled:true},worker:{online:true}};showPage('production');});
+ await page.waitForSelector('#production .studio-workspace');
+ assert.equal(await page.locator('#production [data-studio-play]').getAttribute('data-studio-play'),'standard');
+ await page.locator('#production .studio-more-actions summary').first().click();assert(await page.locator('#production .studio-more-actions button').filter({hasText:'Reels Teste'}).count(),'Trial action preserved');
+ assert(await page.locator('#production .studio-frame-action').count(),'frame preview preserved');
+ await page.screenshot({path:'studio-production-desktop.png',fullPage:true});
+ await page.locator('#production .production-workflow-tab').nth(1).click();
+ await page.waitForSelector('#production.motion-control-mode .studio-workspace');
+ assert.equal(await page.locator('#production [data-studio-play]').getAttribute('data-studio-play'),'motion','mode keeps results isolated');
+ await page.setViewportSize({width:390,height:844});
+ for(const id of ['faceSwap','faceSwapPhoto','upscale','production']){
+   await page.evaluate(id=>showPage(id),id);await page.waitForTimeout(120);
+   const overflow=await page.locator('#'+id).evaluate(n=>({width:n.clientWidth,scroll:n.scrollWidth}));assert(overflow.scroll<=overflow.width+2,id+' has horizontal overflow: '+JSON.stringify(overflow));
+   const tiny=await page.locator('#'+id+' button:visible').evaluateAll(bs=>bs.filter(b=>b.getBoundingClientRect().height<29).map(b=>b.textContent));assert.equal(tiny.length,0,id+' has unusably small buttons: '+tiny);
+   await page.screenshot({path:'studio-'+id+'-mobile.png',fullPage:true});
+ }
+ await page.evaluate(()=>showPage('faceSwapPhoto'));
+ await page.locator('#faceSwapPhoto [data-open=photo]').click();await page.waitForSelector('#faceSwapPhoto .studio-compare');
+ await page.evaluate(()=>{cloudSession=null;ImagePipeline.render('faceSwapPhoto');});
+ assert.equal(await page.locator('#faceSwapPhoto .studio-compare').count(),0,'logout clears selected media');
+ assert.equal(errors.length,0,errors.join('\n'));
+ console.log('PASS real browser: target-frame comparator, pointer/keyboard slider, refresh preservation, batch and per-file identities, filters/search, standard/Motion isolation, mobile overflow/buttons, logout, no runtime errors');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1});
