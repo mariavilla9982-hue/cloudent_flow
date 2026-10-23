@@ -379,7 +379,7 @@ Deno.serve(async(req:Request)=>{
         const {error:ue}=await admin.storage.from("videos").upload(path,blob,{contentType:mime,upsert:true,cacheControl:"3600"});
         if(ue)throw ue;
       }
-      const name="runninghub-"+job.id.slice(0,8)+"."+ext;
+      const name=(job.meta?.image_pipeline_version===2&&job.meta?.character_name?String(job.meta.character_name)+" · ":"")+"runninghub-"+job.id.slice(0,8)+"."+ext;
       const videoPayload={storage_path:path,storage_provider:provider,file_name:name,mime_type:mime,size_bytes:blob.size,status:"ready",platform:"instagram",caption:""};
       const videoWrite=early?admin.from("videos").upsert({id:job.id,...videoPayload},{onConflict:"id"}):admin.from("videos").insert(videoPayload);
       const {data:video,error:ve}=await videoWrite.select().single();
@@ -1092,5 +1092,6 @@ Deno.serve(async(req:Request)=>{
     return out({ok:false,error:message},500);
   }
 });
+
 
 

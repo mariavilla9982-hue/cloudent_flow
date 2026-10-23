@@ -109,7 +109,7 @@ export async function runImagePipeline(d:any){
             original_storage_path:j.original_storage_path,original_file_name:j.original_file_name,original_mime_type:j.original_mime_type,original_size_bytes:j.original_size_bytes,
             frame_storage_path:saved.path,frame_file_name:saved.name,frame_mime_type:saved.mime,frame_size_bytes:saved.size,
             status:'motion_waiting',progress:0,max_attempts:1,attempt_count:0,
-            meta:{workflow_key:'motion_control',workflow_label:'Motion Control V7',workflow_nodes:{video:'275',frame:'299',output:'285'},manual_run:true,auto_chained:true,image_pipeline_version:2,face_swap_job_id:j.id}}));
+            meta:{workflow_key:'motion_control',workflow_label:'Motion Control V7',workflow_nodes:{video:'275',frame:'299',output:'285'},manual_run:true,auto_chained:true,image_pipeline_version:2,face_swap_job_id:j.id,...(m.character_id?{character_id:m.character_id,character_name:m.character_name,tags:m.tags,character:m.character}:{})}}));
         }
         await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_WAITING'},last_error:null});
         await d.wakeMotion();
@@ -124,3 +124,4 @@ export async function runImagePipeline(d:any){
     }
   }
 }
+
