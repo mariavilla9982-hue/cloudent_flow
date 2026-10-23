@@ -31,7 +31,7 @@
   async function refresh(){
     if(loading||!cloudSession||!sources[currentPage])return;loading=true;
     const g=++generation,uid=cloudSession.user?.id;
-    try{await loadPanelViews();const r=await cloudFetch('?resource=image-pipeline');if(g!==generation||uid!==cloudSession?.user?.id)return;jobs=r.jobs||[];drawJobs();}
+    try{if(typeof loadPanelViews==='function')await loadPanelViews();const r=await cloudFetch('?resource=image-pipeline');if(g!==generation||uid!==cloudSession?.user?.id)return;jobs=r.jobs||[];drawJobs();}
     catch(err){const root=document.querySelector('#'+currentPage+' [data-pipeline-error]');if(root)root.textContent=err.message;}
     finally{loading=false;}
   }
@@ -90,8 +90,8 @@
     const rank=j=>j.status==='ready'||j.production?.status==='ready'?2:j.status==='failed'||j.production?.status==='failed'?3:queueState(j)?1:0;
     const stageRank=j=>({face_swap:0,upscale:1,control_motion:2}[j.meta?.stage]??3);
     const allRows=jobs.filter(j=>j.meta.source===sources[currentPage]);
-    const rows=panelVisibleRows(currentPage,allRows).sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?stageRank(a)-stageRank(b):0)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
-    const signature=JSON.stringify([panelViews[currentPage],rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.meta?.face_swap_result?.path,j.meta?.upscale_result?.path,j.last_error,j.meta?.provider_queue_waiting,j.meta?.queue_reason,j.production?.meta?.provider_queue_waiting,j.production?.status,j.production?.progress])]);
+    const rows=(typeof panelVisibleRows==='function'?panelVisibleRows(currentPage,allRows):allRows).sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?stageRank(a)-stageRank(b):0)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
+    const signature=JSON.stringify([typeof panelViews==='undefined'?null:panelViews[currentPage],rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.meta?.face_swap_result?.path,j.meta?.upscale_result?.path,j.last_error,j.meta?.provider_queue_waiting,j.meta?.queue_reason,j.production?.meta?.provider_queue_waiting,j.production?.status,j.production?.progress])]);
     if(node.dataset.signature===signature)return;node.dataset.signature=signature;
     const groups=['Em processamento','Na fila','Concluídos','Precisam de atenção'];
     const counts=groups.map((_,i)=>rows.filter(j=>rank(j)===i).length);
@@ -99,7 +99,7 @@
     const stageNames={face_swap:'Face Swap',upscale:'Upscale',control_motion:'Motion V7'};
     const stageSummary='<div class="pipeline-queue-summary" aria-label="Filas por etapa">'+Object.entries(stageNames).map(([stage,name])=>'<span>'+name+' · <strong>'+rows.filter(j=>rank(j)<2&&j.meta.stage===stage).length+'</strong> pendentes</span>').join('')+'</div>';
     const summary=stageSummary+'<div class="pipeline-queue-summary" role="status">'+['Processando','Aguardando','Concluídos','Atenção'].map((name,i)=>'<span><strong>'+counts[i]+'</strong> '+name+'</span>').join('')+'</div>';
-    node.innerHTML=panelViewToolbar(currentPage,rows)+(rows.length?summary+rows.map((j,index)=>{ 
+    node.innerHTML=(typeof panelViewToolbar==='function'?panelViewToolbar(currentPage,rows):'')+(rows.length?summary+rows.map((j,index)=>{
       const group=rank(j),stage=j.meta.stage;let heading=previous!==group?'<h3 class="pipeline-group-title">'+groups[group]+'</h3>':'';
       if(group===1&&(previous!==group||previousStage!==stage))heading+='<h4 class="pipeline-group-title">Fila de '+e(stageNames[stage]||'processamento')+'</h4>';
       previous=group;previousStage=stage;

@@ -48,4 +48,17 @@ assert.match(html,/panelViewToolbar\(panelScope,jobs\)/);assert.match(html,/pane
 assert.match(html,/frameExtractorBusy\)\{toast/);
 assert.doesNotMatch(backend,/from\(['"](?:schedules|videos|production_jobs|face_swap_jobs)['"]\)|\.delete\(|\.remove\(|hidden_at/);
 console.log('PASS: full SPA/API syntax; private scope and user isolation; clear and restore; new items; active job preservation; stale-response and logout protection; offline fallback; native controls.');
+function renderPipelineFixture(withHelpers){
+ const list={dataset:{},innerHTML:'',querySelector:()=>null};
+ const form={addEventListener:()=>{}};
+ const root={dataset:{},innerHTML:'',querySelector:s=>s==='form'?form:null};
+ const document={createElement:()=>({textContent:''}),head:{appendChild:()=>{}},getElementById:id=>id==='faceSwap'?root:null,querySelector:()=>list};
+ const c=vm.createContext({document,window:{},cloudSession:null,currentPage:'faceSwap',console,Set,Map,Date,setInterval:()=>1,esc:String,cloudFetch:async()=>({jobs:[]})});
+ if(withHelpers)vm.runInContext(helper,c);
+ vm.runInContext(pipeline,c);
+ assert.equal(list.innerHTML.includes('Excluir tudo desta aba'),withHelpers);
+ assert.ok(list.innerHTML.includes('Envie um arquivo'));
+}
+renderPipelineFixture(false);renderPipelineFixture(true);
+console.log('PASS: actual pipeline render in current document and cached legacy document without new globals.');
 
