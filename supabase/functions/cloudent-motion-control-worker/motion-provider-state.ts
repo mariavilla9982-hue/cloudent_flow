@@ -5,11 +5,30 @@ export async function readMotionProviderStatus(base:string,apiKey:string,taskId:
     let raw:any={};try{raw=await response.json()}catch{}
     return {response,raw};
   };
+  const failureDetail=async(fallback:any)=>{
+    try{
+      const {response,raw}=await post("/task/openapi/outputs");
+      const reason=raw?.data?.failedReason;
+      if(response.ok&&Number(raw?.code)===805&&reason){
+        const node=String(reason.node_id||reason.node_name||"").slice(0,100);
+        const type=String(reason.exception_type||"");
+        const message=String(reason.exception_message||"");
+        if(/outofmemory|vram oom|insufficient vram|cuda.*out of memory/i.test(type+" "+message)){
+          return "Memória de vídeo da GPU insuficiente (VRAM)"+(node?" · node "+node:"")+". A geração falhou na RunningHub. Revise a capacidade da GPU ou as dimensões/duração da entrada antes de tentar novamente.";
+        }
+        if(message||type)return [type,message,node?"node "+node:""].filter(Boolean).join(" · ").slice(0,1800);
+      }
+    }catch{}
+    return fallback||"RunningHub falhou";
+  };
   let lastError="RunningHub não retornou um status reconhecido.";
   try{
     const {response,raw}=await post("/openapi/v2/query");
     const status=String(raw?.status||"").toUpperCase();
-    if(response.ok&&(!raw?.taskId||String(raw.taskId)===taskId)&&["QUEUED","RUNNING","SUCCESS","FAILED","CANCELLED","CANCELED"].includes(status))return {status,source:"v2",raw,error:raw?.errorMessage||raw?.failedReason?.exception_message||raw?.failedReason?.node_name||null,checkedAt:new Date().toISOString()};
+    if(response.ok&&(!raw?.taskId||String(raw.taskId)===taskId)&&["QUEUED","RUNNING","SUCCESS","FAILED","CANCELLED","CANCELED"].includes(status)){
+      const fallback=raw?.errorMessage||raw?.failedReason?.exception_message||raw?.failedReason?.node_name||null;
+      return {status,source:"v2",raw,error:status==="FAILED"?await failureDetail(fallback):fallback,checkedAt:new Date().toISOString()};
+    }
   }catch(e){lastError=e instanceof Error?e.message:String(e)}
   try{
     const {response,raw}=await post("/task/openapi/status");
@@ -17,7 +36,7 @@ export async function readMotionProviderStatus(base:string,apiKey:string,taskId:
     if(response.ok&&["QUEUED","RUNNING","SUCCESS","FAILED","CANCELLED","CANCELED"].includes(status)){
       let error:any=null;
       if(status==="FAILED"){
-        try{const detail=await post("/task/openapi/outputs");error=detail.raw?.data?.failedReason?.exception_message||detail.raw?.data?.failedReason?.node_name||detail.raw?.msg||null}catch{}
+        error=await failureDetail(null);
       }
       return {status,source:"legacy",raw,error,checkedAt:new Date().toISOString()};
     }
