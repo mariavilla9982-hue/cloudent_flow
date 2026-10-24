@@ -8,7 +8,7 @@ const admin={from(table){let patch=null,single=false,filters=[];const b={
   if(table==='face_swap_jobs')data=single?{id:'j',meta:{pipeline_version:2,stage:'control_motion'}}:null;
   else if(!patch)data=single?{meta:structuredClone(row.meta)}:row.meta.previous_motion_failure?[]:[structuredClone(row)];
   if(patch){
-   const match=table==='face_swap_jobs'||filters.every(([k,v])=>typeof v==='object'?Object.entries(v).every(([a,z])=>row[k]?.[a]===z):row[k]===v);
+   const match=table==='face_swap_jobs'||filters.every(([k,v])=>v!==null&&typeof v==='object'?Object.entries(v).every(([a,z])=>row[k]?.[a]===z):row[k]===v);
    if(match){updates.push({table,patch,filters});if(table==='production_jobs')Object.assign(row,patch);data={id:'j'};}
   }
   return Promise.resolve({data,error:null}).then(resolve,reject);
