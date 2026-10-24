@@ -1,3 +1,4 @@
+import {MotionCreateError,motionDispatchFailurePatch} from "./motion-dispatch.ts";
 import {motionStorageHealth,requireMotionStorage,motionCheckObject,MotionStorageSafetyError,storageRPC} from "./motion-storage-protection.ts";
 import {applyMotionProviderStatus} from "./motion-provider-state.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -117,7 +118,7 @@ async function validateWorkflow(base:string,apiKey:string,cfg:any){
 async function rhJson(base:string,apiKey:string,path:string,body:any){
   const r=await fetch(base+path,{method:"POST",headers:{"Authorization":"Bearer "+apiKey,"Content-Type":"application/json"},body:JSON.stringify({...body,apiKey})});
   let j:any={};try{j=await r.json()}catch{}
-  if(!r.ok)throw new Error(j?.msg||j?.message||("RunningHub HTTP "+r.status));
+  if(!r.ok)throw new MotionCreateError(j,r.status);
   return j;
 }
 async function getCredits(base:string,apiKey:string){
@@ -212,6 +213,7 @@ Deno.serve(async(req:Request)=>{
     if(claimError)throw claimError;
     let processed=0;
     for(const job of claimed||[]){
+      let acceptedTaskId:string|null=null;
       try{
         if(job.runninghub_task_id)continue;
         if(job.meta?.image_pipeline_version===2&&job.meta.pipeline_dispatch_intent)throw new Error("Criação Motion incerta; reconcilie a tarefa antes de repetir.");
@@ -239,11 +241,13 @@ Deno.serve(async(req:Request)=>{
           job.meta=intent;
         }
         const created=await rhJson(base,apiKey,"/task/openapi/create",{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}],addMetadata:true});
-        if(Number(created?.code)!==0||!created?.data?.taskId)throw new Error(created?.msg||"RunningHub não retornou taskId no Motion Control.");
+        if(Number(created?.code)!==0||!created?.data?.taskId)throw new MotionCreateError(created);
         const taskId=String(created.data.taskId);
+        acceptedTaskId=taskId;
+        console.info(JSON.stringify({event:"motion_create_receipt",job_id:job.id,task_id:taskId,dispatch_intent:job.meta?.pipeline_dispatch_intent||null}));
         const taskStatus=String(created.data.taskStatus||"QUEUED").toUpperCase();
-        const {error:attachError}=await admin.from("production_jobs").update({status:"queued",progress:38,started_at:null,runninghub_task_id:taskId,locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",job.id).is("runninghub_task_id",null);
-        if(attachError)throw attachError;
+        const {data:attached,error:attachError}=await admin.from("production_jobs").update({status:"queued",progress:38,started_at:null,runninghub_task_id:taskId,locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id").maybeSingle();
+        if(attachError||!attached)throw attachError||new Error("Não foi possível vincular a tarefa criada.");
         if(job.meta?.image_pipeline_version===2){
           const {data:fresh}=await admin.from("production_jobs").select("meta").eq("id",job.id).single();
           await admin.from("production_jobs").update({meta:{...(fresh?.meta||job.meta),pipeline_dispatch_uncertain:false}}).eq("id",job.id).eq("runninghub_task_id",taskId);
@@ -252,9 +256,17 @@ Deno.serve(async(req:Request)=>{
         EdgeRuntime.waitUntil(fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-production-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null));
         processed++;
       }catch(e:any){
-        if(e instanceof MotionStorageSafetyError){await storageRPC(admin,"release_motion_storage_claim",{p_job_id:job.id,p_worker:workerId});continue;}
-        const message=e instanceof Error?e.message:String(e);
-        await admin.from("production_jobs").update({status:"failed",locked_at:null,locked_by:null,last_error:message,updated_at:new Date().toISOString()}).eq("id",job.id);
+        // An accepted task must never be failed/recreated due to a local persistence/poll error.
+        const {data:fresh,error:readError}=await admin.from("production_jobs").select("id,status,runninghub_task_id,meta").eq("id",job.id).maybeSingle();
+        if(!readError&&fresh?.runninghub_task_id){
+          // Preserve terminal results and the first real RUNNING timestamp.
+          if(["queued","running"].includes(fresh.status))await admin.from("production_jobs").update({last_error:null,meta:{...(fresh.meta||{}),pipeline_dispatch_uncertain:false,provider_status_error:"Aguardando nova confirmação do status."},updated_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",fresh.runninghub_task_id).in("status",["queued","running"]);
+          continue;
+        }
+        if(e instanceof MotionStorageSafetyError&&!acceptedTaskId&&!job.meta?.pipeline_dispatch_intent){await storageRPC(admin,"release_motion_storage_claim",{p_job_id:job.id,p_worker:workerId});continue;}
+        const patch=motionDispatchFailurePatch(job,e,acceptedTaskId);
+        const {data:saved,error:saveError}=await admin.from("production_jobs").update(patch).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id").maybeSingle();
+        if(saveError||!saved)console.error(JSON.stringify({event:"motion_dispatch_persist_error",job_id:job.id,task_id:acceptedTaskId,dispatch_intent:job.meta?.pipeline_dispatch_intent||null}));
         processed++;
       }
     }

@@ -1,3 +1,4 @@
+import {enrichFailedMotionJobs} from "./motion-failure-repair.ts";
 import {motionStorageHealth} from "./motion-storage-protection.ts";
 import {readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -81,9 +82,10 @@ Deno.serve(async(req:Request)=>{
       }));
     }
 
+    const failureDetails=await enrichFailedMotionJobs(admin,base,apiKey);
     if(needsCapture&&options.sync_only!==true)EdgeRuntime.waitUntil(wakeProduction(master));
     await admin.from("worker_runtime").upsert({worker_name:"motion_status",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_jobs:processed,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
-    return out({ok:true,processed,queued,running,terminal,unknown,storage_phase:storageState?.phase||"unknown"});
+    return out({ok:true,processed,queued,running,terminal,unknown,failure_details:failureDetails,storage_phase:storageState?.phase||"unknown"});
   }catch(e:any){
     const message=e instanceof Error?e.message:String(e);
     try{await admin.from("worker_runtime").upsert({worker_name:"motion_status",last_heartbeat:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()},{onConflict:"worker_name"})}catch{}
