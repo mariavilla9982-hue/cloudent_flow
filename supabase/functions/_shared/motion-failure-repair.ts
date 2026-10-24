@@ -49,3 +49,29 @@ export function extractMotionFailure(payload:any){
   if(!display)return null;
   return {node,exception_type:type,exception_message:message,message:display.slice(0,1800)};
 }
+
+export async function enrichPreviousMotionFailure(admin:any,base:string,apiKey:string){
+  const {data:jobs,error}=await admin.from("production_jobs").select("id,status,updated_at,meta")
+    .eq("status","motion_waiting").is("runninghub_task_id",null).contains("meta",{workflow_key:"motion_control"})
+    .not("meta->>previous_motion_task_id","is",null).is("meta->previous_motion_failure",null).order("updated_at",{ascending:true}).limit(1);
+  if(error)throw error;
+  for(const job of jobs||[]){
+    const taskId=String(job.meta.previous_motion_task_id),stamp=new Date().toISOString();
+    const claimedMeta={...job.meta,previous_motion_failure:{task_id:taskId,state:"checking",checked_at:stamp}};
+    const {data:claimed}=await admin.from("production_jobs").update({meta:claimedMeta,updated_at:stamp}).eq("id",job.id).eq("status","motion_waiting").is("runninghub_task_id",null).eq("updated_at",job.updated_at).select("id").maybeSingle();
+    if(!claimed)continue;
+    let summary:any={task_id:taskId,state:"unavailable",checked_at:stamp};
+    try{
+      const response=await fetch(base+"/openapi/v2/query",{method:"POST",headers:{Authorization:"Bearer "+apiKey,"Content-Type":"application/json"},body:JSON.stringify({apiKey,taskId}),signal:AbortSignal.timeout(10000)});
+      const raw=await response.json();
+      if(response.ok&&String(raw?.taskId)===taskId){
+        const clean=(v:any)=>String(v||"").replace(/https?:\/\/\S+/gi,"[URL]").replace(/(apiKey|token|authorization)\s*[:=]\s*\S+/gi,"$1=[redacted]").slice(0,1200);
+        summary={task_id:taskId,state:"observed",checked_at:stamp,status:String(raw.status||""),error_code:clean(raw.errorCode),message:clean(raw.errorMessage),
+          detail:extractMotionFailure({code:805,failedReason:raw.failedReason}),output_384_available:Array.isArray(raw.results)&&raw.results.some((x:any)=>String(x.nodeId)==="384"&&!!x.url)};
+      }
+    }catch{}
+    const {data:fresh}=await admin.from("production_jobs").select("meta").eq("id",job.id).eq("status","motion_waiting").is("runninghub_task_id",null).maybeSingle();
+    if(fresh&&String(fresh.meta?.previous_motion_task_id)===taskId)
+      await admin.from("production_jobs").update({meta:{...fresh.meta,previous_motion_failure:summary}}).eq("id",job.id).eq("status","motion_waiting").is("runninghub_task_id",null).contains("meta",{previous_motion_task_id:taskId});
+  }
+}
