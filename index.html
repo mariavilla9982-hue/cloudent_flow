@@ -3899,31 +3899,47 @@ body,.app,.main,.page{box-sizing:border-box}
   }
 }
 
-/* ===== Sidebar scroll behavior fix: do not follow viewport ===== */
+/* ===== Desktop navigation: viewport-bound rail with independent scrolling ===== */
 @media(min-width:761px){
+  /* hidden creates a non-scrolling body scrollport and breaks sticky children. */
+  html,body,body.auth-logged-in{overflow-x:clip!important}
   .sidebar,
   .app.sidebar-collapsed .sidebar.compact,
   .app:not(.sidebar-collapsed) .sidebar{
-    position:relative!important;
-    top:auto!important;
-    height:auto!important;
-    min-height:100vh!important;
-    max-height:none!important;
-    align-self:stretch!important;
+    position:sticky!important;
+    top:0!important;
+    height:100vh!important;
+    height:100dvh!important;
+    min-height:0!important;
+    max-height:100vh!important;
+    max-height:100dvh!important;
+    align-self:start!important;
+    overflow:hidden!important;
   }
-  .sidebar .nav{
-    overflow-y:visible!important;
+  .sidebar .nav,
+  .app.sidebar-collapsed:not(.sidebar-hover-open) .sidebar.compact .nav,
+  .app.sidebar-collapsed.sidebar-hover-open .sidebar.compact .nav{
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    min-height:0!important;
     max-height:none!important;
-    flex:0 0 auto!important;
+    flex:1 1 0!important;
     align-content:start!important;
     grid-auto-rows:max-content!important;
+    padding-bottom:8px!important;
+    overscroll-behavior-y:contain;
   }
   .sidebar .nav-group{
     align-content:start!important;
     grid-auto-rows:max-content!important;
   }
+  .sidebar .sidebar-foot,
+  .app.sidebar-collapsed .sidebar.compact .sidebar-foot{
+    position:static!important;
+    flex:0 0 auto!important;
+    margin-top:8px!important;
+  }
 }
-
 
 
 /* ===== CANONICAL THEME — single source of truth ===== */
@@ -11911,6 +11927,7 @@ init();
 <script src="/image-pipeline-ui.js?v=12"></script>
 </body>
 </html>
+
 
 
 

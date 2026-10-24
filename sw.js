@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v60";
+const CACHE="cloudentflow-pwa-v61";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -231,5 +231,6 @@ self.addEventListener("notificationclick",event=>{
     })
   );
 });
+
 
 
