@@ -122,7 +122,7 @@
       const actions=row.querySelector('.production-job-actions');
       const frame=row.querySelector('.production-media-cell.frame');
       if(frame&&actions){frame.className='btn studio-frame-action';frame.textContent='Ver frame';actions.append(frame);}
-      if(job?.meta?.character_name&&!row.querySelector('.studio-identity')){const tag=document.createElement('span');tag.className='studio-identity';tag.textContent=job.meta.character_name;row.querySelector('.production-job-state')?.prepend(tag);}
+      if(job?.meta?.character_name&&!row.querySelector('.studio-identity')){const tag=document.createElement('span');tag.className='studio-identity studio-model-tag';tag.dataset.character=modelOf(job);tag.textContent=job.meta.character_name;row.querySelector('.production-job-state')?.prepend(tag);}
       if(job?.status==='ready'&&!row.querySelector('[data-studio-select]')){
         const b=document.createElement('button');b.type='button';b.className='btn studio-select-result';b.dataset.studioSelect=id;b.textContent='Ver no painel';b.setAttribute('aria-pressed',String(selected===id));row.querySelector('.production-job-actions')?.prepend(b);
       }
