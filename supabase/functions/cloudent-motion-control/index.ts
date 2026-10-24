@@ -1,3 +1,4 @@
+import {cancelPipelineMotion} from '../_shared/image-pipeline-cancel.ts';
 import {retryPipelineMotion} from "../_shared/image-pipeline-retry.ts";
 import {MotionStorageSafetyError as MotionStorageError,motionStorageHealth,motionCheckObject,motionStorageRead,motionObjectConfig,reserveMotionStorage,storageRPC,RESERVE_INPUT_MAX} from "./motion-storage-protection.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -256,6 +257,7 @@ Deno.serve(async(req)=>{
       if(error)throw error;
       if(!job||!isMotion(job))return out({ok:false,error:"Motion Control job não encontrado."},404);
       if(job.meta?.image_pipeline_version===2){
+        if(operation==="cancel"){const r=await cancelPipelineMotion(admin,user.id,id);return out(r,r.status||200);}
         if(operation!=="retry"&&operation!=="run")return out({error:"Gerencie esta operação pela aba Face Swap."},409);
         const r=await retryPipelineMotion(admin,user.id,id);
         if(r.ok)await wake(admin);

@@ -1,3 +1,4 @@
+import {cancelPipelineMotion} from './image-pipeline-cancel.ts';
 import {retryPipelineMotion} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
 import {PIPELINE_CHARACTERS} from './image-pipeline-characters.ts';
@@ -110,6 +111,9 @@ export async function imagePipelineApi(d:any){
     const updated=await admin.from('face_swap_jobs').update({status:'waiting',meta:m,next_attempt_at:new Date().toISOString()}).eq('id',j.id).eq('status','cancelled').contains('meta',{stage:'upload'}).select('id');check(updated);
     await wake();return json({ok:true,job_id:j.id});
   }
+  if(req.method==='PATCH'&&action==='image-pipeline-cancel'){
+    const b=await req.json();const r=await cancelPipelineMotion(admin,user.id,String(b.id||''));return json(r,r.status||200);
+  }
   if(req.method==='PATCH'&&action==='image-pipeline-retry'){
     const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);
     if(j.meta.stage==='control_motion'){
@@ -125,7 +129,7 @@ export async function imagePipelineApi(d:any){
   }
   if(req.method==='DELETE'&&action==='image-pipeline-job'){
     const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);
-    if(['waiting','uploading','queued','running'].includes(j.status)||j.meta.dispatch_uncertain||j.meta.stage==='control_motion'&&j.status!=='ready')return json({error:'Aguarde a conclusão da tarefa antes de excluir.'},409);
+    if(['waiting','uploading','queued','running'].includes(j.status)||j.meta.dispatch_uncertain||j.meta.stage==='control_motion'&&!['ready','cancelled'].includes(j.status))return json({error:'Aguarde a conclusão da tarefa antes de excluir.'},409);
     if(!j.production_job_id){
       const paths=[j.frame_storage_path,j.result_storage_path,j.meta.face_swap_result?.path,j.meta.upscale_result?.path,...(j.meta.source==='face_swap_photo'?[]:[j.original_storage_path])].filter(Boolean);
       await removePaths(j.storage_provider,[...new Set(paths)]);
