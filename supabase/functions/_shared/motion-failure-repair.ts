@@ -15,14 +15,15 @@ export async function enrichFailedMotionJobs(admin:any,base:string,apiKey:string
     const {data:claimed,error:claimError}=await admin.from("production_jobs").update({meta:reserved,updated_at:claimTime})
       .eq("id",job.id).eq("status","failed").eq("runninghub_task_id",taskId).eq("updated_at",job.updated_at).eq("last_error",job.last_error).select("id").maybeSingle();
     if(claimError||!claimed)continue;
-    let detail:any=null;
+    let detail:any=null,querySummary:any={state:"unavailable"};
     try{
       const response=await fetch(base+"/task/openapi/outputs",{method:"POST",headers:{Authorization:"Bearer "+apiKey,"Content-Type":"application/json"},body:JSON.stringify({apiKey,taskId}),signal:AbortSignal.timeout(10000)});
       const payload=await response.json();
+      querySummary={http:response.status,code:payload?.code??null,message:String(payload?.msg||payload?.message||"").replace(/https?:\/\/\S+/gi,"[URL]").slice(0,300),data_type:Array.isArray(payload?.data)?"array":typeof payload?.data,data_keys:payload?.data&&typeof payload.data==="object"?Object.keys(payload.data).slice(0,20):[],reason_type:typeof(payload?.data?.failedReason||payload?.failedReason)};
       if(response.ok)detail=extractMotionFailure(payload);
     }catch{}
     checked++;
-    const next={...reserved,...(detail?{runninghub_failure:detail}: {})};
+    const next={...reserved,failure_detail_response:querySummary,...(detail?{runninghub_failure:detail}: {})};
     const values:any={meta:next};if(detail?.message)values.last_error=detail.message;
     const {data:saved,error:saveError}=await admin.from("production_jobs").update(values).eq("id",job.id).eq("status","failed").eq("runninghub_task_id",taskId).contains("meta",{failure_detail_claim:claim}).select("id").maybeSingle();
     if(saveError)throw saveError;
@@ -37,7 +38,8 @@ export async function enrichFailedMotionJobs(admin:any,base:string,apiKey:string
   return {checked,repaired};
 }
 export function extractMotionFailure(payload:any){
-  const reason=payload?.data?.failedReason||payload?.failedReason||payload?.data?.data?.failedReason;
+  const parse=(v:any)=>{if(typeof v==="string")try{return JSON.parse(v)}catch{}return v;};
+  const data=parse(payload?.data),reason=parse(data?.failedReason||payload?.failedReason||data?.data?.failedReason);
   if(Number(payload?.code)!==805||!reason||typeof reason!=="object")return null;
   const scrub=(v:any)=>String(v||"").replace(/https?:\/\/\S+/gi,"[URL]").replace(/(apiKey|token|authorization)\s*[:=]\s*\S+/gi,"$1=[redacted]").slice(0,1200);
   const node=scrub(reason.node_id||reason.nodeId||reason.node_name).slice(0,100),type=scrub(reason.exception_type),message=scrub(reason.exception_message);
