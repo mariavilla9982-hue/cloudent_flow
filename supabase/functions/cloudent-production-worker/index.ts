@@ -1,3 +1,4 @@
+import {enrichFailedMotionJobs} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
 import {motionStorageHealth,motionStorageRead,requireMotionStorage,reserveMotionStorage,commitMotionStorage,putMotionPrimary,MotionStorageSafetyError} from "./motion-storage-protection.ts";
 import {isMotionStatusJob,readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
@@ -571,6 +572,8 @@ Deno.serve(async(req:Request)=>{
       });
     }
 
+    // Bounded metadata-only error reconciliation runs without delaying active captures.
+    EdgeRuntime.waitUntil(enrichFailedMotionJobs(admin,base,apiKey).catch(()=>null));
     await runImagePipeline({admin,workerId,rhJson,prepareInput,concurrency,
       validateStage:async(stage)=>{
         const workflowId=stage==="face_swap"?"2111452526003380225":"2111453733402390530";

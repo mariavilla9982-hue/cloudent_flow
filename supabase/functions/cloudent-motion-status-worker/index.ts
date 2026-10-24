@@ -1,4 +1,4 @@
-import {enrichFailedMotionJobs} from "./motion-failure-repair.ts";
+import {enrichFailedMotionJobs} from "../_shared/motion-failure-repair.ts";
 import {motionStorageHealth} from "./motion-storage-protection.ts";
 import {readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

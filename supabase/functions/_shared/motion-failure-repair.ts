@@ -1,6 +1,6 @@
 // Invoked only behind the existing status-worker secret; never starts or retries tasks.
 export async function enrichFailedMotionJobs(admin:any,base:string,apiKey:string){
-  const {data:jobs,error}=await admin.from("production_jobs").select("id,user_id,status,runninghub_task_id,last_error,meta")
+  const {data:jobs,error}=await admin.from("production_jobs").select("id,user_id,status,runninghub_task_id,last_error,updated_at,meta")
     .eq("status","failed").contains("meta",{workflow_key:"motion_control"}).not("runninghub_task_id","is",null)
     .in("last_error",["工作流运行失败","RunningHub falhou","RunningHub falhou.","Falha do workflow na RunningHub."])
     .order("updated_at",{ascending:true}).limit(5);
@@ -9,6 +9,12 @@ export async function enrichFailedMotionJobs(admin:any,base:string,apiKey:string
   for(const job of jobs||[]){
     const taskId=String(job.runninghub_task_id),m=job.meta||{};
     if(m.failure_detail_task_id===taskId&&(Number(m.failure_detail_attempts||0)>=3||Date.parse(m.failure_detail_next_check||"")>Date.now()))continue;
+    const claim=crypto.randomUUID(),claimTime=new Date().toISOString();
+    const reserved={...m,failure_detail_claim:claim,failure_detail_task_id:taskId,failure_detail_checked_at:claimTime,failure_detail_next_check:new Date(Date.now()+300000).toISOString(),
+      failure_detail_attempts:m.failure_detail_task_id===taskId?Number(m.failure_detail_attempts||0)+1:1};
+    const {data:claimed,error:claimError}=await admin.from("production_jobs").update({meta:reserved,updated_at:claimTime})
+      .eq("id",job.id).eq("status","failed").eq("runninghub_task_id",taskId).eq("updated_at",job.updated_at).eq("last_error",job.last_error).select("id").maybeSingle();
+    if(claimError||!claimed)continue;
     let detail:any=null;
     try{
       const response=await fetch(base+"/task/openapi/outputs",{method:"POST",headers:{Authorization:"Bearer "+apiKey,"Content-Type":"application/json"},body:JSON.stringify({apiKey,taskId}),signal:AbortSignal.timeout(10000)});
@@ -16,11 +22,9 @@ export async function enrichFailedMotionJobs(admin:any,base:string,apiKey:string
       if(response.ok)detail=extractMotionFailure(payload);
     }catch{}
     checked++;
-    const now=new Date().toISOString();
-    const next={...m,failure_detail_task_id:taskId,failure_detail_checked_at:now,failure_detail_next_check:new Date(Date.now()+300000).toISOString(),
-      failure_detail_attempts:m.failure_detail_task_id===taskId?Number(m.failure_detail_attempts||0)+1:1,...(detail?{runninghub_failure:detail}: {})};
+    const next={...reserved,...(detail?{runninghub_failure:detail}: {})};
     const values:any={meta:next};if(detail?.message)values.last_error=detail.message;
-    const {data:saved,error:saveError}=await admin.from("production_jobs").update(values).eq("id",job.id).eq("status","failed").eq("runninghub_task_id",taskId).select("id").maybeSingle();
+    const {data:saved,error:saveError}=await admin.from("production_jobs").update(values).eq("id",job.id).eq("status","failed").eq("runninghub_task_id",taskId).contains("meta",{failure_detail_claim:claim}).select("id").maybeSingle();
     if(saveError)throw saveError;
     if(saved&&detail?.message){
       repaired++;

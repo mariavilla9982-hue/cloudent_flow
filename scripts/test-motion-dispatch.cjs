@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const {stripTypeScriptTypes}=require('node:module');
-const paths={'motion-dispatch.ts':'supabase/functions/cloudent-motion-control-worker/motion-dispatch.ts','motion-worker.ts':'supabase/functions/cloudent-motion-control-worker/index.ts','motion-failure-repair.ts':'supabase/functions/cloudent-motion-status-worker/motion-failure-repair.ts'};
-const read=n=>fs.readFileSync(process.env.MOTION_FIX_ROOT?process.env.MOTION_FIX_ROOT+'/'+n:paths[n],'utf8');
+const paths={'motion-dispatch.ts':'supabase/functions/cloudent-motion-control-worker/motion-dispatch.ts','motion-worker.ts':'supabase/functions/cloudent-motion-control-worker/index.ts','motion-failure-repair.ts':'supabase/functions/_shared/motion-failure-repair.ts'};
+const read=n=>fs.readFileSync(process.env.MOTION_FIX_ROOT?process.env.MOTION_FIX_ROOT+'/'+(n==='motion-failure-repair.ts'?'failure-repair-final.ts':n):paths[n],'utf8');
 const compile=s=>stripTypeScriptTypes(s.replace(/^import .*$/mg,'').replace(/export /g,''),{mode:'transform'});
 const ctx={console,Date,Error,crypto:globalThis.crypto,setTimeout,clearTimeout,TextEncoder,TextDecoder,Uint8Array,Request,Response,Blob,File,FormData,AbortSignal,fetch:()=>{throw Error('real fetch forbidden')}};
 vm.createContext(ctx);vm.runInContext(compile(read('motion-dispatch.ts'))+';globalThis.MCE=MotionCreateError;globalThis.patch=motionDispatchFailurePatch',ctx);
