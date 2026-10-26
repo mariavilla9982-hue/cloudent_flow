@@ -4801,7 +4801,14 @@ async function loadAutomationStatus(full=false){
 }
 async function loadPlatformAccounts(){
   if(!cloudSession){platformAccounts=[];return}
-  try{platformAccounts=await cloudFetch("?resource=platform-accounts")}catch(e){platformAccounts=[]}
+  const session=cloudSession;
+  try{
+    const accounts=await cloudFetch("?resource=platform-accounts");
+    if(cloudSession!==session)return false;
+    if(!Array.isArray(accounts))throw new Error("Lista de contas inválida.");
+    platformAccounts=accounts;
+    return true;
+  }catch(e){return false}
 }
 
 async function loadNotifications(full=false){
@@ -5378,7 +5385,6 @@ function calendarEnsureAccount(){
   const accounts=calendarInstagramAccounts();
   if(!accounts.length)return "";
   if(!accounts.some(a=>calendarAccountId(a)===String(calendarActiveAccountId||""))){
-    if(calendarActiveAccountId)return "";
     calendarActiveAccountId=calendarAccountId(accounts[0]);
     localStorage.setItem(CALENDAR_ACCOUNT_KEY,calendarActiveAccountId);
   }
@@ -5456,7 +5462,14 @@ async function selectCalendarAccount(id,context="calendar"){
 
 async function syncFromBackend(rows=null){
   if(!cloudSession)return;
+  const session=cloudSession;
+  if(!calendarInstagramAccounts().length){
+    const loaded=await loadPlatformAccounts();
+    if(cloudSession!==session)return;
+    if(!loaded)throw new Error("Não foi possível carregar as contas. Atualize a agenda para tentar novamente.");
+  }
   const all=rows||await cloudFetch(queueResourcePath());
+  if(cloudSession!==session)return;
   calendarAllQueueRows=Array.isArray(all)?all:[];
   const q=calendarFilterQueueRows(calendarAllQueueRows);
   state.slots={};
