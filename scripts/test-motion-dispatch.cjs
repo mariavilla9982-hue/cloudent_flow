@@ -21,8 +21,9 @@ assert.match(ctx.extract({code:805,data:{failedReason:{node_id:'367',exception_t
 assert.equal(ctx.extract({code:804,data:{}}),null);
 assert(!ctx.extract({code:805,failedReason:{exception_message:'token=secret https://example.com/private'}}).message.includes('secret'));
 
-async function workerScenario(kind){
+async function workerScenario(kind,ultra=false){
  const state={creates:0,updates:[],row:{id:'job',user_id:'owner',status:'uploading',attempt_count:1,max_attempts:1,storage_provider:'supabase',original_storage_path:'v',frame_storage_path:'f',original_file_name:'v.mp4',frame_file_name:'f.png',meta:{workflow_key:'motion_control',image_pipeline_version:2}}};
+ if(ultra){state.row.meta={workflow_key:'motion_control',execution_ultra_once:{approval_id:'44444444-4444-4444-8444-444444444444',job_id:'job',workflow_id:'2110721194974982146',source_task_id:'2115252978189692929',state:'pending'}};}
  const admin={from(table){let update=null,filter=[],single=false,selection='';const b={
   select(s){selection=s;return b},update(v){update=v;return b},upsert(){return b},eq(k,v){filter.push([k,v]);return b},is(k,v){filter.push([k,v]);return b},in(){return b},contains(){return b},lte(){return b},lt(){return b},not(){return b},limit(){return b},order(){return b},maybeSingle(){single=true;return b},single(){single=true;return b},
   then(resolve,reject){try{
@@ -48,7 +49,7 @@ async function workerScenario(kind){
    if(url.endsWith('/queue/status'))return Response.json({code:0,data:{concurrentLimit:2,runningCount:0,queuedCount:0,totalCurrentTasks:0}});
    if(url.endsWith('/getJsonApiFormat'))return Response.json({code:0,data:{'275':{class_type:'VHS_LoadVideo',inputs:{video:''}},'299':{class_type:'LoadImage',inputs:{image:''}},'285':{class_type:'VHS_VideoCombine',inputs:{}},'384':{class_type:'SaveVideo',inputs:{}}}});
    if(url.endsWith('/upload'))return Response.json({code:0,data:{fileName:'file'}});
-   if(url.endsWith('/create')){state.creates++;if(kind==='timeout')throw Error('timeout');return Response.json(kind==='queue'?{code:421,msg:'TASK_QUEUE_MAXED'}:{code:0,data:{taskId:'task-known',taskStatus:'QUEUED'}});}
+   if(url.endsWith('/create')){const payload=JSON.parse(opt.body);assert.equal(payload.instanceType,ultra?'ultra':'plus');assert.equal(payload.workflowId,'2110721194974982146');assert.equal(payload.nodeInfoList.map(x=>x.nodeId).join(','),'275,299');assert.equal(payload.workflow,undefined);state.creates++;if(kind==='timeout')throw Error('timeout');return Response.json(kind==='queue'?{code:421,msg:'TASK_QUEUE_MAXED'}:{code:0,data:{taskId:'task-known',taskStatus:'QUEUED'}});}
    return Response.json({code:0});
   }};
  vm.createContext(c);
@@ -57,6 +58,7 @@ async function workerScenario(kind){
  assert.equal(response.status,200,await response.text());assert.equal(state.creates,1);
  if(kind==='queue'){assert.equal(state.row.status,'motion_waiting');assert.equal(state.row.attempt_count,0);assert.equal(state.row.meta.pipeline_dispatch_uncertain,false);}
  if(kind==='timeout'){assert.equal(state.row.status,'failed');assert.equal(state.row.meta.pipeline_dispatch_uncertain,true);}
+ if(ultra){assert.equal(state.row.meta.execution_instance_vram_gb,84);if(['poll-error','attach-once'].includes(kind)){assert.equal(state.row.meta.execution_ultra_once.state,'used');assert.equal(state.row.meta.execution_ultra_once.task_id,'task-known');}else assert.equal(state.row.meta.execution_ultra_once.state,'pending');}
  if(kind==='poll-error'||kind==='attach-once'){assert.equal(state.row.runninghub_task_id,'task-known');assert.equal(state.row.status,'queued');assert.equal(state.row.last_error,null);}
 }
-(async()=>{for(const kind of ['queue','timeout','poll-error','attach-once'])await workerScenario(kind);console.log('PASS dispatch: explicit queue rejection, ambiguous response, known receipt, attach retry and poll error; failure details and redaction');})().catch(e=>{console.error(e);process.exit(1)});
+(async()=>{for(const ultra of [false,true])for(const kind of ['queue','timeout','poll-error','attach-once'])await workerScenario(kind,ultra);console.log('PASS dispatch: explicit queue rejection, ambiguous response, known receipt, attach retry and poll error; failure details and redaction');})().catch(e=>{console.error(e);process.exit(1)});

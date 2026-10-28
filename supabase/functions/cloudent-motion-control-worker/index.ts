@@ -21,6 +21,15 @@ async function decrypt(cipher:string,iv:string,master:string){
 function motionExecutionOptions(job:any,cfg:any){
   if(job?.meta?.workflow_key!=="motion_control")throw new Error("Motion Control: workflow do job inválido.");
   if(cfg?.executionInstanceType!=="plus")throw new Error("Motion Control: configuração de GPU 48 GB ausente. Execução bloqueada.");
+  const grant=job.meta.execution_ultra_once;
+  if(grant){
+    if(grant.state!=="pending"||grant.job_id!==job.id||grant.workflow_id!==String(cfg.workflowId)||
+      !/^[0-9a-f-]{36}$/i.test(String(grant.approval_id||""))||!/^\d+$/.test(String(grant.source_task_id||""))||
+      job.runninghub_task_id||Number(job.attempt_count)!==1||Number(job.max_attempts)!==1)
+      throw new Error("GPU 84 GB: autorização única ausente, consumida ou incompatível. Nenhuma geração enviada.");
+    return {instanceType:"ultra"};
+  }
+  if(job.meta.execution_instance_type==="ultra")throw new Error("GPU 84 GB exige autorização única para este envio.");
   return {instanceType:"plus"};
 }
 function cleanBase(v:any){
@@ -216,14 +225,16 @@ Deno.serve(async(req:Request)=>{
       let acceptedTaskId:string|null=null;
       try{
         if(job.runninghub_task_id)continue;
-        if(job.meta?.image_pipeline_version===2&&job.meta.pipeline_dispatch_intent)throw new Error("Criação Motion incerta; reconcilie a tarefa antes de repetir.");
+        if((job.meta?.image_pipeline_version===2||job.meta?.execution_ultra_once)&&job.meta.pipeline_dispatch_intent)throw new Error("Criação Motion incerta; reconcilie a tarefa antes de repetir.");
         const executionOptions=motionExecutionOptions(job,cfg);
+        const ultra=executionOptions.instanceType==="ultra";
+        const hardwareMeta={...(job.meta||{}),execution_instance_type:executionOptions.instanceType,execution_instance_used:executionOptions.instanceType,execution_instance_vram_gb:ultra?84:48,execution_instance_policy:ultra?"motion_ultra_once":"motion_default_48gb",execution_instance_authorized:ultra,workflow_id:String(cfg.workflowId)};
         const {error:hardwareError}=await admin.from("production_jobs").update({
-          meta:{...(job.meta||{}),execution_instance_type:"plus",execution_instance_used:"plus",execution_instance_vram_gb:48,execution_instance_policy:"motion_default_48gb",execution_instance_authorized:false,workflow_id:String(cfg.workflowId)},
+          meta:hardwareMeta,
           updated_at:new Date().toISOString()
         }).eq("id",job.id).eq("locked_by",workerId);
         if(hardwareError)throw hardwareError;
-        job.meta={...(job.meta||{}),execution_instance_type:"plus",execution_instance_used:"plus",execution_instance_vram_gb:48,execution_instance_policy:"motion_default_48gb",execution_instance_authorized:false,workflow_id:String(cfg.workflowId)};
+        job.meta=hardwareMeta;
         const videoInput=await prepareInput(admin,base,apiKey,job,job.original_storage_path,job.original_file_name,job.original_mime_type||"video/mp4");
         await admin.from("production_jobs").update({progress:15,runninghub_video_file:videoInput,updated_at:new Date().toISOString()}).eq("id",job.id);
         const frameInput=await prepareInput(admin,base,apiKey,job,job.frame_storage_path,job.frame_file_name,job.frame_mime_type||"image/jpeg");
@@ -234,7 +245,7 @@ Deno.serve(async(req:Request)=>{
         if(existingError)throw existingError;
         if(existingTask?.runninghub_task_id)continue;
         await requireMotionStorage(admin);
-        if(job.meta?.image_pipeline_version===2){
+        if(job.meta?.image_pipeline_version===2||ultra){
           const intent={...(job.meta||{}),pipeline_dispatch_intent:crypto.randomUUID(),pipeline_dispatch_uncertain:true};
           const {data:reserved,error}=await admin.from("production_jobs").update({meta:intent}).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id");
           if(error||!reserved?.length)throw new Error("Reserva de execução Motion indisponível.");
@@ -244,9 +255,10 @@ Deno.serve(async(req:Request)=>{
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new MotionCreateError(created);
         const taskId=String(created.data.taskId);
         acceptedTaskId=taskId;
+        if(ultra)job.meta={...job.meta,execution_ultra_once:{...job.meta.execution_ultra_once,state:"used",task_id:taskId,consumed_at:new Date().toISOString()},pipeline_dispatch_uncertain:false};
         console.info(JSON.stringify({event:"motion_create_receipt",job_id:job.id,task_id:taskId,dispatch_intent:job.meta?.pipeline_dispatch_intent||null}));
         const taskStatus=String(created.data.taskStatus||"QUEUED").toUpperCase();
-        const {data:attached,error:attachError}=await admin.from("production_jobs").update({status:"queued",progress:38,started_at:null,runninghub_task_id:taskId,locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()}).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id").maybeSingle();
+        const {data:attached,error:attachError}=await admin.from("production_jobs").update({status:"queued",progress:38,started_at:null,runninghub_task_id:taskId,locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString(),...(ultra?{meta:job.meta}:{})}).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id").maybeSingle();
         if(attachError||!attached)throw attachError||new Error("Não foi possível vincular a tarefa criada.");
         if(job.meta?.image_pipeline_version===2){
           const {data:fresh}=await admin.from("production_jobs").select("meta").eq("id",job.id).single();
