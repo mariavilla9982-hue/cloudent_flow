@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {stripTypeScriptTypes} from 'node:module';
 import {createHash,webcrypto} from 'node:crypto';
+import {PIPELINE_VIDEO_WORKFLOWS,pipelineVideoWorkflow} from '../supabase/functions/_shared/image-pipeline-workflows.ts';
 import {PIPELINE_CHARACTERS} from '../supabase/functions/_shared/image-pipeline-characters.ts';
 const apiSource=fs.readFileSync('supabase/functions/_shared/image-pipeline-api.ts','utf8');
-const sandbox={PIPELINE_CHARACTERS,ROOT_IMAGE_B64:'',ROOT_IMAGE_SHA:'legacy',atob,Request,Response,URL,AbortSignal,Uint8Array,crypto:webcrypto,retryPipelineMotion:async()=>({ok:true})};
+const sandbox={PIPELINE_VIDEO_WORKFLOWS,pipelineVideoWorkflow,PIPELINE_CHARACTERS,ROOT_IMAGE_B64:'',ROOT_IMAGE_SHA:'legacy',atob,Request,Response,URL,AbortSignal,Uint8Array,crypto:webcrypto,retryPipelineMotion:async()=>({ok:true})};
 vm.createContext(sandbox);vm.runInContext(stripTypeScriptTypes(apiSource).replace(/^import .*;\n/gm,'').replace(/export /g,'')+'\nthis.api=imagePipelineApi;',sandbox);
 const rows=[],uploads=[];
 const admin={storage:{from(){return {upload:async(path,bytes,opts)=>{assert.equal(opts.upsert,false);uploads.push({path,hash:createHash('sha256').update(bytes).digest('hex')});return {error:null};}}}},from(){let filters=[],mode='select',value;const q={select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},contains(k,v){filters.push(r=>Object.entries(v).every(([x,y])=>r[k]?.[x]===y));return q},maybeSingle(){return q},insert(v){mode='insert';value=v;return q},then(resolve){if(mode==='insert'){rows.push(structuredClone(value));return Promise.resolve({data:value}).then(resolve);}return Promise.resolve({data:rows.find(r=>filters.every(f=>f(r)))||null}).then(resolve);}};return q;}};
@@ -26,6 +27,22 @@ assert.equal(uploads.length,3,'completed input is never uploaded again');
 const legacy={...structuredClone(rows[0]),id:'20000000-0000-4000-8000-000000000000',meta:{pipeline_version:2,source:'face_swap_natural',stage:'upscale',character:{sha256:'legacy'}}};rows.push(legacy);
 assert.equal((await api({source:'face_swap_natural',job_id:legacy.id,original,reference})).body.registered,true);assert.equal(legacy.meta.character.sha256,'legacy');
 const list=await api(null,'image-pipeline-characters');assert.equal(list.body.characters.length,3);assert(list.body.characters.every(c=>c.preview_url.startsWith('data:image/')));
+// A photo uses the saved sheet and uploads only the target image.
+for(const [i,c] of PIPELINE_CHARACTERS.slice(0,2).entries()){
+ const id='30000000-0000-4000-8000-00000000000'+i;
+ const result=await api({source:'face_swap_photo',job_id:id,character_id:c.id,reference});
+ assert.equal(result.status,200);assert.equal(result.body.model_selected,true);assert.equal(result.body.original,undefined);
+ const row=rows.find(x=>x.id===id);assert.equal(row.meta.character.sha256,c.sha256);assert.equal(row.original_storage_path,row.meta.character.storage_path);assert.equal(row.frame_file_name,reference.name);
+ assert.equal((await api({source:'face_swap_photo',job_id:id,character_id:i?'jujuh':'sahry_japah',reference})).status,409);
+}
+assert.equal((await api({source:'face_swap_photo',job_id:'40000000-0000-4000-8000-000000000000',character_id:'sahry_gravida',reference})).status,400);
+assert.equal((await api({source:'face_swap_photo',job_id:'40000000-0000-4000-8000-000000000000',reference})).status,400);
+const standardId='50000000-0000-4000-8000-000000000000';
+assert.equal((await api({source:'face_swap_natural',job_id:standardId,character_id:'jujuh',workflow_key:'unknown',original,reference})).status,400);
+assert.equal((await api({source:'face_swap_natural',job_id:standardId,character_id:'jujuh',workflow_key:'standard',original,reference,video_workflow:{workflowId:'attacker'}})).status,200);
+assert.equal(rows.find(x=>x.id===standardId).meta.video_workflow.workflowId,'2100995504908824578');
+assert.equal((await api({source:'face_swap_natural',job_id:standardId,character_id:'jujuh',workflow_key:'motion_control',original,reference})).status,409);
+console.log('PASS server: photo saved sheets/target-only, invalid selections, immutable workflow and server-owned IDs');
 console.log('PASS server: three exact sheets, required selection, immutable snapshots, server-owned names/tags, replay and legacy jobs');
 
 const status={textContent:''},error={textContent:''},controls=[{},{}],form={querySelector:s=>s==='[data-pipeline-status]'?status:s==='[data-pipeline-error]'?error:{},querySelectorAll:()=>controls,reset(){}};

@@ -1,3 +1,4 @@
+import {pipelineVideoWorkflow} from '../_shared/image-pipeline-workflows.ts';
 import {enrichFailedMotionJobs,enrichPreviousMotionFailure} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
 import {motionStorageHealth,motionStorageRead,requireMotionStorage,reserveMotionStorage,commitMotionStorage,putMotionPrimary,MotionStorageSafetyError} from "./motion-storage-protection.ts";
@@ -970,6 +971,13 @@ Deno.serve(async(req:Request)=>{
       if(ce)throw ce;
       for(const job of claimed||[]){
         try{
+          const selected=job.meta?.image_pipeline_version===2?pipelineVideoWorkflow(job.meta?.video_workflow?.key||job.meta?.workflow_key||'standard'):null;
+          if(selected&&selected.key!=='standard')throw new Error('Executor de vídeo incompatível.');
+          if(selected){
+            const response=await rhJson('/api/openapi/getJsonApiFormat',{workflowId:selected.workflowId});
+            let graph=response.data;if(typeof graph==='string')graph=JSON.parse(graph);if(graph?.prompt)graph=typeof graph.prompt==='string'?JSON.parse(graph.prompt):graph.prompt;
+            if(Number(response.code)!==0||graph?.[selected.videoNodeId]?.class_type!=='VHS_LoadVideo'||graph?.[selected.frameNodeId]?.class_type!=='LoadImage')throw new Error('Workflow de vídeo incompatível com as entradas salvas.');
+          }
           const videoInput=await prepareInput(job.original_storage_path,job.original_file_name,job.original_mime_type||"video/mp4",job.storage_provider||"supabase");
           await admin.from("production_jobs").update({progress:15,runninghub_video_file:videoInput,updated_at:new Date().toISOString()}).eq("id",job.id);
           const frameInput=await prepareInput(job.frame_storage_path,job.frame_file_name,job.frame_mime_type||"image/jpeg",job.storage_provider||"supabase");
@@ -981,10 +989,10 @@ Deno.serve(async(req:Request)=>{
           }
 
           const created=await rhJson("/task/openapi/create",{
-            workflowId,
+            workflowId:selected?.workflowId||workflowId,
             nodeInfoList:[
-              {nodeId:videoNodeId,fieldName:videoFieldName,fieldValue:videoInput},
-              {nodeId:frameNodeId,fieldName:frameFieldName,fieldValue:frameInput}
+              {nodeId:selected?.videoNodeId||videoNodeId,fieldName:selected?.videoFieldName||videoFieldName,fieldValue:videoInput},
+              {nodeId:selected?.frameNodeId||frameNodeId,fieldName:selected?.frameFieldName||frameFieldName,fieldValue:frameInput}
             ],
             addMetadata:true
           });

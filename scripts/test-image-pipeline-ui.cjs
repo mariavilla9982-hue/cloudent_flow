@@ -6,7 +6,7 @@ const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_
  await page.evaluate(()=>{window.currentPage='faceSwapPhoto';window.cloudSession={user:{id:'owner'}};window.calls=[];window.cloudFetch=async(path,opts)=>{calls.push(path);if(path.includes('resource=image-pipeline-result'))return {url:'https://example.test/a.png',type:'image'};if(path.includes('resource=image-pipeline'))return {jobs:[{id:'a',original_file_name:'modelo.jpg',status:'ready',meta:{source:'face_swap_photo',pipeline_status:'COMPLETED'}}]};return {ok:true};};});
  await page.addScriptTag({content:fs.readFileSync('image-pipeline-ui.js','utf8')});
  await page.waitForFunction(()=>document.querySelector('#faceSwapPhoto [data-open]'));
- assert.equal(await page.locator('#faceSwapPhoto input[type=file]').count(),2);
+ assert.equal(await page.locator('#faceSwapPhoto input[type=file]').count(),1);
  await page.locator('#faceSwapPhoto [data-open]').click();assert(await page.locator('#faceSwapPhoto [data-result] img').count());
  await page.locator('#faceSwapPhoto [data-refresh]').click();assert(await page.locator('#faceSwapPhoto [data-result] img').count(),'poll must preserve opened result');
  await page.evaluate(()=>{currentPage='upscale';ImagePipeline.render('upscale')});assert.equal(await page.locator('#upscale input[type=file]').count(),1);

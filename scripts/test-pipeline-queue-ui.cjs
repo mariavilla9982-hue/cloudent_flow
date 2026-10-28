@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const file=fs.readFileSync('image-pipeline-ui.js','utf8');
 let rows=[];const list={dataset:{},innerHTML:'',querySelector:()=>null};
-const root={dataset:{pipelineMounted:'10'},querySelector:()=>null};
+const root={dataset:{pipelineMounted:'11'},querySelector:()=>null};
 const context={window:{},cloudSession:{user:{id:'owner'}},currentPage:'faceSwap',console,
  document:{createElement:()=>({textContent:''}),head:{appendChild(){}},getElementById:()=>root,querySelector:selector=>selector.includes('data-pipeline-jobs')?list:null},
  cloudFetch:async()=>({jobs:rows}),setInterval:()=>0,URL,Date};

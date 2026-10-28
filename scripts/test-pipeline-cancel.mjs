@@ -3,7 +3,7 @@ const read=p=>fs.readFileSync(p,'utf8');
 const helper=read('supabase/functions/_shared/image-pipeline-cancel.ts'),motion=read('supabase/functions/cloudent-motion-control/index.ts'),api=read('supabase/functions/_shared/image-pipeline-api.ts'),ui=read('image-pipeline-ui.js');
 for(const source of [helper,motion,api])new vm.Script(stripTypeScriptTypes(source,{mode:'transform'}).replace(/^import .*;\s*$/gm,'').replaceAll('export ',''));
 new vm.Script(ui);new vm.Script(read('sw.js'));
-const c=vm.createContext({});vm.runInContext(stripTypeScriptTypes(helper,{mode:'transform'}).replaceAll('export ','')+';globalThis.cancel=cancelPipelineMotion',c);
+const c=vm.createContext({workflowLabel:()=> 'Motion Control V7'});vm.runInContext(stripTypeScriptTypes(helper,{mode:'transform'}).replaceAll('export ','')+';globalThis.cancel=cancelPipelineMotion',c);
 let called=0;const admin={rpc:async(name,args)=>{called++;assert.equal(name,'cancel_waiting_pipeline_motion');assert.equal(args.p_user_id,'owner');return {data:{ok:true,cancelled:true}}}};
 assert.equal((await c.cancel(admin,'owner','bad')).status,400);assert.equal(called,0);
 assert.equal((await c.cancel(admin,'owner','00000000-0000-4000-8000-000000000001')).cancelled,true);

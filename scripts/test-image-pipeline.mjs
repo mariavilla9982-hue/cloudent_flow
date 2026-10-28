@@ -80,3 +80,10 @@ assert.equal(noSlot.rows[0].meta.stage,'upscale');
 assert.equal(noSlot.rows[0].status,'waiting');
 assert(noSlot.rows[0].meta.face_swap_result);
 console.log('PASS: same-invocation Face→Upscale handoff, one dispatch only, no capacity bypass and saved Face retained when full');
+
+const standard=harness([{...job('standard','face_swap_natural'),meta:{...job('standard','face_swap_natural').meta,video_workflow:{key:'standard'},character_id:'jujuh',character_name:'Jujuh',tags:['Jujuh']}}]);
+let motionWakes=0;standard.deps.wakeMotion=async()=>motionWakes++;
+for(let i=0;i<4;i++)await runImagePipeline(standard.deps);
+assert.equal(standard.production.length,1);assert.equal(standard.production[0].status,'waiting');assert.equal(standard.production[0].meta.workflow_key,'standard');assert.equal(standard.production[0].meta.video_workflow.workflowId,'2100995504908824578');assert.equal(standard.production[0].frame_storage_path,'standard/upscale');assert.equal(standard.production[0].original_storage_path,'standard/video');assert.equal(motionWakes,0);assert.equal(standard.production[0].meta.character_id,'jujuh');
+standard.production[0].status='ready';standard.production[0].result_video_id='video';await runImagePipeline(standard.deps);assert.equal(standard.rows[0].status,'ready');assert.equal(standard.production.length,1);
+console.log('PASS: chosen standard workflow handoff, saved Upscale frame, original video, character TAG, no Motion dispatch, completion reconciliation');

@@ -1,5 +1,13 @@
 # Image pipeline v2 — 2026-10-18
 
+## Character and video workflow choices — 2026-10-27
+
+The photo form now selects one saved sheet: Jujuh or Sahry Japah. Only the target/reference image is uploaded by the browser. The API resolves the exact saved sheet server-side and fixes its identity/hash on the job; deleting an individual photo result preserves the shared sheet. Photo output remains Face Swap → Upscale → image.
+
+Each video upload independently selects Motion Control V7 or Vídeo 7 minutos after Face Swap → Upscale. The API accepts only the two known workflow keys, snapshots the published workflow mapping and rejects changes on the same upload. The handoff reuses the original video and saved upscaled image, preserving character tags. Existing jobs default to their previous Motion V7 behavior. The UI keeps workflow selection fixed during partial-upload retries and displays the selected workflow in queue cards.
+
+This release completes the frontend for the already active API v23 and production worker v14 and synchronizes their relevant source changes. UI asset v13 and service-worker cache v64 refresh cached pages. No database migration, paid generation or existing job reset is part of this release. DOM tests cover both exact sheets, reference-only upload, retained photo selection and separate video workflow choices; API/worker mocks cover immutable selection and both handoffs. A real paid generation and visual Chromium verification have not been run (the browser binary download failed).
+
 Three views share face_swap_jobs and the current RunningHub executor:
 
 - Face Swap Natural: video + automatic browser first-frame extraction, immutable model snapshot, Face Swap → Upscale → existing Motion V7 worker.

@@ -1,4 +1,5 @@
 // New jobs only. Legacy face-swap jobs keep their original executor.
+import {pipelineVideoWorkflow} from './image-pipeline-workflows.ts';
 export const FACE_WORKFLOW='2111452526003380225';
 export const UPSCALE_WORKFLOW='2111453733402390530';
 export const isPipeline=(j:any)=>j?.meta?.pipeline_version===2;
@@ -101,18 +102,20 @@ export async function runImagePipeline(d:any){
         if(!handoffs.has(j.id)){handoffs.add(j.id);rows.push({...j,locked_by:null,locked_at:null});}
 
       }else if(m.source==='face_swap_natural'){
-        // Reuse exactly the production_jobs contract consumed by the existing Motion V7 worker.
+        const workflow=pipelineVideoWorkflow(m.video_workflow?.key||'motion_control');
+        const motion=workflow.key==='motion_control';
+        // Route to the existing executor selected for this individual upload.
         const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
         if(existing&&existing.user_id!==j.user_id)throw new Error('Motion owner mismatch');
         if(!existing){
           check(await admin.from('production_jobs').insert({id:j.id,user_id:j.user_id,storage_provider:j.storage_provider,
             original_storage_path:j.original_storage_path,original_file_name:j.original_file_name,original_mime_type:j.original_mime_type,original_size_bytes:j.original_size_bytes,
             frame_storage_path:saved.path,frame_file_name:saved.name,frame_mime_type:saved.mime,frame_size_bytes:saved.size,
-            status:'motion_waiting',progress:0,max_attempts:1,attempt_count:0,
-            meta:{workflow_key:'motion_control',workflow_label:'Motion Control V7',workflow_nodes:{video:'275',frame:'299',output:'285'},manual_run:true,auto_chained:true,image_pipeline_version:2,face_swap_job_id:j.id,...(m.character_id?{character_id:m.character_id,character_name:m.character_name,tags:m.tags,character:m.character}:{})}}));
+            status:motion?'motion_waiting':'waiting',progress:0,max_attempts:1,attempt_count:0,
+            meta:{workflow_key:workflow.key,workflow_label:workflow.label,video_workflow:workflow,workflow_nodes:{video:workflow.videoNodeId,frame:workflow.frameNodeId,...(workflow.outputNodeId?{output:workflow.outputNodeId}:{})},manual_run:true,auto_chained:true,image_pipeline_version:2,face_swap_job_id:j.id,...(m.character_id?{character_id:m.character_id,character_name:m.character_name,tags:m.tags,character:m.character}:{})}}));
         }
         await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_WAITING'},last_error:null});
-        await d.wakeMotion();
+        if(motion)await d.wakeMotion();
       }else{
         await patch(j,{status:'ready',result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED'},last_error:null});
       }
