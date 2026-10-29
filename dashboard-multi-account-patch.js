@@ -1,226 +1,191 @@
 (()=>{
-  if(window.__cfDashboardMultiAccountPatchV1)return;
-  window.__cfDashboardMultiAccountPatchV1=true;
+  if(window.__cfDashboardOverviewV2)return;
+  window.__cfDashboardOverviewV2=true;
 
-  const metricCache=new Map();
-  let metricsLoading=false;
-
-  const accountId=a=>String(a?.id||a?.platform_account_id||"");
-  const accountName=a=>String(a?.account_label||a?.config?.username||a?.username||"Instagram").replace(/^@/,"");
-  const activeInstagramAccounts=()=>Array.isArray(platformAccounts)
-    ? platformAccounts.filter(a=>String(a?.platform||"").toLowerCase()==="instagram"&&a?.enabled!==false)
-    : [];
-  const rowAccountId=row=>String(row?.platformAccountId||row?.platform_account_id||"");
-  const accountForRow=row=>activeInstagramAccounts().find(a=>accountId(a)===rowAccountId(row))||null;
-  const safe=value=>typeof esc==="function"?esc(value):String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
-  const metricRowsForPeriod=rows=>dashboardPeriod==="all"?rows:rows.filter(m=>dashboardDateInPeriod(m.timestamp,dashboardPeriod));
-  const sumMetrics=rows=>rows.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0)}),{views:0,reach:0});
-
-  function ageLabel(value){
-    if(!value)return "Conectada · aguardando métricas";
-    const ms=Date.now()-new Date(value).getTime();
-    if(!Number.isFinite(ms)||ms<0)return "Métricas sincronizadas";
-    const min=Math.floor(ms/60000);
-    if(min<1)return "Métricas atualizadas agora";
-    if(min<60)return "Métricas atualizadas há "+min+" min";
-    const h=Math.floor(min/60);
-    if(h<24)return "Métricas atualizadas há "+h+" h";
-    return "Métricas atualizadas há "+Math.floor(h/24)+" d";
+  // Presentation only: these are the two existing account identities, not new accounts.
+  const identities=[
+    {id:'c5f2fdd6-00e8-4ca7-adb8-281aa922ad0a',name:'Jujuh',username:'jujuhmartinss'},
+    {id:'7160f95b-a23c-4f28-a5b8-9502a856e091',name:'Sahry Japah',username:'sahryjapah'}
+  ];
+  const mediaCache=new Map(),followersCache=new Map(),pending=new Map();
+  const periods={'1':'Hoje','7':'Últimos 7 dias','30':'Últimos 30 dias','90':'Últimos 90 dias'};
+  let period='30',viewer='',generation=0,refreshing=false;
+  const safe=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const number=value=>value===null||value===undefined||value===''||typeof value==='boolean'?null:(Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null);
+  const format=value=>value===null?'—':value.toLocaleString('pt-BR');
+  const sessionKey=()=>cloudSession?.user?.id||cloudSession?.access_token||'';
+  const permitted=()=>!!cloudSession&&typeof cloudAccess!=='undefined'&&cloudAccess?.role==='admin';
+  function resetViewer(){
+    const key=permitted()?sessionKey():'';
+    if(key===viewer)return;
+    viewer=key;generation++;mediaCache.clear();followersCache.clear();pending.clear();refreshing=false;period='30';
   }
-
-  async function loadAccountMetric(account,force=false){
-    const id=accountId(account);
-    if(!id)return;
-    const current=metricCache.get(id);
-    if(!force&&current&&Date.now()-current.loadedAt<60000)return;
-    try{
-      const suffix="&account_id="+encodeURIComponent(id);
-      if(force){
-        await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=1"+suffix,{method:"POST"});
-      }
-      const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=120"+suffix,{method:"GET"});
-      metricCache.set(id,{media:Array.isArray(stored?.media)?stored.media:[],last:stored?.last_collected_at||null,error:"",loadedAt:Date.now()});
-    }catch(error){
-      metricCache.set(id,{media:current?.media||[],last:current?.last||null,error:error?.message||"metrics_unavailable",loadedAt:Date.now()});
-    }
-  }
-
-  async function loadDashboardAccountMetrics(force=false){
-    if(metricsLoading)return;
-    metricsLoading=true;
-    try{
-      await Promise.allSettled(activeInstagramAccounts().map(a=>loadAccountMetric(a,force)));
-    }finally{
-      metricsLoading=false;
-    }
-  }
-
-  async function patchedLoadDashboardScheduleRows(){
-    if(!cloudSession)return;
-    try{
-      const rows=await cloudFetch("?resource=queue&compact=1&from="+encodeURIComponent("2020-01-01T00:00:00.000Z"));
-      dashboardScheduleRows=(Array.isArray(rows)?rows:[]).map(row=>{
-        const v=row.videos||{};
-        return {
-          scheduleId:row.id,
-          videoId:row.video_id,
-          platformAccountId:row.platform_account_id||null,
-          name:v.file_name||"Vídeo",
-          scheduledAt:row.scheduled_at,
-          publishedAt:row.published_at||null,
-          status:row.status||"scheduled",
-          smartMode:row.smart_mode||"manual",
-          platform:row.platform||"instagram"
-        };
-      });
-    }catch(error){
-      console.warn("Dashboard history unavailable:",error);
-    }
-  }
-
-  async function refreshDashboardMultiAccount(force=false){
-    if(!cloudSession)return;
-    await Promise.allSettled([
-      typeof loadPlatformAccounts==="function"?loadPlatformAccounts():Promise.resolve(),
-      patchedLoadDashboardScheduleRows()
-    ]);
-    await loadDashboardAccountMetrics(force);
-    if(currentPage==="overview")overview();
-  }
-  window.refreshDashboardMultiAccount=refreshDashboardMultiAccount;
-
-  try{loadDashboardScheduleRows=patchedLoadDashboardScheduleRows}catch{}
-
-  function accountCard(account,future){
-    const id=accountId(account);
-    const name=accountName(account);
-    const displayName=dashboardHideNames?"••••••••":"@"+name;
-    const photo=String(account?.config?.profile_picture_url||account?.profile_picture_url||"").trim();
-    const avatar=photo
-      ?'<img src="'+safe(photo)+'" alt="" referrerpolicy="no-referrer">'
-      :'<span>'+safe(name.slice(0,1).toUpperCase()||"I")+'</span>';
-    const cached=metricCache.get(id);
-    const fallback=id===String(metricsAccountId||"")?liveInstagramMetrics:[];
-    const media=metricRowsForPeriod(cached?.media?.length?cached.media:(Array.isArray(fallback)?fallback:[]));
-    const totals=sumMetrics(media);
-    const queue=future.filter(x=>rowAccountId(x)===id).length;
-    const status=account?.enabled!==false?"Conta conectada · operação ativa":"Conta desativada";
-    const live=cached?.error?(cached?.media?.length?ageLabel(cached.last):"Métricas indisponíveis"):ageLabel(cached?.last);
-    return `<div class="sr-account-card cf-dashboard-account-card">
-      <div class="sr-account-icon cf-dashboard-avatar">${avatar}</div>
-      <div><b>${safe(displayName)}</b><span>${safe(status)}</span><small class="sr-live-label">${safe(live)}</small></div>
-      <div class="sr-account-metrics">
-        <span>Views <b>${totals.views.toLocaleString("pt-BR")}</b></span>
-        <span>Alcance <b>${totals.reach.toLocaleString("pt-BR")}</b></span>
-        <span>Fila <b>${queue}</b></span>
-      </div>
-    </div>`;
-  }
-
-  function patchedOverview(){
-    if(cloudLoading){$("#overview").innerHTML=loadingShell("Carregando sua operação");return}
-    const scheduled=dashboardScheduleRows.length?dashboardScheduleRows:allScheduled();
-    const filtered=scheduled.filter(x=>{
-      const status=getStatus(x);
-      const reference=status==="publicado"?(x.publishedAt||x.scheduledAt):x.scheduledAt;
-      return dashboardDateInPeriod(reference,dashboardPeriod);
+  function accounts(){
+    if(!permitted()||!Array.isArray(platformAccounts))return [];
+    return identities.flatMap(identity=>{
+      const account=platformAccounts.find(a=>String(a.id)===identity.id&&a.platform==='instagram'&&a.enabled!==false);
+      return account?[{...account,displayName:identity.name}]:[];
     });
-    const now=Date.now();
-    const future=scheduled.filter(x=>
-      new Date(x.scheduledAt).getTime()>=now &&
-      !["publicado","erro","cancelado"].includes(getStatus(x)) &&
-      dashboardDateInPeriod(x.scheduledAt,dashboardPeriod)
-    );
-    const counts={
-      total:filtered.length,
-      scheduled:filtered.filter(x=>["agendado","fila","publicando"].includes(getStatus(x))).length,
-      published:filtered.filter(x=>getStatus(x)==="publicado").length,
-      error:filtered.filter(x=>getStatus(x)==="erro").length
-    };
-    const accounts=activeInstagramAccounts();
-    const greetingName=dashboardHideNames||accounts.length!==1?"Cloudent":accountName(accounts[0]).split(/[._]/)[0];
-    const today=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase();
-    const next=future.slice(0,8);
-    const periodCaption=dashboardPeriodCaption(dashboardPeriod);
-    const periodNoun=dashboardPeriod==="today"?"hoje":dashboardPeriod==="7d"?"nos próximos 7 dias":dashboardPeriod==="month"?"neste mês":dashboardPeriod==="year"?"neste ano":"no histórico";
-    const cardLabels={
-      total:dashboardPeriod==="today"?"PROGRAMADOS HOJE":"POSTS "+periodNoun.toUpperCase(),
-      scheduled:dashboardPeriod==="today"?"A PUBLICAR HOJE":"A PUBLICAR",
-      published:dashboardPeriod==="today"?"PUBLICADOS HOJE":"PUBLICADOS",
-      error:dashboardPeriod==="today"?"ERROS HOJE":"ERROS"
-    };
-    const cards=accounts.length
-      ?accounts.map(a=>accountCard(a,future)).join("")
-      :`<div class="sr-account-card cf-dashboard-account-card"><div class="sr-account-icon">◎</div><div><b>Instagram</b><span>Nenhuma conta conectada</span><small class="sr-live-label">Conecte uma conta nas configurações</small></div><div class="sr-account-metrics"><span>Views <b>0</b></span><span>Alcance <b>0</b></span><span>Fila <b>${future.length}</b></span></div></div>`;
-
-    $("#overview").innerHTML=`
-      <div class="sr-dashboard-top">
-        <div class="sr-greeting">Bom dia, <b>${safe(greetingName)}</b><small>${today}</small></div>
-      </div>
-
-      <div class="sr-dashboard-head">
-        <div><h2>Dashboard</h2><p>Visão geral das postagens</p></div>
-        <div class="sr-head-actions">
-          <button onclick="refreshDashboardMultiAccount(true)">↻ Atualizar ao vivo</button>
-          <button onclick="showPage('settings')">Ajuda</button>
-        </div>
-      </div>
-
-      <div class="sr-periods">
-        <button class="${dashboardPeriod==="today"?"active":""}" onclick="setDashboardPeriod('today')">Hoje</button>
-        <button class="${dashboardPeriod==="7d"?"active":""}" onclick="setDashboardPeriod('7d')">Próximos 7 dias</button>
-        <button class="${dashboardPeriod==="month"?"active":""}" onclick="setDashboardPeriod('month')">Mês</button>
-        <button class="${dashboardPeriod==="year"?"active":""}" onclick="setDashboardPeriod('year')">Ano</button>
-        <button class="${dashboardPeriod==="all"?"active":""}" onclick="setDashboardPeriod('all')">Tudo</button>
-        <span>${safe(periodCaption)}</span>
-      </div>
-
-      <div class="sr-stat-grid">
-        <div class="sr-stat"><span>${cardLabels.total}</span><strong>${counts.total}</strong><small>${counts.scheduled} restantes · ${counts.published} publicados</small></div>
-        <div class="sr-stat blue"><span>${cardLabels.scheduled}</span><strong>${counts.scheduled}</strong><small>pendentes no período</small></div>
-        <div class="sr-stat green"><span>${cardLabels.published}</span><strong>${counts.published}</strong><small>publicações concluídas</small></div>
-        <div class="sr-stat red"><span>${cardLabels.error}</span><strong>${counts.error}</strong><small>falhas de publicação</small></div>
-      </div>
-
-      <div class="sr-operation">
-        <div class="sr-section-head">
-          <div><span>OPERAÇÃO POR CONTA</span><p>${accounts.length} conta${accounts.length===1?"":"s"} do Instagram conectada${accounts.length===1?"":"s"}, com fila separada.</p></div>
-          <button onclick="toggleDashboardNames()">${dashboardHideNames?"Mostrar nomes":"Esconder nomes"}</button>
-        </div>
-        <div class="cf-dashboard-account-list">${cards}</div>
-      </div>
-
-      <div class="sr-next">
-        <div class="sr-next-title">PRÓXIMOS POSTS</div>
-        <div class="sr-table-head"><span>CONTA</span><span>STATUS</span><span>AGENDADO</span><span>ARQUIVO</span></div>
-        ${next.length?next.map(x=>{
-          const linked=accountForRow(x);
-          const label=linked?"@"+accountName(linked):"Instagram";
-          const shown=dashboardHideNames&&linked?"••••••••":label;
-          return `<div class="sr-table-row"><span>${safe(shown)}</span><span><i class="sr-dot"></i>${statusLabel(getStatus(x))}</span><span>${fmtDateTime(x.scheduledAt)}</span><b>${safe(x.name||"Vídeo")}</b></div>`;
-        }).join(""):`<div class="sr-empty"><b>Nenhum post agendado</b><span>A fila está vazia.</span></div>`}
-      </div>`;
-
-    if(accounts.some(a=>!metricCache.has(accountId(a)))&&!metricsLoading){
-      setTimeout(()=>loadDashboardAccountMetrics(false).then(()=>{if(currentPage==="overview")patchedOverview()}),0);
-    }
   }
+  function day(value){
+    const date=new Date(value);
+    if(!value||!Number.isFinite(date.getTime()))return '';
+    return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+  }
+  function inPeriod(value,days){
+    const posted=new Date(value),today=day(new Date());
+    if(!value||!Number.isFinite(posted.getTime())||posted.getTime()>Date.now())return false;
+    const cutoff=new Date(today+'T03:00:00Z');cutoff.setUTCDate(cutoff.getUTCDate()-(Number(days)-1));
+    return day(value)>=day(cutoff)&&day(value)<=today;
+  }
+  function dateLabel(value){
+    const date=new Date(value);
+    if(!value||!Number.isFinite(date.getTime()))return 'aguardando coleta';
+    return date.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }
+  function currentRequest(key,epoch,id){
+    return permitted()&&sessionKey()===key&&viewer===key&&generation===epoch&&accounts().some(a=>a.id===id);
+  }
+  async function read(account,kind,days,force,key,epoch){
+    const id=String(account.id),cache=kind==='media'?mediaCache:followersCache;
+    const cacheId=kind==='media'?id+':'+days:id;
+    const previous=cache.get(cacheId);
+    if(!force&&previous&&Date.now()-previous.loadedAt<60000)return;
+    const requestKey=kind+':'+cacheId;
+    if(pending.has(requestKey))return pending.get(requestKey);
+    const task=(async()=>{
+      try{
+        const endpoint=kind==='media'?IG_METRICS_URL:IG_FOLLOWERS_STATUS_URL;
+        // Read existing worker snapshots. Dashboard refresh never creates collections or jobs.
+        const result=await edgeFetch(endpoint+'?timezone=America/Sao_Paulo&days='+(kind==='media'?days:1)+'&account_id='+encodeURIComponent(id),{method:'GET'});
+        if(!currentRequest(key,epoch,id))return;
+        if(!result||result.ok===false||String(result.account_id)!==id||(kind==='media'&&!Array.isArray(result.media)))throw new Error('invalid_account_metrics');
+        cache.set(cacheId,{data:result,error:!!result.error,loadedAt:Date.now()});
+      }catch{
+        if(currentRequest(key,epoch,id))cache.set(cacheId,{data:previous?.data||null,error:true,loadedAt:Date.now()});
+      }
+    })();
+    pending.set(requestKey,task);
+    try{await task}finally{if(pending.get(requestKey)===task)pending.delete(requestKey)}
+  }
+  async function load(force=false){
+    resetViewer();
+    if(!permitted())return;
+    const key=viewer,epoch=generation,days=period;
+    await Promise.allSettled(accounts().flatMap(account=>[
+      read(account,'media',days,force,key,epoch),read(account,'followers',days,force,key,epoch)
+    ]));
+    if(permitted()&&sessionKey()===key&&generation===epoch&&currentPage==='overview')overview();
+  }
+  function accountStats(account){
+    const stored=mediaCache.get(account.id+':'+period),followers=followersCache.get(account.id);
+    const data=stored?.data;
+    let views=data?0:null;
+    const seen=new Set();
+    for(const row of Array.isArray(data?.media)?data.media:[]){
+      if(String(row.platform_account_id)!==String(account.id)||row.media_product_type!=='REELS'||!inPeriod(row.timestamp,period))continue;
+      const id=String(row.id||row.record_id||'');
+      if(!id||seen.has(id))continue;
+      seen.add(id);
+      const count=number(row.views);
+      views=count===null||views===null?null:views+count;
+    }
+    return {account,views,followers:number(followers?.data?.current?.followers_count),
+      collected:data?.last_collected_at||null,followersAt:followers?.data?.current?.last_checked_at||null,
+      mediaError:!!stored?.error,followersError:!!followers?.error,
+      waiting:!stored||!followers};
+  }
+  const total=(rows,key)=>rows.length&&rows.every(row=>row[key]!==null)?rows.reduce((sum,row)=>sum+row[key],0):null;
+  function render(){
+    resetViewer();
+    const host=document.getElementById('overview');
+    if(!host)return;
+    if(!permitted()){host.innerHTML='';return}
+    if(cloudLoading){host.innerHTML=loadingShell('Carregando dashboard');return}
+    const title=document.getElementById('pageTitle');
+    if(currentPage==='overview'&&title)title.textContent='Dashboard';
+    const rows=accounts().map(accountStats),views=total(rows,'views'),followers=total(rows,'followers');
+    const available=rows.filter(row=>row.views!==null).length;
+    const latest=rows.map(row=>row.collected).filter(Boolean).sort().at(-1);
+    const waiting=rows.some(row=>row.waiting);
+    const issue=rows.some(row=>row.mediaError||row.followersError);
+    const updated=waiting?'Carregando métricas…':issue?'Algumas métricas não puderam ser atualizadas':available+'/'+rows.length+' contas com métricas de Reels'+(latest?' · Última coleta '+dateLabel(latest):'');
+    host.innerHTML=`<div class="cf-dash">
+      <header class="cf-dash-heading"><h2>Visão geral</h2><button type="button" class="cf-dash-refresh" onclick="refreshDashboardMultiAccount(true)" ${refreshing?'disabled':''}>${refreshing?'Atualizando…':'Atualizar'}</button></header>
+      <section class="cf-dash-panel" aria-label="Resumo do Instagram" aria-busy="${waiting||refreshing}">
+        <div class="cf-dash-panel-head"><h3><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg>Instagram</h3><label class="cf-dash-period"><span class="cf-dash-sr">Período dos Reels publicados</span><select aria-label="Período dos Reels publicados" onchange="setDashboardAnalyticsPeriod(this.value)">${Object.entries(periods).map(([value,label])=>`<option value="${value}" ${value===period?'selected':''}>${label}</option>`).join('')}</select></label></div>
+        <div class="cf-dash-primary"><span>Visualizações</span><strong>${format(views)}</strong><small>Dos Reels publicados no período</small></div>
+        <div class="cf-dash-breakdown"><div><span>Reels</span><b>${format(views)}</b></div><div><span>Stories</span><b aria-label="Métricas de Stories indisponíveis">—</b><small>Sem coleta disponível</small></div><div><span>Seguidores totais</span><b>${format(followers)}</b><small>Total atual das contas</small></div></div>
+        <p class="cf-dash-updated" role="status">${rows.length?safe(updated):'Conecte Jujuh ou Sahry Japah em Contas para ver as métricas.'}</p>
+      </section>
+      <section class="cf-dash-panel cf-dash-accounts" aria-label="Métricas por conta"><h3>Visualizações por conta</h3><div class="cf-dash-account-grid">${rows.map(row=>`<article class="cf-dash-account"><h4><i aria-hidden="true"></i>${safe(row.account.displayName)}</h4><span class="cf-dash-username">@${safe(row.account.config?.username||row.account.account_label||'Instagram')}</span><strong>${format(row.views)}</strong><span class="cf-dash-caption">visualizações de Reels</span><p>${row.followers===null?'Seguidores indisponíveis':format(row.followers)+' seguidores'}</p><small>Reels: ${safe(dateLabel(row.collected))}</small><small>Seguidores: ${safe(dateLabel(row.followersAt))}</small>${row.mediaError||row.followersError?'<small class="cf-dash-warning">Atualização indisponível · último dado preservado</small>':''}</article>`).join('')||'<p class="cf-dash-empty">Nenhuma das duas contas está conectada. <button type="button" onclick="showPage(\'settings\')">Gerenciar contas</button></p>'}</div></section>
+    </div>`;
+    if(rows.some(row=>row.waiting)&&!refreshing)void load(false);
+  }
+  window.setDashboardAnalyticsPeriod=value=>{
+    if(!Object.hasOwn(periods,String(value)))return;
+    period=String(value);render();void load(false);
+  };
+  window.refreshDashboardMultiAccount=async(force=false)=>{
+    resetViewer();if(!permitted()||refreshing)return;
+    const key=viewer,epoch=generation;refreshing=true;render();
+    try{
+      if(force&&typeof loadPlatformAccounts==='function')await loadPlatformAccounts();
+      if(!permitted()||sessionKey()!==key||generation!==epoch)return;
+      await load(force);
+    }finally{
+      if(sessionKey()===key&&generation===epoch){refreshing=false;if(currentPage==='overview')render()}
+    }
+  };
+  // Reuse the existing refresh cadence; no extra polling loop or observers.
+  const nativeSync=syncDashboardLiveMetrics;
+  syncDashboardLiveMetrics=async(force=false)=>{
+    if(currentPage==='overview')return load(false);
+    return nativeSync(force);
+  };
+  overview=render;
 
-  try{overview=patchedOverview}catch{}
-
-  const style=document.createElement("style");
+  const style=document.createElement('style');style.id='cf-dashboard-overview-style';
   style.textContent=`
-    .cf-dashboard-account-list{display:grid;gap:10px}
-    .cf-dashboard-avatar{overflow:hidden;padding:0}
-    .cf-dashboard-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-    .cf-dashboard-avatar span{width:100%;height:100%;display:grid;place-items:center;font-weight:900}
-    @media(min-width:1180px){.cf-dashboard-account-list:has(.cf-dashboard-account-card:nth-child(2)){grid-template-columns:repeat(2,minmax(0,1fr))}.cf-dashboard-account-list .sr-account-card{margin:0}}
-    @media(max-width:760px){.cf-dashboard-account-list{grid-template-columns:1fr!important}.cf-dashboard-account-list .sr-account-card{min-width:0}.cf-dashboard-account-list .sr-account-metrics{gap:12px}}
+    #overview .cf-dash{max-width:1280px;margin:28px auto 0;color:#f3f3f3;font-family:inherit}
+    #overview .cf-dash-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+    #overview .cf-dash-heading h2{font-size:28px!important;line-height:1.2!important;font-weight:600;letter-spacing:-.04em;margin:0!important;color:#f5f5f5}
+    #overview .cf-dash-refresh{background:transparent;border:1px solid #292929;color:#aaa;border-radius:8px;padding:9px 13px;font:inherit;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s}
+    #overview .cf-dash-refresh:hover{background:#171717;border-color:#555;color:#fff}
+    #overview .cf-dash-refresh:disabled{cursor:wait;opacity:.6}
+    #overview .cf-dash-panel{padding:28px 32px;background:#0b0c0d;border:1px solid #202225;border-radius:14px;margin:0 0 18px}
+    #overview .cf-dash-panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
+    #overview .cf-dash h3{display:flex;align-items:center;gap:12px;font-size:16px!important;line-height:1.4!important;font-weight:600;margin:0!important;color:#f3f3f3;letter-spacing:-.02em}
+    #overview .cf-dash h3 svg{width:24px;height:24px;fill:none;stroke:#a6a6ad;stroke-width:1.6;flex-shrink:0}
+    #overview .cf-dash-period select{font:inherit;font-size:12px!important;color:#ddd!important;background:#101112!important;border:1px solid #2c2e31!important;border-radius:8px!important;min-height:38px;padding:7px 30px 7px 12px!important;width:auto!important;cursor:pointer}
+    #overview .cf-dash-primary{margin:30px 0 27px}
+    #overview .cf-dash-primary>span,#overview .cf-dash-breakdown span{color:#a0a1a6;font-size:13px;display:block}
+    #overview .cf-dash-primary strong{display:block;font-size:clamp(38px,5.4vw,68px);font-weight:600;letter-spacing:-.055em;line-height:1.15;margin:9px 0 7px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+    #overview .cf-dash small{display:block;font-size:11px;color:#777d85;line-height:1.6}
+    #overview .cf-dash-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #25272a;padding-top:24px;gap:24px}
+    #overview .cf-dash-breakdown>div+div{border-left:1px solid #242629;padding-left:26px}
+    #overview .cf-dash-breakdown b{display:block;color:#f3f3f3;font-size:clamp(20px,2.5vw,31px);font-weight:600;line-height:1.25;letter-spacing:-.03em;margin:9px 0 3px;overflow-wrap:anywhere}
+    #overview .cf-dash-updated{margin:23px 0 0;color:#81858c;font-size:11px;line-height:1.6}
+    #overview .cf-dash-account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;margin-top:26px}
+    #overview .cf-dash-account{min-width:0}
+    #overview .cf-dash-account+article{padding-left:32px;border-left:1px solid #25272a}
+    #overview .cf-dash-account h4{display:flex;gap:10px;align-items:center;font-size:14px!important;font-weight:500;margin:0!important;color:#d5d5d8}
+    #overview .cf-dash-account h4 i{height:8px;width:8px;flex-shrink:0;border-radius:50%;background:#65c7b4}
+    #overview .cf-dash-username{display:block;color:#7e838b;font-size:11px;margin:5px 0 15px;overflow-wrap:anywhere}
+    #overview .cf-dash-account strong{display:block;font-size:clamp(26px,3.3vw,42px);font-weight:600;letter-spacing:-.045em;line-height:1.2;overflow-wrap:anywhere}
+    #overview .cf-dash-caption{display:block;font-size:12px;color:#999fa8;margin-top:4px}
+    #overview .cf-dash-account p{font-size:12px;color:#aaaeb6;margin:12px 0 14px}
+    #overview .cf-dash-warning{color:#c4b59b!important}
+    #overview .cf-dash-empty{font-size:13px;line-height:1.6;color:#999;grid-column:1/-1;margin:0}
+    #overview .cf-dash-empty button{font:inherit;color:#eee;background:none;border:0;text-decoration:underline;cursor:pointer}
+    #overview .cf-dash-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+    #overview .cf-dash button:focus-visible,#overview .cf-dash select:focus-visible{outline:2px solid #e5e5e5;outline-offset:3px}
+    body:has(#overview:not(.hidden)) .saas-topbar .top-search-trigger,body:has(#overview:not(.hidden)) .saas-topbar .live-worker-pill,body:has(#overview:not(.hidden)) .saas-topbar #newVideoBtn,body:has(#overview:not(.hidden)) #pageSubtitle{display:none!important}
+    body:has(#overview:not(.hidden)) .saas-topbar{grid-template-columns:1fr auto!important}
+    @media(max-width:760px){#overview .cf-dash{margin-top:18px}#overview .cf-dash-heading h2{font-size:24px!important}#overview .cf-dash-panel{padding:22px 20px}#overview .cf-dash-breakdown{gap:12px}#overview .cf-dash-breakdown>div+div{padding-left:12px}#overview .cf-dash-breakdown span{font-size:11px}#overview .cf-dash h3{font-size:15px!important}#overview .cf-dash-account-grid{gap:22px}#overview .cf-dash-account+article{padding-left:22px}#overview .cf-dash-period select{max-width:170px}}
+    @media(max-width:480px){#overview .cf-dash-panel{padding:20px 16px}#overview .cf-dash-breakdown{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:20px}#overview .cf-dash-breakdown>div:last-child{grid-column:1/-1;border-left:0;padding:18px 0 0;border-top:1px solid #25272a}#overview .cf-dash-account-grid{grid-template-columns:1fr;gap:24px}#overview .cf-dash-account+article{padding:24px 0 0;border-left:0;border-top:1px solid #25272a}#overview .cf-dash-account strong{font-size:34px}}
+    @media(prefers-reduced-motion:reduce){#overview .cf-dash-refresh{transition:none}}
   `;
   document.head.appendChild(style);
-
-  setTimeout(()=>{
-    if(!cloudSession)return;
-    refreshDashboardMultiAccount(false).catch(error=>console.warn("Dashboard multi-account patch",error));
-  },0);
+  if(currentPage==='overview')render();
 })();
