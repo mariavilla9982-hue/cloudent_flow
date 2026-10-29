@@ -149,9 +149,18 @@ Deno.serve(async(req:Request)=>{
 
     // Normal Reels. The dedicated recovery publisher is idempotent and resumes container processing on later ticks.
     if(body.trials_only!==true){
-    const {data:due,error:dueErr}=await admin.from("schedules").select("id").eq("platform","instagram").in("status",["scheduled","processing","failed"]).lte("scheduled_at",now).is("instagram_media_id",null).order("scheduled_at").limit(5);if(dueErr)throw dueErr;
+    // Give each account its own batch. A disconnected account must never consume
+    // another account's slots; rotate attempted failures behind untouched work.
+    const {data:accounts,error:accountsError}=await admin.from("platform_accounts").select("id").eq("platform","instagram").eq("enabled",true);if(accountsError)throw accountsError;
+    for(const account of accounts||[]){
+    const {data:due,error:dueErr}=await admin.from("schedules").select("id").eq("platform","instagram").eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).lte("scheduled_at",now).is("instagram_media_id",null).order("updated_at",{ascending:true,nullsFirst:true}).order("scheduled_at").limit(5);if(dueErr)throw dueErr;
+    if(!due?.length)continue;
+    const {data:token,error:tokenError}=await admin.rpc("get_instagram_page_token_for_account",{p_account_id:account.id});
+    if(tokenError||!token){results.push({type:"account",id:account.id,state:"blocked",ok:false,error:tokenError?"instagram_token_lookup_failed":"instagram_reconnect_required"});continue;}
     for(const s of due||[]){
       try{const rr=await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-instagram-publish-recovery",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:JSON.stringify({schedule_id:s.id}),signal:AbortSignal.timeout(20000)});let j:any={};try{j=await rr.json()}catch{};results.push({type:"normal",id:s.id,http:rr.status,...j});}catch(e:any){results.push({type:"normal",id:s.id,state:"retry",error:e instanceof Error?e.message:String(e)})}
+      finally{const {error:rotationError}=await admin.from("schedules").update({updated_at:new Date().toISOString()}).eq("id",s.id).eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).is("instagram_media_id",null);if(rotationError)results.push({type:"normal",id:s.id,state:"retry",error:"scheduler_rotation_failed"});}
+    }
     }
     }
     const failed=results.filter(x=>x.state==="failed"||x.state==="retry"||x.ok===false);for(const worker of ["automation","instagram_publish","trial_reels"]){await admin.from("worker_runtime").upsert({worker_name:worker,last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:failed.length?failed.map(x=>x.error||x.state).join(" | ").slice(0,2000):null,last_jobs:results.length,updated_at:new Date().toISOString()},{onConflict:"worker_name"})}
