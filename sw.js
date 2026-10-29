@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v65";
+const CACHE="cloudentflow-pwa-v66";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -16,7 +16,7 @@ async function injectCalendarPatch(response){
       .replace(/const SUPABASE_KEY\s*=\s*["'][^"']+["'];/, 'const SUPABASE_KEY=window.CloudentConfig?.publishableKey||"";');
     if(!html.includes('src="/api/auth-config"'))html=html.replace('<head>','<head><script src="/api/auth-config"></script>');
     // Native and cached documents use the same dashboard, after the inline SPA.
-    const dashboardTag='<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=2"></script>';
+    const dashboardTag='<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=3"></script>';
     html=html.replace(/<script\b[^>]*src=["'][^"']*dashboard-multi-account-patch\.js[^"']*["'][^>]*><\/script>/gi,'');
     html=html.includes('</body>')?html.replace('</body>',dashboardTag+'</body>'):html+dashboardTag;
     const calendarTag='<script src="/calendar-connect-patch.js?v=8"></script>';

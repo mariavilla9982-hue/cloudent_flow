@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 import {metricAccount,metricContext,metricCutoff,metricGraph,storeMetric,storedMetrics} from './metrics-core.ts';
+import {accountViewSummary} from './account-summary.ts';
 const H={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Content-Type':'application/json'};
 const out=(data:any,status=200)=>new Response(JSON.stringify(data),{status,headers:H});
 Deno.serve(async(req:Request)=>{
@@ -14,6 +15,11 @@ Deno.serve(async(req:Request)=>{
  const url=new URL(req.url),requested=url.searchParams.get('account_id');
  const rawDays=Number(url.searchParams.get('days')||120),days=Number.isFinite(rawDays)?Math.max(1,Math.min(120,Math.floor(rawDays))):120;
  const cutoff=metricCutoff(days),account=await metricAccount(admin,auth.user.id,requested);
+ if(url.searchParams.get('summary')==='1'){
+  if(req.method!=='GET')return out({error:'method_not_allowed'},405);
+  const summary=await accountViewSummary(admin,account,days);
+  return out({ok:true,account_id:account.id,account_label:account.account_label,summary,media:[],last_collected_at:summary.collected_at||null});
+ }
  let nextCursor:string|null=null;const errors:any[]=[];let synced=0;
  if(req.method==='POST'){
  const context=await metricContext(admin,account.id);const after=url.searchParams.get('after');

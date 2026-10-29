@@ -1,0 +1,23 @@
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {stripTypeScriptTypes} from 'node:module';
+const code=stripTypeScriptTypes(fs.readFileSync('supabase/functions/instagram-metrics-today/account-summary.ts','utf8'),{mode:'transform'}).replace(/^import .*;\s*$/gm,'').replaceAll('export ','');
+const account={id:'c5f2fdd6-00e8-4ca7-adb8-281aa922ad0a',external_account_id:'123'};
+let calls=0,fail=false,cache=null;const ranges=[];
+const fixture={data:[{name:'views',total_value:{value:423274,breakdowns:[{dimension_keys:['media_product_type'],results:[{dimension_values:['POST'],value:2236},{dimension_values:['CAROUSEL_CONTAINER'],value:527},{dimension_values:['STORY'],value:4973},{dimension_values:['REEL'],value:415538}]}]}}]};
+const admin={from(table){assert.equal(table,'app_settings');return {select(){return this},eq(){return this},async maybeSingle(){return {data:cache?{value:cache}:null}},async upsert(row){cache=row.value;assert(!JSON.stringify(row).includes('private-token'));return {error:null}}}}};
+const ctx=vm.createContext({Map,Set,Date,Promise,metricCutoff:days=>new Date(Math.floor(Date.now()/86400000)*86400000-(days-1)*86400000).toISOString(),metricContext:async()=>({base:'https://graph.instagram.com/v26.0',token:'private-token'}),metricGraph:async(base,path)=>{calls++;if(fail)throw Error('provider failure');const q=new URL(base+'/'+path);ranges.push([+q.searchParams.get('since'),+q.searchParams.get('until')]);return fixture;}});
+vm.runInContext(code,ctx);
+assert.deepEqual(JSON.parse(JSON.stringify(ctx.parseAccountViews(fixture))),{views:423274,reels:415538,stories:4973});
+assert.throws(()=>ctx.parseAccountViews({data:[]}));
+assert.throws(()=>ctx.parseAccountViews({data:[{name:'views',total_value:{value:100}}]}));
+const zero=structuredClone(fixture);zero.data[0].total_value.value=0;zero.data[0].total_value.breakdowns[0].results=[];
+assert.equal(ctx.parseAccountViews(zero).stories,0,'explicit valid zero is distinct from missing data');
+const result=await ctx.accountViewSummary(admin,account,90);assert.equal(calls,3);assert.equal(result.stories,14919);assert(result.available);
+assert(ranges.every(([s,e])=>e-s<=30*86400));assert.equal(ranges[0][1],ranges[1][0]);assert.equal(ranges[1][1],ranges[2][0]);
+await ctx.accountViewSummary(admin,account,90);assert.equal(calls,3,'five-minute cache');
+cache.attempted_at='2020-01-01';const fixedSince=cache.since;
+// Real cutoff rounds to a stable calendar day; keep a fixed cutoff for this stale test.
+ctx.metricCutoff=()=>fixedSince;fail=true;const prior=cache.stories;const stale=await ctx.accountViewSummary(admin,account,90);assert.equal(stale.stories,prior);assert.equal(stale.error,'account_insights_unavailable');
+cache=null;const unavailable=await ctx.accountViewSummary(admin,account,30);assert(!unavailable.available);assert.equal(unavailable.stories,undefined);
+await assert.rejects(ctx.accountViewSummary(admin,{...account,id:'other'},30),/forbidden/);
+await assert.rejects(ctx.accountViewSummary(admin,account,120),/invalid_summary_period/);
+console.log('PASS account summary: actual Meta response parser, all-content total, Story/Reel breakdown, strict missing data, explicit zero, 90-day disjoint windows, bounded cache, error preservation, allowed account and period');

@@ -1,56 +1,30 @@
-# Dashboard — visão geral aprovada em 29/10/2026
+# Dashboard — resumo oficial Instagram (29/10/2026)
 
-Interface baseada na referência Kronos aprovada pelo dono: resumo do Instagram,
-visualizações em destaque, Reels/Stories/seguidores abaixo e resumo de Jujuh e
-Sahry Japah. Sem gráficos, ranking ou fila na página inicial. A navegação e os
-demais recursos permanecem existentes. Sahry Grávida não participa desta visão;
-nenhuma conta, personagem ou informação histórica é apagada ou desconectada.
+Mantém o layout aprovado e somente Jujuh/Sahry Japah. Overview usa GET
+instagram-metrics-today?summary=1&days=1|7|30|90&account_id=ID, autorizado pelo
+mesmo getUser/app_members admin/metricAccount existente. Nenhuma autenticação
+ou endpoint interno de diagnóstico novo.
 
-## Fontes e significado
+O resumo vem da Meta /IG_USER_ID/insights: views, period=day,
+metric_type=total_value, breakdown=media_product_type, since/until.
+Total inclui todas as superfícies; Reels e Stories são breakdowns oficiais.
+Diferente da versão anterior, mede visualizações recebidas NO período,
+incluindo vídeos antigos. Seguidores continuam total atual por conta.
 
-- `instagram-metrics-today` GET fornece o último snapshot por Reel da conta.
-  O filtro Hoje/7/30/90 dias usa a **data de publicação** em America/Sao_Paulo.
-  As visualizações são acumuladas desses Reels, não incrementos diários das views.
-- `instagram-followers-status` GET fornece o total atual de seguidores da conta,
-  independente do período. A data da coleta aparece em cada resumo.
-- Stories não tem coleta na integração atual: mostra `— / Sem coleta disponível`.
-  O destaque explica que cobre Reels, sem somar zeros inventados de Stories.
-- Conta é vinculada ao ID real, não a nome de arquivo ou seleção global. A lista
-  autorizada/ativa recebida do servidor continua sendo obrigatória. Apenas os
-  IDs existentes de Jujuh e Sahry Japah entram no resumo e nas consultas.
-- Ausência/falha de dado mostra `—`. Zero só aparece após consulta válida sem
-  visualizações. Total combinado fica indisponível se uma conta não tem dado.
-  Em falha de atualização preserva o último snapshot da mesma sessão/conta/período
-  e exibe aviso; não atribui data de coleta nova a dado antigo.
+Reaproveita o token privado existente server-side. Conta e período em allowlist:
+no máximo oito snapshots pequenos em app_settings, TTL de cinco minutos,
+sem tokens/payloads brutos, mídia, novo cron ou migração. Períodos de 90 dias
+são divididos em três janelas disjuntas de até30dias. Sem nova consulta Meta
+antes do TTL, inclusive após falha; cache em voo coalescido por instância.
+A cadência de frontend existente e cache60s permanecem. Falha preserva snapshot
+da mesma conta/período/dia com data original, ou mostra indisponível.
+Zero só vem de resposta válida. Virada de dia não reutiliza intervalo antigo.
 
-## Implementação e custo
+GETs tradicionais de métricas e POSTs de coleta mantêm comportamento anterior;
+a rota summary aceita apenas GET e retorna JSON pequeno sem varrer mídia.
 
-Reutiliza `dashboard-multi-account-patch.js` v2. Cache por sessão, conta e período,
-TTL 60s, requisições simultâneas coalescidas, respostas antigas descartadas após
-logout/troca de sessão/desativação da conta. A cadência de atualização da SPA é
-reutilizada. A dashboard somente lê snapshots: nenhuma chamada POST para coleta,
-novo cron, job, upload, mídia, migração ou alteração de backend.
-
-Por leitura fria são dois GETs de métricas e dois GETs de seguidores. O seletor
-de período reutiliza seguidores; atualização manual relê a lista de contas e os
-snapshots. O endpoint existente limita o período e continua autorizando admin.
-Estilos limitados à overview, com layout móvel e foco de teclado. O cabeçalho
-global é simplificado somente enquanto a overview está visível.
-
-Loader nativo no HTML, bootstrap v2 e SW v65 mantém uma única versão também em
-documentos PWA antigos; o módulo é idempotente e servido network/no-store pelo SW.
-
-## Validação
-
-`node scripts/test-dashboard-overview.cjs` cobre soma por conta, deduplicação de
-Reels, isolamento de conta, timezone/limite de período, GET-only/cache, Stories
-ausente, falha com snapshot preservado, troca de usuário, logout/resposta tardia,
-perfil X restrito, estado vazio e injeção PWA sem tags duplicadas.
-
-Também passam `node scripts/test-panel-view.mjs`,
-`node scripts/test-route-guard.cjs` e `git diff --check`.
-
-Não houve nova coleta Meta, publicação, geração paga ou alteração de dados de
-produção para testar. Teste visual autenticado não realizado: navegador local
-Chromium ausente e download oficial retornou arquivo inválido. Não confundir
-validação funcional em VM com inspeção visual da sessão do usuário.
+Verificação real via consulta autorizada à Meta: HTTP200 nas duas contas para
+Hoje e30dias, com valores REEL/STORY/POST/CAROUSEL_CONTAINER. Testes usam formato
+real e verificam parser, janelas90dias/cache/falha/escopo, UI, sessão/logout,
+período e carregamento PWAv66/dashboardv3. Sem geração/publicação de QA.
+Sem inspeção visual da sessão autenticada do celular.
