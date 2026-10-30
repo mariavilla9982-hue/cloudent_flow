@@ -1566,7 +1566,12 @@ Deno.serve(async (req: Request) => {
         config:{
           status:x.config?.status||null,
           api_mode:x.config?.api_mode||null,
-          account_type:x.config?.account_type||null
+          account_type:x.config?.account_type||null,
+          calendar_policy:x.config?.calendar_policy?.enabled===true&&x.config?.calendar_policy?.locked===true?{
+            enabled:true,locked:true,
+            timezone:x.config.calendar_policy.timezone||"America/Sao_Paulo",
+            times:Array.isArray(x.config.calendar_policy.times)?x.config.calendar_policy.times.filter((t:any)=>typeof t==="string"&&/^([01]\d|2[0-3]):[0-5]\d$/.test(t)):[]
+          }:null
         },
         created_at:x.created_at,
         updated_at:x.updated_at

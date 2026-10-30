@@ -28,3 +28,10 @@ Hoje e30dias, com valores REEL/STORY/POST/CAROUSEL_CONTAINER. Testes usam format
 real e verificam parser, janelas90dias/cache/falha/escopo, UI, sessão/logout,
 período e carregamento PWAv66/dashboardv3. Sem geração/publicação de QA.
 Sem inspeção visual da sessão autenticada do celular.
+
+## 30/10/2026 — clareza e virada de dia
+
+Dashboard v4/SWv67 mostra intervalo exato, origem Meta, cache de5min e data mais
+antiga das contas no agregado. Dado de intervalo anterior é descartado ao virar
+o dia, inclusive durante falha de rede; nunca reapresentado como Hoje. Não muda
+valores Meta, seguidores, layout aprovado ou frequência de coleta.

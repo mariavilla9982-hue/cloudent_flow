@@ -5390,6 +5390,32 @@ function calendarEnsureAccount(){
   }
   return calendarActiveAccountId;
 }
+// Locked account calendars use the same policy returned by the server/database.
+function calendarAccountPolicy(accountId=calendarEnsureAccount()){
+  const policy=calendarInstagramAccounts().find(a=>calendarAccountId(a)===String(accountId))?.config?.calendar_policy;
+  if(policy?.enabled!==true||policy?.locked!==true||!Array.isArray(policy.times))return null;
+  const times=[...new Set(policy.times.filter(t=>Number.isFinite(minutesOf(t))))].sort();
+  return times.length?{...policy,times}:null;
+}
+function calendarPolicyClock(value,policy){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:policy.timezone||'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value));
+  const get=type=>parts.find(p=>p.type===type)?.value;
+  return {date:get('year')+'-'+get('month')+'-'+get('day'),time:get('hour')+':'+get('minute')};
+}
+function calendarPolicyAvailableTimes(accountId,date,rows,ignoreKey=null){
+  const policy=calendarAccountPolicy(accountId);if(!policy)return [];
+  const now=calendarPolicyClock(new Date(),policy);
+  const occupied=new Set((rows||[]).filter(row=>row&&row.status!=='cancelled'&&calendarRowAccountId(row)===String(accountId)&&String(row.platform||'instagram').toLowerCase()==='instagram'&&row.key!==ignoreKey).map(row=>calendarPolicyClock(row.scheduled_at||row.scheduledAt,policy)).filter(at=>at.date===date).map(at=>at.time));
+  return policy.times.filter(time=>(date>now.date||(date===now.date&&time>now.time))&&!occupied.has(time));
+}
+function calendarPolicyValidation(accountId,date,time,rows,ignoreKey=null){
+  const policy=calendarAccountPolicy(accountId);if(!policy)return null;
+  if(!policy.times.includes(time))return {ok:false,msg:'Horários desta conta: '+policy.times.join(', ')+'.'};
+  const used=(rows||[]).filter(row=>row&&row.key!==ignoreKey&&row.status!=='cancelled'&&calendarRowAccountId(row)===String(accountId)&&String(row.platform||'instagram').toLowerCase()==='instagram'&&calendarPolicyClock(row.scheduled_at||row.scheduledAt,policy).date===date).length;
+  if(used>=policy.times.length)return {ok:false,msg:'Esta conta já tem os '+policy.times.length+' vídeos do dia.'};
+  const available=calendarPolicyAvailableTimes(accountId,date,rows,ignoreKey);
+  return available.includes(time)?{ok:true}:{ok:false,msg:'Horário ocupado ou passado. Escolha uma das próximas vagas desta conta.'};
+}
 function calendarRowAccountId(row){return String(row?.platform_account_id||row?.platformAccountId||"")}
 function calendarFilterQueueRows(rows){
   rows=Array.isArray(rows)?rows:[];
@@ -5406,15 +5432,15 @@ function calendarAccountCapacity(accountId,dates=weekDates(),queueRows=null){
   const rows=queueRows||(accountId===active?Object.values(state.slots).filter(Boolean):calendarAllQueueRows);
   if(!Array.isArray(rows))return null;
   return dates.map(d=>{
-    const date=localISO(d),base=calendarDayVolume(date,accountId);
+    const date=localISO(d),base=calendarDayVolume(date,accountId),policy=calendarAccountPolicy(accountId);
     const used=rows.filter(row=>{
       if(String(row.platform||"instagram").toLowerCase()!=="instagram"||row.status==="cancelled")return false;
       const id=calendarRowAccountId(row);
       if(!id||id!==accountId)return false;
       const at=row.scheduled_at||row.scheduledAt;
-      return at&&localISO(new Date(at))===date;
+      return at&&(policy?calendarPolicyClock(at,policy).date:localISO(new Date(at)))===date;
     }).length;
-    return {date,dateObj:d,base,used,free:Math.max(0,base-used),label:d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".",""),number:String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")};
+    return {date,dateObj:d,base,used,free:policy?Math.min(Math.max(0,base-used),calendarPolicyAvailableTimes(accountId,date,rows).length):Math.max(0,base-used),label:d.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".",""),number:String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")};
   });
 }
 function calendarReconnectButton(){
@@ -5979,6 +6005,8 @@ function dateSlots(date,ignoreKey=null){
 function validateSchedule(date,time,ignoreKey=null){
   const mins=minutesOf(time);
   if(!Number.isFinite(mins)) return {ok:false,msg:"Horário inválido."};
+  const policyCheck=calendarPolicyValidation(calendarEnsureAccount(),date,time,dateSlots(date),ignoreKey);
+  if(policyCheck)return policyCheck;
   const items=dateSlots(date,ignoreKey);
   if(items.length>=15) return {ok:false,msg:"Limite de 15 vídeos por dia atingido."};
   for(const item of items){
@@ -5990,6 +6018,13 @@ function validateSchedule(date,time,ignoreKey=null){
 }
 
 function firstValidDefaultSlot(date,ignoreKey=null){
+  const policy=calendarAccountPolicy();
+  if(policy){
+    const time=calendarPolicyAvailableTimes(calendarEnsureAccount(),date,dateSlots(date),ignoreKey)[0];
+    if(!time)return null;
+    const slot=Array.from({length:policy.times.length},(_,i)=>i).find(i=>!state.slots[keyFor(date,i)]||keyFor(date,i)===ignoreKey);
+    return slot===undefined?null:{slot,time};
+  }
   const capacity=calendarBasePostsPerDay(date);
   const preferred=capacity===15
     ? ["07:30","08:30","09:30","10:30","11:30","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"]
@@ -7266,19 +7301,22 @@ function ensureCalendarMetricsTicker(){
 }
 
 function calendarDayVolume(date,accountId=calendarEnsureAccount()){
+  const policy=calendarAccountPolicy(accountId);if(policy)return policy.times.length;
   const value=state.accountDayVolumeModes?.[accountId]?.[date];
   const legacy=accountId===calendarAccountId(calendarInstagramAccounts()[0])?state.dayVolumeModes?.[date]:null;
   return Number(value??legacy)===15?15:5;
 }
 function setCalendarDayVolume(date,mode){
-  const next=Number(mode)===15?15:5;
   const accountId=calendarEnsureAccount();
+  if(calendarAccountPolicy(accountId)){toast("Esta conta usa horários fixos.","warn");return}
+  const next=Number(mode)===15?15:5;
   state.accountDayVolumeModes=state.accountDayVolumeModes||{};
   state.accountDayVolumeModes[accountId]={...(state.accountDayVolumeModes[accountId]||{}),[date]:next};
   save();calendarPage();
   toast(next===15?"Modo 15 vídeos: 5 manhã · 5 tarde · 5 noite.":"Modo 5 vídeos ativado.","ok");
 }
 function dayVolumeSwitch(date,mode){
+  const policy=calendarAccountPolicy();if(policy)return '<div class="day-volume-switch"><span>'+policy.times.length+' vídeos · horários fixos</span></div>';
   return '<div class="day-volume-switch"><button class="'+(mode===5?"active":"")+'" onclick="setCalendarDayVolume(\''+date+'\',5)">5 vídeos</button><button class="'+(mode===15?"active":"")+'" onclick="setCalendarDayVolume(\''+date+'\',15)">15 vídeos</button></div>';
 }
 function dayColumn(d,label){
@@ -7290,7 +7328,7 @@ function dayColumn(d,label){
         return '<div class="day-period-group"><div class="day-period-head"><span>'+name+'</span><b>'+filled+'/5</b></div>'+
           Array.from({length:b-a},(_,j)=>renderSlot(iso,a+j)).join("")+'</div>';
       }).join("")
-    : Array.from({length:5},(_,i)=>renderSlot(iso,i)).join("");
+    : Array.from({length:mode},(_,i)=>renderSlot(iso,i)).join("");
   return `<div class="day-column ui31-day ${count?"has-content":""}" data-day="${iso}" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropOnDay(event,'${iso}');this.classList.remove('drag')">
     <div class="day-head"><div><div class="day-name">${label}</div><small>${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</small></div><div class="count">${countLabel}</div></div>
     ${dayVolumeSwitch(iso,mode)}
@@ -7447,6 +7485,7 @@ function smartSchedulerEnabled(){
     automationData?.settings?.smart_scheduler?.enabled!==false;
 }
 function calendarValidatedTime(date,index,mode=calendarDayVolume(date)){
+  const policy=calendarAccountPolicy();if(policy)return policy.times[index]||"";
   if(mode!==15)return state.defaultTimes[index]||smartChoiceForSlot(date,index).time||"12:00";
   const windows=index<5?[360,720]:index<10?[720,1020]:[1020,1430];
   const recs=smartRecommendationsForDate(date)
@@ -7465,6 +7504,8 @@ function smartRecommendationsForDate(date){
     .sort((a,b)=>Number(a.rank)-Number(b.rank));
 }
 function smartChoiceForSlot(date,preferredIndex=0){
+  const policy=calendarAccountPolicy();
+  if(policy)return {time:calendarPolicyAvailableTimes(calendarEnsureAccount(),date,dateSlots(date))[0]||policy.times[preferredIndex]||"",strategy:"manual",recommendation:null};
   const recs=smartRecommendationsForDate(date);
   if(!recs.length)return {
     time:calendarValidatedTime(date,preferredIndex,calendarDayVolume(date)),
@@ -7486,6 +7527,14 @@ function bestAvailableSmartTime(date,preferredIndex=0){
   return smartChoiceForSlot(date,preferredIndex).time;
 }
 function updateScheduleModalSmartTime(){
+  const policy=calendarAccountPolicy();
+  if(policy){
+    const day=$("#modalDay"),time=$("#modalTime"),smart=$("#modalSmart"),hint=$("#modalSmartHint");
+    if(smart){smart.checked=false;smart.disabled=true}
+    if(time){time.disabled=false;time.value=calendarPolicyAvailableTimes(calendarEnsureAccount(),day.value,dateSlots(day.value))[0]||""}
+    if(hint)hint.textContent="Horários fixos: "+policy.times.join(", ");
+    return;
+  }
   const day=$("#modalDay"),time=$("#modalTime"),smart=$("#modalSmart");
   if(!day||!time||!smart)return;
   const auto=smart.checked;
@@ -7508,8 +7557,8 @@ async function handleQuickSlotVideo(input){
 
   try{
     toast("Enviando "+file.name+"…","ok");
-    const auto=smartSchedulerEnabled();
-    const choice=auto?smartChoiceForSlot(target.date,target.slot):{time:state.defaultTimes[target.slot]||"12:00",strategy:"manual"};
+    const auto=!calendarAccountPolicy()&&smartSchedulerEnabled();
+    const choice=auto?smartChoiceForSlot(target.date,target.slot):{time:calendarValidatedTime(target.date,target.slot),strategy:"manual"};
     const chosenTime=choice.time;
     const ok=await addVideoToSlot(file,target.date,target.slot,chosenTime,"",auto?"auto":"manual",choice.strategy);
     if(ok){
@@ -7630,6 +7679,7 @@ async function uploadScheduledVideoDirect(file,{scheduledAt,caption="",smartMode
 
 async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="auto",smartStrategy=null){
   const accountId=calendarEnsureAccount();
+  if(calendarAccountPolicy(accountId)){smartMode="manual";smartStrategy="manual"}
   const choice=smartMode==="auto"?smartChoiceForSlot(date,slot):null;
   const t=time||(choice?.time||(state.defaultTimes[slot]||"12:00"));
   const strategy=smartStrategy||(smartMode==="auto"?(choice?.strategy||"tested"):"manual");
@@ -7886,7 +7936,7 @@ async function clearCurrentWeek(){
 
 function openScheduleModal(presetDate=null,extraManual=false){
   const dates=weekDates();
-  const auto=smartSchedulerEnabled()&&!extraManual;
+  const auto=!calendarAccountPolicy()&&smartSchedulerEnabled()&&!extraManual;
   $("#modalHost").innerHTML=`<div class="modal"><div class="modal-box">
     <div class="modal-head"><div><b>${extraManual?"Adicionar vídeo extra":"Agendar vídeo"}</b><div class="muted">${extraManual?"Post extra manual: o Smart Scheduler não altera esse horário.":"O Smart Scheduler usa o histórico real para escolher um horário estável."}</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>
     <input id="modalExtra" type="hidden" value="${extraManual?"1":"0"}">
@@ -9130,13 +9180,16 @@ function productionScheduleAccountId(){
   return calendarInstagramAccounts().some(a=>calendarAccountId(a)===id)?id:"";
 }
 function productionScheduleRows(accountId,date){
+  const policy=calendarAccountPolicy(accountId);
   const rows=calendarAllQueueRows||Object.values(state.slots).filter(Boolean);
-  return rows.filter(x=>calendarRowAccountId(x)===accountId&&String(x.platform||"instagram").toLowerCase()==="instagram"&&x.status!=="cancelled"&&localISO(new Date(x.scheduled_at||x.scheduledAt))===date);
+  return rows.filter(x=>calendarRowAccountId(x)===accountId&&String(x.platform||"instagram").toLowerCase()==="instagram"&&x.status!=="cancelled"&&(policy?calendarPolicyClock(x.scheduled_at||x.scheduledAt,policy).date:localISO(new Date(x.scheduled_at||x.scheduledAt)))===date);
 }
 function validateProductionSchedule(accountId,date,time){
   if(!accountId)return {ok:false,msg:"Escolha uma conta Instagram disponível."};
   if(!Number.isFinite(minutesOf(time)))return {ok:false,msg:"Horário inválido."};
   const rows=productionScheduleRows(accountId,date);
+  const policyCheck=calendarPolicyValidation(accountId,date,time,rows);
+  if(policyCheck)return policyCheck;
   if(rows.length>=15)return {ok:false,msg:"Limite de 15 vídeos por dia atingido."};
   const occupied=rows.some(x=>{
     const at=new Date(x.scheduled_at||x.scheduledAt);
@@ -9145,6 +9198,7 @@ function validateProductionSchedule(accountId,date,time){
   return occupied?{ok:false,msg:`Já existe um vídeo às ${time} nessa conta.`}:{ok:true};
 }
 function productionScheduleDefaultTime(accountId,date){
+  if(calendarAccountPolicy(accountId))return calendarPolicyAvailableTimes(accountId,date,calendarAllQueueRows||Object.values(state.slots).filter(Boolean))[0]||"";
   const base=calendarDayVolume(date,accountId);
   const preferred=base===15
     ? ["07:30","08:30","09:30","10:30","11:30","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"]
@@ -11935,7 +11989,7 @@ async function saveProductionTrial(button){
 
 init();
 </script>
-<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=3"></script>
+<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=4"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=18"></script>
 <script src="/production-studio.js?v=3"></script>
 <script src="/image-pipeline-ui.js?v=13"></script>

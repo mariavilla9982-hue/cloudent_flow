@@ -1,7 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync('dashboard-multi-account-patch.js','utf8');
 const ids=['c5f2fdd6-00e8-4ca7-adb8-281aa922ad0a','7160f95b-a23c-4f28-a5b8-9502a856e091'];
-const fixed=new Date('2026-10-29T19:30:00Z');
+let fixed=new Date('2026-10-29T19:30:00Z');
 class Clock extends Date{constructor(...args){super(...(args.length?args:[fixed]))}static now(){return fixed.getTime()}}
 const account=(id,label)=>({id,account_label:label,config:{username:label},enabled:true,platform:'instagram'});
 const media=(id,account,views,timestamp='2026-10-29T04:00:00Z')=>({id,platform_account_id:account,views,timestamp,media_product_type:'REELS'});
@@ -18,7 +18,7 @@ function fixture(){
    if(delay)await delay;
    if(fail)throw Error('offline');
    if(q.pathname==='/followers')return {ok:true,account_id:id,current:{followers_count:id===ids[0]?80000:700,last_checked_at:fixed.toISOString()}};
-   return {ok:true,account_id:id,last_collected_at:fixed.toISOString(),summary:{available:true,views:id===ids[0]?(q.searchParams.get('days')==='1'?100:130):50,reels:id===ids[0]?(q.searchParams.get('days')==='1'?90:120):48,stories:id===ids[0]?10:2},media:id===ids[0]?
+   return {ok:true,account_id:id,last_collected_at:fixed.toISOString(),summary:{since:new Date(new Date(fixed.toISOString().slice(0,10)+'T03:00:00Z').getTime()-(Number(q.searchParams.get('days'))-1)*86400000).toISOString(),until:fixed.toISOString(),available:true,views:id===ids[0]?(q.searchParams.get('days')==='1'?100:130):50,reels:id===ids[0]?(q.searchParams.get('days')==='1'?90:120):48,stories:id===ids[0]?10:2},media:id===ids[0]?
     [media('j1',id,100),media('j1',id,100),media('boundary',id,30,'2026-09-30T03:00:00Z'),media('too-old',id,1000,'2026-09-30T02:59:59Z'),media('future',id,900,'2026-10-30T03:00:00Z'),media('wrong-account',ids[1],2000),{...media('feed',id,500),media_product_type:'FEED'}]:[media('s1',id,50)]};
   }
  });
@@ -46,6 +46,11 @@ function fixture(){
  f.setFail(true);await f.c.refreshDashboardMultiAccount(true);
  assert(f.elements.overview.innerHTML.includes('<strong>150</strong>'),'offline preserves same account and period');
  assert(f.elements.overview.innerHTML.includes('último dado preservado'));
+ assert(f.elements.overview.innerHTML.includes('Instagram (Meta)'));
+ assert(f.elements.overview.innerHTML.includes('29/10/2026 a 29/10/2026'));
+ fixed=new Date('2026-10-30T03:01:00Z');await f.c.refreshDashboardMultiAccount(true);
+ assert(!f.elements.overview.innerHTML.includes('<strong>150</strong>'),'previous day cannot masquerade as today during failure');
+ fixed=new Date('2026-10-29T19:30:00Z');
  f.c.cloudSession={user:{id:'other'}};f.render();await f.c.refreshDashboardMultiAccount(false);
  assert(!f.elements.overview.innerHTML.includes('80.700'),'session switch clears private cached totals');
  assert(f.elements.overview.innerHTML.includes('<strong>—</strong>'));
@@ -62,11 +67,11 @@ function fixture(){
  assert(empty.elements.overview.innerHTML.includes('Nenhuma das duas contas'));assert(empty.elements.overview.innerHTML.includes('<strong>—</strong>'));
  new vm.Script(fs.readFileSync('sw.js','utf8'));
  const sw=fs.readFileSync('sw.js','utf8');
- assert(sw.includes('cloudentflow-pwa-v66'));assert(sw.includes('url.pathname==="/dashboard-multi-account-patch.js"'));
+ assert(sw.includes('cloudentflow-pwa-v67'));assert(sw.includes('url.pathname==="/dashboard-multi-account-patch.js"'));
  const swContext=vm.createContext({self:{addEventListener:()=>{}},Response,Headers});vm.runInContext(sw,swContext);
- const legacy='<head></head><body><script>const example=1;</script><script src="/dashboard-multi-account-patch.js?v=1"></script><script src="/dashboard-multi-account-patch.js?v=3"></script></body>';
+ const legacy='<head></head><body><script>const example=1;</script><script src="/dashboard-multi-account-patch.js?v=1"></script><script src="/dashboard-multi-account-patch.js?v=4"></script></body>';
  const patched=await (await swContext.injectCalendarPatch(new Response(legacy,{headers:{'content-type':'text/html'}}))).text();
- assert.equal((patched.match(/src="\/dashboard-multi-account-patch.js\?v=3"/g)||[]).length,1);
- assert(patched.indexOf('const example=1')<patched.indexOf('dashboard-multi-account-patch.js?v=3'));
- console.log('PASS dashboard: scoped accounts, official account totals and Story breakdown, period cache, GET-only cadence, real Stories, stale data, session/role/logout guards, late responses, empty state, PWA v66 single loader');
+ assert.equal((patched.match(/src="\/dashboard-multi-account-patch.js\?v=4"/g)||[]).length,1);
+ assert(patched.indexOf('const example=1')<patched.indexOf('dashboard-multi-account-patch.js?v=4'));
+ console.log('PASS dashboard: scoped accounts, official account totals and Story breakdown, period cache, GET-only cadence, real Stories, stale data, session/role/logout guards, late responses, empty state, PWA v67 single loader');
 })().catch(e=>{console.error(e);process.exitCode=1});
