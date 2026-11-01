@@ -20,6 +20,13 @@
   const sources={faceSwap:'face_swap_natural',upscale:'upscale_manual',faceSwapPhoto:'face_swap_photo'};
   const titles={faceSwap:'Produção automática',upscale:'Upscale de imagem',faceSwapPhoto:'Face Swap de imagem'};
   const characters=[{id:'jujuh',name:'Jujuh'},{id:'sahry_japah',name:'Sahry japah'},{id:'sahry_gravida',name:'Sahry grávida'}];
+  const photoCharacters=[...characters.filter(c=>['jujuh','sahry_japah'].includes(c.id)),{id:'custom',name:'Modelo personalizada'}];
+  function photoSelection(root,d){
+    const custom=d?.character==='custom',box=root.querySelector('[data-custom-model]');
+    box.hidden=!custom;
+    const input=box.querySelector('input');input.disabled=!custom;input.required=custom&&!d?.original;
+    root.querySelector('[data-character-count]').textContent=custom?'Envie a foto da modelo que você quer usar.':d?.character?'Folha selecionada: '+photoCharacters.find(c=>c.id===d.character).name:'Escolha uma modelo.';
+  }
   let characterRequest=null;
   const videoWorkflows=[{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
   const workflowLabel=j=>videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
@@ -28,11 +35,11 @@
   }
   function lockWorkflows(root){for(const entry of drafts.faceSwap?.entries||[]){const select=root.querySelector('[data-entry="'+entry.id+'"] select');if(select&&entry.workflowLocked)select.disabled=true;}}
   function characterSelector(photo=false){
-    const choices=photo?characters.filter(c=>['jujuh','sahry_japah'].includes(c.id)):characters;
-    return '<fieldset class="pipeline-characters"><legend>'+(photo?'Foto da modelo · escolha a personagem':'Para qual modelo é este vídeo?')+'</legend><p>'+(photo?'Selecione Jujuh ou Sahry Japah. A folha salva será usada automaticamente.':'Selecione uma, duas ou as três. Cada modelo escolhida gera um vídeo separado.')+'</p><div class="pipeline-character-grid '+(photo?'pipeline-character-pair':'')+'">'+choices.map(c=>'<label class="pipeline-character"><input type="'+(photo?'radio':'checkbox')+'" name="character" value="'+c.id+'" '+(photo?'required':'')+'><img data-character-preview="'+c.id+'" alt="Folha de '+c.name+'" hidden><strong>'+c.name+'</strong><a data-character-open="'+c.id+'" target="_blank" rel="noopener" hidden>Abrir folha ↗</a></label>').join('')+'</div><p data-character-count>'+(photo?'Escolha uma personagem.':'Escolha pelo menos uma modelo.')+'</p></fieldset>';
+    const choices=photo?photoCharacters:characters;
+    return '<fieldset class="pipeline-characters"><legend>'+(photo?'Foto da modelo · escolha a personagem':'Para qual modelo é este vídeo?')+'</legend><p>'+(photo?'Use uma folha salva ou envie a foto de outra modelo.':'Selecione uma, duas ou as três. Cada modelo escolhida gera um vídeo separado.')+'</p><div class="pipeline-character-grid">'+choices.map(c=>'<label class="pipeline-character"><input type="'+(photo?'radio':'checkbox')+'" name="character" value="'+c.id+'" '+(photo?'required':'')+'>'+(c.id==='custom'?'<small>Enviar minha foto</small>':'<img data-character-preview="'+c.id+'" alt="Folha de '+c.name+'" hidden>')+'<strong>'+c.name+'</strong>'+(c.id==='custom'?'':'<a data-character-open="'+c.id+'" target="_blank" rel="noopener" hidden>Abrir folha ↗</a>')+'</label>').join('')+'</div><p data-character-count>'+(photo?'Escolha uma modelo.':'Escolha pelo menos uma modelo.')+'</p></fieldset>';
   }
   style.textContent+='.pipeline-characters{border:1px solid #333;border-radius:12px;padding:16px;min-width:0}.pipeline-characters p{font-size:12px;color:#aaa}.pipeline-character-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.pipeline-character{border:1px solid #333;border-radius:10px;padding:10px;cursor:pointer;font-size:12px;align-content:start}.pipeline-character:has(input:checked){border-color:#fff;background:#202020}.pipeline-character img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#111;border-radius:6px}.pipeline-character input{width:18px;height:18px;accent-color:#fff}.pipeline-character a{font-size:10px;color:#bbb}.pipeline-character-tag{display:inline-block;border:1px solid #555;padding:4px 8px;border-radius:6px;font-size:10px;margin-bottom:10px}@media(max-width:420px){.pipeline-character-grid{gap:6px}.pipeline-character{padding:7px;font-size:11px}}';
-  style.textContent+='.pipeline-character-pair{grid-template-columns:repeat(2,minmax(0,1fr))}.pipeline-workflow{display:grid;gap:8px}.pipeline-workflow select{width:100%;min-height:44px;border:1px solid #444;border-radius:10px;background:#111;color:#eee;padding:10px;font:inherit}.pipeline-workflow small{color:#aaa;font-size:12px}';
+  style.textContent+='[data-custom-model][hidden]{display:none!important}.pipeline-character small{color:#aaa;font-size:11px}.pipeline-workflow{display:grid;gap:8px}.pipeline-workflow select{width:100%;min-height:44px;border:1px solid #444;border-radius:10px;background:#111;color:#eee;padding:10px;font:inherit}.pipeline-workflow small{color:#aaa;font-size:12px}';
   async function loadCharacters(root){
     const uid=owner;
     try{
@@ -246,13 +253,13 @@
   function render(page){
     resetOwner();if(!sources[page])return;
     const root=document.getElementById(page);if(!root)return;
-    if(root.dataset.pipelineMounted==='11'){drawJobs();refresh();return;}
-    root.dataset.pipelineMounted='11';
+    if(root.dataset.pipelineMounted==='12'){drawJobs();refresh();return;}
+    root.dataset.pipelineMounted='12';
     const photo=page==='faceSwapPhoto',natural=page==='faceSwap';
     const tabs='<div class="studio-tabs" role="tablist" aria-label="Modo de produção">'+[['faceSwap','Produção automática'],['faceSwapPhoto','Apenas foto'],['upscale','Upscale']].map(([id,label])=>'<button type="button" role="tab" aria-selected="'+(id===page)+'" class="btn '+(id===page?'primary':'')+'" data-mode="'+id+'">'+label+'</button>').join('')+'</div>';
     const upload=(kind,title,help)=>'<div class="studio-form-inputs"><label class="studio-upload"><input name="'+kind+'" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" '+(natural?'multiple':photo&&kind==='original'?'':'required')+'><span><b>'+title+'</b><small>'+help+'</small></span><span class="studio-upload-action">Escolher '+(natural?'vídeos':'foto')+'</span><div data-preview="'+kind+'"></div></label><button class="btn" type="button" data-remove="'+kind+'">Remover '+(kind==='reference'?'foto alvo':natural?'vídeos':'imagem')+'</button></div>';
     root.classList?.add('studio-page');
-    root.innerHTML='<div class="face-swap-shell"><div class="studio-page-header"><div><span class="studio-eyebrow">FACE SWAP</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie seus vídeos e escolha uma ou mais modelos para cada arquivo.':photo?'Escolha a modelo e a foto alvo. Compare o original com a imagem final.':'Melhore a imagem e confira a diferença antes de baixar.')+'</p></div></div>'+tabs+'<div class="'+(natural?'':'studio-image-workspace')+'"><div class="card studio-input-card"><form data-pipeline-form><div class="studio-form-inputs">'+(photo?characterSelector(true):upload('original',natural?'Adicionar vídeos':photo?'Foto da modelo':'Imagem para upscale',natural?'Selecione vários arquivos de uma vez.':photo?'Modelo fixada ou uma foto enviada por você.':'JPG, PNG ou WebP'))+(photo?upload('reference','Foto alvo','Envie apenas a foto de referência onde a personagem será aplicada.'):'')+'</div>'+(natural?'<div data-batch-list></div>':'')+'<div class="studio-submit-bar"><small '+(natural?'data-batch-count':'')+'>'+(natural?'0 vídeos selecionados':'O processamento continua no servidor.')+'</small><button class="btn primary" type="submit">'+(natural?'Iniciar produção':photo?'Gerar imagem':'Iniciar upscale')+'</button></div><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div>'+(natural?'':'<aside class="card studio-result-dock"><h3>Comparar resultado</h3><div data-studio-result><div class="studio-empty"><span>↔</span><b>Antes e depois, no mesmo lugar</b><p>Abra um resultado concluído abaixo para comparar arrastando a linha central.</p></div></div></aside>')+'</div><div class="studio-queue-head"><h3>'+(natural?'Fila de produção':'Resultados recentes')+'</h3><button class="btn" type="button" data-refresh>Atualizar</button></div><div class="studio-filters" aria-label="Filtrar resultados">'+[['all','Todos'],['active','Em produção'],['ready','Prontos'],['failed','Erro']].map(([key,label])=>'<button type="button" class="btn" data-filter="'+key+'" aria-pressed="'+((viewFilters[page]||'all')===key)+'">'+label+'</button>').join('')+'<input type="search" data-pipeline-search aria-label="Buscar por nome ou modelo" placeholder="Buscar vídeo ou modelo" value="'+e(searchTerms[page]||'')+'"></div><div class="'+(natural?'studio-queue-workspace':'')+'"><div class="face-swap-jobs" data-pipeline-jobs></div>'+(natural?'<aside class="card studio-result-dock"><h3>Resultado selecionado</h3><div data-studio-result><div class="studio-empty"><span>▷</span><b>Confira imagem ou vídeo</b><p>Selecione Comparar imagem ou Ver resultado em um dos vídeos da fila.</p></div></div></aside>':'')+'</div></div>';
+    root.innerHTML='<div class="face-swap-shell"><div class="studio-page-header"><div><span class="studio-eyebrow">FACE SWAP</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie seus vídeos e escolha uma ou mais modelos para cada arquivo.':photo?'Escolha a modelo e a foto alvo. Compare o original com a imagem final.':'Melhore a imagem e confira a diferença antes de baixar.')+'</p></div></div>'+tabs+'<div class="'+(natural?'':'studio-image-workspace')+'"><div class="card studio-input-card"><form data-pipeline-form><div class="studio-form-inputs">'+(photo?characterSelector(true)+'<div data-custom-model hidden>'+upload('original','Foto da sua modelo','JPG, PNG ou WebP · até 10 MB. Esta foto define a identidade.')+'</div>':upload('original',natural?'Adicionar vídeos':photo?'Foto da modelo':'Imagem para upscale',natural?'Selecione vários arquivos de uma vez.':photo?'Modelo fixada ou uma foto enviada por você.':'JPG, PNG ou WebP'))+(photo?upload('reference','Foto alvo','Envie apenas a foto de referência onde a personagem será aplicada.'):'')+'</div>'+(natural?'<div data-batch-list></div>':'')+'<div class="studio-submit-bar"><small '+(natural?'data-batch-count':'')+'>'+(natural?'0 vídeos selecionados':'O processamento continua no servidor.')+'</small><button class="btn primary" type="submit">'+(natural?'Iniciar produção':photo?'Gerar imagem':'Iniciar upscale')+'</button></div><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div>'+(natural?'':'<aside class="card studio-result-dock"><h3>Comparar resultado</h3><div data-studio-result><div class="studio-empty"><span>↔</span><b>Antes e depois, no mesmo lugar</b><p>Abra um resultado concluído abaixo para comparar arrastando a linha central.</p></div></div></aside>')+'</div><div class="studio-queue-head"><h3>'+(natural?'Fila de produção':'Resultados recentes')+'</h3><button class="btn" type="button" data-refresh>Atualizar</button></div><div class="studio-filters" aria-label="Filtrar resultados">'+[['all','Todos'],['active','Em produção'],['ready','Prontos'],['failed','Erro']].map(([key,label])=>'<button type="button" class="btn" data-filter="'+key+'" aria-pressed="'+((viewFilters[page]||'all')===key)+'">'+label+'</button>').join('')+'<input type="search" data-pipeline-search aria-label="Buscar por nome ou modelo" placeholder="Buscar vídeo ou modelo" value="'+e(searchTerms[page]||'')+'"></div><div class="'+(natural?'studio-queue-workspace':'')+'"><div class="face-swap-jobs" data-pipeline-jobs></div>'+(natural?'<aside class="card studio-result-dock"><h3>Resultado selecionado</h3><div data-studio-result><div class="studio-empty"><span>▷</span><b>Confira imagem ou vídeo</b><p>Selecione Comparar imagem ou Ver resultado em um dos vídeos da fila.</p></div></div></aside>':'')+'</div></div>';
     root.oninput=evt=>{if(evt.target.hasAttribute('data-pipeline-search')){searchTerms[page]=evt.target.value;drawJobs();}};
     root.onchange=evt=>{
       if(busy.has(page))return;
@@ -263,9 +270,11 @@
       }
       if(evt.target.name==='character'){
         const d=drafts[page]||(drafts[page]={id:crypto.randomUUID(),urls:{}});d.character=evt.target.value;d.id=crypto.randomUUID();d.variantIds={};
-        root.querySelector('[data-character-count]').textContent='Folha selecionada: '+characters.find(c=>c.id===d.character).name;return;
+        photoSelection(root,d);return;
       }
       const f=evt.target.files?.[0];if(!f)return;
+      if(photo&&(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size<=0||f.size>10*1024*1024)){root.querySelector('[data-pipeline-error]').textContent='Use uma imagem JPG, PNG ou WebP de até 10 MB.';evt.target.value='';return;}
+      root.querySelector('[data-pipeline-error]').textContent='';
       const d=drafts[page]||(drafts[page]={id:crypto.randomUUID(),urls:{}});d.id=crypto.randomUUID();d.variantIds={};d[evt.target.name]=f;
       const k=evt.target.name;if(d.urls[k])URL.revokeObjectURL(d.urls[k]);d.urls[k]=URL.createObjectURL(f);
       const p=root.querySelector('[data-preview="'+k+'"]');p.innerHTML=f.type.startsWith('video/')?'<video controls style="max-width:100%;max-height:220px"></video>':'<img alt="Prévia da imagem selecionada" style="max-width:100%;max-height:220px">';p.firstChild.src=d.urls[k];
@@ -279,7 +288,7 @@
         if(b.dataset.removeEntry){const d=drafts.faceSwap,entry=d?.entries?.find(x=>x.id===b.dataset.removeEntry);if(entry){Object.values(entry.urls).forEach(url=>URL.revokeObjectURL(url));d.entries=d.entries.filter(x=>x!==entry);drawBatch(root);}return;}
         if(page==='faceSwap'&&b.dataset.remove==='original'){for(const entry of drafts.faceSwap?.entries||[])Object.values(entry.urls).forEach(url=>URL.revokeObjectURL(url));if(drafts.faceSwap)drafts.faceSwap.entries=[];drawBatch(root);return;}
         if(b.dataset.mode){if(busy.has(page))return;showPage(b.dataset.mode);return;}
-        if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();d.variantIds={};}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();return;}
+        if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();d.variantIds={};}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();if(photo)photoSelection(root,d);return;}
         if(b.hasAttribute('data-refresh'))return await refresh();
         if(b.dataset.original){
           b.disabled=true;const id=b.dataset.original;
@@ -305,7 +314,7 @@
         if(b.dataset.calendar){await loadProductionData();await openProductionScheduleModal(b.dataset.calendar,1);}
       }catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}finally{if(b.isConnected){b.disabled=false;b.removeAttribute('aria-busy');}}
     };
-    if(photo){loadCharacters(root);const d=drafts[page];if(d?.character){root.querySelector('input[value="'+d.character+'"]').checked=true;root.querySelector('[data-character-count]').textContent='Folha selecionada: '+characters.find(c=>c.id===d.character).name;}if(d?.reference){const preview=root.querySelector('[data-preview="reference"]');preview.innerHTML='<img alt="Foto alvo selecionada" style="max-width:100%;max-height:220px">';preview.firstChild.src=d.urls.reference;}}
+    if(photo){loadCharacters(root);const d=drafts[page];if(d?.character)root.querySelector('input[value="'+d.character+'"]').checked=true;photoSelection(root,d);for(const k of ['original','reference'])if(d?.[k]){const preview=root.querySelector('[data-preview="'+k+'"]');preview.innerHTML='<img alt="Imagem selecionada" style="max-width:100%;max-height:220px">';preview.firstChild.src=d.urls[k];}}
     if(natural)drawBatch(root);
     drawJobs();refresh();
     if(!timer)timer=setInterval(()=>{resetOwner();if(sources[currentPage]&&cloudSession)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
@@ -316,21 +325,21 @@
     const form=root.querySelector('form'),button=form.querySelector('button'),status=form.querySelector('[data-pipeline-status]'),error=form.querySelector('[data-pipeline-error]');
     form.querySelectorAll('input,select,button').forEach(x=>x.disabled=true);error.textContent='';form.querySelector('button[type=submit]')?.setAttribute?.('aria-busy','true');
     try{
-      const submitOwner=owner,photo=page==='faceSwapPhoto';const d=drafts[page];if(photo){if(!['jujuh','sahry_japah'].includes(d?.character))throw new Error('Escolha Jujuh ou Sahry Japah.');if(!d.reference)throw new Error('Selecione a foto alvo de referência.');}else if(!d?.original)throw new Error('Selecione o arquivo de entrada.');
+      const submitOwner=owner,photo=page==='faceSwapPhoto';const d=drafts[page];if(photo){if(!photoCharacters.some(c=>c.id===d?.character))throw new Error('Escolha uma folha salva ou Modelo personalizada.');if(d.character==='custom'&&!d.original)throw new Error('Selecione a foto da sua modelo.');if(!d.reference)throw new Error('Selecione a foto alvo de referência.');}else if(!d?.original)throw new Error('Selecione o arquivo de entrada.');
       if(page==='faceSwap'&&!(d.characters||[]).length)throw new Error('Escolha pelo menos uma modelo.');
       let reference=d.reference;
       if(page==='faceSwap'){status.textContent='Extraindo primeiro frame…';reference=new File([await extractFirstFrameBlob(d.urls.original)],'primeiro-frame.jpg',{type:'image/jpeg'});}
       const describe=f=>({name:f.name,size:f.size,type:f.type});
       status.textContent='Preparando envio…';
       if(submitOwner!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os arquivos novamente.');
-      const selected=photo?[characters.find(c=>c.id===d.character)]:page==='faceSwap'?characters.filter(c=>(d.characters||[]).includes(c.id)):[null];
+      const selected=photo?[photoCharacters.find(c=>c.id===d.character)]:page==='faceSwap'?characters.filter(c=>(d.characters||[]).includes(c.id)):[null];
       if(!selected.length)throw new Error('Escolha pelo menos uma modelo.');
       d.variantIds=d.variantIds||{};let completed=0;
       for(const character of selected){
         if(submitOwner!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os arquivos novamente.');
         const jobId=character?(d.variantIds[character.id]||(d.variantIds[character.id]=crypto.randomUUID())):d.id;
         status.textContent='Enviando '+(character?.name||'arquivos')+' · '+(completed+1)+' de '+selected.length+'…';
-        const ticket=await request('image-pipeline-ticket',{source:sources[page],job_id:jobId,character_id:character?.id,original:photo?null:describe(d.original),reference:reference?describe(reference):null});
+        const ticket=await request('image-pipeline-ticket',{source:sources[page],job_id:jobId,character_id:character?.id,original:photo&&d.character!=='custom'?null:describe(d.original),reference:reference?describe(reference):null});
         if(!ticket.registered){
           if(!ticket.model_selected)await uploadFaceSwapPart(ticket.original,d.original,()=>{});
           if(!ticket.same_input)await uploadFaceSwapPart(ticket.reference,reference,()=>{});
@@ -347,7 +356,7 @@
       }
       await refresh();
     }catch(err){error.textContent=err.message;status.textContent='Envio interrompido. Os vídeos já confirmados continuam na fila; tente novamente para concluir os restantes.';refresh();}
-    finally{busy.delete(page);form.querySelectorAll('input,select,button').forEach(x=>x.disabled=false);form.querySelector('button[type=submit]')?.removeAttribute?.('aria-busy');}
+    finally{busy.delete(page);form.querySelectorAll('input,select,button').forEach(x=>x.disabled=false);if(page==='faceSwapPhoto')photoSelection(root,drafts[page]);form.querySelector('button[type=submit]')?.removeAttribute?.('aria-busy');}
   }
   window.ImagePipeline={render,refresh,draw:drawJobs,rowsForPage:page=>jobs.filter(j=>j.meta.source===sources[page])};
   if(sources[currentPage])render(currentPage);

@@ -1,3 +1,9 @@
+## Custom photo model — 2026-10-31
+
+Apenas foto now offers Jujuh, Sahry Japah and Modelo personalizada. The custom choice exposes a separate model photo input and preview; the target photo remains separate. Accept JPG/PNG/WebP up to 10 MiB per image. Named choices keep their exact saved sheets and upload only the target. Custom tickets use character_id=custom, upload the selected model plus target, and keep the model preview for subsequent targets. Removing/replacing the model or switching selection creates fresh submission IDs. Retries without edits reuse the same ID.
+
+Server support was already ACTIVE in cloudent-api v25 and is mirrored in Git without redeployment. It validates custom input, isolates the private per-job model, hashes it at completion and rejects switching a fixed submission to another identity. No workflow graph, worker, schema, schedule or provider generation changed during this patch. UI v14/mount12 and PWA cache v68.
+
 # Image pipeline v2 — 2026-10-18
 
 ## Character and video workflow choices — 2026-10-27

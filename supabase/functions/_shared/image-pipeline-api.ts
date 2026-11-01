@@ -61,8 +61,10 @@ export async function imagePipelineApi(d:any){
     const image=(p:any)=>p&&['image/jpeg','image/png','image/webp'].includes(p.type)&&Number.isSafeInteger(p.size)&&p.size>0&&p.size<=10*1024*1024;
     const photo=b.source==='face_swap_photo',natural=b.source==='face_swap_natural';
     const selected=(natural||photo)?PIPELINE_CHARACTERS.find(c=>c.id===b.character_id&&(natural||['jujuh','sahry_japah'].includes(c.id))):null;
+    const manual=photo&&b.character_id==='custom';
     const old=await owner(id);
-    if((natural||photo)&&!selected&&!old)return json({error:photo?'Escolha Jujuh ou Sahry Japah antes de gerar.':'Escolha Jujuh, Sahry japah ou Sahry grávida antes de gerar.'},400);
+    if((natural||photo)&&!selected&&!manual&&!old)return json({error:photo?'Escolha uma folha salva ou Outra modelo antes de gerar.':'Escolha Jujuh, Sahry japah ou Sahry grávida antes de gerar.'},400);
+    if(photo&&b.character_id&&!selected&&!manual)return json({error:'Modelo inválida.'},400);
     const workflowKey=String(b.workflow_key||old?.meta?.video_workflow?.key||'motion_control');
     if(natural&&!PIPELINE_VIDEO_WORKFLOWS.some(w=>w.key===workflowKey))return json({error:'Workflow de vídeo inválido.'},400);
     if(old&&natural&&old.meta.video_workflow&&old.meta.video_workflow.key!==workflowKey)return json({error:'O workflow deste envio já foi fixado. Crie um novo envio para mudar.'},409);
@@ -70,7 +72,7 @@ export async function imagePipelineApi(d:any){
     if(b.source==='face_swap_natural'?!first?.type?.startsWith('video/')||!Number.isSafeInteger(first.size)||first.size<=0||first.size>500*1024*1024:!image(first))return json({error:'Arquivo de entrada inválido'},400);
     if(b.source!=='upscale_manual'&&!image(ref))return json({error:'Referência inválida'},400);
     if(old&&old.meta.source!==b.source)return json({error:'Job já utilizado'},409);
-    if(old&&(natural||photo)&&b.character_id&&old.meta.character_id!==b.character_id)return json({error:'A personagem deste envio já foi fixada. Crie um novo envio para mudar.'},409);
+    if(old&&(natural||photo)&&b.character_id&&(old.meta.character_id||(photo?'custom':null))!==b.character_id)return json({error:'A personagem deste envio já foi fixada. Crie um novo envio para mudar.'},409);
     if(old&&old.meta.stage!=='upload')return json({ok:true,registered:true,job_id:id});
     const cfg=await objectConfig();
     if(!cfg)return json({error:'Configure o Backblaze B2 antes de enviar mídia para este fluxo.'},409);
