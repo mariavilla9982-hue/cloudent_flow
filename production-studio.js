@@ -35,7 +35,7 @@
     images[0].addEventListener('load',()=>{if(images[0].naturalWidth&&images[0].naturalHeight)canvas.style.aspectRatio=images[0].naturalWidth+'/'+images[0].naturalHeight;},{once:true});
     for(const img of images)img.addEventListener('error',()=>{container.innerHTML='<p class="studio-empty" role="status">Não foi possível carregar a comparação. Tente abrir o resultado novamente.</p>';},{once:true});
   }
-  function releaseMedia(){if(mediaURL){URL.revokeObjectURL(mediaURL);mediaURL='';}}
+  function releaseMedia(){if(mediaURL){if(mediaURL.startsWith('blob:'))URL.revokeObjectURL(mediaURL);mediaURL='';}}
   function modeJobs(){
     if(typeof productionData==='undefined')return [];
     const scope=typeof productionPanelScope==='function'?productionPanelScope():'production_standard';
@@ -58,11 +58,13 @@
     if(busyButtons.has(button))return;busyButtons.add(button);busy(button,true);
     const uid=user(),r=++revision,id=button.dataset.studioPlay;
     try{
-      const url=await getProductionResultBlobUrl(id,'preview-'+id.slice(0,8)+'.mp4');
-      if(uid!==user()||r!==revision||!button.isConnected){URL.revokeObjectURL(url);return;}
+      const url=await getProductionResultUrl(id,'preview-'+id.slice(0,8)+'.mp4');
+      if(uid!==user()||r!==revision||!button.isConnected)return;
       releaseMedia();mediaURL=url;
       const canvas=button.closest('[data-studio-canvas]');canvas.innerHTML='<video controls playsinline preload="metadata" aria-label="Vídeo final"></video>';
-      const video=canvas.querySelector('video');video.src=url;video.play().catch(()=>{});
+      const video=canvas.querySelector('video');
+      video.addEventListener('error',()=>{if(uid===user()&&video.isConnected){releaseMedia();canvas.replaceChildren(button);toast('Não foi possível reproduzir. Tente novamente ou use Baixar vídeo.','err');}},{once:true});
+      video.src=url;video.play().catch(()=>{});
     }catch(err){if(uid===user()&&button.isConnected)toast(err.message,'err');}
     finally{busyButtons.delete(button);busy(button,false);}
   }

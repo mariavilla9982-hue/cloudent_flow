@@ -1,3 +1,5 @@
+import {handleInstagramDisconnect} from "./instagram-disconnect.ts";
+import {healthWorkers,healthFailures} from "./system-health.ts";
 import {panelViewApi} from './panel-view.ts';
 import {imagePipelineApi} from '../_shared/image-pipeline-api.ts';
 
@@ -258,6 +260,8 @@ Deno.serve(async (req: Request) => {
     if(!accessMember?.enabled||!["admin","x_user"].includes(accessMember.role))return json({error:"forbidden"},403);
     if(resource==="session"&&req.method==="GET")return json({user_id:userData.user.id,role:accessMember.role,workspace_id:accessMember.workspace_id});
     if(accessMember.role!=="admin")return json({error:"forbidden",user_message:"Seu acesso está limitado ao X Studio."},403);
+    const disconnectResponse=await handleInstagramDisconnect(req,url,admin,userData.user.id,accessMember,json);
+    if(disconnectResponse)return disconnectResponse;
     const panelViewResponse=await panelViewApi(req,url,admin,userData.user.id,json);
     if(panelViewResponse)return panelViewResponse;
     if(resource==="calendar-trial")return handleCalendarTrial(req,admin,accessMember,userData.user.id,url,json);
@@ -570,11 +574,12 @@ Deno.serve(async (req: Request) => {
       const settings=Object.fromEntries((settingRows||[]).map((x:any)=>[x.key,x.value]));
       const limits=settings.system_limits||{};
       const now=Date.now();
-      const normalizedWorkers=(workers||[]).map((w:any)=>{
-        const age=w.last_heartbeat?now-new Date(w.last_heartbeat).getTime():Infinity;
-        const grace=w.worker_name==="production"||w.worker_name==="followers"?3*60_000:6*60_000;
-        return {...w,online:Number.isFinite(age)&&age<=grace,heartbeat_age_seconds:Number.isFinite(age)?Math.max(0,Math.round(age/1000)):null};
-      });
+      const allWorkers=healthWorkers(workers||[],now);
+      const normalizedWorkers=allWorkers.filter((w:any)=>!w.retired);
+      const {data:failedRows,error:failedError}=await admin.from("job_queue")
+        .select("id,job_type,schedule_id,last_error,updated_at").eq("status","failed").order("updated_at",{ascending:false}).limit(200);
+      if(failedError)throw failedError;
+      const failures=healthFailures(failedRows||[],now);
 
       const ig=(integrations||[]).find((x:any)=>x.provider==="instagram")||null;
       const rh=(integrations||[]).find((x:any)=>x.provider==="runninghub")||null;
@@ -631,11 +636,11 @@ Deno.serve(async (req: Request) => {
       const egressWarn=Number(egressGuard.daily_warn_bytes||125829120);
       const egressCritical=Number(egressGuard.daily_critical_bytes||167772160);
 
-      const requiredWorkers=["instagram_publish","automation","followers","production","trial_reels"];
-      const workerIssues=requiredWorkers.filter(name=>!normalizedWorkers.find((w:any)=>w.worker_name===name&&w.online));
+      const requiredWorkers=normalizedWorkers.map((w:any)=>w.worker_name);
+      const workerIssues=requiredWorkers.filter(name=>!normalizedWorkers.find((w:any)=>w.worker_name===name&&w.healthy));
       const issues:any[]=[];
       if(!ig?.enabled)issues.push({code:"instagram_offline",severity:"critical",label:"Instagram desconectado"});
-      if(workerIssues.length)issues.push({code:"workers_offline",severity:"critical",label:"Worker(s) sem heartbeat",workers:workerIssues});
+      if(workerIssues.length)issues.push({code:"workers_offline",severity:"critical",label:"Serviço(s) precisam de atenção",workers:workerIssues});
       if(!runninghub.configured||!runninghub.enabled)issues.push({code:"runninghub_unavailable",severity:"warn",label:"RunningHub não está pronto"});
       else if(runninghub.error)issues.push({code:"runninghub_status_error",severity:"warn",label:"Não consegui consultar créditos do RunningHub"});
       else if(Number(runninghub.credits)<=0)issues.push({code:"runninghub_no_credits",severity:"critical",label:"RunningHub sem créditos"});
@@ -649,7 +654,7 @@ Deno.serve(async (req: Request) => {
           label:"Egress estimado do CloudentFlow alto hoje"
         });
       }
-      if(failed>0)issues.push({code:"failed_jobs",severity:"warn",label:failed+" job(s) falharam"});
+      if(failures.current.length)issues.push({code:"failed_jobs",severity:"warn",label:failures.current.length+" job(s) com falha para verificar"});
 
       const critical=issues.filter(x=>x.severity==="critical").length;
       const warning=issues.filter(x=>x.severity==="warn").length;
@@ -681,7 +686,9 @@ Deno.serve(async (req: Request) => {
           api_mode:ig.config?.api_mode||null
         }:null,
         runninghub,
-        workers:normalizedWorkers
+        workers:normalizedWorkers,
+        retired_workers:allWorkers.filter((w:any)=>w.retired),
+        failed_jobs:{current:failures.current,historical:failures.historical,total:failed,truncated:failed>200}
       });
     }
 
@@ -1752,6 +1759,7 @@ Deno.serve(async (req: Request) => {
         bucket="videos";
       }
       if(!path)return json({error:"file_not_available"},404);
+      if(!String(path).startsWith(userData.user.id+"/"))return json({error:"media_owner_mismatch"},403);
       const signedUrl=await storageSignedGetBucket(admin,provider,String(path),3600,bucket);
       return json({url:signedUrl,expires_in:3600,provider});
     }
@@ -1783,12 +1791,22 @@ Deno.serve(async (req: Request) => {
       }
       if(!path&&!job.result_url)return json({error:"file_not_available"},404);
 
+      // Let the browser's download manager read the stored video directly.
+      // Fetching a whole Blob through this function stalls preview and duplicates egress.
+      if(url.searchParams.get("mode")==="link"){
+        if(!path)return json({error:"file_not_available"},404);
+        if(!path.startsWith(userData.user.id+"/"))return json({error:"media_owner_mismatch"},403);
+        const fileName=safeDownloadName(requestedName);
+        const signedUrl=await storageSignedDownloadBucket(admin,provider,path,fileName,900,bucket);
+        return json({url:signedUrl,file_name:fileName,expires_in:900,provider});
+      }
+
       let upstream:Response|null=null;
       let storageStatus=0;
       if(path){
         try{
           const upstreamUrl=await storageSignedGetBucket(admin,provider,path,900,bucket);
-          upstream=await fetch(upstreamUrl,{method:"GET"});
+          upstream=await fetch(upstreamUrl,{method:"GET",signal:AbortSignal.timeout(15000)});
           storageStatus=upstream.status;
         }catch(e){
           console.error("production_download_storage_error",{id,provider,bucket,path,error:readableError(e)});
@@ -1799,7 +1817,7 @@ Deno.serve(async (req: Request) => {
       // URL still works, serve it now and heal the storage copy for future access.
       if((!upstream||!upstream.ok)&&job.result_url){
         try{
-          const source=await fetch(String(job.result_url));
+          const source=await fetch(String(job.result_url),{signal:AbortSignal.timeout(60000)});
           if(source.ok){
             const bytes=await source.arrayBuffer();
             const sourceMime=source.headers.get("content-type")||mime||"video/mp4";
@@ -1811,7 +1829,7 @@ Deno.serve(async (req: Request) => {
                 const cfg=await getCloudentR2Config(admin);
                 if(cfg){
                   const putUrl=await r2PresignedUrl(cfg,"PUT",path,900);
-                  const put=await fetch(putUrl,{method:"PUT",headers:{"Content-Type":sourceMime},body:bytes});
+                  const put=await fetch(putUrl,{method:"PUT",headers:{"Content-Type":sourceMime},body:bytes,signal:AbortSignal.timeout(30000)});
                   if(put.ok){
                     await admin.from("activity_logs").insert({
                       level:"warn",

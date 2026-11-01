@@ -7867,6 +7867,7 @@ async function previewScheduled(date,slot){
 
 function closeModal(){
   const m=$("#modalHost .modal");
+  m?.mediaController?.abort();
   if(m){
     m.querySelectorAll("video,audio").forEach(media=>{
       try{media.pause();media.removeAttribute("src");media.load()}catch{}
@@ -8988,30 +8989,50 @@ async function productionAction(id,operation,button=null){
 
 function productionPreviewFromButton(el){previewProductionJob(el.dataset.id,el.dataset.kind||"result")}
 
-async function getProductionResultBlobUrl(id,name="preview.mp4"){
+async function getProductionResultUrl(id,name="preview.mp4",download=false,signal){
   if(!cloudSession)throw new Error("Faça login no CloudentFlow primeiro.");
-  const headers={Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
-  const res=await fetch(EDGE_URL+"?resource=production-download&id="+encodeURIComponent(id)+"&name="+encodeURIComponent(name),{headers});
-  if(res.status===401&&await refreshCloudSession())return getProductionResultBlobUrl(id,name);
-  if(!res.ok){
-    let data=null;try{data=await res.json()}catch{}
-    throw new Error(responseErrorMessage(data,res.status));
+  const owner=cloudSession.user?.id,controller=new AbortController();
+  const abort=()=>controller.abort();
+  signal?.addEventListener("abort",abort,{once:true});
+  if(signal?.aborted)abort();
+  const timer=setTimeout(abort,20000);
+  try{
+    const path=download?"?resource=production-download&mode=link&name="+encodeURIComponent(name):"?resource=production-preview&kind=result";
+    for(let attempt=0;attempt<2;attempt++){
+      const headers={Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
+      const res=await fetch(EDGE_URL+path+"&id="+encodeURIComponent(id),{headers,signal:controller.signal});
+      if(res.status===401&&attempt===0&&await withTimeout(refreshCloudSession(),10000,"renovação da sessão"))continue;
+      let data=null;try{data=await res.json()}catch{}
+      if(!res.ok)throw new Error(responseErrorMessage(data,res.status));
+      if(controller.signal.aborted)throw new Error("O tempo de preparação acabou. Tente novamente.");
+      if(!cloudSession||cloudSession.user?.id!==owner)throw new Error("A sessão mudou. Abra o vídeo novamente.");
+      const url=new URL(data?.url||"");
+      if(url.protocol!=="https:")throw new Error("O link do vídeo não está disponível.");
+      return url.href;
+    }
+  }catch(e){
+    if(signal?.aborted)throw Object.assign(new Error("Prévia fechada."),{name:"AbortError"});
+    if(controller.signal.aborted&&!signal?.aborted)throw new Error("O tempo de preparação acabou. Tente novamente.");
+    throw e;
+  }finally{
+    clearTimeout(timer);signal?.removeEventListener("abort",abort);
   }
-  const blob=await res.blob();
-  if(!blob.size)throw new Error("O vídeo final veio vazio.");
-  return URL.createObjectURL(blob);
 }
+// Compatibility with older cached studio controllers: returns a streaming URL.
+function getProductionResultBlobUrl(id,name){return getProductionResultUrl(id,name);}
 
 function productionActionFromButton(el){productionAction(el.dataset.id,el.dataset.op,el)}
 async function previewProductionJob(id,kind="result"){
   try{
     closeModal();
     const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
-    let url="",objectUrl=false;
+    let url="",pending=null;
     if(kind==="result"){
       $("#modalHost").innerHTML='<div class="modal production-preview-modal"><div class="modal-box production-preview-box"><div class="modal-head"><div><b>Resultado RunningHub</b><div class="muted">Carregando vídeo final…</div></div><button class="btn" onclick="closeModal()">Fechar</button></div><div style="padding:42px;text-align:center;color:#888">Preparando preview…</div></div></div>';
-      url=await getProductionResultBlobUrl(id,"preview-"+String(id).slice(0,8)+".mp4");
-      objectUrl=true;
+      pending=$("#modalHost .modal");
+      pending.mediaController=new AbortController();
+      url=await getProductionResultUrl(id,"preview-"+String(id).slice(0,8)+".mp4",false,pending.mediaController.signal);
+      if(!pending.isConnected)return;
     }else{
       const r=await cloudFetch("?resource=production-preview&id="+encodeURIComponent(id)+"&kind="+encodeURIComponent(kind));
       url=r.url;
@@ -9028,8 +9049,8 @@ async function previewProductionJob(id,kind="result"){
       media+
       '</div></div>';
     const modal=$("#modalHost .modal");
-    if(objectUrl&&modal)modal.dataset.url=url;
-  }catch(e){closeModal();toast(friendlyCloudentError(e?.message||String(e)),"err")}
+    if(kind!=="frame"&&modal)modal.querySelector("video")?.addEventListener("error",()=>toast("Não foi possível reproduzir o vídeo. Tente Baixar para abrir no celular.","err"),{once:true});
+  }catch(e){if(e?.name!=="AbortError"){closeModal();toast(friendlyCloudentError(e?.message||String(e)),"err")}}
 }
 function runningHubFormPayload(){
   return {
@@ -9288,29 +9309,26 @@ function productionPreviewMarkup(job,kind){
     '<span class="production-media-icon">▶</span><span class="production-thumb-label">ORIGINAL</span></span>';
 }
 
-async function downloadProductionResult(id,number,retry=true){
+const productionDownloads=new Set();
+async function downloadProductionResult(id,number){
+  if(productionDownloads.has(id))return;
+  productionDownloads.add(id);
   try{
-    if(!cloudSession)throw new Error("Faça login no CloudentFlow primeiro.");
     const name="Video final "+number+".mp4";
-    const headers={Authorization:"Bearer "+cloudSession.access_token,apikey:SUPABASE_KEY};
-    const res=await fetch(EDGE_URL+"?resource=production-download&id="+encodeURIComponent(id)+"&name="+encodeURIComponent(name),{headers});
-    if(res.status===401&&retry&&await refreshCloudSession())return downloadProductionResult(id,number,false);
-    if(!res.ok){
-      let data=null;try{data=await res.json()}catch{}
-      throw new Error(responseErrorMessage(data,res.status));
-    }
-    const blob=await res.blob();
-    if(!blob.size)throw new Error("O arquivo final veio vazio.");
-    const url=URL.createObjectURL(blob);
+    toast("Preparando download…","ok");
+    const url=await getProductionResultUrl(id,name,true);
+    closeModal();
+    $("#modalHost").innerHTML='<div class="modal production-preview-modal"><div class="modal-box production-preview-box"><div class="modal-head"><b>Download preparado</b><button class="btn" onclick="closeModal()">Fechar</button></div><p>Se o download não começar, toque abaixo.</p><a class="btn" href="'+esc(url)+'" download="'+esc(name)+'" target="_blank" rel="noopener noreferrer">Baixar vídeo</a></div></div>';
     const a=document.createElement("a");
     a.href=url;
     a.download=name;
+    a.target="_blank";a.rel="noopener noreferrer";
     a.style.display="none";
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),5000);
   }catch(e){toast(friendlyCloudentError(e?.message||String(e)),"err")}
+  finally{productionDownloads.delete(id);}
 }
 async function sendProductionResultToBulk(id,button=null){
   if(!cloudSession)return;
@@ -10031,14 +10049,17 @@ async function previewFaceSwapMotion(id){
     $("#modalHost").innerHTML='<div class="modal"><div class="modal-box production-preview-box">'+
       '<div class="modal-head"><div><b>Motion final</b><div class="muted">Carregando vídeo final…</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
       '<div style="padding:42px;text-align:center;color:#888">Preparando preview…</div></div></div>';
-    const url=await getProductionResultBlobUrl(pid,"motion-"+String(pid).slice(0,8)+".mp4");
+    const pending=$("#modalHost .modal");
+    pending.mediaController=new AbortController();
+    const url=await getProductionResultUrl(pid,"motion-"+String(pid).slice(0,8)+".mp4",false,pending.mediaController.signal);
+    if(!pending.isConnected)return;
     $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()">'+
       '<div class="modal-box production-preview-box">'+
         '<div class="modal-head"><div><b>Motion final</b><div class="muted">Resultado final carregado pelo CloudentFlow.</div></div><button class="btn" onclick="closeModal()">Fechar</button></div>'+
         '<video src="'+esc(url)+'" controls autoplay playsinline preload="metadata" style="display:block;max-width:100%;max-height:72vh;margin:0 auto;border-radius:12px;background:#08090c"></video>'+
       '</div></div>';
-    const modal=$("#modalHost .modal");if(modal)modal.dataset.url=url;
-  }catch(e){closeModal();toast(friendlyCloudentError(e?.message||String(e)),"err")}
+    const modal=$("#modalHost .modal");modal?.querySelector("video")?.addEventListener("error",()=>toast("Não foi possível reproduzir o vídeo. Tente Baixar para abrir no celular.","err"),{once:true});
+  }catch(e){if(e?.name!=="AbortError"){closeModal();toast(friendlyCloudentError(e?.message||String(e)),"err")}}
 }
 async function retryFaceSwapMotion(id,button=null){
   const job=(faceSwapData?.jobs||[]).find(x=>String(x.id)===String(id));
@@ -11991,7 +12012,7 @@ init();
 </script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=4"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=18"></script>
-<script src="/production-studio.js?v=3"></script>
+<script src="/production-studio.js?v=4"></script>
 <script src="/image-pipeline-ui.js?v=14"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v68";
+const CACHE="cloudentflow-pwa-v69";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -65,9 +65,9 @@ async function injectCalendarPatch(response){
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
     html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=13');
-    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=3').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=3');
+    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=4').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=3');
     if(html.includes('image-pipeline-ui.js')){
-      if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=3"></script>$&');
+      if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=4"></script>$&');
       if(!html.includes('production-studio.css'))html=html.replace('</head>','<link rel="stylesheet" href="/production-studio.css?v=3"></head>');
     }
     // The staged pipeline owns its queue. Keep the old decorator only for legacy documents.
