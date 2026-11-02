@@ -16,4 +16,13 @@ for(const patch of [{runninghub_task_id:'already-active'},{attempt_count:2},{max
 assert.throws(()=>c.options({...job,meta:{...job.meta,execution_instance_type:'ultra'}},cfg));
 assert.throws(()=>c.options(allowed(),{...cfg,executionInstanceType:'ultra'}));
 assert.throws(()=>c.options({...allowed(),meta:{...allowed().meta,workflow_key:'standard'}},cfg));
-console.log('PASS Ultra: explicit approval bound to one job/workflow/attempt, consumed grants and active tasks blocked, 48GB default unchanged');
+const ultraCfg={...cfg,executionInstanceType:'ultra',executionVramGb:84,hardwarePolicy:'motion_default_84gb'};
+assert.equal(c.options(job,ultraCfg).instanceType,'ultra');
+assert.equal(c.options({...job,meta:{...job.meta,execution_instance_type:'plus'}},ultraCfg).instanceType,'ultra');
+assert.equal(c.options({...job,attempt_count:2,max_attempts:2,meta:{...job.meta,execution_instance_type:'ultra'}},ultraCfg).instanceType,'ultra');
+assert.throws(()=>c.options({...job,runninghub_task_id:'active'},ultraCfg));
+assert.throws(()=>c.options({...job,meta:{workflow_key:'standard'}},ultraCfg));
+for(const patch of [{executionInstanceType:'unknown'},{executionVramGb:48},{hardwarePolicy:'motion_default_48gb'}])assert.throws(()=>c.options(job,{...ultraCfg,...patch}));
+assert.equal(c.options(allowed(),ultraCfg).instanceType,'ultra');
+const consumed=allowed();consumed.meta.execution_ultra_once.state='used';assert.throws(()=>c.options(consumed,ultraCfg));
+console.log('PASS Ultra default 84GB: policy validated, V7 isolated, existing tasks and consumed one-time grants blocked; legacy Plus preserved');

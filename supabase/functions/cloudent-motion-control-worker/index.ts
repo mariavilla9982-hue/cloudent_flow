@@ -20,7 +20,9 @@ async function decrypt(cipher:string,iv:string,master:string){
 // Hardware selection stays outside the immutable workflow graph.
 function motionExecutionOptions(job:any,cfg:any){
   if(job?.meta?.workflow_key!=="motion_control")throw new Error("Motion Control: workflow do job inválido.");
-  if(cfg?.executionInstanceType!=="plus")throw new Error("Motion Control: configuração de GPU 48 GB ausente. Execução bloqueada.");
+  if(!["plus","ultra"].includes(cfg?.executionInstanceType))throw new Error("Motion Control: configuração de GPU inválida. Execução bloqueada.");
+  if(job.runninghub_task_id)throw new Error("Motion Control: tarefa já criada. Nenhuma geração enviada.");
+  if(cfg.executionInstanceType==="ultra"&&(cfg.hardwarePolicy!=="motion_default_84gb"||cfg.executionVramGb!==84))throw new Error("Motion Control: política de GPU 84 GB inválida. Execução bloqueada.");
   const grant=job.meta.execution_ultra_once;
   if(grant){
     if(grant.state!=="pending"||grant.job_id!==job.id||grant.workflow_id!==String(cfg.workflowId)||
@@ -29,8 +31,8 @@ function motionExecutionOptions(job:any,cfg:any){
       throw new Error("GPU 84 GB: autorização única ausente, consumida ou incompatível. Nenhuma geração enviada.");
     return {instanceType:"ultra"};
   }
-  if(job.meta.execution_instance_type==="ultra")throw new Error("GPU 84 GB exige autorização única para este envio.");
-  return {instanceType:"plus"};
+  if(job.meta.execution_instance_type==="ultra"&&cfg.executionInstanceType!=="ultra")throw new Error("GPU 84 GB exige autorização única para este envio.");
+  return {instanceType:cfg.executionInstanceType};
 }
 function cleanBase(v:any){
   const x=String(v||"https://www.runninghub.ai").replace(/\/$/,"");
@@ -225,10 +227,11 @@ Deno.serve(async(req:Request)=>{
       let acceptedTaskId:string|null=null;
       try{
         if(job.runninghub_task_id)continue;
-        if((job.meta?.image_pipeline_version===2||job.meta?.execution_ultra_once)&&job.meta.pipeline_dispatch_intent)throw new Error("Criação Motion incerta; reconcilie a tarefa antes de repetir.");
+        if(job.meta?.pipeline_dispatch_intent)throw new Error("Criação Motion incerta; reconcilie a tarefa antes de repetir.");
         const executionOptions=motionExecutionOptions(job,cfg);
         const ultra=executionOptions.instanceType==="ultra";
-        const hardwareMeta={...(job.meta||{}),execution_instance_type:executionOptions.instanceType,execution_instance_used:executionOptions.instanceType,execution_instance_vram_gb:ultra?84:48,execution_instance_policy:ultra?"motion_ultra_once":"motion_default_48gb",execution_instance_authorized:ultra,workflow_id:String(cfg.workflowId)};
+        const ultraOnce=ultra&&!!job.meta?.execution_ultra_once;
+        const hardwareMeta={...(job.meta||{}),execution_instance_type:executionOptions.instanceType,execution_instance_used:executionOptions.instanceType,execution_instance_vram_gb:ultra?84:48,execution_instance_policy:ultraOnce?"motion_ultra_once":ultra?"motion_default_84gb":"motion_default_48gb",execution_instance_authorized:ultra,workflow_id:String(cfg.workflowId)};
         const {error:hardwareError}=await admin.from("production_jobs").update({
           meta:hardwareMeta,
           updated_at:new Date().toISOString()
@@ -255,7 +258,7 @@ Deno.serve(async(req:Request)=>{
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new MotionCreateError(created);
         const taskId=String(created.data.taskId);
         acceptedTaskId=taskId;
-        if(ultra)job.meta={...job.meta,execution_ultra_once:{...job.meta.execution_ultra_once,state:"used",task_id:taskId,consumed_at:new Date().toISOString()},pipeline_dispatch_uncertain:false};
+        if(ultra)job.meta={...job.meta,...(ultraOnce?{execution_ultra_once:{...job.meta.execution_ultra_once,state:"used",task_id:taskId,consumed_at:new Date().toISOString()}}:{}),pipeline_dispatch_uncertain:false};
         console.info(JSON.stringify({event:"motion_create_receipt",job_id:job.id,task_id:taskId,dispatch_intent:job.meta?.pipeline_dispatch_intent||null}));
         const taskStatus=String(created.data.taskStatus||"QUEUED").toUpperCase();
         const {data:attached,error:attachError}=await admin.from("production_jobs").update({status:"queued",progress:38,started_at:null,runninghub_task_id:taskId,locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString(),...(ultra?{meta:job.meta}:{})}).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id").maybeSingle();

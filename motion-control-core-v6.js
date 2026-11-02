@@ -88,7 +88,7 @@
     const text=err
       ?"Validação bloqueou a execução: "+esc(err)
       :validated
-        ?"Workflow validado pela API do RunningHub. GPU padrão: 48 GB."
+        ?"Workflow validado pela API do RunningHub. GPU padrão: Ultra · 84 GB de VRAM."
         :"O worker valida workflow + nodes antes da primeira execução para não gastar crédito em configuração errada.";
     return '<div class="motion-workflow-state '+cls+'"><i></i><span>'+text+'</span></div>';
   }
@@ -149,7 +149,7 @@
     const add=root.querySelector(".production-add-btn");
     if(add&&!productionUploading)add.textContent="＋ Adicionar ao Motion Control";
     const note=root.querySelector(".production-note");
-    if(note)note.textContent="Entrega: SaveVideo · node #384. A execução é cancelada após salvar e verificar o vídeo. GPU padrão: 48 GB.";
+    if(note)note.textContent="Entrega: SaveVideo · node #384. A execução é cancelada após salvar e verificar o vídeo. GPU padrão: Ultra · 84 GB de VRAM.";
 
     const main=root.querySelector(".production-main-grid");
     if(main&&!root.querySelector(".motion-workflow-map")){
