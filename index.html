@@ -556,7 +556,9 @@ button:disabled,.btn:disabled{
 }
 button,.btn,.nav button,.quick-actions button,.more-popover button{
   transition:background-color .14s ease,border-color .14s ease,color .14s ease,opacity .14s ease!important;
+  touch-action:manipulation;
 }
+button:focus-visible,.btn:focus-visible,summary:focus-visible{outline:2px solid #aaa;outline-offset:3px}
 button:not(:disabled):hover,.btn:not(:disabled):hover,
 .quick-actions button:hover,.nav button:hover,.more-popover button:hover{
   transform:none!important;
@@ -4614,7 +4616,7 @@ async function authRequest(path,options={}){
   return data;
 }
 function persistCloudSession(session){
-  if(cloudSession?.user?.id!==session?.user?.id)cloudAccess=null;
+  if(cloudSession?.user?.id!==session?.user?.id){cloudAccess=null;resetCalendarData()}
   cloudSession=session||null;
   if(session)localStorage.setItem(SESSION_KEY,JSON.stringify(session));
   else localStorage.removeItem(SESSION_KEY);
@@ -4715,7 +4717,7 @@ async function loadDeferredCloudData(){
     await Promise.allSettled([
       withTimeout(syncDashboardLiveMetrics(true),18000,"métricas ao vivo")
     ]);
-    renderAll();
+    if(currentPage==="overview")renderAll();
   }catch{}
 }
 async function cloudFetch(path="",options={},retry=true){
@@ -5377,6 +5379,31 @@ const CALENDAR_ACCOUNT_KEY="cloudentflow-calendar-account";
 let calendarActiveAccountId=localStorage.getItem(CALENDAR_ACCOUNT_KEY)||"";
 let calendarAllQueueRows=null;
 let calendarAccountSwitching=false;
+let calendarSelectionVersion=0;
+let calendarQueueRequest=null;
+const calendarClockFormatters=new Map();
+function resetCalendarData(){
+  calendarSelectionVersion++;
+  calendarAllQueueRows=null;
+  calendarAccountSwitching=false;
+  calendarQueueRequest=null;
+  state.slots={};
+}
+function loadCalendarQueueRows(){
+  const session=cloudSession,path=queueResourcePath();
+  if(calendarQueueRequest?.session===session&&calendarQueueRequest.path===path)return calendarQueueRequest.promise;
+  const request={session,path,promise:null};
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
+  request.promise=cloudFetch(path,{signal:controller.signal}).then(rows=>{
+    if(!Array.isArray(rows))throw new Error("Resposta de calendário inválida.");
+    return rows;
+  }).catch(error=>{
+    if(controller.signal.aborted)throw new Error("O calendário demorou para responder. Tente atualizar novamente.");
+    throw error;
+  }).finally(()=>{clearTimeout(timeout);if(calendarQueueRequest===request)calendarQueueRequest=null});
+  calendarQueueRequest=request;
+  return request.promise;
+}
 function calendarAccountId(a){return String(a?.id||a?.platform_account_id||"")}
 function calendarInstagramAccounts(){
   return (platformAccounts||[]).filter(a=>String(a?.platform||"").toLowerCase()==="instagram"&&a?.enabled!==false);
@@ -5398,7 +5425,13 @@ function calendarAccountPolicy(accountId=calendarEnsureAccount()){
   return times.length?{...policy,times}:null;
 }
 function calendarPolicyClock(value,policy){
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:policy.timezone||'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value));
+  const timeZone=policy.timezone||'America/Sao_Paulo';
+  let formatter=calendarClockFormatters.get(timeZone);
+  if(!formatter){
+    formatter=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+    calendarClockFormatters.set(timeZone,formatter);
+  }
+  const parts=formatter.formatToParts(new Date(value));
   const get=type=>parts.find(p=>p.type===type)?.value;
   return {date:get('year')+'-'+get('month')+'-'+get('day'),time:get('hour')+':'+get('minute')};
 }
@@ -5466,23 +5499,29 @@ function calendarAccountSwitcher(context="calendar"){
 }
 async function selectCalendarAccount(id,context="calendar"){
   id=String(id||"");
-  if(calendarAccountSwitching||!calendarInstagramAccounts().some(a=>calendarAccountId(a)===id))return;
-  const previous=calendarActiveAccountId;
-  if(id===previous)return;
-  calendarAccountSwitching=true;
+  if(!calendarInstagramAccounts().some(a=>calendarAccountId(a)===id))return;
+  if(id===calendarActiveAccountId)return;
+  const session=cloudSession,version=++calendarSelectionVersion;
+  calendarActiveAccountId=id;
+  localStorage.setItem(CALENDAR_ACCOUNT_KEY,id);
+  closeModal();
+  state.slots={};
+  const cached=calendarAllQueueRows;
+  calendarAccountSwitching=false;
+  if(cached)await syncFromBackend(cached);
+  if(currentPage==="calendar")calendarPage();
+  if(context==="overview")renderProductionCalendarOverview();
+  if(cached||!session)return;
   try{
-    const rows=cloudSession?await cloudFetch(queueResourcePath()):null;
-    calendarActiveAccountId=id;
-    localStorage.setItem(CALENDAR_ACCOUNT_KEY,id);
-    closeModal();
-    state.slots={};
-    if(rows)await syncFromBackend(rows);
-    if(currentPage==="calendar")calendarPage();
-  }catch(e){toast(e?.message||"Não consegui trocar o calendário.","err")}
+    const rows=await loadCalendarQueueRows();
+    if(cloudSession!==session||version!==calendarSelectionVersion)return;
+    await syncFromBackend(rows);
+  }catch(e){if(cloudSession===session&&version===calendarSelectionVersion)toast(e?.message||"Não consegui carregar o calendário.","err")}
   finally{
-    calendarAccountSwitching=false;
-    if(context==="overview")renderProductionCalendarOverview();
-    else if(currentPage==="calendar")calendarPage();
+    if(cloudSession===session&&version===calendarSelectionVersion){
+      if(context==="overview")renderProductionCalendarOverview();
+      else if(currentPage==="calendar")calendarPage();
+    }
   }
 }
 
@@ -5494,22 +5533,26 @@ async function syncFromBackend(rows=null){
     if(cloudSession!==session)return;
     if(!loaded)throw new Error("Não foi possível carregar as contas. Atualize a agenda para tentar novamente.");
   }
-  const all=rows||await cloudFetch(queueResourcePath());
+  const all=rows||await loadCalendarQueueRows();
   if(cloudSession!==session)return;
   calendarAllQueueRows=Array.isArray(all)?all:[];
   const q=calendarFilterQueueRows(calendarAllQueueRows);
+  const policy=calendarAccountPolicy();
   state.slots={};
   for(const row of q){
     const d=new Date(row.scheduled_at);
-    const date=localISO(d), time=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
-    let slot=firstFreeSlot(date); if(slot<0) continue;
+    const at=policy?calendarPolicyClock(d,policy):{date:localISO(d),time:String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
+    const {date,time}=at;
+    // Keep fixed positions even when only a late slot has been scheduled.
+    const fixed=policy?policy.times.indexOf(time):-1;
+    let slot=fixed>=0&&!state.slots[keyFor(date,fixed)]?fixed:firstFreeSlot(date,policy?policy.times.length:0); if(slot<0) continue;
     const v=row.videos||{};
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
       size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",storageProvider:v.storage_provider||"supabase",
       thumbnailPath:v.thumbnail_storage_path||"",
       coverOffsetMs:Number(v.cover_offset_ms||3500),coverStrategy:v.cover_strategy||"auto_after_3s",
-      time,status:row.status||"scheduled",scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
+      time,status:row.status||"scheduled",lastError:row.last_error||null,scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
       instagramMediaId:row.instagram_media_id||null,calendarMetrics:row.calendar_metrics||null,pretrial:row.pretrial||null,trialVideoId:row.trial_video_id||null,
       platform:row.platform||"instagram",platformAccountId:row.platform_account_id||null,smartMode:row.smart_mode||"manual",smartStrategy:row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),smartStrategyLocked:!!row.smart_strategy_locked
     };
@@ -5751,7 +5794,8 @@ async function refreshLiveData(showFeedback=false){
   try{
     const activityOpen=$("#activityPanelHost")?.classList.contains("open");
     const fullAutomation=currentPage==="automation"||currentPage==="smartTimes";
-    const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(currentPage==="settings"&&settingsTab==="notifications"),syncFromBackend(),loadDashboardScheduleRows()];
+    const calendarVisible=currentPage==="calendar";
+    const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(currentPage==="settings"&&settingsTab==="notifications"),calendarVisible?refreshCalendarLiveData():syncFromBackend(),loadDashboardScheduleRows()];
     if(currentPage==="overview")tasks.push(syncDashboardLiveMetrics(false));
     if(currentPage==="metrics")tasks.push(loadInstagramMetricsStored());
     // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
@@ -5761,7 +5805,8 @@ async function refreshLiveData(showFeedback=false){
     if(currentPage==="settings"&&settingsTab==="health")tasks.push(loadSystemHealth());
     if(currentPage==="settings"&&settingsTab==="integrations")tasks.push(loadInstagramWebSessionStatus());
     await Promise.allSettled(tasks);
-    updateLiveChrome();renderAll();
+    const editing=!!$("#modalHost")?.children?.length||document.activeElement?.matches?.("input,textarea,select,[contenteditable='true']");
+    updateLiveChrome();if((!calendarVisible||currentPage!=="calendar")&&!editing)renderAll();
     if(activityOpen)toggleActivityPanel(true);
     if(showFeedback)toast("Dados atualizados.","ok");
   }catch(e){
@@ -5955,8 +6000,8 @@ function showPage(id){
   renderMobileNav();
   renderAll();
   if(["faceSwap","upscale","faceSwapPhoto"].includes(id)&&cloudSession){window.ImagePipeline?.render(id)}
-  if(id==="production"&&cloudSession){loadProductionData().then(()=>productionPage()).catch(e=>toast(e.message,"err"))}
-  if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>trialReelsPage()).catch(e=>toast(e.message,"err"))}
+  if(id==="production"&&cloudSession){loadProductionData().then(()=>{if(currentPage==="production")productionPage()}).catch(e=>toast(e.message,"err"))}
+  if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>{if(currentPage==="trialReels")trialReelsPage()}).catch(e=>toast(e.message,"err"))}
   if((id==="automation"||id==="smartTimes")&&cloudSession){
     loadAutomationStatus(true).then(()=>renderAll()).catch(e=>toast(e.message,"err"));
   }
@@ -6962,7 +7007,10 @@ async function previewTrialReel(id){
 
 function calendarPage(){
   calendarEnsureAccount();
-  if(calendarInstagramAccounts().length>1&&!window.__cfCalendarAccountHydrated){window.__cfCalendarAccountHydrated=true;setTimeout(()=>syncFromBackend().then(()=>{if(currentPage==="calendar")calendarPage()}).catch(()=>{}),0)}
+  if(cloudSession&&!calendarAllQueueRows&&!window.__cfCalendarAccountHydrating){
+    window.__cfCalendarAccountHydrating=true;
+    setTimeout(()=>syncFromBackend().then(()=>{if(currentPage==="calendar")calendarPage()}).catch(e=>toast(e.message,"err")).finally(()=>{window.__cfCalendarAccountHydrating=false}),0);
+  }
   const dates=weekDates(),weekdays=["dom.","seg.","ter.","qua.","qui.","sex.","sáb."];
   const atToday=state.weekStart===currentCalendarStartISO();
   const auto=automationData?.settings?.automation||{};
@@ -7142,7 +7190,7 @@ function calendarCountdownText(at){
 }
 function calendarScheduleAlert(x){
   const st=getStatus(x),at=new Date(x?.scheduledAt||0).getTime();
-  if(st==="erro")return '<div class="calendar-slot-alert error">! Falha na publicação · toque em ••• para revisar</div>';
+  if(st==="erro")return '<div class="calendar-slot-alert error">! '+esc(x.lastError||'Falha na publicação · toque em ••• para revisar')+'</div>';
   if(st==="agendado"&&Number.isFinite(at)&&Date.now()-at>10*60000)return '<div class="calendar-slot-alert late">! Publicação atrasada</div>';
   return "";
 }
@@ -7254,20 +7302,31 @@ function updateCalendarLiveDom(){
   updateCalendarClockDom();
 }
 async function refreshCalendarLiveData(){
-  const [q]=await Promise.all([cloudFetch(queueResourcePath()),loadTrialReels()]);
+  if($("#modalHost")?.children?.length)return;
+  const session=cloudSession,accountId=calendarEnsureAccount();
+  const [q]=await Promise.all([loadCalendarQueueRows(),loadTrialReels()]);
+  if(cloudSession!==session||calendarEnsureAccount()!==accountId||$("#modalHost")?.children?.length)return;
   updateTrialReelsBlock();
-  const rows=new Map((q||[]).map(r=>[String(r.id),r]));
+  const filtered=calendarFilterQueueRows(q);
+  const rows=new Map(filtered.map(r=>[String(r.id),r]));
   const current=Object.values(state.slots).filter(x=>x?.cloud&&x.scheduleId);
   const currentIds=new Set(current.map(x=>String(x.scheduleId)));
-  const backendIds=new Set((q||[]).map(r=>String(r.id)));
+  const backendIds=new Set(filtered.map(r=>String(r.id)));
   let structural=currentIds.size!==backendIds.size||[...currentIds].some(id=>!backendIds.has(id));
+  const policy=calendarAccountPolicy(accountId);
   for(const x of current){
     const row=rows.get(String(x.scheduleId));if(!row)continue;
-    const d=new Date(row.scheduled_at),date=localISO(d),time=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    const d=new Date(row.scheduled_at),at=policy?calendarPolicyClock(d,policy):{date:localISO(d),time:String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
+    const {date,time}=at;
     const currentKey=Object.entries(state.slots).find(([,v])=>v===x)?.[0]||"";
     if(currentKey&&!currentKey.startsWith(date+"#"))structural=true;
     if(x.time!==time)structural=true;
+    const v=row.videos||{};
+    const content=[x.videoId,x.name,x.caption,x.thumbnailPath,x.trialVideoId,x.pretrial,x.smartMode,x.smartStrategy,x.smartStrategyLocked];
+    const nextContent=[row.video_id,v.file_name||"Vídeo",v.caption||"",v.thumbnail_storage_path||"",row.trial_video_id||null,row.pretrial||null,row.smart_mode||"manual",row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),!!row.smart_strategy_locked];
+    if(JSON.stringify(content)!==JSON.stringify(nextContent))structural=true;
     x.status=row.status||x.status;
+    x.lastError=row.last_error||null;
     x.scheduledAt=row.scheduled_at;
     x.publishedAt=row.published_at||null;
     x.instagramMediaId=row.instagram_media_id||null;
@@ -7275,10 +7334,11 @@ async function refreshCalendarLiveData(){
     x.pretrial=row.pretrial||null;
     x.trialVideoId=row.trial_video_id||null;
   }
+  calendarAllQueueRows=q;
   save();
   if(structural){
     const scroll=document.querySelector(".ui3-calendar-scroll"),left=scroll?.scrollLeft||0;
-    await syncFromBackend();
+    await syncFromBackend(q);
     if(currentPage==="calendar"){
       calendarPage();
       const nextScroll=document.querySelector(".ui3-calendar-scroll");if(nextScroll)nextScroll.scrollLeft=left;
@@ -7473,6 +7533,11 @@ async function setSmartStrategyAuto(date,slot){
 }
 
 function pickForSlot(date,slot){
+  const policy=calendarAccountPolicy();
+  if(policy){
+    const valid=validateSchedule(date,policy.times[slot]);
+    if(!valid.ok){toast(valid.msg,"warn");return}
+  }
   pendingTarget={date,slot};
   const input=$("#videoPicker");
   if(!input)return;
@@ -7574,8 +7639,8 @@ async function handleQuickSlotVideo(input){
     input.value="";
   }
 }
-function firstFreeSlot(date){
-  for(let i=0;i<15;i++)if(!slotData(date,i))return i;
+function firstFreeSlot(date,start=0){
+  for(let i=start;i<15;i++)if(!slotData(date,i))return i;
   return -1;
 }
 
@@ -9181,10 +9246,12 @@ function actionButtonBusy(button,busy,label=""){
   if(busy){
     if(!button.dataset.idleHtml)button.dataset.idleHtml=button.innerHTML;
     button.classList.add("is-pending");
+    button.setAttribute?.("aria-busy","true");
     button.disabled=true;
     if(label)button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>'+esc(label)+'</span>';
   }else{
     button.classList.remove("is-pending");
+    button.removeAttribute?.("aria-busy");
     button.disabled=false;
     if(button.dataset.idleHtml){
       button.innerHTML=button.dataset.idleHtml;
@@ -9362,12 +9429,19 @@ async function openProductionScheduleModal(id,number){
   if(!cloudSession)return;
   const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
   if(!job)return;
+  const session=cloudSession,page=currentPage,host=$("#modalHost");
+  if(host.innerHTML.includes('id="productionScheduleLoading"'))return;
+  host.innerHTML='<div class="modal"><div class="modal-box production-schedule-modal" id="productionScheduleLoading"><div class="modal-head"><b>Adicionar ao calendário</b><button class="btn" onclick="closeModal()">Fechar</button></div><p role="status" aria-live="polite">Carregando contas e vagas…</p></div></div>';
+  const loadingNode=host.querySelector('#productionScheduleLoading');
+  const openingCurrent=()=>cloudSession===session&&currentPage===page&&host.querySelector('#productionScheduleLoading')===loadingNode;
   try{
-    await loadPlatformAccounts();
-    const queue=await cloudFetch(queueResourcePath());
-    if(!Array.isArray(queue))throw new Error("Resposta de calendário inválida.");
+    const [,queue]=await Promise.all([loadPlatformAccounts(),loadCalendarQueueRows()]);
+    if(!openingCurrent())return;
     calendarAllQueueRows=queue;
-  }catch(e){toast("Não consegui carregar as contas e vagas: "+friendlyCloudentError(e.message),"err");return}
+  }catch(e){
+    if(openingCurrent()){closeModal();toast("Não consegui carregar as contas e vagas: "+friendlyCloudentError(e.message),"err")}
+    return;
+  }
   const scheduled=!!job.meta?.scheduled;
   const linked=calendarAllQueueRows.find(x=>String(x.id)===String(job.meta?.schedule_id));
   const accountId=scheduled?calendarRowAccountId(linked):calendarEnsureAccount();
