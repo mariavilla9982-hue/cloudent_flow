@@ -1,3 +1,13 @@
+## Vídeo + frame manual — 2026-11-03
+
+A aba GENJUTSU agora abre com dois campos no estilo do Motion V7: vídeo de referência e frame/personagem livre. O frame enviado é a imagem final: não roda extração, Face Swap ou Upscale nesse modo. A seção recolhida “Preparar com uma modelo salva” preserva o fluxo automático anterior e os trabalhos já existentes.
+
+`input_mode=manual_frame` só é aceito para Genjutsu. Vídeo MP4/WebM/MOV até30MiB, imagem JPG/PNG/WebP até10MiB; ambos privados no B2 e verificados antes de ativar a fila. Modo, duração e descritores ficam fixos por UUID; retentativa de upload mantém o ID, trocar/remover arquivo cria outro. Nenhuma mídia manual de fallback no Supabase.
+
+O pai inicia em `frame_ready`; o worker usa a mesma lease/FIFO serial Genjutsu e encaminha exatamente os dois arquivos ao job de produção, sem criar tarefas de imagem. `prepared_frame` registra a imagem manual para retomada, sem fabricar resultado Upscale. O executor permanece Gemini com1040→910, vídeo970, imagem496, Ultra84GB, captura482/persistência antes do cancelamento. Sem mudança no grafo, schemas, crons ou políticas RLS.
+
+Validação: `test-genjutsu-manual.mjs`, controlador `test-genjutsu-ui.mjs`, e regressões dos pipelines automáticos, retentativa, Gemini, dispatch e captura. Nenhuma análise/geração paga é iniciada pelos testes. Chromium indisponível; testes de controlador/DOM não comprovam aparência em navegador real nem qualidade de uma geração real.
+
 # Genjutsu production pipeline
 
 Published workflow: **2117411301344411649**. Gemini model: **gemini-3.8-flash**. The real account preflight on 2026-11-03 returned HTTP200 for the model and validated the published graph. Availability does not prove free-tier eligibility or impose a spending cap.

@@ -69,10 +69,13 @@ export async function imagePipelineApi(d:any){
     const id=String(b.job_id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return json({error:'Job inválido'},400);
     const image=(p:any)=>p&&['image/jpeg','image/png','image/webp'].includes(p.type)&&Number.isSafeInteger(p.size)&&p.size>0&&p.size<=10*1024*1024;
     const photo=b.source==='face_swap_photo',natural=b.source==='face_swap_natural';
-    const selected=(natural||photo)?PIPELINE_CHARACTERS.find(c=>c.id===b.character_id&&(natural||['jujuh','sahry_japah'].includes(c.id))):null;
+    const directFrame=natural&&b.workflow_key==='genjutsu'&&b.input_mode==='manual_frame';
+    if(b.input_mode&&b.input_mode!=='manual_frame'||b.input_mode==='manual_frame'&&!directFrame)return json({error:'Modo de entrada inválido.'},400);
+    const selected=!directFrame&&(natural||photo)?PIPELINE_CHARACTERS.find(c=>c.id===b.character_id&&(natural||['jujuh','sahry_japah'].includes(c.id))):null;
     const manual=photo&&b.character_id==='custom';
     const old=await owner(id);
-    if((natural||photo)&&!selected&&!manual&&!old)return json({error:photo?'Escolha uma folha salva ou Outra modelo antes de gerar.':'Escolha Jujuh, Sahry japah ou Sahry grávida antes de gerar.'},400);
+    if(old&&(old.meta.input_mode==='manual_frame')!==directFrame)return json({error:'O modo deste envio já foi fixado. Crie um novo envio.'},409);
+    if((natural||photo)&&!selected&&!manual&&!directFrame&&!old)return json({error:photo?'Escolha uma folha salva ou Outra modelo antes de gerar.':'Escolha Jujuh, Sahry japah ou Sahry grávida antes de gerar.'},400);
     if(photo&&b.character_id&&!selected&&!manual)return json({error:'Modelo inválida.'},400);
     const workflowKey=String(b.workflow_key||old?.meta?.video_workflow?.key||'motion_control');
     if(natural&&!PIPELINE_VIDEO_WORKFLOWS.some(w=>w.key===workflowKey))return json({error:'Workflow de vídeo inválido.'},400);
@@ -89,6 +92,7 @@ export async function imagePipelineApi(d:any){
     if(old&&old.meta.source!==b.source)return json({error:'Job já utilizado'},409);
     if(old&&(natural||photo)&&b.character_id&&(old.meta.character_id||(photo?'custom':null))!==b.character_id)return json({error:'A personagem deste envio já foi fixada. Crie um novo envio para mudar.'},409);
     if(old&&old.meta.stage!=='upload')return json({ok:true,registered:true,job_id:id});
+    if(old&&directFrame&&(['name','type','size'].some(k=>b.original?.[k]!==({name:old.original_file_name,type:old.original_mime_type,size:old.original_size_bytes} as any)[k])||['name','type','size'].some(k=>b.reference?.[k]!==({name:old.frame_file_name,type:old.frame_mime_type,size:old.frame_size_bytes} as any)[k])))return json({error:'Os arquivos deste envio já foram fixados. Crie outro envio para trocar.'},409);
     const cfg=await objectConfig();
     if(!cfg)return json({error:'Configure o Backblaze B2 antes de enviar mídia para este fluxo.'},409);
     const provider=old?.storage_provider||'r2';
@@ -106,7 +110,7 @@ export async function imagePipelineApi(d:any){
     const framePath=b.source==='upscale_manual'?originalPath:prefix+'/reference';
     const originalName=String(photo&&selected?ref.name:first.name||'entrada');
     const taggedName=selected?selected.name+' · '+originalName.slice(0,200):originalName;
-    if(!old){check(await admin.from('face_swap_jobs').insert({id,user_id:user.id,storage_provider:provider,original_storage_path:originalPath,original_file_name:taggedName.slice(0,255),original_mime_type:first.type,original_size_bytes:first.size,frame_storage_path:framePath,frame_file_name:String(ref?.name||first.name||'referencia').slice(0,255),frame_mime_type:ref?.type||first.type,frame_size_bytes:ref?.size||first.size,status:'cancelled',auto_send:false,max_attempts:1,meta:{pipeline_version:2,source:b.source,stage:'upload',pipeline_status:'UPLOADING',character,manual_run:true,...(natural?{video_workflow:pipelineVideoWorkflow(workflowKey),...(workflowKey==='genjutsu'?{source_duration_seconds:b.duration_seconds}:{})}:{}),...(selected?{character_id:selected.id,character_name:selected.name,tags:[selected.name],source_file_name:originalName.slice(0,255)}:{})}}));}
+    if(!old){check(await admin.from('face_swap_jobs').insert({id,user_id:user.id,storage_provider:provider,original_storage_path:originalPath,original_file_name:taggedName.slice(0,255),original_mime_type:first.type,original_size_bytes:first.size,frame_storage_path:framePath,frame_file_name:String(ref?.name||first.name||'referencia').slice(0,255),frame_mime_type:ref?.type||first.type,frame_size_bytes:ref?.size||first.size,status:'cancelled',auto_send:false,max_attempts:1,meta:{pipeline_version:2,source:b.source,stage:'upload',pipeline_status:'UPLOADING',character,manual_run:true,...(directFrame?{input_mode:'manual_frame',source_file_name:originalName.slice(0,255)}:{}),...(natural?{video_workflow:pipelineVideoWorkflow(workflowKey),...(workflowKey==='genjutsu'?{source_duration_seconds:b.duration_seconds}:{})}:{}),...(selected?{character_id:selected.id,character_name:selected.name,tags:[selected.name],source_file_name:originalName.slice(0,255)}:{})}}));}
     else if(old.meta.stage!=='upload')return json({ok:true,registered:true,job_id:id});
     const parts:any={};
     for(const [key,path,type,p] of [['original',originalPath,first.type,provider],['reference',framePath,ref?.type||first.type,provider]] as any[]){
@@ -125,7 +129,7 @@ export async function imagePipelineApi(d:any){
       const address=await signGet(provider,path);
       if(!await uploadedObjectMatches(address,Number(size)))return json({error:'Upload incompleto; selecione novamente os arquivos.'},409);
     }
-    const m={...j.meta,stage:j.meta.source==='upscale_manual'?'upscale':'face_swap',pipeline_status:'UPLOADED'};
+    const m={...j.meta,stage:j.meta.input_mode==='manual_frame'?'frame_ready':j.meta.source==='upscale_manual'?'upscale':'face_swap',pipeline_status:'UPLOADED'};
     if(m.source==='face_swap_photo'&&!m.character_id){
       const blob=check(await admin.storage.from('production').download(j.original_storage_path));
       const sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),v=>v.toString(16).padStart(2,'0')).join('');

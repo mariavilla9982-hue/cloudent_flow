@@ -14,7 +14,9 @@ export async function retryPipelineMotion(admin:any,userId:string,id:string){
     return {ok:true,queued:true,reused_inputs:true};
   }
   if(p.status!=='failed'||!p.runninghub_task_id||p.meta?.provider_status!=='FAILED'||String(p.meta?.provider_status_task_id)!==String(p.runninghub_task_id)||p.meta?.pipeline_dispatch_uncertain||p.result_video_id||p.meta?.motion_preview_file)return {ok:false,error:'Confirme a falha da tarefa antes de repetir. Uma saída existente deve ser recuperada.',status:409};
-  if(!p.original_storage_path||!j.meta?.upscale_result?.path||p.frame_storage_path!==j.meta.upscale_result.path)return {ok:false,error:'Vídeo original ou imagem Upscale indisponível.',status:409};
+  const directFrame=p.meta.workflow_key==='genjutsu'&&p.meta.input_mode==='manual_frame'&&j.meta?.input_mode==='manual_frame';
+  const image=directFrame?j.meta.prepared_frame:j.meta?.upscale_result;
+  if(!p.original_storage_path||!image?.path||p.frame_storage_path!==image.path)return {ok:false,error:'Vídeo original ou frame preparado indisponível.',status:409};
   const meta={...p.meta,previous_motion_task_id:p.runninghub_task_id,pipeline_dispatch_intent:null,pipeline_dispatch_uncertain:false};
   for(const key of Object.keys(meta))if(key.startsWith('provider_')||key.startsWith('motion_preview_')||key.startsWith('motion_execution_'))delete meta[key];
   const claimed=check(await admin.from('production_jobs').update({status:'motion_waiting',progress:0,runninghub_task_id:null,runninghub_video_file:null,runninghub_frame_file:null,attempt_count:0,next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,started_at:null,completed_at:null,meta,updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',userId).eq('status','failed').eq('runninghub_task_id',p.runninghub_task_id).select('id'));
