@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v72";
+const CACHE="cloudentflow-pwa-v73";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -30,7 +30,7 @@ async function injectCalendarPatch(response){
     const backblazeGuardTag='<script src="/backblaze-media-guard.js?v=1"></script>';
     const genjutsuTag='<script src="/genjutsu-ui.js?v=1"></script>';
     if(!html.includes('genjutsu-ui.js'))html=html.replace('</body>',genjutsuTag+'</body>');
-    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=20"></script>';
+    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=21"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
@@ -61,15 +61,16 @@ async function injectCalendarPatch(response){
     if(oldForYouWatchdog.test(html))html=html.replace(oldForYouWatchdog,forYouWatchdogTag);
     else html=html.includes("</body>")?html.replace("</body>",forYouWatchdogTag+"</body>"):html+forYouWatchdogTag;
 
+    html=html.replace(/genjutsu-ui\.js\?v=\d+/g,'genjutsu-ui.js?v=2');
     // Cached native and legacy documents share one selector controller.
     html=html.replace(oldFaceSwapCharacterClickHotfix,'');
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
     html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=15');
-    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=4').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=3');
+    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=5').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=3');
     if(html.includes('image-pipeline-ui.js')){
-      if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=4"></script>$&');
+      if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=5"></script>$&');
       if(!html.includes('production-studio.css'))html=html.replace('</head>','<link rel="stylesheet" href="/production-studio.css?v=3"></head>');
     }
     // The staged pipeline owns its queue. Keep the old decorator only for legacy documents.
