@@ -19,6 +19,7 @@ export async function imagePipelineApi(d:any){
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const owner=async(id:string)=>check(await admin.from('face_swap_jobs').select('*').eq('id',id).eq('user_id',user.id).contains('meta',{pipeline_version:2}).maybeSingle());
   if(req.method==='GET'&&resource==='image-pipeline-characters'){
+    if(url.searchParams.get('metadata')==='1')return json({characters:PIPELINE_CHARACTERS.map(c=>({id:c.id,name:c.name}))});
     return json({characters:PIPELINE_CHARACTERS.map(({base64,...c})=>({...c,preview_url:'data:'+c.mime_type+';base64,'+base64}))});
   }
   if(req.method==='GET'&&resource==='image-pipeline-model'){
@@ -29,9 +30,17 @@ export async function imagePipelineApi(d:any){
     return json({url:await signGet('supabase',path),name:'modelo_raiz.jpg',type:'image/jpeg',sha256:ROOT_IMAGE_SHA});
   }
   if(req.method==='GET'&&resource==='image-pipeline'){
-    const rows=check(await admin.from('face_swap_jobs').select('*').eq('user_id',user.id).contains('meta',{pipeline_version:2}).is('hidden_at',null).order('created_at',{ascending:false}).limit(100));
+    let query=admin.from('face_swap_jobs').select('*').eq('user_id',user.id).contains('meta',{pipeline_version:2}).is('hidden_at',null);
+    if(url.searchParams.get('workflow')==='genjutsu')query=query.contains('meta',{video_workflow:{key:'genjutsu'}});
+    const rows=check(await query.order('created_at',{ascending:false}).limit(100));
     for(const j of rows||[]){
-      if(j.production_job_id)j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
+      if(j.production_job_id){
+        j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
+        if(j.production){
+          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&j.production.meta?.genjutsu_prompt?.status!=='generating':j.production.meta?.provider_status==='FAILED')};
+          delete j.production.meta;
+        }
+      }
     }
     return json({jobs:rows});
   }
@@ -68,6 +77,12 @@ export async function imagePipelineApi(d:any){
     const workflowKey=String(b.workflow_key||old?.meta?.video_workflow?.key||'motion_control');
     if(natural&&!PIPELINE_VIDEO_WORKFLOWS.some(w=>w.key===workflowKey))return json({error:'Workflow de vídeo inválido.'},400);
     if(old&&natural&&old.meta.video_workflow&&old.meta.video_workflow.key!==workflowKey)return json({error:'O workflow deste envio já foi fixado. Crie um novo envio para mudar.'},409);
+    if(natural&&workflowKey==='genjutsu'){
+      const readiness=check(await admin.from('app_settings').select('value').eq('key','genjutsu_readiness').maybeSingle());
+      if(!readiness?.value?.ready||readiness.value.workflowId!=='2117411301344411649')return json({error:'Genjutsu ainda não está validado no servidor.'},409);
+      if(!['video/mp4','video/webm','video/quicktime'].includes(b.original?.type)||Number(b.original?.size)>30*1024*1024||!Number.isFinite(b.duration_seconds)||b.duration_seconds<=0)return json({error:'Genjutsu: envie um vídeo válido de até 30 MiB, com duração identificável.'},400);
+      if(old&&Number(old.meta.source_duration_seconds)!==b.duration_seconds)return json({error:'A duração deste envio já foi fixada. Crie outro envio.'},409);
+    }
     const first=photo&&selected?{name:selected.file_name,type:selected.mime_type,size:selected.size_bytes}:b.original,ref=b.reference;
     if(b.source==='face_swap_natural'?!first?.type?.startsWith('video/')||!Number.isSafeInteger(first.size)||first.size<=0||first.size>500*1024*1024:!image(first))return json({error:'Arquivo de entrada inválido'},400);
     if(b.source!=='upscale_manual'&&!image(ref))return json({error:'Referência inválida'},400);
@@ -91,7 +106,7 @@ export async function imagePipelineApi(d:any){
     const framePath=b.source==='upscale_manual'?originalPath:prefix+'/reference';
     const originalName=String(photo&&selected?ref.name:first.name||'entrada');
     const taggedName=selected?selected.name+' · '+originalName.slice(0,200):originalName;
-    if(!old){check(await admin.from('face_swap_jobs').insert({id,user_id:user.id,storage_provider:provider,original_storage_path:originalPath,original_file_name:taggedName.slice(0,255),original_mime_type:first.type,original_size_bytes:first.size,frame_storage_path:framePath,frame_file_name:String(ref?.name||first.name||'referencia').slice(0,255),frame_mime_type:ref?.type||first.type,frame_size_bytes:ref?.size||first.size,status:'cancelled',auto_send:false,max_attempts:1,meta:{pipeline_version:2,source:b.source,stage:'upload',pipeline_status:'UPLOADING',character,manual_run:true,...(natural?{video_workflow:pipelineVideoWorkflow(workflowKey)}:{}),...(selected?{character_id:selected.id,character_name:selected.name,tags:[selected.name],source_file_name:originalName.slice(0,255)}:{})}}));}
+    if(!old){check(await admin.from('face_swap_jobs').insert({id,user_id:user.id,storage_provider:provider,original_storage_path:originalPath,original_file_name:taggedName.slice(0,255),original_mime_type:first.type,original_size_bytes:first.size,frame_storage_path:framePath,frame_file_name:String(ref?.name||first.name||'referencia').slice(0,255),frame_mime_type:ref?.type||first.type,frame_size_bytes:ref?.size||first.size,status:'cancelled',auto_send:false,max_attempts:1,meta:{pipeline_version:2,source:b.source,stage:'upload',pipeline_status:'UPLOADING',character,manual_run:true,...(natural?{video_workflow:pipelineVideoWorkflow(workflowKey),...(workflowKey==='genjutsu'?{source_duration_seconds:b.duration_seconds}:{})}:{}),...(selected?{character_id:selected.id,character_name:selected.name,tags:[selected.name],source_file_name:originalName.slice(0,255)}:{})}}));}
     else if(old.meta.stage!=='upload')return json({ok:true,registered:true,job_id:id});
     const parts:any={};
     for(const [key,path,type,p] of [['original',originalPath,first.type,provider],['reference',framePath,ref?.type||first.type,provider]] as any[]){

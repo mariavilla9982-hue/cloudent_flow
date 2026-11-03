@@ -87,3 +87,9 @@ for(let i=0;i<4;i++)await runImagePipeline(standard.deps);
 assert.equal(standard.production.length,1);assert.equal(standard.production[0].status,'waiting');assert.equal(standard.production[0].meta.workflow_key,'standard');assert.equal(standard.production[0].meta.video_workflow.workflowId,'2100995504908824578');assert.equal(standard.production[0].frame_storage_path,'standard/upscale');assert.equal(standard.production[0].original_storage_path,'standard/video');assert.equal(motionWakes,0);assert.equal(standard.production[0].meta.character_id,'jujuh');
 standard.production[0].status='ready';standard.production[0].result_video_id='video';await runImagePipeline(standard.deps);assert.equal(standard.rows[0].status,'ready');assert.equal(standard.production.length,1);
 console.log('PASS: chosen standard workflow handoff, saved Upscale frame, original video, character TAG, no Motion dispatch, completion reconciliation');
+
+const gen=harness([{...job('gen','face_swap_natural'),meta:{...job('gen','face_swap_natural').meta,video_workflow:{key:'genjutsu'},source_duration_seconds:8.5,character_id:'jujuh',character_name:'Jujuh'}}]);
+const genWakes=[];gen.deps.wakeMotion=async(key)=>genWakes.push(key);
+for(let i=0;i<4;i++)await runImagePipeline(gen.deps);
+assert.equal(gen.production.length,1);assert.equal(gen.production[0].status,'motion_waiting');assert.equal(gen.production[0].meta.workflow_key,'genjutsu');assert.equal(gen.production[0].meta.workflow_id,'2117411301344411649');assert.equal(gen.production[0].meta.source_duration_seconds,8.5);assert.equal(gen.production[0].original_storage_path,'gen/video');assert.equal(gen.production[0].frame_storage_path,'gen/upscale');assert.deepEqual(genWakes,['genjutsu']);assert.equal(gen.production[0].meta.workflow_nodes.output,'482');
+console.log('PASS Genjutsu handoff: original video, final Upscale, duration, fixed workflow/482 mapping, separate worker wake');

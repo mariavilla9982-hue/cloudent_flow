@@ -13,13 +13,14 @@
   const MODE_KEY="cloudent_production_workflow_tab_v1";
   const MOTION="motion_control";
   const STANDARD="standard";
-  let activeMode=localStorage.getItem(MODE_KEY)===MOTION?MOTION:STANDARD;
+  const GENJUTSU="genjutsu";
+  let activeMode=[MOTION,GENJUTSU].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):STANDARD;
   let motionConfig=null;
   let configLoadedAt=0;
   const MOTION_EDGE=(window.CloudentConfig?.supabaseUrl||"")+"/functions/v1/cloudent-motion-control";
 
   const isMotionJob=job=>String(job?.meta?.workflow_key||"")===MOTION;
-  const belongsToMode=job=>activeMode===MOTION?isMotionJob(job):!isMotionJob(job);
+  const belongsToMode=job=>activeMode===MOTION?isMotionJob(job):activeMode===GENJUTSU?job?.meta?.workflow_key===GENJUTSU:!isMotionJob(job)&&job?.meta?.workflow_key!==GENJUTSU;
   const visibleJobs=()=>((typeof productionData!=="undefined"&&productionData?.jobs)||[]).filter(belongsToMode);
 
   async function motionFetch(path,options={},retry=true){
@@ -51,7 +52,7 @@
     const style=document.createElement("style");
     style.id="motionControlProductionStyle";
     style.textContent=`
-      #production .production-workflow-tabs{display:flex;gap:8px;align-items:center;margin:-2px 0 16px;padding:5px;width:max-content;max-width:100%;border:1px solid #272727;background:#0d0d0d;border-radius:14px}
+      #production .production-workflow-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-2px 0 16px;padding:5px;width:max-content;max-width:100%;border:1px solid #272727;background:#0d0d0d;border-radius:14px}
       #production .production-workflow-tab{border:0;background:transparent;color:#8b8b8b;padding:9px 14px;border-radius:10px;font:700 12px/1 inherit;cursor:pointer;white-space:nowrap}
       #production .production-workflow-tab.active{background:#fff;color:#050505}
       #production .motion-workflow-map{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:center;margin:0 0 14px;padding:14px 16px;border:1px solid #252525;border-radius:16px;background:#0b0b0b}
@@ -104,6 +105,7 @@
         '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
           '<button type="button" class="production-workflow-tab '+(activeMode===STANDARD?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;standard&quot;)">video 7 minutos</button>'+
           '<button type="button" class="production-workflow-tab '+(activeMode===MOTION?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;motion_control&quot;)">motion control v7</button>'+
+          '<button type="button" class="production-workflow-tab" onclick="CloudentMotionControl.setMode(&quot;genjutsu&quot;)">Genjutsu</button>'+
         '</div>'
       );
     }
@@ -225,6 +227,7 @@
 
   const nativeProductionPage=productionPage;
   productionPage=function(...args){
+    if(activeMode===GENJUTSU&&window.CloudentGenjutsu){window.CloudentGenjutsu.render(document.getElementById("production"));return;}
     const data=typeof productionData!=="undefined"?productionData:null;
     const all=data?.jobs;
     if(data&&Array.isArray(all))data.jobs=all.filter(belongsToMode);
@@ -332,9 +335,9 @@
   };
 
   async function setMode(mode){
-    const next=mode===MOTION?MOTION:STANDARD;
+    const next=[MOTION,GENJUTSU].includes(mode)?mode:STANDARD;
     if(next===activeMode)return;
-    if(productionUploading){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
+    if(productionUploading||window.CloudentGenjutsu?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
     activeMode=next;
     localStorage.setItem(MODE_KEY,activeMode);
     try{releaseProductionDraft()}catch{}

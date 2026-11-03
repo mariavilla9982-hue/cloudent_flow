@@ -1702,7 +1702,7 @@ Deno.serve(async (req: Request) => {
         };
       }
       return json({
-        jobs:jobs||[],imagePipelineQueue,
+        jobs:(jobs||[]).map((job:any)=>job.meta?.workflow_key==="genjutsu"?{...job,meta:{...job.meta,genjutsu_prompt:job.meta.genjutsu_prompt?{status:job.meta.genjutsu_prompt.status,usage:job.meta.genjutsu_prompt.usage,retryAt:job.meta.genjutsu_prompt.retryAt}:null}}:job),imagePipelineQueue,
         integration:{enabled:!!integration?.enabled,account_label:integration?.account_label||"RunningHub",config},
         worker:worker?{...worker,online}:null
       });
@@ -2280,6 +2280,7 @@ Deno.serve(async (req: Request) => {
         .select("id,user_id,status,meta")
         .eq("id",id).eq("user_id",userData.user.id).maybeSingle();
       if(readError)throw readError;if(!job)return json({error:"production_job_not_found"},404);
+      if(job.meta?.workflow_key==="genjutsu")return json({error:"Gerencie este trabalho pela aba Genjutsu."},409);
 
       if(op==="run"){
         if(job.status!=="waiting")return json({error:"run_not_allowed"},409);
