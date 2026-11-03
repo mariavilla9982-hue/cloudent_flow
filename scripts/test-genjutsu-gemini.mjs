@@ -185,6 +185,24 @@ const wrongId=harness({response:{id:'first-id',status:'in_progress'}});await wro
 await rejects(()=>wrongId.run(undefined,{fetcher:async()=>Response.json({id:'different-id',status:'completed'})}),'invalid_response');
 assert.equal(wrongId.state.interactionId,'first-id');
 console.log('PASS background ID survives 503/network/invalid JSON, output isolation, prompt reuse and failed final save recovery');
+// HTTP 200 can carry a terminal infrastructure failure, not a usable completion.
+const internal=harness({response:{id:'internal-1',status:'in_progress'}});
+await internal.run();internal.clock=current+31000;
+await rejects(()=>internal.run(undefined,{fetcher:async()=>Response.json({id:'internal-1',status:'failed',errors:[{code:'INTERNAL',message:'private-test-key'}]})}),'provider_waiting');
+assert.equal(internal.state.interactionId,undefined);assert.equal(internal.state.previousInteractionId,'internal-1');
+assert.deepEqual(internal.state.providerFailureCodes,['INTERNAL']);assert.equal(internal.state.status,'provider_waiting');
+assert(!JSON.stringify(internal.state).includes('private-test-key'));
+const retryCalls=internal.calls.length;await internal.run();assert.equal(internal.calls.length,retryCalls);
+internal.clock=Date.parse(internal.state.retryAt)+1;internal.config.response={id:'internal-2',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]};
+assert.equal((await internal.run()).ready,true);assert.equal(count(internal,'/upload/v1beta/files'),2);assert.equal(count(internal,'/v1beta/interactions'),2);
+const exhaustedInternal=harness({response:{id:'internal-final',status:'failed',errors:[{code:'INTERNAL'}]}});
+for(let i=0;i<5;i++){await rejects(()=>exhaustedInternal.run(),'provider_waiting');exhaustedInternal.clock=Date.parse(exhaustedInternal.state.retryAt)+1;}
+await rejects(()=>exhaustedInternal.run(),'provider_unavailable');assert.equal(exhaustedInternal.state.status,'failed');
+for(const errors of [[],[{code:'INVALID_ARGUMENT'}],[{code:'INTERNAL'},{code:'SAFETY'}],[{code:'UNKNOWN'}]]){
+ const terminal=harness({response:{id:'terminal',status:'failed',errors}});
+ await rejects(()=>terminal.run(),'incomplete_response');assert.equal(terminal.state.status,'failed');assert.equal(terminal.state.retryAt,undefined);
+}
+console.log('PASS HTTP200 terminal INTERNAL recovery, same media/new independent analysis, bounded shared retry budget and refusal isolation');
 // Exhausting a worker pass before POST leaves preparation resumable, never uncertain.
 const budget=harness();let budgetState;
 await rejects(()=>budget.run(undefined,{checkpoint:async state=>{budgetState=structuredClone(state);if(state.status==='generating')budget.clock=current+45000;}}),'pass_yield');

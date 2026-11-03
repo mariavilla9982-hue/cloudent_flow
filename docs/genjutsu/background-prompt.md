@@ -11,3 +11,7 @@ The historical legacy job can only be reanalyzed with an exact, owner-linked, ta
 Validated: async create/poll,503/429/budget, deadlines, network/JSON recovery, identity/model isolation, media/instructions, unsafe upload origins, output validation, final save recovery, owner lease, manual retry, actual worker dispatch and482 capture/cancel. Production results and deployed versions belong in the Brain release entry.
 
 References: https://ai.google.dev/gemini-api/docs/background-execution ; https://ai.google.dev/api/interactions-api ; https://ai.google.dev/gemini-api/docs/video-understanding
+
+## Terminal background infrastructure failures
+
+Real recovery on 2026-11-03 accepted an interaction but returned HTTP200/status=failed with errors[0].code=INTERNAL. These errors live in `errors`, not `error`. The adapter now retries terminal INTERNAL/UNAVAILABLE/RESOURCE_EXHAUSTED/DEADLINE_EXCEEDED failures using the same bounded backoff budget as503. It clears only the confirmed terminal interaction ID, retains its previous ID and sanitized codes, and reuses the same uploaded media for an independent analysis. Unknown, mixed, safety, invalid input and incomplete responses remain terminal. Raw upstream messages are never persisted. Tests cover HTTP200 failed polling, delayed recovery, media reuse, exhausted retries and refusal isolation.
