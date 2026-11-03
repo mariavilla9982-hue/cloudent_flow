@@ -45,7 +45,8 @@ async function run(options={}){
     validateGenjutsuWorkflow:async()=>{events.push('validate');return [];},GENJUTSU_CONFIG,genjutsuPromptWait,MotionCreateError,motionDispatchFailurePatch,
     prepareGenjutsuStage:async({job,key})=>{
       assert.equal(key,'gemini-secret');assert.equal(job.frame_storage_path,'owner/upscale.png');assert.equal(job.original_storage_path,'owner/original.mp4');events.push('llm');
-      job.meta.genjutsu_prompt={status:options.quota?'quota_waiting':options.uncertain?'generating':'complete',prompt:'dynamic prompt',retryAt:new Date(Date.now()+120000).toISOString()};
+      job.meta.genjutsu_prompt={status:options.provider503?'provider_waiting':options.quota?'quota_waiting':options.uncertain?'generating':'complete',prompt:'dynamic prompt',retryAt:new Date(Date.now()+120000).toISOString()};
+      if(options.provider503)throw new GenjutsuPromptError('provider_waiting','503');
       if(options.quota)throw new GenjutsuPromptError('quota_waiting','quota');
       if(options.uncertain)throw new GenjutsuPromptError('generation_uncertain','uncertain');
       return !options.pending;
@@ -59,7 +60,7 @@ async function run(options={}){
 const ready=await run();assert.equal(ready.body.ok,true,JSON.stringify(ready.body));assert.equal(ready.creates.length,1,JSON.stringify({body:ready.body,row:ready.row,events:ready.events}));assert.equal(ready.creates[0].instanceType,'ultra');assert.equal(ready.creates[0].workflowId,GENJUTSU_CONFIG.workflowId);
 assert.deepEqual(ready.creates[0].nodeInfoList.map(x=>[x.nodeId,x.fieldName]),[['970','video'],['496','image'],['910','value']]);assert.equal(ready.creates[0].nodeInfoList[2].fieldValue,'dynamic prompt');
 assert(ready.events.indexOf('llm')<ready.events.indexOf('intent'));assert(ready.events.indexOf('intent')<ready.events.indexOf('create'));assert.equal(ready.row.runninghub_task_id,'provider-task');
-for(const options of [{pending:true},{quota:true}]){const h=await run(options);assert.equal(h.creates.length,0);assert.equal(h.row.status,'motion_waiting');assert.equal(h.row.attempt_count,0);assert.equal(h.row.locked_by,null);}
+for(const options of [{pending:true},{quota:true},{provider503:true}]){const h=await run(options);assert.equal(h.creates.length,0);assert.equal(h.row.status,'motion_waiting');assert.equal(h.row.attempt_count,0);assert.equal(h.row.locked_by,null);}
 const uncertain=await run({uncertain:true});assert.equal(uncertain.creates.length,0);assert.equal(uncertain.row.status,'failed');
 const timeout=await run({createTimeout:true});assert.equal(timeout.creates.length,1);assert.equal(timeout.row.meta.pipeline_dispatch_uncertain,true);assert.equal(timeout.row.status,'failed');
 const full=await run({full:true});assert.equal(full.row.status,'motion_waiting');assert.equal(full.row.attempt_count,0);assert.equal(full.row.meta.genjutsu_prompt.status,'complete');

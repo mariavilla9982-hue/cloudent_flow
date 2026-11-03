@@ -25,3 +25,12 @@ await runImagePipeline(deps);assert.equal(db.production_jobs.length,1);assert.eq
 p.status='failed';p.runninghub_task_id='failed-task';Object.assign(p.meta,{provider_status:'FAILED',provider_status_task_id:'failed-task'});j.status='failed';
 assert.equal((await retryPipelineMotion(admin,'owner',p.id)).reused_inputs,true);assert.equal(p.frame_storage_path,ticket.body.reference.path);assert.equal(p.status,'motion_waiting');
 console.log('PASS manual Genjutsu: arbitrary frame/no saved model, B2 only, size/readiness/immutable-mode guards, upload verification, replay/owner, exact media handoff without Face/Upscale, saved-frame retry');
+
+// Historical explicit 503 may resume; ambiguous generation must remain blocked.
+p.status='failed';p.runninghub_task_id=null;p.last_error='Gemini recusou a operação (HTTP 503).';
+p.meta.pipeline_dispatch_intent=null;p.meta.genjutsu_prompt={status:'generating',transientAttempts:6};
+assert.equal((await retryPipelineMotion(admin,'owner',p.id)).reused_inputs,true);
+assert.equal(p.meta.genjutsu_prompt.status,'preparing');assert.equal(p.meta.genjutsu_prompt.transientAttempts,undefined);
+p.status='failed';p.last_error='Falha de comunicação com Gemini.';p.meta.genjutsu_prompt={status:'generating'};
+assert.equal((await retryPipelineMotion(admin,'owner',p.id)).status,409);
+console.log('PASS historical explicit 503 resumes same job, ambiguous timeout stays blocked');
