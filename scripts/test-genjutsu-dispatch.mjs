@@ -14,8 +14,8 @@ async function run(options={}){
     if(name==='get_cloudent_r2_config')return {data:{access_key_id:'b2-id',secret_access_key:'b2-secret',bucket:'bucket',endpoint:'https://s3.region.backblazeb2.com'}};
     assert.equal(name,'claim_genjutsu_job');assert.equal(args.p_limit,1);events.push('claim');
     Object.assign(row,{status:'uploading',attempt_count:1,locked_by:args.p_worker});return {data:[structuredClone(row)]};
-  },from(table){let key,values,update=false,filters=[];const q={select(){return q;},eq(k,v){key=v;filters.push(x=>x[k]===v);return q;},is(k,v){filters.push(x=>(x[k]??null)===v);return q;},in(){return q;},contains(){return q;},lte(){return q;},limit(){return q;},single(){return q.maybeSingle();},upsert(){return Promise.resolve({error:null});},update(value){values=value;update=true;return q;},async maybeSingle(){
-    if(table==='integrations')return {data:{enabled:true,config:{apiKeyCipher:'encrypted',apiKeyIv:'iv',concurrency:2}}};
+  },from(table){let key,values,update=false,filters=[];const q={select(){return q;},eq(k,v){key=v;filters.push(x=>x[k]===v);return q;},is(k,v){filters.push(x=>(x[k]??null)===v);return q;},in(k,v){if(table==='production_jobs'&&k==='status'&&v.includes('queued'))q.count=options.expired?1:0;return q;},lt(){return q;},contains(){return q;},lte(){return q;},limit(){return q;},single(){return q.maybeSingle();},upsert(){return Promise.resolve({error:null});},update(value){values=value;update=true;return q;},async maybeSingle(){
+    if(table==='integrations')return {data:{enabled:true,config:{apiKeyCipher:'encrypted',apiKeyIv:'iv',concurrency:options.expired?1:2}}};
     if(table==='app_settings')return {data:{value:{enabled:true}}};
     if(table==='production_jobs'){
       if(update){if(!filters.every(f=>f(row)))return {data:null,error:null};Object.assign(row,structuredClone(values));if(values.meta?.pipeline_dispatch_intent)events.push('intent');}
@@ -65,3 +65,5 @@ const timeout=await run({createTimeout:true});assert.equal(timeout.creates.lengt
 const full=await run({full:true});assert.equal(full.row.status,'motion_waiting');assert.equal(full.row.attempt_count,0);assert.equal(full.row.meta.genjutsu_prompt.status,'complete');
 const accepted=await run({afterAttachFailure:true});assert.equal(accepted.creates.length,1);assert.equal(accepted.row.runninghub_task_id,'provider-task');assert.equal(accepted.row.status,'queued');
 console.log('PASS real dispatch worker: exact 970/496/910, Ultra, LLM before durable create, pending/quota, ambiguity, provider capacity and accepted-task recovery');
+
+const expired=await run({expired:true});assert.equal(expired.body.ok,true);assert.equal(expired.creates.length,1,JSON.stringify(expired));assert.equal(expired.events.filter(x=>x==='claim').length,1);console.log('PASS expired pre-create lease resumes even when its reservation fills concurrency=1');
