@@ -194,7 +194,16 @@ Deno.serve(async(req:Request)=>{
       admin.from("production_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"]),
       admin.from("face_swap_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"])
     ]);
-    const active=Number(productionActive||0)+Number(faceActive||0);
+    let active=Number(productionActive||0)+Number(faceActive||0);
+    // An expired pre-create lease owns a local slot already. Reclaim it even at concurrency=1.
+    // The RPC still excludes the same row from capacity and rejects existing task/dispatch intent.
+    if(genjutsu&&active>=concurrency){
+      const {count:recoverable,error:recoveryError}=await admin.from("production_jobs").select("id",{count:"exact",head:true})
+        .eq("status","uploading").contains("meta",{workflow_key:"genjutsu",workflow_id:GENJUTSU_CONFIG.workflowId})
+        .is("runninghub_task_id",null).is("result_video_id",null).is("hidden_at",null).is("meta->>pipeline_dispatch_intent",null)
+        .lt("locked_at",new Date(Date.now()-10*60*1000).toISOString()).lte("next_attempt_at",new Date().toISOString());
+      if(!recoveryError&&Number(recoverable||0)>0)active=Math.max(0,active-1);
+    }
     let slots=Math.max(0,concurrency-active);
     if(slots<=0)return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency,message:"Aguardando vaga do RunningHub"});
 

@@ -15,7 +15,7 @@ Execution requests Ultra84GB (`instanceType: ultra`). The published graph and al
 
 ## Queue and task lifecycle
 
-`genjutsu_image_eligible` and `claim_genjutsu_job` serialize the entire Genjutsu job in Postgres, under the existing RunningHub advisory lock and shared provider capacity. Later Genjutsu Face Swap jobs wait for the earlier parent to finish its video stage. This is enforced server-side, including concurrent workers and expired leases. Other workflow types retain their existing behavior.
+`genjutsu_image_eligible` and `claim_genjutsu_job` serialize the entire Genjutsu job in Postgres, under the existing RunningHub advisory lock and shared provider capacity. Later Genjutsu Face Swap jobs wait for the earlier parent to finish its video stage. This is enforced server-side, including concurrent workers and expired leases. A recoverable pre-create reservation is deducted from the worker capacity precheck before reclaim, so concurrency1 does not deadlock on its own expired slot. The atomic RPC still enforces shared capacity and dispatch uncertainty. Other workflow types retain their existing behavior.
 
 Gemini file descriptors and prompt/hash are saved under the owner and current worker lease. Processing and quota waits release the lease and resume through the existing minute scheduler. Completed prompts and uploaded Google files are reused. A durable generating checkpoint precedes generateContent; an ambiguous generation response blocks automatic replay. A durable dispatch intent precedes RunningHub create; an ambiguous create never permits a second task. Retry is explicit and restricted to safe pre-dispatch failures or provider-confirmed FAILED tasks.
 
