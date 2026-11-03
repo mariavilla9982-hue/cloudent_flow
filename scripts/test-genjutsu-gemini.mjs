@@ -77,7 +77,7 @@ const generated=happy.calls.find(c=>c.url.endsWith('/v1beta/interactions'));
 assert.equal(generated.init.headers['Api-Revision'],'2026-05-20');
 const body=JSON.parse(generated.init.body);
 assert.equal(body.system_instruction,GENJUTSU_INSTRUCTIONS);
-assert.equal(body.background,true);assert.equal(body.store,true);assert.equal(body.generation_config.thinking_level,'low');
+assert.equal(body.background,true);assert.equal(body.store,true);assert.equal(body.model,'gemini-3.5-flash-lite');assert.equal(body.generation_config.thinking_level,undefined);
 assert.equal(body.previous_interaction_id,undefined,'each video starts an independent analysis');
 assert.deepEqual(body.input.slice(0,2),[
   {type:'video',uri:ref('video').uri,mime_type:video.type},
