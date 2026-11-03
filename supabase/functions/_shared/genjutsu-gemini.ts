@@ -23,6 +23,7 @@ export type PromptState = {
   interactionStartedAt?:string;
   interactionStatus?:string;
   previousInteractionId?:string;
+  providerFailureCodes?:string[];
 };
 type Options = {
   apiKey:string;
@@ -151,6 +152,20 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
       await save({retryAt:new Date(now()+30000).toISOString()});return {ready:false,state};
     }
     if(data.status!=='completed'){
+      // Background failures arrive inside HTTP 200. Retry only explicit, terminal
+      // infrastructure faults; refusals, invalid inputs and unknown faults stay blocked.
+      const codes=Array.isArray(data.errors)?data.errors.map((e:any)=>String(e?.code||'')):[];
+      const transient=['INTERNAL','UNAVAILABLE','RESOURCE_EXHAUSTED','DEADLINE_EXCEEDED'];
+      if(data.status==='failed'&&codes.length&&codes.every((code:string)=>transient.includes(code))){
+        const attempts=(state.transientAttempts||0)+1;
+        const exhausted=attempts>5;
+        await save({status:exhausted?'failed':'provider_waiting',previousInteractionId:id,interactionId:undefined,
+          providerFailureCodes:[...new Set(codes)] as string[],transientAttempts:attempts,
+          retryAt:exhausted?undefined:new Date(now()+Math.min(3600,60*2**(attempts-1))*1000).toISOString()});
+        fail(exhausted?'provider_unavailable':'provider_waiting',exhausted?
+          'Gemini continua com falha temporária após o limite de tentativas. Tente a etapa novamente mais tarde.':
+          'Gemini encerrou a análise por falha temporária. Nova tentativa agendada com as mesmas mídias.');
+      }
       await save({status:'failed',previousInteractionId:id,interactionId:undefined,retryAt:undefined});
       fail('incomplete_response','Gemini não concluiu a análise ('+(['failed','cancelled','incomplete','requires_action','requires_continuation'].includes(data.status)?data.status:'estado inválido')+'). Nenhum vídeo será gerado.');
     }
