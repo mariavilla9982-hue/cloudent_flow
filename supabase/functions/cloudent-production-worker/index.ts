@@ -135,6 +135,16 @@ function motionPreviewViewUrl(base:string,wss:string,file:any){
   u.searchParams.set("filename",file.filename);u.searchParams.set("subfolder",file.subfolder||"");u.searchParams.set("type","output");
   return u.toString();
 }
+// A terminated edge invocation can leave a capture lease behind. Reclaim only
+// an expired, unchanged lease for this task; never steal an active saver.
+async function claimMotionSaveLease(admin:any,job:any,lease:string,now=Date.now()){
+  const age=now-Date.parse(job.locked_at||'');
+  if(job.locked_by&&(!Number.isFinite(age)||age<130000))return false;
+  let claim=admin.from('production_jobs').update({locked_by:lease,locked_at:new Date(now).toISOString()})
+    .eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).in('status',['queued','running']).is('result_video_id',null);
+  claim=job.locked_by?claim.eq('locked_by',job.locked_by).eq('locked_at',job.locked_at):claim.is('locked_by',null);
+  const {data,error}=await claim.select('id').maybeSingle();if(error)throw error;return !!data;
+}
 async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:string,master:string,onCapture:any=null){
   if(!isMotionPreviewJob(job)||job.result_video_id||job.meta?.motion_preview_file)return;
   if(job.locked_by&&Date.now()-Date.parse(job.locked_at||"")<130000)return;
@@ -754,8 +764,7 @@ Deno.serve(async(req:Request)=>{
             const valid=motionPreviewFile({type:"executed",data:{node:motionOutputNode(job),prompt_id:job.runninghub_task_id,output:{videos:[file]}}},String(job.runninghub_task_id),motionOutputNode(job));
             if(!valid)throw new Error("Motion Control: arquivo de prévia inválido.");
             const lease="motion-save-"+crypto.randomUUID();
-            const {data:locked}=await admin.from("production_jobs").update({locked_by:lease,locked_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",job.runninghub_task_id).is("result_video_id",null).is("locked_by",null).select("id").maybeSingle();
-            if(!locked)continue;
+            if(!await claimMotionSaveLease(admin,job,lease))continue;
             try{
               const outputs=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
               const wss=outputs?.data?.netWssUrl;
@@ -774,7 +783,17 @@ Deno.serve(async(req:Request)=>{
                 const item=outputs.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")===motionOutputNode(job));
                 if(item){await saveResult(job,item,item);touched++;continue;}
               }
-              throw new Error("Motion Control: saída #384 ainda não acessível.");
+              if(isGenjutsuPreviewJob(job)&&['FAILED','CANCELLED','CANCELED'].includes(motionState?.status)&&Number(outputs?.code)===805){
+                // The provider has ended and its output API no longer offers a
+                // download. Preserve the descriptor/inputs for manual recovery,
+                // but stop reserving a generation slot for a dead task.
+                await admin.from('production_jobs').update({status:'failed',completed_at:new Date().toISOString(),
+                  last_error:'Genjutsu: a tarefa encerrou e o provedor não disponibiliza mais a saída 482. Arquivos e prompt preservados.',
+                  meta:{...job.meta,genjutsu_capture_recovery:{status:'provider_output_unavailable',task_id:job.runninghub_task_id,node_id:'482',checked_at:new Date().toISOString()}},updated_at:new Date().toISOString()})
+                  .eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).eq('locked_by',lease).is('result_video_id',null);
+                touched++;continue;
+              }
+              throw new Error(isGenjutsuPreviewJob(job)?"Genjutsu: saída 482 ainda não acessível; recuperando vídeo.":"Motion Control: saída #384 ainda não acessível.");
             }finally{await admin.from("production_jobs").update({locked_by:null,locked_at:null}).eq("id",job.id).eq("locked_by",lease);}
           }
           await ensureMotionPreviewMonitor(admin,job,base,apiKey,String(expected),isGenjutsuPreviewJob(job)?async(file:any,wss:string,current:any)=>{
