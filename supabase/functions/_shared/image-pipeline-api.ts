@@ -35,14 +35,29 @@ export async function imagePipelineApi(d:any){
     const rows=check(await query.order('created_at',{ascending:false}).limit(100));
     for(const j of rows||[]){
       if(j.production_job_id){
-        j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
+        j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
         if(j.production){
+          if(j.meta?.video_workflow?.key==='genjutsu'){
+            const p=j.production,m=p.meta||{};
+            p.execution_confirmed=!!p.started_at&&!!p.runninghub_task_id&&String(m.provider_status_task_id)===String(p.runninghub_task_id);
+          }
           if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
           delete j.production.meta;
         }
       }
     }
-    return json({jobs:rows});
+    // Scheduled children are hidden by the native calendar transfer.
+    return json({jobs:(rows||[]).filter((j:any)=>!j.production?.hidden_at)});
+  }
+  if(req.method==='GET'&&resource==='image-pipeline-prompt'){
+    const j=await owner(url.searchParams.get('id')||'');
+    if(!j||j.meta?.video_workflow?.key!=='genjutsu')return json({error:'Job não encontrado'},404);
+    const p=check(await admin.from('production_jobs').select('meta').eq('id',j.production_job_id||j.id).eq('user_id',user.id).maybeSingle());
+    if(p?.meta?.workflow_key!=='genjutsu')return json({error:'Prompt indisponível'},404);
+    const prompt=p.meta.genjutsu_prompt;
+    if(prompt?.status!=='complete'||typeof prompt.prompt!=='string'||!prompt.prompt.trim())return json({error:'O prompt ainda não foi concluído.'},409);
+    // Return only generated text, never Files URIs, credentials or checkpoints.
+    const response=json({prompt:prompt.prompt});response.headers.set('Cache-Control','private, no-store');return response;
   }
   if(req.method==='GET'&&resource==='image-pipeline-preview'){
     const j=await owner(url.searchParams.get('id')||'');if(!j)return json({error:'Job não encontrado'},404);
@@ -156,7 +171,16 @@ export async function imagePipelineApi(d:any){
   }
   if(req.method==='DELETE'&&action==='image-pipeline-job'){
     const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);
-    if(['waiting','uploading','queued','running'].includes(j.status)||j.meta.dispatch_uncertain||j.meta.stage==='control_motion'&&!['ready','cancelled'].includes(j.status))return json({error:'Aguarde a conclusão da tarefa antes de excluir.'},409);
+    let child:any=null;
+    if(j.production_job_id){
+      child=check(await admin.from('production_jobs').select('id,status,meta').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
+      // A parent may be terminal while its external task is still active.
+      if(child&&(!['ready','failed','cancelled'].includes(child.status)||child.meta?.provider_task_pending||child.meta?.pipeline_dispatch_uncertain))return json({error:'Aguarde o encerramento da tarefa antes de excluir.'},409);
+    }
+    // Once handed off, the video child owns execution state. The image parent may
+    // still say waiting even after the child has failed.
+    const handedOff=j.meta.stage==='control_motion'&&!!child;
+    if(j.meta.dispatch_uncertain||!handedOff&&(['waiting','uploading','queued','running'].includes(j.status)||j.meta.stage==='control_motion'&&!['ready','failed','cancelled'].includes(j.status)))return json({error:'Aguarde a conclusão da tarefa antes de excluir.'},409);
     if(!j.production_job_id){
       const paths=[j.frame_storage_path,j.result_storage_path,j.meta.face_swap_result?.path,j.meta.upscale_result?.path,...(j.meta.source==='face_swap_photo'?[]:[j.original_storage_path])].filter(Boolean);
       await removePaths(j.storage_provider,[...new Set(paths)]);

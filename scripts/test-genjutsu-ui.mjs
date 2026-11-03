@@ -16,13 +16,14 @@ let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],moda
 const modalHost=node();Object.defineProperty(modalHost,'innerHTML',{set(value){if(modal){modal.isConnected=false;modal.mediaController?.abort();}this.html=value;if(!value){modal=null;return;}modal=node();modal.isConnected=true;modal.canvas=node();modal.close=node();modal.close.focus=()=>{};modal.querySelector=s=>s==='[data-gen-close]'?modal.close:modal.canvas;modal.querySelectorAll=()=>[modal.close];},get(){return this.html;}});modalHost.querySelector=()=>modal;
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
 const document={hidden:false,querySelector:s=>s.includes('modalHost')?modal:section,getElementById:id=>id==='production'?container:id==='modalHost'?modalHost:node(),createElement(tag){const el=node();el.addEventListener=()=>{};el.play=async()=>{};el.replaceChildren=child=>el.child=child;el.appendChild=child=>el.child=child;if(tag==='video'){el.duration=10;Object.defineProperty(el,'src',{get(){return el.savedSrc;},set(value){el.savedSrc=value;queueMicrotask(()=>el.onloadedmetadata?.());}});}return el;}};
-const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.supabase.co'},CloudentMotionControl:{mode:'genjutsu'}},document,currentPage:'production',cloudSession:{user:{id:'owner'},access_token:'session'},SUPABASE_KEY:'publishable',crypto,File,Blob,AbortSignal,AbortController,URL:{createObjectURL:()=> 'blob:source',revokeObjectURL(){}},Date,Number,String,Error,Promise,setTimeout,clearTimeout,setInterval:fn=>{timer=fn;},queueMicrotask,
+const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.supabase.co'},CloudentMotionControl:{mode:'genjutsu'}},document,currentPage:'production',cloudSession:{user:{id:'owner'},access_token:'session'},SUPABASE_KEY:'publishable',crypto,File,Blob,AbortSignal,AbortController,URL:{createObjectURL:()=> 'blob:source',revokeObjectURL(){}},Date,Number,String,Error,Promise,setTimeout,clearTimeout,setInterval:(fn,ms)=>{if(ms===10000)timer=fn;},queueMicrotask,
   extractFirstFrameBlob:async()=>{frameReads++;return new Blob(['frame'],{type:'image/jpeg'});},
   uploadFaceSwapPart:async(part,file)=>{uploadedFiles.push(file);uploads.push(part.path);if(part.path==='reference'&&failUpload){failUpload=false;throw Error('upload interrupted');}},
   closeModal:()=>{modalHost.innerHTML='';},cloudFetch:async(path,options)=>{
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
     if(path.includes('resource=image-pipeline-characters')){assert(path.includes('metadata=1'));return {characters:[{id:'jujuh',name:'Jujuh'}]};}
     if(path.includes('resource=image-pipeline&'))return {jobs:[{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
+    if(path.includes('resource=image-pipeline-prompt'))return {prompt:'subject_definitions: <script>alert(1)</script>'};
     if(path.includes('resource=image-pipeline-result')){if(previewFailure)throw Error('Falha de prévia');return deferResult?new Promise(resolve=>{resolveResult=resolve;}):{url:'https://b2.test/result.mp4'};}
     if(path.includes('resource=image-pipeline-preview'))return {url:path.includes('kind=original')?'https://b2.test/original.mp4':'https://b2.test/frame.webp'};
     if(path.includes('image-pipeline-ticket'))return {job_id:JSON.parse(options.body).job_id,original:{path:'original'},reference:{path:'reference'}};
@@ -81,6 +82,7 @@ assert.equal(nodes.get('[data-gen-drop="frame"]').querySelector('.production-upl
 // Preview opens only after an explicit click; polling cannot replace a player.
 assert(!calls.some(c=>c.path.includes('image-pipeline-result')));
 const clickAction=(dataset)=>{const b=node();b.dataset=dataset;b.hasAttribute=()=>false;return section.onclick({target:{closest:()=>b}});};
+await clickAction({prompt:'existing'});assert.equal(modal.canvas.child.textContent,'subject_definitions: <script>alert(1)</script>');assert.equal(modal.canvas.child.className,'genjutsu-prompt-text');c.closeModal();
 await clickAction({preview:'existing'});assert(modal.isConnected);assert.equal(modal.canvas.child.savedSrc,'https://b2.test/result.mp4');
 const playing=modal.canvas.child;await c.window.CloudentGenjutsu.refresh();assert.equal(modal.canvas.child,playing);
 modal.onkeydown({key:'Escape',preventDefault(){}});assert.equal(modal,null);
