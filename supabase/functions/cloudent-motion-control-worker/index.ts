@@ -176,7 +176,7 @@ Deno.serve(async(req:Request)=>{
     const rh:any=integration?.config||{},cfg:any=motionSetting?.value||{};
     let apiKey="";if(rh.apiKeyCipher&&rh.apiKeyIv){try{apiKey=await decrypt(String(rh.apiKeyCipher),String(rh.apiKeyIv),String(expected))}catch{}}
     const base=cleanBase(rh.baseUrl),concurrency=Math.max(1,Math.min(10,Number(rh.concurrency||1)));
-    const enabled=integration?.enabled!==false&&queueSetting?.value?.enabled!==false;
+    const enabled=integration?.enabled!==false&&queueSetting?.value?.enabled!==false&&cfg.paused!==true;
     const configured=!!(apiKey&&cfg.workflowId&&cfg.videoNodeId&&cfg.frameNodeId);
     if(!enabled||!configured){
       const message=!enabled?"Motion Control pausado":"Configuração do Motion Control pendente";
