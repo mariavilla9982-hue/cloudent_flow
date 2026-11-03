@@ -139,7 +139,7 @@
     try{
       const result=await cloudFetch('?resource=image-pipeline&workflow=genjutsu');
       if(uid!==cloudSession?.user?.id||rev!==revision)return;
-      jobs=(result.jobs||[]).filter(j=>j.meta?.video_workflow?.key==='genjutsu');drawJobs();
+      jobs=(result.jobs||[]).filter(j=>j.meta?.video_workflow?.key==='genjutsu');drawJobs();message('',true);
       if(!characters.length){const r=await cloudFetch('?resource=image-pipeline-characters&metadata=1');if(uid!==cloudSession?.user?.id||rev!==revision)return;characters=(r.characters||[]).map(c=>({id:c.id,name:c.name}));drawEntries();}
       if(Date.now()-lastCheck>60000){
         const url=(window.CloudentConfig?.supabaseUrl||'')+'/functions/v1/cloudent-genjutsu';

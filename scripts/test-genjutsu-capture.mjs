@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
+import {genjutsuExecutionEvent} from '../supabase/functions/_shared/genjutsu-diagnostics.ts';
 const source=fs.readFileSync('supabase/functions/cloudent-production-worker/index.ts','utf8');
 const functions=stripTypeScriptTypes(source.slice(source.indexOf('const MOTION_PREVIEW_WORKFLOW'),source.indexOf('Deno.serve')));
 const bytes=new Uint8Array(64);bytes.set(new TextEncoder().encode('ftyp'),4);const blob=new Blob([bytes],{type:'video/mp4'});
@@ -12,7 +13,7 @@ function harness(options={}){
   const video={id:'job',status:'ready',storage_path:row.result_storage_path,storage_provider:'r2',size_bytes:64,mime_type:'video/mp4'};
   const admin={from(table){let value;const q={select(){return q;},eq(){return q;},in(){return q;},is(){return q;},update(v){value=v;return q;},async maybeSingle(){if(value){writes.push(value);Object.assign(row,value);events.push('verify-saved');return {data:{id:row.id}};}return {data:table==='production_jobs'?structuredClone(row):video};},then(resolve){if(value){writes.push(value);Object.assign(row,value);}return Promise.resolve({error:null}).then(resolve);}};return q;}};
   const c=vm.createContext({Date,Number,String,Array,Uint8Array,TextDecoder,crypto,Blob,URL,AbortSignal,Error,Promise,JSON,setTimeout,clearTimeout,setInterval,clearInterval,
-    Deno:{env:{get:()=>''}},EdgeRuntime:{waitUntil(){}},
+    Deno:{env:{get:()=>''}},EdgeRuntime:{waitUntil(){}},genjutsuExecutionEvent,
     getCloudentR2Config:async()=>({}),requireMotionStorage:async()=>{if(options.storageBlocked)throw Error('storage blocked');},
     motionStorageRead:async()=>{events.push('download-copy');return new Response(options.corrupt?new Blob(['bad']):blob);},
     fetch:async()=>Response.json({data:{netWssUrl:'wss://www.runninghub.ai/ws?Rh-Comfy-Auth=private-token'}})
@@ -25,6 +26,9 @@ const event=(node,task='task')=>({type:'executed',data:{node,prompt_id:task,outp
 assert.equal(h.c.motionPreviewFile(event('384'),'task','482'),null);
 assert.equal(h.c.motionPreviewFile(event('482','other'),'task','482'),null);
 assert.equal(h.c.motionPreviewFile(event('482'),'task','482').node_id,'482');
+const routed=h.c.motionPreviewViewUrl('https://www.runninghub.ai','wss://www.runninghub.ai/ws/c_instance?Rh-Comfy-Auth=private-token&c_host=10.1.2.3&c_port=80&clientId=client&workflowId=2117411301344411649&target=https%3A%2F%2Fworker.runninghub.ai',{filename:'video.mp4',subfolder:'',node_id:'482'});
+const routedUrl=new URL(routed);assert.equal(routedUrl.origin,'https://www.runninghub.ai');assert.equal(routedUrl.searchParams.get('c_host'),'10.1.2.3');assert.equal(routedUrl.searchParams.get('target'),'https://worker.runninghub.ai');
+assert.throws(()=>h.c.motionPreviewViewUrl('https://www.runninghub.ai','wss://other.test/ws?Rh-Comfy-Auth=secret',{filename:'video.mp4',node_id:'482'}));
 assert.equal(h.c.isMotionPreviewJob({meta:{workflow_key:'genjutsu',workflow_id:'other'}}),false);
 assert.equal(await h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson),true);
 assert(h.events.indexOf('download-copy')<h.events.indexOf('/task/openapi/cancel'));
