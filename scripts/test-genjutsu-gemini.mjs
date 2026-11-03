@@ -105,7 +105,7 @@ console.log('PASS missing key, invalid media, unavailable model and untrusted up
 const processing=harness({processing:true});assert.equal((await processing.run()).ready,false);
 assert.equal(processing.state.status,'processing');assert.equal(count(processing,':generateContent'),0);
 const uploads=count(processing,'/upload/v1beta/files');processing.config.processing=false;
-assert.equal((await processing.run()).ready,true);assert.equal(count(processing,'/upload/v1beta/files'),uploads);
+assert.equal((await processing.run(processing.state,{resumeUploadedFiles:true,video:new Blob(['saved'],{type:video.type}),image:new Blob(['saved'],{type:image.type})})).ready,true);assert.equal(count(processing,'/upload/v1beta/files'),uploads);
 const failed=harness({failCheckpoint:'generating'});await assert.rejects(()=>failed.run(),/lease lost/);
 assert.equal(count(failed,':generateContent'),0,'lost lease blocks generation');
 const timeout=harness({timeout:true});await rejects(()=>timeout.run(),'network_error');

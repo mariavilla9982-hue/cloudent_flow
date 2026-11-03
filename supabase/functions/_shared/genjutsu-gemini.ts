@@ -9,6 +9,7 @@ export type PromptState = {
   fingerprint:string;
   model:string;
   durationSeconds:number;
+  instructionsSha256:string;
   status:'preparing'|'processing'|'generating'|'quota_waiting'|'complete'|'failed';
   video?:FileRef;
   image?:FileRef;
@@ -22,6 +23,8 @@ type Options = {
   video:Blob;
   image:Blob;
   durationSeconds:number;
+  // Internal worker only: media already checkpointed to the job's immutable Google files.
+  resumeUploadedFiles?:boolean;
   state?:PromptState;
   // Must atomically persist under the caller's owner/job lease; throw on lost lease.
   checkpoint:(state:PromptState)=>Promise<void>;
@@ -81,10 +84,13 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
   if(!String(o.apiKey||'').trim())fail('missing_key','Configure GEMINI_API_KEY no servidor.');
   validMedia(o.video,o.image,o.durationSeconds);
   const now=o.now??Date.now,fetcher=o.fetcher??fetch;
-  const fingerprint=await genjutsuFingerprint(o.video,o.image,o.durationSeconds);
-  if(o.state&&(o.state.fingerprint!==fingerprint||o.state.model!==GENJUTSU_MODEL||o.state.durationSeconds!==o.durationSeconds))
+  const instructionsSha256=await sha(new TextEncoder().encode(GENJUTSU_INSTRUCTIONS));
+  if(o.resumeUploadedFiles&&(!o.state?.video||!o.state?.image||!/^[a-f0-9]{64}$/.test(o.state.fingerprint)))
+    fail('invalid_cache','Referências das mídias ainda não foram salvas.');
+  const fingerprint=o.resumeUploadedFiles?o.state!.fingerprint:await genjutsuFingerprint(o.video,o.image,o.durationSeconds);
+  if(o.state&&(o.state.fingerprint!==fingerprint||o.state.model!==GENJUTSU_MODEL||o.state.durationSeconds!==o.durationSeconds||o.state.instructionsSha256!==instructionsSha256))
     fail('inputs_changed','Foto, vídeo ou instruções mudaram; crie outro trabalho.');
-  let state:PromptState=o.state?structuredClone(o.state):{fingerprint,model:GENJUTSU_MODEL,durationSeconds:o.durationSeconds,status:'preparing'};
+  let state:PromptState=o.state?structuredClone(o.state):{fingerprint,model:GENJUTSU_MODEL,durationSeconds:o.durationSeconds,instructionsSha256,status:'preparing'};
   const save=async(patch:Partial<PromptState>)=>{
     const next={...state,...patch};await o.checkpoint(structuredClone(next));state=next;
   };
@@ -177,6 +183,7 @@ export async function genjutsuExecutionInputs(workflowId:string,videoFile:string
   if(!/^\d{16,24}$/.test(workflowId))fail('missing_workflow','Configure o ID publicado do workflow Genjutsu.');
   if(!videoFile?.trim()||!imageFile?.trim()||state.status!=='complete'||!state.prompt||state.model!==GENJUTSU_MODEL)
     fail('prompt_not_ready','Mídias ou prompt Genjutsu ainda não estão prontos.');
+  if(state.instructionsSha256!==await sha(new TextEncoder().encode(GENJUTSU_INSTRUCTIONS)))fail('inputs_changed','As instruções deste prompt mudaram.');
   const prompt=validateGenjutsuPrompt(state.prompt,state.durationSeconds);
   if(!Number.isFinite(state.durationSeconds)||state.durationSeconds<=0||
     await sha(new TextEncoder().encode(prompt))!==state.promptSha256)

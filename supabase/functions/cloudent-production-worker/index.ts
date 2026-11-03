@@ -1,3 +1,4 @@
+import {applyGenjutsuStatus,genjutsuResultBlob} from '../_shared/genjutsu-stage.ts';
 import {pipelineVideoWorkflow} from '../_shared/image-pipeline-workflows.ts';
 import {enrichFailedMotionJobs,enrichPreviousMotionFailure} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
@@ -104,12 +105,14 @@ function imageMimeFor(ext:string){
 
 
 const MOTION_PREVIEW_WORKFLOW="2110721194974982146";
+function isGenjutsuPreviewJob(job:any){return job?.meta?.workflow_key==="genjutsu"&&job?.meta?.workflow_id==="2117411301344411649";}
+function motionOutputNode(job:any){return isGenjutsuPreviewJob(job)?"482":"384";}
 function isMotionPreviewJob(job:any){
-  return job?.meta?.workflow_key==="motion_control"&&job?.meta?.workflow_id===MOTION_PREVIEW_WORKFLOW;
+  return isGenjutsuPreviewJob(job)||job?.meta?.workflow_key==="motion_control"&&job?.meta?.workflow_id===MOTION_PREVIEW_WORKFLOW;
 }
-function motionPreviewFile(message:any,taskId:string){
+function motionPreviewFile(message:any,taskId:string,nodeId="384"){
   const d=message?.data;
-  if(message?.type!=="executed"||String(d?.node)!=="384"||String(d?.prompt_id)!==String(taskId))return null;
+  if(message?.type!=="executed"||String(d?.node)!==nodeId||String(d?.prompt_id)!==String(taskId))return null;
   const output=d?.output||{};
   for(const key of ["images","videos","gifs"]){
     for(const item of Array.isArray(output[key])?output[key]:[]){
@@ -117,7 +120,7 @@ function motionPreviewFile(message:any,taskId:string){
       const subfolder=String(item?.subfolder||"");
       if(!/\.(mp4|webm|mov)$/i.test(filename)||filename.includes("/")||filename.includes("\\")||filename.includes("..")||subfolder.split(/[\\/]/).includes(".."))continue;
       if(String(item?.type||"output")!=="output")continue;
-      return {filename,subfolder,type:"output",node_id:"384",task_id:String(taskId)};
+      return {filename,subfolder,type:"output",node_id:nodeId,task_id:String(taskId)};
     }
   }
   return null;
@@ -130,7 +133,7 @@ function motionPreviewViewUrl(base:string,wss:string,file:any){
   u.searchParams.set("filename",file.filename);u.searchParams.set("subfolder",file.subfolder||"");u.searchParams.set("type","output");
   return u.toString();
 }
-async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:string,master:string){
+async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:string,master:string,onCapture:any=null){
   if(!isMotionPreviewJob(job)||job.result_video_id||job.meta?.motion_preview_file)return;
   if(job.locked_by&&Date.now()-Date.parse(job.locked_at||"")<130000)return;
   const lease="motion-preview-"+crypto.randomUUID();
@@ -138,10 +141,10 @@ async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:s
   claim=job.locked_by?claim.eq("locked_by",job.locked_by):claim.is("locked_by",null);
   const {data:claimed,error}=await claim.select("id").maybeSingle();
   if(error||!claimed)return;
-  const work=watchMotionPreview(admin,job,base,apiKey,master,lease);
+  const work=watchMotionPreview(admin,job,base,apiKey,master,lease,onCapture);
   EdgeRuntime.waitUntil(work);
 }
-async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,master:string,lease:string){
+async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,master:string,lease:string,onCapture:any=null){
   let captured=false,continueWatching=false,loopSeen=false;const began=Date.now();
   try{
     const r=await fetch(base+"/task/openapi/outputs",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},body:JSON.stringify({apiKey,taskId:job.runninghub_task_id}),signal:AbortSignal.timeout(10000)});
@@ -163,7 +166,7 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
           const {data:current}=await admin.from("production_jobs").select("meta,runninghub_task_id").eq("id",job.id).maybeSingle();
           if(!finished&&current&&String(current.runninghub_task_id)===String(job.runninghub_task_id))await admin.from("production_jobs").update({meta:{...current.meta,motion_execution_phase:"waiting_loop",motion_execution_task_id:String(job.runninghub_task_id),motion_execution_node:String(message.data?.display_node||message.data?.node)},updated_at:new Date().toISOString()}).eq("id",job.id).eq("locked_by",lease).eq("runninghub_task_id",job.runninghub_task_id);
         }
-        const file=motionPreviewFile(message,String(job.runninghub_task_id));
+        const file=motionPreviewFile(message,String(job.runninghub_task_id),motionOutputNode(job));
         if(!file)return;
         // Persist only the file descriptor. Provider credentials stay server-side.
         finished=true;clearTimeout(timer);clearInterval(ping);
@@ -173,6 +176,7 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
             const {error}=await admin.from("production_jobs").update({meta:{...(latest.meta||{}),motion_preview_file:file,motion_preview_detected_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq("id",job.id).eq("locked_by",lease).eq("runninghub_task_id",job.runninghub_task_id);
             if(error)throw error;
             captured=true;
+            if(onCapture)await onCapture(file,wss,{...job,meta:{...(latest.meta||{}),motion_preview_file:file}});
           }
         }catch{/* Retain the task and let the next listener retry. */}finally{try{ws.close()}catch{}resolve();}
       };
@@ -196,7 +200,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
   if(!job||!isMotionPreviewJob(job)||!job.result_video_id||!job.result_storage_path||!job.meta?.motion_preview_available)return false;
   if(!["queued","running"].includes(job.status))return false;
   const meta=job.meta||{},taskId=String(job.runninghub_task_id||"");
-  if(!taskId||String(meta.motion_preview_file?.task_id)!==taskId||meta.result_node_id!=="384")throw new Error("Motion Control: cancelamento bloqueado até confirmar a origem do vídeo #384.");
+  if(!taskId||String(meta.motion_preview_file?.task_id)!==taskId||meta.result_node_id!==motionOutputNode(job))throw new Error("Motion Control: cancelamento bloqueado até confirmar a origem do vídeo #384.");
   const {data:video,error:videoError}=await admin.from("videos").select("id,status,storage_path,storage_provider,size_bytes,mime_type").eq("id",job.result_video_id).maybeSingle();
   if(videoError)throw videoError;
   if(!video||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(meta.result_storage_provider||job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
@@ -355,13 +359,14 @@ Deno.serve(async(req:Request)=>{
       if(!fileUrl&&!early)throw new Error("RunningHub concluiu sem URL de resultado");
       const rr=early?null:await fetch(fileUrl);
       if(rr&&!rr.ok)throw new Error("Não consegui baixar o resultado do RunningHub");
-      const blob=previewBlob||await rr!.blob();
+      const blob=previewBlob||(isGenjutsuPreviewJob(job)?await genjutsuResultBlob(rr!):await rr!.blob());
       if(!blob.size)throw new Error("Vídeo vazio retornado pelo RunningHub");
       const ext=extFrom(fileUrl,item?.fileType||item?.outputType);
       const mime=mimeFor(ext);
       const path=job.user_id+"/production-results/"+new Date().toISOString().slice(0,10)+"/"+job.id+"."+ext;
       let provider=String(job.storage_provider||"supabase")==="r2"?"r2":"supabase";
       const protectedMotion=isMotionStatusJob(job);
+      if(isGenjutsuPreviewJob(job)){if(provider!=="r2"||blob.size>40*1024*1024)throw new Error("Genjutsu: resultado exige B2 e limite de 40 MiB.");await requireMotionStorage(admin);}
       let reserveResult=protectedMotion&&provider==="supabase"&&!!job.meta?.storage_reserve;
       let r2:CloudentR2Config|null=null;
       if(protectedMotion&&provider==="r2"){
@@ -371,7 +376,8 @@ Deno.serve(async(req:Request)=>{
       if(provider==="r2"){
         r2=await getCloudentR2Config(admin);
         if(!r2)throw new Error("r2_not_configured");
-        if(protectedMotion){
+        if(isGenjutsuPreviewJob(job))await putMotionPrimary(admin,r2,path,blob,mime);
+        else if(protectedMotion){
           try{await putMotionPrimary(admin,r2,path,blob,mime);}
           catch(e){if(!(e instanceof MotionStorageSafetyError))throw e;provider="supabase";reserveResult=true;}
         }else await putAndVerifyR2(r2,path,blob,mime);
@@ -383,9 +389,11 @@ Deno.serve(async(req:Request)=>{
       }
       const name=(job.meta?.image_pipeline_version===2&&job.meta?.character_name?String(job.meta.character_name)+" · ":"")+"runninghub-"+job.id.slice(0,8)+"."+ext;
       const videoPayload={storage_path:path,storage_provider:provider,file_name:name,mime_type:mime,size_bytes:blob.size,status:"ready",platform:"instagram",caption:""};
-      const videoWrite=early?admin.from("videos").upsert({id:job.id,...videoPayload},{onConflict:"id"}):admin.from("videos").insert(videoPayload);
+      const videoWrite=early||isGenjutsuPreviewJob(job)?admin.from("videos").upsert({id:job.id,...videoPayload},{onConflict:"id"}):admin.from("videos").insert(videoPayload);
       const {data:video,error:ve}=await videoWrite.select().single();
       if(ve){
+        // Keep a verified Genjutsu object on metadata failure; retry must never delete a saved output.
+        if(isGenjutsuPreviewJob(job))throw ve;
         if(provider==="r2"&&r2)await deleteR2Object(r2,path).catch(()=>null);
         else await admin.storage.from("videos").remove([path]).catch(()=>null);
         throw ve;
@@ -428,10 +436,10 @@ Deno.serve(async(req:Request)=>{
         runninghub_cost_money:Number.isFinite(costMoney)?costMoney:null,
         runninghub_third_party_cost_money:Number.isFinite(thirdPartyCost)?thirdPartyCost:null,
         runninghub_runtime_seconds:Number.isFinite(runtimeSeconds)?runtimeSeconds:null,
-        meta:{...(job.meta||{}),...(protectedMotion?{result_storage_provider:provider,storage_reserve_result:reserveResult}:{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,"0")).join(""),motion_preview_saved_at:new Date().toISOString(),result_node_id:"384",provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
+        meta:{...(job.meta||{}),...(protectedMotion?{result_storage_provider:provider,storage_reserve_result:reserveResult}:{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,"0")).join(""),motion_preview_saved_at:new Date().toISOString(),result_node_id:motionOutputNode(job),provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
         completed_at:early?null:new Date().toISOString(),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()
       }).eq("id",job.id);
-      if((early||protectedMotion)&&saveError)throw saveError;
+      if((early||protectedMotion||isGenjutsuPreviewJob(job))&&saveError)throw saveError;
       if(reserveResult)await commitMotionStorage(admin,job.id,path,blob.size);
       await admin.from("activity_logs").insert({
         level:"info",event_type:early?"motion_preview_ready":"runninghub_production_ready",message:early?"Vídeo #384 salvo; execução RunningHub continua":"Vídeo do RunningHub finalizado e salvo",
@@ -597,7 +605,7 @@ Deno.serve(async(req:Request)=>{
         else{const {error}=await admin.storage.from("production").upload(path,blob,{contentType:mime,upsert:true});if(error)throw error;}
         return {path,name:stage+"."+ext,mime,size:blob.size,task_id:job.runninghub_task_id};
       },
-      wakeMotion:async()=>{await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
+      wakeMotion:async(key:string="motion_control")=>{await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker"+(key==="genjutsu"?"?workflow=genjutsu":""),{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
     });
 
     let touched=0;
@@ -718,14 +726,19 @@ Deno.serve(async(req:Request)=>{
           Object.assign(job,synced);
           if(!["RUNNING","SUCCESS"].includes(motionState.status))continue;
         }
+        if(isGenjutsuPreviewJob(job)){
+          motionState=await readMotionProviderStatus(base,apiKey,String(job.runninghub_task_id));
+          const synced=await applyGenjutsuStatus(admin,job,motionState);if(!synced)continue;Object.assign(job,synced);
+          if(job.status==='failed')continue;
+        }
         if(isMotionPreviewJob(job)){
           if(job.result_video_id&&job.meta?.motion_preview_available){
             await cancelMotionAfterSave(admin,job.id,rhJson);
             continue;
           }
           const file=job.meta?.motion_preview_file;
-          if(file&&String(file.task_id)===String(job.runninghub_task_id)&&file.node_id==="384"){
-            const valid=motionPreviewFile({type:"executed",data:{node:"384",prompt_id:job.runninghub_task_id,output:{videos:[file]}}},String(job.runninghub_task_id));
+          if(file&&String(file.task_id)===String(job.runninghub_task_id)&&file.node_id===motionOutputNode(job)){
+            const valid=motionPreviewFile({type:"executed",data:{node:motionOutputNode(job),prompt_id:job.runninghub_task_id,output:{videos:[file]}}},String(job.runninghub_task_id),motionOutputNode(job));
             if(!valid)throw new Error("Motion Control: arquivo de prévia inválido.");
             const lease="motion-save-"+crypto.randomUUID();
             const {data:locked}=await admin.from("production_jobs").update({locked_by:lease,locked_at:new Date().toISOString()}).eq("id",job.id).eq("runninghub_task_id",job.runninghub_task_id).is("result_video_id",null).is("locked_by",null).select("id").maybeSingle();
@@ -736,7 +749,7 @@ Deno.serve(async(req:Request)=>{
               if(wss){
                 const rr=await fetch(motionPreviewViewUrl(base,wss,valid),{signal:AbortSignal.timeout(30000)});
                 if(!rr.ok)throw new Error("Motion Control: download da saída #384 indisponível · HTTP "+rr.status);
-                const blob=await rr.blob();
+                const blob=isGenjutsuPreviewJob(job)?await genjutsuResultBlob(rr):await rr.blob();
                 const bytes=new Uint8Array(await blob.slice(0,16).arrayBuffer());
                 const mp4=new TextDecoder().decode(bytes.slice(4,8))==="ftyp";
                 const webm=bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3;
@@ -745,13 +758,20 @@ Deno.serve(async(req:Request)=>{
                 touched++;continue;
               }
               if(Number(outputs?.code)===0&&Array.isArray(outputs.data)){
-                const item=outputs.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384");
+                const item=outputs.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")===motionOutputNode(job));
                 if(item){await saveResult(job,item,item);touched++;continue;}
               }
               throw new Error("Motion Control: saída #384 ainda não acessível.");
             }finally{await admin.from("production_jobs").update({locked_by:null,locked_at:null}).eq("id",job.id).eq("locked_by",lease);}
           }
-          await ensureMotionPreviewMonitor(admin,job,base,apiKey,String(expected));
+          await ensureMotionPreviewMonitor(admin,job,base,apiKey,String(expected),isGenjutsuPreviewJob(job)?async(file:any,wss:string,current:any)=>{
+            const rr=await fetch(motionPreviewViewUrl(base,wss,file),{signal:AbortSignal.timeout(30000)});
+            if(!rr.ok||Number(rr.headers.get('content-length')||0)>40*1024*1024)throw new Error('Genjutsu: saída 482 indisponível ou acima de 40 MiB.');
+            const blob=await genjutsuResultBlob(rr);if(blob.size>40*1024*1024)throw new Error('Genjutsu: saída acima de 40 MiB.');
+            const bytes=new Uint8Array(await blob.slice(0,16).arrayBuffer());
+            if(new TextDecoder().decode(bytes.slice(4,8))!=='ftyp')throw new Error('Genjutsu: saída 482 não é MP4 válido.');
+            await saveResult(current,{fileType:'mp4'},null,blob);
+          }:null);
         }
         let handledByV2=false;
         try{
@@ -774,7 +794,7 @@ Deno.serve(async(req:Request)=>{
               let item=vj.results.find((x:any)=>String(x?.outputType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||vj.results[0];
               if(isMotionPreviewJob(job)){
                 const exact=await rhJson("/task/openapi/outputs",{taskId:job.runninghub_task_id});
-                item=Array.isArray(exact?.data)?exact.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384"):null;
+                item=Array.isArray(exact?.data)?exact.data.find((x:any)=>String(x?.nodeId??x?.node_id??"")===motionOutputNode(job)):null;
                 if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados. RunningHub retornou nodes: "+(Array.isArray(exact?.data)?exact.data.map((x:any)=>String(x?.nodeId??x?.node_id??"?")).join(", "):"nenhum"));
               }
               let usage=vj?.usage||null;
@@ -824,8 +844,9 @@ Deno.serve(async(req:Request)=>{
           await applyMotionProviderStatus(admin,job,{status,source:"legacy_outputs",error:status==="FAILED"?(data?.failedReason?.exception_message||data?.failedReason?.node_name||j?.msg||"RunningHub falhou"):status==="UNKNOWN"?"Resposta de saída não reconhecida · "+String(resultCode):null,checkedAt:new Date().toISOString()});
           continue;
         }
+        if(isGenjutsuPreviewJob(job)&&resultCode!==0)continue;
         if(resultCode===0 && Array.isArray(data) && data.length){
-          const item=isMotionPreviewJob(job)?data.find((x:any)=>String(x?.nodeId??x?.node_id??"")==="384"):data.find((x:any)=>String(x?.fileType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||data[0];
+          const item=isMotionPreviewJob(job)?data.find((x:any)=>String(x?.nodeId??x?.node_id??"")===motionOutputNode(job)):data.find((x:any)=>String(x?.fileType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||data[0];
           if(!item)throw new Error("Motion Control: saída #384 ausente nos resultados.");
           await saveResult(job,item,{
             consumeCoins:item?.consumeCoins??null,

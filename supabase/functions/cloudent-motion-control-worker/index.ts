@@ -1,3 +1,4 @@
+import {GENJUTSU_CONFIG,isGenjutsuJob,validateGenjutsuWorkflow,prepareGenjutsuStage,genjutsuInputs,genjutsuPromptWait,applyGenjutsuStatus} from '../_shared/genjutsu-stage.ts';
 import {MotionCreateError,motionDispatchFailurePatch} from "./motion-dispatch.ts";
 import {motionStorageHealth,requireMotionStorage,motionCheckObject,MotionStorageSafetyError,storageRPC} from "./motion-storage-protection.ts";
 import {applyMotionProviderStatus} from "./motion-provider-state.ts";
@@ -19,6 +20,7 @@ async function decrypt(cipher:string,iv:string,master:string){
 }
 // Hardware selection stays outside the immutable workflow graph.
 function motionExecutionOptions(job:any,cfg:any){
+  if(job?.meta?.workflow_key==="genjutsu"){if(cfg.workflowId!==GENJUTSU_CONFIG.workflowId||cfg.executionInstanceType!=="ultra"||job.runninghub_task_id)throw new Error("Genjutsu: configuração de execução inválida.");return {instanceType:"ultra"};}
   if(job?.meta?.workflow_key!=="motion_control")throw new Error("Motion Control: workflow do job inválido.");
   if(!["plus","ultra"].includes(cfg?.executionInstanceType))throw new Error("Motion Control: configuração de GPU inválida. Execução bloqueada.");
   if(job.runninghub_task_id)throw new Error("Motion Control: tarefa já criada. Nenhuma geração enviada.");
@@ -159,13 +161,15 @@ async function prepareInput(admin:any,base:string,apiKey:string,job:any,path:str
 
 Deno.serve(async(req:Request)=>{
   const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
-  const workerId="motion-"+crypto.randomUUID();
+  const genjutsu=new URL(req.url).searchParams.get("workflow")==="genjutsu";
+  const workflowKey=genjutsu?"genjutsu":"motion_control";
+  const workerId=(genjutsu?"genjutsu-":"motion-")+crypto.randomUUID();
   try{
     const supplied=String(req.headers.get("x-cloudent-worker-secret")||"");
     const {data:expected,error:secretError}=await admin.rpc("get_cloudent_worker_secret");
     if(secretError)throw secretError;
     if(!supplied||supplied!==String(expected||""))return out({ok:false,error:"unauthorized"},401);
-    await admin.from("worker_runtime").upsert({worker_name:"motion_control",last_heartbeat:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:"worker_name"});
+    await admin.from("worker_runtime").upsert({worker_name:workflowKey,last_heartbeat:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:"worker_name"});
 
     const [{data:integration,error:ie},{data:queueSetting},{data:motionSetting}]=await Promise.all([
       admin.from("integrations").select("enabled,config").eq("provider","runninghub").maybeSingle(),
@@ -173,14 +177,14 @@ Deno.serve(async(req:Request)=>{
       admin.from("app_settings").select("value").eq("key","motion_control_workflow").maybeSingle()
     ]);
     if(ie)throw ie;
-    const rh:any=integration?.config||{},cfg:any=motionSetting?.value||{};
+    const rh:any=integration?.config||{},cfg:any=genjutsu?GENJUTSU_CONFIG:motionSetting?.value||{};
     let apiKey="";if(rh.apiKeyCipher&&rh.apiKeyIv){try{apiKey=await decrypt(String(rh.apiKeyCipher),String(rh.apiKeyIv),String(expected))}catch{}}
     const base=cleanBase(rh.baseUrl),concurrency=Math.max(1,Math.min(10,Number(rh.concurrency||1)));
-    const enabled=integration?.enabled!==false&&queueSetting?.value?.enabled!==false;
+    const enabled=integration?.enabled!==false&&queueSetting?.value?.enabled!==false&&cfg.paused!==true;
     const configured=!!(apiKey&&cfg.workflowId&&cfg.videoNodeId&&cfg.frameNodeId);
     if(!enabled||!configured){
       const message=!enabled?"Motion Control pausado":"Configuração do Motion Control pendente";
-      await admin.from("worker_runtime").upsert({worker_name:"motion_control",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:configured?null:message,last_jobs:0,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
+      await admin.from("worker_runtime").upsert({worker_name:workflowKey,last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:configured?null:message,last_jobs:0,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
       return out({ok:true,enabled,configured,processed:0,message});
     }
 
@@ -194,7 +198,8 @@ Deno.serve(async(req:Request)=>{
     let slots=Math.max(0,concurrency-active);
     if(slots<=0)return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency,message:"Aguardando vaga do RunningHub"});
 
-    const {count:waiting}=await admin.from("production_jobs").select("*",{count:"exact",head:true}).eq("status","motion_waiting").contains("meta",{workflow_key:"motion_control"}).lte("next_attempt_at",new Date().toISOString());
+    const waitingQuery=admin.from("production_jobs").select("*",{count:"exact",head:true});
+    const {count:waiting}=await (genjutsu?waitingQuery.in("status",["motion_waiting","uploading"]):waitingQuery.eq("status","motion_waiting")).contains("meta",{workflow_key:workflowKey}).lte("next_attempt_at",new Date().toISOString());
     if(!Number(waiting||0))return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency});
 
     // Account capacity includes tasks created outside CloudentFlow. Check before any claim or media read/upload.
@@ -209,18 +214,18 @@ Deno.serve(async(req:Request)=>{
     if(slots<=0)return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency,provider_capacity:providerCapacity,provider_queue_waiting:true,message:"Aguardando vaga da RunningHub; retomada automática."});
 
     try{
-      const info=await validateWorkflow(base,apiKey,cfg);
-      await admin.from("app_settings").upsert({key:"motion_control_workflow",value:{...cfg,lastValidatedAt:new Date().toISOString(),lastValidationError:null,lastValidatedNodes:info},updated_at:new Date().toISOString()},{onConflict:"key"});
+      const info=genjutsu?await validateGenjutsuWorkflow(base,apiKey):await validateWorkflow(base,apiKey,cfg);
+      await admin.from("app_settings").upsert({key:genjutsu?"genjutsu_workflow":"motion_control_workflow",value:{...cfg,lastValidatedAt:new Date().toISOString(),lastValidationError:null,lastValidatedNodes:info},updated_at:new Date().toISOString()},{onConflict:"key"});
     }catch(e:any){
       const message=e instanceof Error?e.message:String(e);
-      await admin.from("app_settings").upsert({key:"motion_control_workflow",value:{...cfg,lastValidationError:message},updated_at:new Date().toISOString()},{onConflict:"key"});
-      const {data:toFail}=await admin.from("production_jobs").select("id").eq("status","motion_waiting").contains("meta",{workflow_key:"motion_control"}).limit(slots);
+      await admin.from("app_settings").upsert({key:genjutsu?"genjutsu_workflow":"motion_control_workflow",value:{...cfg,lastValidationError:message},updated_at:new Date().toISOString()},{onConflict:"key"});
+      const {data:toFail}=await admin.from("production_jobs").select("id").eq("status","motion_waiting").contains("meta",{workflow_key:workflowKey}).limit(slots);
       const ids=(toFail||[]).map((x:any)=>x.id);
       if(ids.length)await admin.from("production_jobs").update({status:"failed",last_error:message,locked_at:null,locked_by:null,updated_at:new Date().toISOString()}).in("id",ids);
       throw new Error(message);
     }
 
-    const {data:claimed,error:claimError}=await admin.rpc("claim_motion_control_jobs",{p_worker:workerId,p_limit:slots});
+    const {data:claimed,error:claimError}=await admin.rpc(genjutsu?"claim_genjutsu_job":"claim_motion_control_jobs",{p_worker:workerId,p_limit:genjutsu?1:slots});
     if(claimError)throw claimError;
     let processed=0;
     for(const job of claimed||[]){
@@ -231,13 +236,26 @@ Deno.serve(async(req:Request)=>{
         const executionOptions=motionExecutionOptions(job,cfg);
         const ultra=executionOptions.instanceType==="ultra";
         const ultraOnce=ultra&&!!job.meta?.execution_ultra_once;
-        const hardwareMeta={...(job.meta||{}),execution_instance_type:executionOptions.instanceType,execution_instance_used:executionOptions.instanceType,execution_instance_vram_gb:ultra?84:48,execution_instance_policy:ultraOnce?"motion_ultra_once":ultra?"motion_default_84gb":"motion_default_48gb",execution_instance_authorized:ultra,workflow_id:String(cfg.workflowId)};
+        const hardwareMeta={...(job.meta||{}),execution_instance_type:executionOptions.instanceType,execution_instance_used:executionOptions.instanceType,execution_instance_vram_gb:ultra?84:48,execution_instance_policy:genjutsu?"genjutsu_default_84gb":ultraOnce?"motion_ultra_once":ultra?"motion_default_84gb":"motion_default_48gb",execution_instance_authorized:ultra,workflow_id:String(cfg.workflowId)};
         const {error:hardwareError}=await admin.from("production_jobs").update({
           meta:hardwareMeta,
           updated_at:new Date().toISOString()
         }).eq("id",job.id).eq("locked_by",workerId);
         if(hardwareError)throw hardwareError;
         job.meta=hardwareMeta;
+        if(genjutsu){
+          const readBlob=async(path:string)=>{
+            if(job.storage_provider!=="r2")throw new Error("Genjutsu exige o armazenamento principal para preservar a cota Supabase.");
+            const object=await getObjectConfig(admin);if(!object)throw new Error("Armazenamento principal indisponível.");
+            await requireMotionStorage(admin);
+            if(!await storageRPC(admin,"motion_storage_record_read",{p_count:1}))throw new MotionStorageSafetyError("Orçamento preventivo de leituras atingido.");
+            return fetch(await signed(object,"GET",path,900),{signal:AbortSignal.timeout(30000)});
+          };
+          const ready=await prepareGenjutsuStage({admin,job,workerId,key:Deno.env.get("GEMINI_API_KEY")||"",readBlob});
+          if(!ready){
+            await admin.from("production_jobs").update({status:"motion_waiting",attempt_count:Math.max(0,job.attempt_count-1),next_attempt_at:new Date(Date.now()+30000).toISOString(),locked_by:null,locked_at:null,last_error:null,meta:job.meta}).eq("id",job.id).eq("locked_by",workerId);continue;
+          }
+        }
         const videoInput=await prepareInput(admin,base,apiKey,job,job.original_storage_path,job.original_file_name,job.original_mime_type||"video/mp4");
         await admin.from("production_jobs").update({progress:15,runninghub_video_file:videoInput,updated_at:new Date().toISOString()}).eq("id",job.id);
         const frameInput=await prepareInput(admin,base,apiKey,job,job.frame_storage_path,job.frame_file_name,job.frame_mime_type||"image/jpeg");
@@ -254,7 +272,8 @@ Deno.serve(async(req:Request)=>{
           if(error||!reserved?.length)throw new Error("Reserva de execução Motion indisponível.");
           job.meta=intent;
         }
-        const created=await rhJson(base,apiKey,"/task/openapi/create",{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}],addMetadata:true});
+        const requestInputs=genjutsu?await genjutsuInputs(videoInput,frameInput,job):{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}]};
+        const created=await rhJson(base,apiKey,"/task/openapi/create",{...requestInputs,addMetadata:true});
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new MotionCreateError(created);
         const taskId=String(created.data.taskId);
         acceptedTaskId=taskId;
@@ -267,10 +286,13 @@ Deno.serve(async(req:Request)=>{
           const {data:fresh}=await admin.from("production_jobs").select("meta").eq("id",job.id).single();
           await admin.from("production_jobs").update({meta:{...(fresh?.meta||job.meta),pipeline_dispatch_uncertain:false}}).eq("id",job.id).eq("runninghub_task_id",taskId);
         }
-        await applyMotionProviderStatus(admin,{id:job.id,runninghub_task_id:taskId},{status:["RUNNING","QUEUED","FAILED"].includes(taskStatus)?taskStatus:"UNKNOWN",source:"create",error:created?.data?.promptTips||null,checkedAt:new Date().toISOString()});
+        await (genjutsu?applyGenjutsuStatus:applyMotionProviderStatus)(admin,{...job,runninghub_task_id:taskId},{status:["RUNNING","QUEUED","FAILED"].includes(taskStatus)?taskStatus:"UNKNOWN",source:"create",error:created?.data?.promptTips||null,checkedAt:new Date().toISOString()});
         EdgeRuntime.waitUntil(fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-production-worker",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null));
         processed++;
       }catch(e:any){
+        if(genjutsu&&!acceptedTaskId&&!job.runninghub_task_id&&!job.meta?.pipeline_dispatch_intent&&(genjutsuPromptWait(e,job)||e instanceof MotionStorageSafetyError)){
+          await admin.from("production_jobs").update({status:"motion_waiting",attempt_count:Math.max(0,job.attempt_count-1),next_attempt_at:job.meta.genjutsu_prompt?.retryAt||new Date(Date.now()+60000).toISOString(),locked_by:null,locked_at:null,last_error:null,meta:job.meta}).eq("id",job.id).eq("locked_by",workerId);continue;
+        }
         // An accepted task must never be failed/recreated due to a local persistence/poll error.
         const {data:fresh,error:readError}=await admin.from("production_jobs").select("id,status,runninghub_task_id,meta").eq("id",job.id).maybeSingle();
         if(!readError&&fresh?.runninghub_task_id){
@@ -285,11 +307,11 @@ Deno.serve(async(req:Request)=>{
         processed++;
       }
     }
-    await admin.from("worker_runtime").upsert({worker_name:"motion_control",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_jobs:processed,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
+    await admin.from("worker_runtime").upsert({worker_name:workflowKey,last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_jobs:processed,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
     return out({ok:true,enabled:true,configured:true,processed,active,concurrency});
   }catch(e:any){
     const message=e instanceof Error?e.message:String(e);
-    try{await admin.from("worker_runtime").upsert({worker_name:"motion_control",last_heartbeat:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()},{onConflict:"worker_name"})}catch{}
+    try{await admin.from("worker_runtime").upsert({worker_name:workflowKey,last_heartbeat:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()},{onConflict:"worker_name"})}catch{}
     return out({ok:false,error:message},500);
   }
 });

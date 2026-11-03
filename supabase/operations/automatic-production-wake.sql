@@ -29,4 +29,18 @@ where exists (
     and runninghub_task_id is null and result_video_id is null
     and attempt_count<max_attempts and next_attempt_at<=now()
     and hidden_at is null
+);
+
+select net.http_post(
+  url:='https://iubzjfidmxfjvvonusos.supabase.co/functions/v1/cloudent-motion-control-worker?workflow=genjutsu',
+  headers:=jsonb_build_object('Content-Type','application/json','x-cloudent-worker-secret',public.get_cloudent_worker_secret()),
+  body:='{}'::jsonb,timeout_milliseconds:=120000
+)
+where exists (
+  select 1 from public.production_jobs
+  where meta @> '{"workflow_key":"genjutsu"}'::jsonb
+    and (status='motion_waiting' or (status='uploading' and locked_at<now()-interval '10 minutes'))
+    and runninghub_task_id is null and result_video_id is null
+    and nullif(meta->>'pipeline_dispatch_intent','') is null
+    and next_attempt_at<=now() and hidden_at is null
 );$wake$);

@@ -1,54 +1,42 @@
-# Genjutsu — Gemini prompt stage (draft)
+# Genjutsu production pipeline
 
-This change implements the server-side **adapter**, not the Genjutsu tab or its production executor. It is not imported by an active worker. No existing workflow, queue, job, deployment or database configuration changes when these files are added. Do not describe the whole feature as implemented or enabled.
+Published workflow: **2117411301344411649**. Gemini model: **gemini-3.8-flash**. The real account preflight on 2026-11-03 returned HTTP200 for the model and validated the published graph. Availability does not prove free-tier eligibility or impose a spending cap.
 
-## Implemented and tested locally
+The separate Produção IA → Genjutsu tab submits videos to the existing image pipeline. Each video requires an explicit model choice. The original video supplies the first frame; Face Swap and Upscale produce the final model image. The private motion worker uploads the original video (with audio) and final image to Gemini Files, using the exact instructions from note1040. It checkpoints the prompt before dispatching RunningHub.
 
-`supabase/functions/_shared/genjutsu-gemini.ts` uploads the source video **including its audio** and the final upscaled model photo to the Gemini Files API, then uses the exact note #1040 from the supplied workflow as its system instruction. It checks `models/gemini-3.8-flash` with the configured key before transferring media; no alternate model or billing tier is selected automatically.
-
-The original note is preserved in `genjutsu-instructions.ts`. Its source is `GENJUTSU DA SHOPEE - VYSSEA - C_CNET (5).json`, SHA-256 `83e6b60466ef594921c3ca03e0e3120b6674f6789b13d2ef0e0696d9af60bc5d`. The editor JSON and published graph are not edited. A per-request instruction labels the media and actual duration, requires an explicit Subject 1 definition, and asks for prompt text only.
-
-Only complete, structurally valid responses are saved. Validation checks the six ordered sections, required tags/rules, no unfilled placeholders or code fences, and timestamps within the source duration. It **does not** establish semantic fidelity, accurate transcription, English-only prose, full timeline coverage or frame-perfect synchronization. Those require a real sample and output review.
-
-`genjutsuExecutionInputs(...)` prepares exactly three authorized runtime inputs:
-
-| Node | Field | Value |
+| Runtime node | Field | Input |
 |---|---|---|
-| 970 | video | Uploaded original video identifier from RunningHub |
-| 496 | image | Uploaded final photo identifier from RunningHub |
-| 910 | value | Validated Gemini response, replacing the sample in that execution |
+| 970 | video | Original video |
+| 496 | image | Final upscaled model image |
+| 910 | value | Validated Gemini response |
+| 482 | SaveVideo output | Capture MP4, verify storage, then cancel exact task |
 
-It requests `instanceType: ultra`; it never calls RunningHub create/cancel. The saved prompt's hash must match before building the inputs. The destination workflow ID must be provided from the actual published RunningHub workflow; the editor UUID is not that ID.
+Execution requests Ultra84GB (`instanceType: ultra`). The published graph and all other node parameters remain unchanged, including QueueStop1044 and segmentation502. V7 and standard paths keep their existing workflow IDs and inputs.
 
-## Resumption and ownership contract
+## Queue and task lifecycle
 
-Call `prepareGenjutsuPrompt` **only from an authenticated internal worker**, after loading the exact user's job/media server-side and acquiring the persistent job lease. Do not expose Blob input, state, API keys or arbitrary storage paths through a public endpoint. This module does not implement authorization or queue claims itself.
+`genjutsu_image_eligible` and `claim_genjutsu_job` serialize the entire Genjutsu job in Postgres, under the existing RunningHub advisory lock and shared provider capacity. Later Genjutsu Face Swap jobs wait for the earlier parent to finish its video stage. This is enforced server-side, including concurrent workers and expired leases. Other workflow types retain their existing behavior.
 
-The supplied `checkpoint` callback must atomically save state under the owner's job and the current lease/version, rejecting a stale worker. Do not implement it as an unconditional metadata overwrite. The complete state contains only the media fingerprint, model/duration, bounded file descriptors, phase, prompt/hash, retry deadline and numeric usage. It never persists the API key or upload session URL. Existing metadata must be merged without erasing task/capture records.
+Gemini file descriptors and prompt/hash are saved under the owner and current worker lease. Processing and quota waits release the lease and resume through the existing minute scheduler. Completed prompts and uploaded Google files are reused. A durable generating checkpoint precedes generateContent; an ambiguous generation response blocks automatic replay. A durable dispatch intent precedes RunningHub create; an ambiguous create never permits a second task. Retry is explicit and restricted to safe pre-dispatch failures or provider-confirmed FAILED tasks.
 
-Video/photo/instructions/duration/MIME are fingerprinted. Changed inputs require a new job. Completed prompts are reused without another Gemini request. Each file descriptor is checkpointed before the next operation. Processing files return `ready: false`; the caller resumes through its regular scheduler rather than a busy loop. Expired/failed descriptors stop and require controlled handling, not silent media substitution. Google retains uploaded media according to its Files API expiration; this adapter does not add a deletion scheduler.
+The production monitor binds output482 to the exact task, copies and verifies it before cancellation, and exposes the result while cancellation remains pending. The job holds its provider slot until terminal confirmation. Genjutsu media uses the existing B2 primary storage and budget guards; it never falls back to Supabase Storage. A metadata-write failure retains a verified result object for recovery.
 
-A durable `generating` state is saved **before** generateContent. If that request times out or its response cannot be saved, the next invocation blocks replay as uncertain. A definite 429 records a retry deadline and permits retry only after that time, reusing existing uploads. Other failed or incomplete responses never authorize a RunningHub job. A configured paid Gemini project can incur charges; this adapter does not detect or enforce the account's free tier or a spending cap.
+Limits: video30MiB, final image10MiB, result40MiB, positive actual duration. Supported source video types: MP4/WebM/QuickTime; final images: JPEG/PNG/WebP. Google file expiration is respected; no separate file deletion scheduler is introduced.
 
-Adapter limits: source video up to 30 MiB (MP4/WebM/QuickTime), final photo up to 10 MiB (JPEG/PNG/WebP), positive actual duration. Requests have a 90-second per-request timeout; a worker must also budget total execution time and retain its lease. Files API upload destinations and file URIs are restricted to Google's API origin; redirects and arbitrary URLs are rejected. Raw provider errors, secrets and media content are not included in surfaced errors.
+## Authentication and visibility
 
-## Required before activation
+The new setup endpoint uses native Supabase admin authentication plus a live Cloudent session, or the existing internal worker secret. It exposes only sanitized cached readiness. Credentials, upload-session URLs, raw prompts and Google file references are not sent to the new UI. The key belongs in Supabase Edge Function secrets as GEMINI_API_KEY and is never stored in client code.
 
-1. Configure `GEMINI_API_KEY` in the secrets of the **runtime that runs the worker**. Existing production pipeline workers are Supabase Edge Functions, so a key only in Vercel will not reach them. Do not paste the key into source, the Brain, a PR or chat. Inspect only presence when diagnosing secrets.
-2. Confirm that the account exposes the exact requested model and its current free/paid quotas. The adapter fails closed if unavailable; documentation alone is not proof of account access.
-3. Obtain the Genjutsu published RunningHub URL/ID and API-format graph. Verify 970/video, 496/image, 910/value and SaveVideo482 against it.
-4. Add a Genjutsu choice to the existing API/UI; wire this adapter after Upscale and before provider dispatch. Keep all existing V7/standard jobs and their configuration intact. New state must be stored as bounded metadata under the authenticated owner.
-5. Add a persistent **one-job-at-a-time** claim for this new workflow; do not rely on a browser button, an in-memory flag, or this adapter to enforce concurrency. Extend the existing scheduler without blind polling/extra idle load, respecting storage/capacity guards and provider dispatch uncertainty.
-6. Implement capture from **node 482**, copy and verify the MP4, provide download, then cancel the exact RunningHub task. Preserve the result while cancellation is pending; do not free its provider slot until terminal state is confirmed. No cancellation is implemented by this adapter.
-7. Validate the effect of the existing QueueStop1044 and the fixed segmentation target at502. Preserve the graph; discuss necessary internal changes separately instead of changing it implicitly.
-8. Run an authorized sample through the complete chain. Current tests use mocked HTTP responses and synthetic Blob bytes only; no real Gemini/RunningHub generation has been performed.
+The new tab polls only while visible, filters its queue server-side, and fetches model names without base64 photos. The existing minute cron gets a conditional Genjutsu wake; no duplicate cron or unconditional idle request is added. The SQL operation changes service-only queue functions and preserves existing jobs, tables, RLS and calendar data.
 
-## Validation
+## Validation and limits of evidence
 
-Run `node scripts/test-genjutsu-gemini.mjs` on Node24. It covers exact instructions/media, prompt substitution, stored prompt reuse, changed inputs, missing key, invalid media, unavailable model, upload host restrictions, processing/resumption, lost lease, uncertain calls, quota waits, truncated/blocked output, invalid timestamps/sections, and corrupt saved prompts. Also run the existing image pipeline regression test.
+Run the focused scripts `test-genjutsu-gemini.mjs`, `test-genjutsu-readiness.mjs`, `test-genjutsu-dispatch.mjs`, `test-genjutsu-capture.mjs`, `test-genjutsu-ui.mjs` and the existing image/Motion regression scripts. `supabase/tests/genjutsu_serial_queue.sql` exercises the queue functions against temporary tables inside a rollback-only transaction.
 
-Official API references consulted during preparation:
-- https://ai.google.dev/gemini-api/docs/files
-- https://ai.google.dev/gemini-api/docs/video-understanding
-- https://ai.google.dev/api/models
-- https://ai.google.dev/api/generate-content
+Coverage includes media/instruction mapping, structural prompt validation, bounded timestamps, Google upload allowlists, resume/quota/uncertainty handling, task creation ordering, durable task recovery, exact482 capture, verification-before-cancel, pending-cancel slot retention, UI isolation and stable upload retries. Synthetic media and mocked providers do not establish semantic fidelity, accurate transcription, full timeline coverage or frame-perfect synchronization.
+
+No real Gemini media analysis or paid RunningHub video generation has been started as a QA action. The first real sample must validate the complete output, timing and published QueueStop behavior. DOM/controller tests passed; actual browser visual QA was unavailable because Chromium could not be installed. Existing unrelated baseline test failures must not be represented as passing checks.
+
+Source instructions: `GENJUTSU DA SHOPEE - VYSSEA - C_CNET (5).json`, SHA256 `83e6b60466ef594921c3ca03e0e3120b6674f6789b13d2ef0e0696d9af60bc5d`.
+
+Official references: https://ai.google.dev/gemini-api/docs/files, https://ai.google.dev/gemini-api/docs/video-understanding, https://ai.google.dev/api/models, https://ai.google.dev/api/generate-content.

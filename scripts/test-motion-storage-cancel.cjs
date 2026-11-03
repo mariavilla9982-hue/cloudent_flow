@@ -9,7 +9,7 @@ async function scenario(options={}){
  const events=[];let statusCalls=0;
  const admin={from(table){let update;const q={select(){return q},eq(){return q},in(){return q},update(v){update=v;return q},async maybeSingle(){if(update){events.push('persist_verified');job={...job,...update};return {data:{id:job.id}}}return {data:table==='production_jobs'?structuredClone(job):video}},then(ok,bad){events.push('persist_state');if(update)job={...job,...update};return Promise.resolve({error:null}).then(ok,bad)}};return q},storage:{from(){return {download:async()=>{events.push('verify_storage');return options.downloadFails?{error:{message:'offline'}}:{data:blob}}}}}};
  const rhJson=async(path,body)=>{assert.equal(body.taskId,'task');events.push(path);if(path.endsWith('/cancel'))return {code:options.cancelRejected?500:0};assert(path.endsWith('/status'));return {code:0,data:options.alreadyDone?'SUCCESS':++statusCalls===1?'RUNNING':options.staysRunning?'RUNNING':'FAILED'}};
- const c=vm.createContext({Blob,TextDecoder,Date,Number,Error,Array,Uint8Array,crypto,isMotionPreviewJob:j=>j.meta?.workflow_key==='motion_control'&&j.meta?.workflow_id==='2110721194974982146'});vm.runInContext(source,c);
+ const c=vm.createContext({Blob,TextDecoder,Date,Number,Error,Array,Uint8Array,crypto,motionOutputNode:()=>"384",isGenjutsuPreviewJob:()=>false,isMotionPreviewJob:j=>j.meta?.workflow_key==='motion_control'&&j.meta?.workflow_id==='2110721194974982146'});vm.runInContext(source,c);
  try{return {result:await c.cancelMotionAfterSave(admin,'job',rhJson),job,events}}catch(error){return {error,job,events}};
 }
 (async()=>{

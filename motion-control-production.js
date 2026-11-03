@@ -208,7 +208,7 @@
       return;
     }
     const core=document.createElement("script");
-    core.src="/motion-control-core-v6.js?v=ultra84-1";
+    core.src="/motion-control-core-v6.js?v=genjutsu-1";
     core.async=false;
     core.onload=applyExactVideo7Actions;
     core.onerror=()=>console.error("Motion Control: não foi possível carregar o controlador base.");

@@ -29,7 +29,7 @@
   }
   let characterRequest=null;
   const videoWorkflows=[{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
-  const workflowLabel=j=>videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
+  const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
   function workflowSelector(d){
     return '<label class="pipeline-workflow"><b>Workflow após Face Swap e Upscale</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||'motion_control')===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>O vídeo original e a imagem pronta seguem para o workflow escolhido.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
   }

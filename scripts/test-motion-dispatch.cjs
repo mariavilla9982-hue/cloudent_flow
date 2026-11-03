@@ -3,7 +3,7 @@ const {stripTypeScriptTypes}=require('node:module');
 const paths={'motion-dispatch.ts':'supabase/functions/cloudent-motion-control-worker/motion-dispatch.ts','motion-worker.ts':'supabase/functions/cloudent-motion-control-worker/index.ts','motion-failure-repair.ts':'supabase/functions/_shared/motion-failure-repair.ts'};
 const read=n=>fs.readFileSync(process.env.MOTION_FIX_ROOT?process.env.MOTION_FIX_ROOT+'/'+(n==='motion-failure-repair.ts'?'failure-repair-final.ts':n):paths[n],'utf8');
 const compile=s=>stripTypeScriptTypes(s.replace(/^import .*$/mg,'').replace(/export /g,''),{mode:'transform'});
-const ctx={console,Date,Error,crypto:globalThis.crypto,setTimeout,clearTimeout,TextEncoder,TextDecoder,Uint8Array,Request,Response,Blob,File,FormData,AbortSignal,fetch:()=>{throw Error('real fetch forbidden')}};
+const ctx={console,Date,Error,crypto:globalThis.crypto,setTimeout,clearTimeout,TextEncoder,TextDecoder,Uint8Array,URL,Request,Response,Blob,File,FormData,AbortSignal,fetch:()=>{throw Error('real fetch forbidden')}};
 vm.createContext(ctx);vm.runInContext(compile(read('motion-dispatch.ts'))+';globalThis.MCE=MotionCreateError;globalThis.patch=motionDispatchFailurePatch',ctx);
 const job={attempt_count:1,meta:{workflow_key:'motion_control',pipeline_dispatch_intent:'intent',pipeline_dispatch_uncertain:true}};
 for(const payload of [{code:421,msg:'TASK_QUEUE_MAXED'},{code:814,msg:'PERSONAL_QUEUE_COUNT_LIMIT'}]){
