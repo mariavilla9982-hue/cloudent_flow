@@ -180,3 +180,27 @@
 @media(max-width:700px){#production [data-genjutsu-root] .production-drop-live{max-height:260px}}
 
 #production [data-genjutsu-root] .production-job-state em{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* GENJUTSU: click-to-open media, compact stages and touch-sized actions. */
+#production .genjutsu-upload-workspace{max-width:860px;margin:0 auto 18px}
+#production.studio-page.studio-page [data-genjutsu-root] .production-job-actions .btn{min-height:44px!important;padding:10px 12px!important;font-size:12px!important}
+#production [data-genjutsu-root] .production-media-cell{min-height:66px;cursor:pointer}
+#production [data-genjutsu-root] .production-media-cell:focus-visible{outline:2px solid #fff;outline-offset:3px}
+#production [data-genjutsu-root] .production-status{font-size:10px;text-transform:none;letter-spacing:0;padding:0;background:none;line-height:1.5}
+#production .genjutsu-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:10px}
+#production .genjutsu-steps span{min-width:0;color:#727782}
+#production .genjutsu-steps i{display:block;height:4px;border-radius:4px;background:#34363b}
+#production .genjutsu-steps small{font-size:10px!important;margin-top:5px;line-height:1.4;color:inherit}
+#production .genjutsu-steps .done{color:#aeb4bd}
+#production .genjutsu-steps .done i{background:#aeb4bd}
+#production .genjutsu-steps .current{color:#fff}
+#production .genjutsu-steps .current i{background:#fff}
+#production .genjutsu-steps .error{color:#efabab}
+#production .genjutsu-steps .error i{background:#efabab}
+#production [data-genjutsu-root] button:disabled{cursor:wait;opacity:.55}
+[data-gen-modal] [data-gen-canvas]{min-height:140px;display:grid;place-items:center;padding:12px;color:#aeb4bd}
+[data-gen-modal] [data-gen-canvas] :is(video,img){display:block;width:100%;max-height:72vh;object-fit:contain}
+[data-gen-modal] .modal-head .btn{min-height:44px}
+@media(max-width:700px){#production [data-genjutsu-root] .production-job-actions{gap:8px}#production.studio-page.studio-page [data-genjutsu-root] .production-job-actions .btn{flex:1 1 auto!important}#production .genjutsu-steps{margin-bottom:5px}}
+#production [data-genjutsu-root] .production-media-preview-shell{position:relative}
+#production [data-genjutsu-root] .production-media-preview-shell::after{content:'▶';position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#fff;text-shadow:0 1px 5px #000;background:#0002;pointer-events:none}
