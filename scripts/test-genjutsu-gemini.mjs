@@ -45,15 +45,16 @@ function harness(config={}){
       return json({file:ref(kind,config.processing?'PROCESSING':'ACTIVE')});
     }
     if(url.startsWith(base+'/v1beta/files/'))return json(ref(url.split('/').at(-1),config.processing?'PROCESSING':'ACTIVE'));
-    if(url.endsWith(':generateContent')){
+    if(url.endsWith('/v1beta/interactions')){
       if(config.unavailable)return json({error:{message:'private-test-key overloaded'}},503);
       if(config.timeout)throw new Error('private-test-key timeout');
       if(config.quota)return json({error:{message:'private-test-key quota'}},429,{'retry-after':'120'});
       if(config.invalidJSON)return new Response('not json');
-      return json(config.response||{candidates:[{finishReason:'STOP',content:{parts:[
-        {thought:true,text:'private reasoning'},
-        {text:config.prompt??prompt}
-      ]}}],usageMetadata:{promptTokenCount:1000,candidatesTokenCount:400,totalTokenCount:1400,secret:'private-test-key'}});
+      return json(config.response||{id:'analysis-1',model:GENJUTSU_MODEL,status:'completed',steps:[
+        {type:'thought',content:[{type:'text',text:'private reasoning'}]},
+        {type:'user_input',content:[{type:'text',text:'ignore this'}]},
+        {type:'model_output',content:[{type:'text',text:config.prompt??prompt}]}
+      ],usage:{total_input_tokens:1000,total_output_tokens:400,total_tokens:1400,secret:'private-test-key'}});
     }
     throw Error('Unexpected network destination '+url);
   };
@@ -72,14 +73,17 @@ const happy=harness();
 const completed=await happy.run();
 assert.equal(completed.ready,true);assert.equal(completed.state.prompt,prompt);
 assert.deepEqual(completed.state.usage,{promptTokenCount:1000,candidatesTokenCount:400,totalTokenCount:1400});
-const generated=happy.calls.find(c=>c.url.endsWith(':generateContent'));
+const generated=happy.calls.find(c=>c.url.endsWith('/v1beta/interactions'));
+assert.equal(generated.init.headers['Api-Revision'],'2026-05-20');
 const body=JSON.parse(generated.init.body);
-assert.equal(body.systemInstruction.parts[0].text,GENJUTSU_INSTRUCTIONS);
-assert.deepEqual(body.contents[0].parts.slice(0,2),[
-  {fileData:{fileUri:ref('video').uri,mimeType:video.type}},
-  {fileData:{fileUri:ref('image').uri,mimeType:image.type}}
+assert.equal(body.system_instruction,GENJUTSU_INSTRUCTIONS);
+assert.equal(body.background,true);assert.equal(body.store,true);assert.equal(body.generation_config.thinking_level,'low');
+assert.equal(body.previous_interaction_id,undefined,'each video starts an independent analysis');
+assert.deepEqual(body.input.slice(0,2),[
+  {type:'video',uri:ref('video').uri,mime_type:video.type},
+  {type:'image',uri:ref('image').uri,mime_type:image.type}
 ]);
-assert(body.contents[0].parts[2].text.includes('10 seconds'));
+assert(body.input[2].text.includes('10 seconds'));
 const mapped=await genjutsuExecutionInputs('2111111111111111111','rh/source.mp4','rh/upscale.png',completed.state);
 assert.deepEqual(mapped,{workflowId:'2111111111111111111',instanceType:'ultra',nodeInfoList:[
   {nodeId:'970',fieldName:'video',fieldValue:'rh/source.mp4'},
@@ -104,14 +108,14 @@ await rejects(()=>malicious.run(),'invalid_upload_url');assert.equal(malicious.c
 console.log('PASS missing key, invalid media, unavailable model and untrusted upload destination fail closed');
 
 const processing=harness({processing:true});assert.equal((await processing.run()).ready,false);
-assert.equal(processing.state.status,'processing');assert.equal(count(processing,':generateContent'),0);
+assert.equal(processing.state.status,'processing');assert.equal(count(processing,'/v1beta/interactions'),0);
 const uploads=count(processing,'/upload/v1beta/files');processing.config.processing=false;
 assert.equal((await processing.run(processing.state,{resumeUploadedFiles:true,video:new Blob(['saved'],{type:video.type}),image:new Blob(['saved'],{type:image.type})})).ready,true);assert.equal(count(processing,'/upload/v1beta/files'),uploads);
 const failed=harness({failCheckpoint:'generating'});await assert.rejects(()=>failed.run(),/lease lost/);
-assert.equal(count(failed,':generateContent'),0,'lost lease blocks generation');
+assert.equal(count(failed,'/v1beta/interactions'),0,'lost lease blocks generation');
 const timeout=harness({timeout:true});await rejects(()=>timeout.run(),'network_error');
 assert.equal(timeout.state.status,'generating');await rejects(()=>timeout.run(),'generation_uncertain');
-assert.equal(count(timeout,':generateContent'),1,'ambiguous generation cannot replay');
+assert.equal(count(timeout,'/v1beta/interactions'),1,'ambiguous generation cannot replay');
 console.log('PASS resumable processing, media reuse, lost lease and ambiguous generation do not duplicate calls');
 
 const quota=harness({quota:true});await rejects(()=>quota.run(),'quota_waiting');
@@ -120,8 +124,8 @@ assert.equal((await quota.run()).ready,false);assert.equal(quota.calls.length,qu
 quota.clock=current+121000;quota.config.quota=false;assert.equal((await quota.run()).ready,true);
 assert.equal(count(quota,'/upload/v1beta/files'),2,'quota retry reuses both uploads');
 for(const response of [
-  {promptFeedback:{blockReason:'SAFETY'}},
-  {candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:prompt}]}}]}
+  {id:'failed-analysis',status:'failed'},
+  {id:'truncated-analysis',status:'incomplete',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]}
 ]){const h=harness({response});await rejects(()=>h.run(),'incomplete_response');assert.equal(h.state.status,'failed');}
 for(const invalid of [prompt.replace('summary:','missing:'),prompt.replace('00:10.000','00:11.000'),'```\n'+prompt+'\n```',prompt+' {unfilled}']){
   const h=harness({prompt:invalid});await rejects(()=>h.run(),'invalid_prompt');assert.equal(h.state.status,'failed');
@@ -145,8 +149,54 @@ for(let i=1;i<=5;i++){
 }
 await rejects(()=>exhausted.run(),'provider_unavailable');
 assert.equal(exhausted.state.status,'failed');
-assert.equal(count(exhausted,':generateContent'),6);
+assert.equal(count(exhausted,'/v1beta/interactions'),6);
 assert.equal(count(exhausted,'/upload/v1beta/files'),2);
 const preflight503=harness({modelStatus:503});await rejects(()=>preflight503.run(),'provider_waiting');
-assert.equal(count(preflight503,':generateContent'),0);
+assert.equal(count(preflight503,'/v1beta/interactions'),0);
 console.log('PASS explicit 503 backoff, due time, media reuse, bounded retry budget and preflight overload');
+
+// One background analysis survives worker boundaries; retrieval failures never create a second one.
+const asyncJob=harness({response:{id:'background-1',model:GENJUTSU_MODEL,status:'in_progress'}});
+const started=await asyncJob.run();assert.equal(started.ready,false);assert.equal(started.state.interactionId,'background-1');
+assert.equal(started.state.status,'generating');const beforePoll=asyncJob.calls.length;
+await asyncJob.run();assert.equal(asyncJob.calls.length,beforePoll,'no poll before retryAt');
+let pollFailure=503,pollCount=0;
+const asyncFetcher=async(url,init)=>{
+ assert.equal(url,base+'/v1beta/interactions/background-1','polling never reuploads/creates');
+ pollCount++;assert.equal(init.method,undefined);assert.equal(init.headers['Api-Revision'],'2026-05-20');
+ if(pollFailure===503)return Response.json({error:{message:'do not log private-test-key'}},{status:503});
+ if(pollFailure==='network')throw Error('network lost');
+ if(pollFailure==='invalid')return new Response('bad json');
+ return Response.json({id:'background-1',model:GENJUTSU_MODEL,status:'completed',steps:[{type:'user_input',content:[{type:'text',text:'wrong prompt'}]},{type:'thought',content:[{type:'text',text:'private'}]},{type:'model_output',content:[{type:'text',text:prompt}]}]});
+};
+asyncJob.clock=current+31000;await rejects(()=>asyncJob.run(undefined,{fetcher:asyncFetcher}),'provider_waiting');
+assert.equal(asyncJob.state.interactionId,'background-1');asyncJob.clock=Date.parse(asyncJob.state.retryAt)+1;
+pollFailure='network';await rejects(()=>asyncJob.run(undefined,{fetcher:asyncFetcher}),'network_error');assert.equal(asyncJob.state.interactionId,'background-1');
+pollFailure='invalid';await rejects(()=>asyncJob.run(undefined,{fetcher:asyncFetcher}),'invalid_response');
+pollFailure=null;assert.equal((await asyncJob.run(undefined,{fetcher:asyncFetcher})).ready,true);assert.equal(asyncJob.state.prompt,prompt);
+assert.equal(count(asyncJob,'/v1beta/interactions'),1);assert.equal(pollCount,4);
+const savedPromptCalls=pollCount;await asyncJob.run(undefined,{fetcher:asyncFetcher});assert.equal(pollCount,savedPromptCalls);
+// The ID is persisted before parsing/saving output, so a failed final write is recoverable.
+const recover=harness({failCheckpoint:'complete'});await assert.rejects(()=>recover.run(),/lease lost/);assert.equal(recover.state.interactionId,'analysis-1');
+recover.config.failCheckpoint=null;
+await recover.run(undefined,{fetcher:async(url)=>{assert(url.endsWith('/interactions/analysis-1'));return Response.json({id:'analysis-1',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]});}});
+assert.equal(recover.state.status,'complete');assert.equal(count(recover,'/v1beta/interactions'),1);
+const wrongId=harness({response:{id:'first-id',status:'in_progress'}});await wrongId.run();wrongId.clock=current+31000;
+await rejects(()=>wrongId.run(undefined,{fetcher:async()=>Response.json({id:'different-id',status:'completed'})}),'invalid_response');
+assert.equal(wrongId.state.interactionId,'first-id');
+console.log('PASS background ID survives 503/network/invalid JSON, output isolation, prompt reuse and failed final save recovery');
+// Exhausting a worker pass before POST leaves preparation resumable, never uncertain.
+const budget=harness();let budgetState;
+await rejects(()=>budget.run(undefined,{checkpoint:async state=>{budgetState=structuredClone(state);if(state.status==='generating')budget.clock=current+45000;}}),'pass_yield');
+assert.equal(budgetState.status,'preparing');assert.equal(count(budget,'/v1beta/interactions'),0);
+// Exercise the actual stage under an owner lease with an already accepted background ID.
+const {prepareGenjutsuStage,GENJUTSU_CONFIG}=await import('../supabase/functions/_shared/genjutsu-stage.ts');
+const savedFetch=globalThis.fetch;const stageJob={id:'job',user_id:'owner',original_storage_path:'owner/video',frame_storage_path:'owner/image',meta:{workflow_key:'genjutsu',workflow_id:GENJUTSU_CONFIG.workflowId,source_duration_seconds:10,genjutsu_prompt:started.state}};
+let stageWrites=0;
+const stageAdmin={from(){const q={update(value){stageWrites++;return q;},eq(){return q;},is(){return q;},select(){return q;},maybeSingle:async()=>({data:{id:'job'}})};return q;}};
+try{
+ globalThis.fetch=async url=>{assert(String(url).endsWith('/interactions/background-1'));return Response.json({id:'background-1',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]});};
+ assert.equal(await prepareGenjutsuStage({admin:stageAdmin,job:stageJob,workerId:'owner-lease',key:'key',readBlob:()=>{throw Error('must reuse uploaded files');},now:()=>current+31000}),true);
+ assert.equal(stageJob.meta.genjutsu_prompt.prompt,prompt);assert(stageWrites>=2);
+}finally{globalThis.fetch=savedFetch;}
+console.log('PASS pass deadline yields before dispatch, actual leased stage polls accepted analysis without re-reading media');

@@ -68,3 +68,6 @@ const accepted=await run({afterAttachFailure:true});assert.equal(accepted.create
 console.log('PASS real dispatch worker: exact 970/496/910, Ultra, LLM before durable create, pending/quota, ambiguity, provider capacity and accepted-task recovery');
 
 const expired=await run({expired:true});assert.equal(expired.body.ok,true);assert.equal(expired.creates.length,1,JSON.stringify(expired));assert.equal(expired.events.filter(x=>x==='claim').length,1);console.log('PASS expired pre-create lease resumes even when its reservation fills concurrency=1');
+const backgroundJob={meta:{genjutsu_prompt:{status:'generating',interactionId:'background-id'}}};
+for(const code of ['network_error','invalid_response','pass_yield'])assert.equal(genjutsuPromptWait(new GenjutsuPromptError(code,'wait'),backgroundJob),true);
+assert.equal(genjutsuPromptWait(new GenjutsuPromptError('network_error','wait'),{meta:{genjutsu_prompt:{status:'generating'}}}),false);

@@ -34,3 +34,9 @@ assert.equal(p.meta.genjutsu_prompt.status,'preparing');assert.equal(p.meta.genj
 p.status='failed';p.last_error='Falha de comunicação com Gemini.';p.meta.genjutsu_prompt={status:'generating'};
 assert.equal((await retryPipelineMotion(admin,'owner',p.id)).status,409);
 console.log('PASS historical explicit 503 resumes same job, ambiguous timeout stays blocked');
+
+p.meta.genjutsu_prompt={status:'generating',interactionId:'existing-background',video:{state:'ACTIVE',expirationTime:'2020-01-01'},image:{state:'ACTIVE',expirationTime:'2020-01-01'}};
+assert.equal((await retryPipelineMotion(admin,'owner',p.id)).reused_inputs,true);
+assert.equal(p.meta.genjutsu_prompt.interactionId,'existing-background');
+assert(p.meta.genjutsu_prompt.video&&p.meta.genjutsu_prompt.image,'background retrieval retains file identity even after media expiry');
+console.log('PASS retry recovers the same accepted background analysis without creating a new request');
