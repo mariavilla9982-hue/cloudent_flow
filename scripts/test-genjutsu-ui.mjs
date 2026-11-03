@@ -8,9 +8,13 @@ const container=node();let section=null;
 for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-error]','[data-gen-status]'])nodes.set(selector,node());
 Object.defineProperty(container,'innerHTML',{set(value){this.html=value;section=node();section.dataset.owner=(value.match(/data-owner="([^"]*)"/)||[])[1];section.querySelector=selector=>nodes.get(selector);},get(){return this.html;}});
 for(const kind of ['video','frame']){const box=node(),parts=new Map(['.production-upload-preview','input','[data-clear]','.production-upload-meta'].map(s=>[s,node()]));box.querySelector=s=>parts.get(s);nodes.set('[data-gen-drop="'+kind+'"]',box);}
+const mediaBoxes={};
+for(const kind of ['original','frame']){const placeholder=node();placeholder.replaceWith=media=>mediaBoxes[kind].media=media;mediaBoxes[kind]={querySelector:()=>placeholder};}
+const target={dataset:{jobMedia:'existing'},isConnected:true,querySelector:s=>mediaBoxes[s.includes('original')?'original':'frame']};
+nodes.get('[data-gen-jobs]').querySelectorAll=()=>[target];
 let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[];
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
-const document={hidden:false,querySelector:()=>section,getElementById:id=>id==='production'?container:node(),createElement(tag){const el=node();if(tag==='video'){el.duration=10;Object.defineProperty(el,'src',{set(){queueMicrotask(()=>el.onloadedmetadata?.());}});}return el;}};
+const document={hidden:false,querySelector:()=>section,getElementById:id=>id==='production'?container:node(),createElement(tag){const el=node();el.appendChild=child=>el.child=child;if(tag==='video'){el.duration=10;Object.defineProperty(el,'src',{get(){return el.savedSrc;},set(value){el.savedSrc=value;queueMicrotask(()=>el.onloadedmetadata?.());}});}return el;}};
 const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.supabase.co'},CloudentMotionControl:{mode:'genjutsu'}},document,currentPage:'production',cloudSession:{user:{id:'owner'},access_token:'session'},SUPABASE_KEY:'publishable',crypto,File,Blob,AbortSignal,URL:{createObjectURL:()=> 'blob:source',revokeObjectURL(){}},Date,Number,String,Error,Promise,setTimeout,clearTimeout,setInterval:fn=>{timer=fn;},queueMicrotask,
   extractFirstFrameBlob:async()=>{frameReads++;return new Blob(['frame'],{type:'image/jpeg'});},
   uploadFaceSwapPart:async(part,file)=>{uploadedFiles.push(file);uploads.push(part.path);if(part.path==='reference'&&failUpload){failUpload=false;throw Error('upload interrupted');}},
@@ -18,6 +22,7 @@ const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.s
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
     if(path.includes('resource=image-pipeline-characters')){assert(path.includes('metadata=1'));return {characters:[{id:'jujuh',name:'Jujuh'}]};}
     if(path.includes('resource=image-pipeline&'))return {jobs:[{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
+    if(path.includes('resource=image-pipeline-preview'))return {url:path.includes('kind=original')?'https://b2.test/original.mp4':'https://b2.test/frame.webp'};
     if(path.includes('image-pipeline-ticket'))return {job_id:JSON.parse(options.body).job_id,original:{path:'original'},reference:{path:'reference'}};
     return {ok:true};
   },fetch:async()=>Response.json({active:true,readiness:{ready:true}})
@@ -30,6 +35,21 @@ assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-download="existing"
 assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('data-calendar'));
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('&lt;unsafe&gt;'));
 assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('other'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-job-media="existing"'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-media-kind="original"'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-media-kind="frame"'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('genjutsu-steps'));
+assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('<progress'));
+assert.equal(mediaBoxes.original.media.src,'https://b2.test/original.mp4');
+assert.equal(mediaBoxes.original.media.poster,'https://b2.test/frame.webp');
+assert.equal(mediaBoxes.original.media.preload,'none');
+assert.equal(mediaBoxes.frame.media.child.src,'https://b2.test/frame.webp');
+assert.equal(mediaBoxes.frame.media.target,'_blank');
+const oldMedia=mediaBoxes.original.media;await c.window.CloudentGenjutsu.refresh();
+assert.equal(mediaBoxes.original.media,oldMedia,'polling preserves the media player');
+assert.equal(calls.filter(x=>x.path.includes('resource=image-pipeline-preview')).length,2,'signed previews are reused');
+
+
 const input=nodes.get('input[type=file]');input.type='file';input.files=[video];section.onchange({target:input});
 let entryId=nodes.get('[data-gen-entries]').innerHTML.match(/data-entry="([^"]+)"/)[1];
 const send=node();send.hasAttribute=key=>key==='data-send';

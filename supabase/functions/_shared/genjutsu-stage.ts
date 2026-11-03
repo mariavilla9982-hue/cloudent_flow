@@ -23,7 +23,7 @@ export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=
   if(![job.original_storage_path,job.frame_storage_path].every(path=>String(path||'').startsWith(job.user_id+'/')))throw new Error('Genjutsu: mídia não pertence ao trabalho.');
   const previous=job.meta.genjutsu_prompt;
   if(previous?.status==='complete'){await genjutsuInputs('saved-video','saved-image',job);return true;}
-  if(previous?.status==='quota_waiting'&&Date.parse(previous.retryAt||'')>now())return false;
+  if(['quota_waiting','provider_waiting'].includes(previous?.status)&&Date.parse(previous.retryAt||'')>now())return false;
   if(previous?.status==='generating')throw new GenjutsuPromptError('generation_uncertain','Análise sem confirmação; não será repetida automaticamente.');
   const checkpoint=async(state:any)=>{
     const meta={...job.meta,genjutsu_prompt:state};
@@ -42,7 +42,7 @@ export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=
   return result.ready;
 }
 export function genjutsuPromptWait(error:any,job:any){
-  return error instanceof GenjutsuPromptError&&(error.code==='quota_waiting'||error.code==='network_error'&&job.meta?.genjutsu_prompt?.status!=='generating');
+  return error instanceof GenjutsuPromptError&&(error.code==='quota_waiting'||error.code==='provider_waiting'||error.code==='network_error'&&job.meta?.genjutsu_prompt?.status!=='generating');
 }
 export async function genjutsuInputs(video:string,image:string,job:any){return genjutsuExecutionInputs(GENJUTSU_WORKFLOW_ID,video,image,job.meta.genjutsu_prompt);}
 export async function applyGenjutsuStatus(admin:any,job:any,state:any){

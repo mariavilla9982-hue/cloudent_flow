@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
-const src=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/image-pipeline-retry.ts','utf8')).replace('export async function','async function');
+const src=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/image-pipeline-retry.ts','utf8')).replaceAll('export ','');
 const retry=vm.runInNewContext(src+';retryPipelineMotion',{Date});
 function fixture(){
  const p={id:'job',user_id:'owner',status:'failed',runninghub_task_id:'task',original_storage_path:'owner/original',frame_storage_path:'owner/upscale',meta:{image_pipeline_version:2,workflow_id:'v7',provider_status:'FAILED',provider_status_task_id:'task',pipeline_dispatch_intent:'old',motion_execution_phase:'waiting_loop'}};

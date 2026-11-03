@@ -46,6 +46,7 @@ function harness(config={}){
     }
     if(url.startsWith(base+'/v1beta/files/'))return json(ref(url.split('/').at(-1),config.processing?'PROCESSING':'ACTIVE'));
     if(url.endsWith(':generateContent')){
+      if(config.unavailable)return json({error:{message:'private-test-key overloaded'}},503);
       if(config.timeout)throw new Error('private-test-key timeout');
       if(config.quota)return json({error:{message:'private-test-key quota'}},429,{'retry-after':'120'});
       if(config.invalidJSON)return new Response('not json');
@@ -126,3 +127,26 @@ for(const invalid of [prompt.replace('summary:','missing:'),prompt.replace('00:1
   const h=harness({prompt:invalid});await rejects(()=>h.run(),'invalid_prompt');assert.equal(h.state.status,'failed');
 }
 console.log('PASS quota wait without paid fallback; blocked/truncated/invalid responses never reach RunningHub inputs');
+
+// Explicit 503 responses back off durably, reuse files, and stop after five retries.
+const overloaded=harness({unavailable:true});
+await rejects(()=>overloaded.run(),'provider_waiting');
+assert.equal(overloaded.state.status,'provider_waiting');
+assert.equal(overloaded.state.retryAt,new Date(current+60000).toISOString());
+const waitingCalls=overloaded.calls.length;await overloaded.run();assert.equal(overloaded.calls.length,waitingCalls);
+overloaded.clock=current+61000;overloaded.config.unavailable=false;
+assert.equal((await overloaded.run()).ready,true);
+assert.equal(count(overloaded,'/upload/v1beta/files'),2);
+const exhausted=harness({unavailable:true});
+for(let i=1;i<=5;i++){
+  await rejects(()=>exhausted.run(),'provider_waiting');
+  assert.equal(exhausted.state.transientAttempts,i);
+  exhausted.clock=Date.parse(exhausted.state.retryAt)+1;
+}
+await rejects(()=>exhausted.run(),'provider_unavailable');
+assert.equal(exhausted.state.status,'failed');
+assert.equal(count(exhausted,':generateContent'),6);
+assert.equal(count(exhausted,'/upload/v1beta/files'),2);
+const preflight503=harness({modelStatus:503});await rejects(()=>preflight503.run(),'provider_waiting');
+assert.equal(count(preflight503,':generateContent'),0);
+console.log('PASS explicit 503 backoff, due time, media reuse, bounded retry budget and preflight overload');

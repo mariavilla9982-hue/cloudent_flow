@@ -10,13 +10,14 @@ export type PromptState = {
   model:string;
   durationSeconds:number;
   instructionsSha256:string;
-  status:'preparing'|'processing'|'generating'|'quota_waiting'|'complete'|'failed';
+  status:'preparing'|'processing'|'generating'|'quota_waiting'|'provider_waiting'|'complete'|'failed';
   video?:FileRef;
   image?:FileRef;
   prompt?:string;
   promptSha256?:string;
   usage?:Record<string,number>;
   retryAt?:string;
+  transientAttempts?:number;
 };
 type Options = {
   apiKey:string;
@@ -101,7 +102,7 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
   }
   if(state.status==='generating')fail('generation_uncertain','Análise anterior sem confirmação. Não repetir automaticamente.');
   if(state.status==='failed')fail('previous_failure','Análise interrompida. Revise a falha antes de tentar novamente.');
-  if(state.status==='quota_waiting'&&Date.parse(state.retryAt||'')>now())return {ready:false,state};
+  if(['quota_waiting','provider_waiting'].includes(state.status)&&Date.parse(state.retryAt||'')>now())return {ready:false,state};
   const headers={'x-goog-api-key':o.apiKey};
   const request=async(url:string,init:RequestInit={})=>{
     let response:Response;
@@ -112,6 +113,17 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
       const seconds=/^\d+$/.test(value)?Number(value):Math.max(60,(Date.parse(value)-now())/1000||60);
       await save({status:'quota_waiting',retryAt:new Date(now()+Math.max(60,Math.min(86400,seconds))*1000).toISOString()});
       fail('quota_waiting','Cota Gemini indisponível. Aguardar nova tentativa; sem fallback pago.');
+    }
+    // An explicit 503 is a failed request, unlike an ambiguous timeout after dispatch.
+    // Back off between worker passes, retaining uploaded files and limiting retries.
+    if(response.status===503){
+      const attempts=(state.transientAttempts||0)+1;
+      if(attempts>5){await save({status:'failed',retryAt:undefined,transientAttempts:attempts});fail('provider_unavailable','Gemini continua indisponível (503). Tente a etapa novamente mais tarde.');}
+      const value=response.headers.get('retry-after')||'';
+      const requested=/^\d+$/.test(value)?Number(value):(Date.parse(value)-now())/1000;
+      const seconds=Math.min(3600,Math.max(60*2**(attempts-1),Number.isFinite(requested)?requested:0));
+      await save({status:'provider_waiting',transientAttempts:attempts,retryAt:new Date(now()+seconds*1000).toISOString()});
+      fail('provider_waiting','Gemini temporariamente indisponível (503). Nova tentativa agendada.');
     }
     if(!response.ok)fail('provider_http_'+response.status,'Gemini recusou a operação (HTTP '+response.status+').');
     return response;
