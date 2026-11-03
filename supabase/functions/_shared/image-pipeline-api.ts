@@ -37,7 +37,7 @@ export async function imagePipelineApi(d:any){
       if(j.production_job_id){
         j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
         if(j.production){
-          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
+          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
           delete j.production.meta;
         }
       }
