@@ -35,7 +35,8 @@ export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=
     if(!String(path||'').startsWith(job.user_id+'/'))throw new Error('Genjutsu: mídia não pertence ao trabalho.');
     return boundedBlob(await readBlob(path),mime,limit);
   };
-  const resumeUploadedFiles=!!(previous?.video&&previous?.image);
+  const resumeUploadedFiles=!!(previous?.video&&previous?.image&&(previous.interactionId||
+    [previous.video,previous.image].every(file=>Date.parse(file.expirationTime)>now())));
   const video=resumeUploadedFiles?new Blob(['saved'],{type:previous.video.mimeType}):await read(job.original_storage_path,job.original_mime_type||'video/mp4',30*1024*1024);
   const image=resumeUploadedFiles?new Blob(['saved'],{type:previous.image.mimeType}):await read(job.frame_storage_path,job.frame_mime_type||'image/jpeg',10*1024*1024);
   const result=await prepareGenjutsuPrompt({apiKey:key,video,image,resumeUploadedFiles,durationSeconds:Number(job.meta.source_duration_seconds),state:job.meta.genjutsu_prompt,checkpoint,now});

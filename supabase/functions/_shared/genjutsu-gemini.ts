@@ -125,15 +125,14 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
       fail('quota_waiting','Cota Gemini indisponível. Aguardar nova tentativa; sem fallback pago.');
     }
     // An explicit 503 is a failed request, unlike an ambiguous timeout after dispatch.
-    // Back off between worker passes, retaining uploaded files and limiting retries.
-    if(response.status===503){
+    // Retry transient faults until a valid prompt, with capped spacing, not a count limit.
+    if([500,502,503,504].includes(response.status)){
       const attempts=(state.transientAttempts||0)+1;
-      if(attempts>5){await save({status:'failed',retryAt:undefined,transientAttempts:attempts});fail('provider_unavailable','Gemini continua indisponível (503). Tente a etapa novamente mais tarde.');}
       const value=response.headers.get('retry-after')||'';
       const requested=/^\d+$/.test(value)?Number(value):(Date.parse(value)-now())/1000;
       const seconds=Math.min(3600,Math.max(60*2**(attempts-1),Number.isFinite(requested)?requested:0));
-      await save({status:'provider_waiting',transientAttempts:attempts,retryAt:new Date(now()+seconds*1000).toISOString()});
-      fail('provider_waiting','Gemini temporariamente indisponível (503). Nova tentativa agendada.');
+      await save({status:'provider_waiting',providerFailureCodes:['HTTP_'+response.status],transientAttempts:attempts,retryAt:new Date(now()+seconds*1000).toISOString()});
+      fail('provider_waiting','Gemini temporariamente indisponível (HTTP '+response.status+'). Nova tentativa agendada.');
     }
     if(!response.ok){await save({status:'failed',retryAt:undefined});fail('provider_http_'+response.status,'Gemini recusou a operação (HTTP '+response.status+').');}
     return response;
@@ -158,12 +157,12 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
       const transient=['INTERNAL','UNAVAILABLE','RESOURCE_EXHAUSTED','DEADLINE_EXCEEDED'];
       if(data.status==='failed'&&codes.length&&codes.every((code:string)=>transient.includes(code))){
         const attempts=(state.transientAttempts||0)+1;
-        const exhausted=attempts>5;
-        await save({status:exhausted?'failed':'provider_waiting',previousInteractionId:id,interactionId:undefined,
+        const quota=codes.includes('RESOURCE_EXHAUSTED');
+        await save({status:quota?'quota_waiting':'provider_waiting',previousInteractionId:id,interactionId:undefined,
           providerFailureCodes:[...new Set(codes)] as string[],transientAttempts:attempts,
-          retryAt:exhausted?undefined:new Date(now()+Math.min(3600,60*2**(attempts-1))*1000).toISOString()});
-        fail(exhausted?'provider_unavailable':'provider_waiting',exhausted?
-          'Gemini continua com falha temporária após o limite de tentativas. Tente a etapa novamente mais tarde.':
+          retryAt:new Date(now()+Math.min(3600,60*2**(attempts-1))*1000).toISOString()});
+        fail(quota?'quota_waiting':'provider_waiting',quota?
+          'Gemini informou limite de recursos ou cota. Nova tentativa agendada com as mesmas mídias.':
           'Gemini encerrou a análise por falha temporária. Nova tentativa agendada com as mesmas mídias.');
       }
       await save({status:'failed',previousInteractionId:id,interactionId:undefined,retryAt:undefined});
@@ -210,6 +209,9 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
   await save({status:'preparing',retryAt:undefined});
   for(const kind of ['video','image'] as const){
     const blob=o[kind];let file=state[kind];
+    if(file&&Number.isFinite(Date.parse(file.expirationTime))&&Date.parse(file.expirationTime)<=now()){
+      await save({[kind]:undefined});file=undefined;
+    }
     if(file){safeFile(file,blob.type,now());}
     else file=await upload(blob,kind);
     if(file.state==='FAILED'){await save({status:'failed'});fail('file_failed','Gemini não conseguiu processar a mídia.');}
