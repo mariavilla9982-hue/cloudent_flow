@@ -1,3 +1,11 @@
+## Interface: prévia por toque e etapas — 2026-11-03
+
+GENJUTSU UI7/SW78 remove o painel lateral de resultados. Tocar na miniatura de um trabalho com resultado abre o vídeo final no modal nativo de prévia; sem resultado abre o original. Ver frame e Original mantêm acesso independente. Nenhuma URL/player de resultado é carregada automaticamente. Fechar, Escape e toque no fundo encerram a prévia; resposta tardia não reabre o modal e polling não substitui o player.
+
+A barra exibe Foto/Prompt/Vídeo/Pronto conforme estado persistido, sem tratar a porcentagem genérica como progresso real do render. Cancelado tem estado próprio. Botões têm alvo de44px, Excluir fica visível nos mesmos estados elegíveis e as ações exibem espera e impedem clique duplicado por job, inclusive após atualização da fila. Endpoints/regras de exclusão e agendamento não foram alterados.
+
+Validação: navegador Chromium131 com fixtures, larguras360/390/430/768/1440 sem overflow, estilo compartilhado de upload comV7, alvos44px, frame/original/resultado corretos, ausência de player automático, player estável no polling, Escape e isolamento entre abas, sem pageerror. Controlador testa fechamento durante request, resposta tardia, erro de prévia, deduplicação e retomada de upload. TestePWA confirma assets atuais em HTML antigo/nativo. Não é teste autenticado com mídia real nem validação de geração. Patch exclusivamente frontend: nenhuma consulta/gravação Supabase de QA, carga de mídia, worker, workflow ou fila alterada.
+
 ## Vídeo + frame manual — 2026-11-03
 
 A aba GENJUTSU agora abre com dois campos no estilo do Motion V7: vídeo de referência e frame/personagem livre. O frame enviado é a imagem final: não roda extração, Face Swap ou Upscale nesse modo. A seção recolhida “Preparar com uma modelo salva” preserva o fluxo automático anterior e os trabalhos já existentes.
