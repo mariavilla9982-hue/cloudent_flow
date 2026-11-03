@@ -71,6 +71,13 @@
   function enhanceProduction(){
     const root=document.getElementById('production');if(!root||typeof currentPage==='undefined'||currentPage!=='production')return;
     if(owner!==user()){owner=user();modelFilter='all';selected='';dockNode=null;revision++;releaseMedia();}
+    // GENJUTSU owns its data/actions and uses the same studio markup and styles.
+    // Do not decorate its rows using the standard/Motion job collection.
+    if(root.querySelector('[data-genjutsu-root]')){
+      root.querySelectorAll('.production-workflow-tab').forEach(b=>{b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});
+      if(mode!=='genjutsu'){mode='genjutsu';selected='';dockNode=null;revision++;releaseMedia();}
+      return;
+    }
     const nextMode=root.classList.contains('motion-control-mode')?'motion':'standard';
     if(mode!==nextMode){mode=nextMode;selected='';dockNode=null;revision++;releaseMedia();}
     root.classList.add('studio-page');

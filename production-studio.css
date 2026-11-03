@@ -161,46 +161,22 @@
 @media(max-width:700px){:is(#faceSwap,#faceSwapPhoto,#upscale,#production) h2{font-size:22px!important}.studio-page-header{margin-bottom:18px;align-items:flex-start}.studio-page-header p{font-size:12px}.studio-image-workspace,#production.studio-page.studio-page .studio-workspace{grid-template-columns:minmax(0,1fr)}.studio-result-dock{position:static;min-height:300px}.studio-input-card,.studio-result-dock,#production.studio-page.studio-page .production-upload-card,#production.studio-page.studio-page .studio-production-result{padding:16px!important}.studio-upload{padding:18px;gap:12px;flex-wrap:wrap}.studio-submit-bar{flex-wrap:wrap}.studio-submit-bar .primary{width:100%}.studio-filters input{max-width:none;width:100%;margin:4px 0 0;flex-basis:100%}.studio-entry-media{max-height:125px}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-character-grid{grid-template-columns:1fr}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-upload-entry{grid-template-columns:100px minmax(0,1fr);gap:12px;padding:12px}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-upload-head{align-items:flex-start;flex-direction:column}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-job{grid-template-columns:70px minmax(0,1fr);gap:12px;padding:14px!important}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-job-preview{min-height:110px}.pipeline-job-head{flex-wrap:wrap}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-job-name{font-size:12px}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-job-current{font-size:12px}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-job-actions{margin-left:-82px}:is(#faceSwap,#faceSwapPhoto,#upscale) .pipeline-job-actions .btn{font-size:11px;min-height:40px}.studio-compare{max-height:520px}#production.studio-page.studio-page .production-drop-live{min-height:190px!important}#production.studio-page.studio-page .production-input-grid{gap:10px!important}#production.studio-page.studio-page .production-upload-title{font-size:11px!important}#production.studio-page.studio-page .production-upload-meta{font-size:9px!important}#production.studio-page.studio-page .production-job{grid-template-columns:20px minmax(0,1fr)!important}#production.studio-page.studio-page .production-job-state,#production.studio-page.studio-page .production-job-actions{grid-column:2!important}#production.studio-page.studio-page .production-queue-head-actions{flex-wrap:wrap}.studio-result-actions .btn{flex:1}.studio-diagnostics summary{min-height:44px}}
 @media(prefers-reduced-motion:reduce){:is(#faceSwap,#faceSwapPhoto,#upscale,#production) *{animation:none!important;transition:none!important;scroll-behavior:auto!important}:is(#faceSwap,#faceSwapPhoto,#upscale,#production) button:active{transform:none!important}}
 
-/* Genjutsu uses the same upload surfaces as Motion, with its own pair draft. */
-#production .genjutsu-input-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important}
-#production .genjutsu-input-grid .production-drop-live{min-width:0;min-height:270px!important;aspect-ratio:9/13;max-height:420px}
-#production .genjutsu-input-grid .production-upload-overlay{cursor:pointer}
-#production .genjutsu-input-grid .production-upload-preview{height:100%;background:#050505}
-#production .genjutsu-input-grid video,#production .genjutsu-input-grid img{width:100%;height:100%;object-fit:contain}
-#production .genjutsu-upload-card .production-add-btn{width:100%}
-#production .genjutsu-auto{margin-top:20px}
-#production .genjutsu-auto summary{cursor:pointer;color:var(--muted,#8a8a8a);padding:12px 0}
+/* GENJUTSU shares V7's workspace, upload surfaces, result dock and queue rows. */
+#production [data-genjutsu-root]{min-width:0;max-width:100%}
+#production [data-genjutsu-root] .production-media-cell{min-width:0;width:100%}
+#production [data-genjutsu-root] .production-media-preview-shell{display:block;flex:none;overflow:hidden}
+#production [data-genjutsu-root] .production-media-preview-shell img{display:block;width:100%;height:100%;object-fit:contain}
+#production [data-genjutsu-root] .production-status{white-space:normal;overflow-wrap:anywhere}
+#production [data-genjutsu-root] .production-upload-preview video{pointer-events:auto}
+#production [data-genjutsu-root] .has-preview .production-upload-overlay{pointer-events:none}
+#production [data-genjutsu-root] .has-preview .production-upload-title{display:none}
+#production [data-genjutsu-root] .production-drop-live{max-height:340px;min-width:0}
+#production [data-genjutsu-root] :is([data-draft-error],[data-gen-error]){color:#efabab;overflow-wrap:anywhere;font-size:12px}
+#production [data-genjutsu-root] :is([data-draft-error],[data-gen-error],[data-gen-status]):empty{display:none}
+#production .genjutsu-auto{margin-top:16px}
+#production .genjutsu-auto summary{padding:12px 0;cursor:pointer;color:var(--studio-muted)}
 #production [data-gen-entries] .toolbar strong{overflow-wrap:anywhere;min-width:0}
-@media(max-width:480px){#production .genjutsu-input-grid{gap:10px!important}#production .genjutsu-input-grid .production-drop-live{min-height:220px!important}#production .genjutsu-input-grid .production-upload-title{font-size:12px}#production .genjutsu-input-grid .production-upload-meta{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+#production [data-gen-result] img{display:block;width:100%;height:350px;object-fit:contain}
+@media(max-width:700px){#production [data-genjutsu-root] .production-drop-live{max-height:260px}}
 
-#production .genjutsu-input-grid .production-draft-clear{display:none!important}
-#production .genjutsu-input-grid .has-preview .production-draft-clear{display:grid!important}
-#production .genjutsu-input-grid video{pointer-events:auto}
-/* GENJUTSU: media first, compact steps, no fabricated percentage. */
-#production .genjutsu-job{padding:20px;min-width:0}
-#production .genjutsu-job-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-#production .genjutsu-job-head>div{min-width:0;display:grid;gap:5px}
-#production .genjutsu-job-head small{font-size:10px;letter-spacing:.12em;color:#999}
-#production .genjutsu-job-head strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#production .genjutsu-job-model{font-size:11px;color:#bbb;border:1px solid #36363b;border-radius:20px;padding:5px 9px;white-space:nowrap}
-#production .genjutsu-job-previews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-#production .genjutsu-job-previews figure{margin:0;min-width:0;overflow:hidden;border:1px solid #303034;border-radius:12px;background:#080808;position:relative}
-#production .genjutsu-job-previews :is(video,a,.genjutsu-preview-placeholder){display:flex;width:100%;height:240px;align-items:center;justify-content:center;object-fit:contain}
-#production .genjutsu-job-previews img{width:100%;height:100%;object-fit:contain}
-#production .genjutsu-preview-placeholder{font-size:13px;color:#888}
-#production .genjutsu-job-previews figcaption{font-size:11px;color:#aaa;padding:9px 10px;border-top:1px solid #27272b}
-#production .genjutsu-steps{display:flex;gap:7px;flex-wrap:wrap;padding:0;margin:16px 0 10px;list-style:none}
-#production .genjutsu-steps li{display:flex;align-items:center;gap:5px;font-size:11px;color:#85858c;background:#202024;border-radius:8px;padding:7px 9px}
-#production .genjutsu-steps li>span{font-size:10px}
-#production .genjutsu-steps .done{color:#c9c9ce}
-#production .genjutsu-steps .current{background:#efefef;color:#151515}
-#production .genjutsu-steps .error{color:#ffc6c6;background:#342426}
-#production .genjutsu-job-status{font-size:13px;margin:10px 0;color:#d5d5da}
-#production .genjutsu-job-error{font-size:12px;line-height:1.6;color:#e1baba}
-#production .genjutsu-job-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-#production .genjutsu-job-actions:empty{display:none}
-#production .genjutsu-job-actions .btn{font-size:12px;min-height:40px}
-#production .genjutsu-input-grid .production-drop-live{min-height:200px!important;aspect-ratio:4/5;max-height:300px}
-#production .genjutsu-input-grid .has-preview .production-upload-overlay{pointer-events:none;background:linear-gradient(transparent,rgba(0,0,0,.8))}
-#production .genjutsu-input-grid .has-preview .production-upload-overlay b{display:none}
-@media(max-width:480px){#production .genjutsu-job{padding:14px}#production .genjutsu-job-previews{gap:8px}#production .genjutsu-job-previews :is(video,a,.genjutsu-preview-placeholder){height:180px}#production .genjutsu-job-head{align-items:flex-start}#production .genjutsu-job-model{font-size:10px}#production .genjutsu-input-grid .production-drop-live{min-height:160px!important;max-height:220px}#production .genjutsu-steps li{padding:6px 8px;font-size:10px}}
+#production [data-genjutsu-root] .production-job-state em{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
