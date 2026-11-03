@@ -1,5 +1,6 @@
 import {prepareGenjutsuPrompt,GenjutsuPromptError,genjutsuExecutionInputs} from './genjutsu-gemini.ts';
 import {GENJUTSU_WORKFLOW_ID,validateGenjutsuGraph} from './genjutsu-readiness.ts';
+import {safeGenjutsuError} from './genjutsu-diagnostics.ts';
 export const isGenjutsuJob=(job:any)=>job?.meta?.workflow_key==='genjutsu'&&job?.meta?.workflow_id===GENJUTSU_WORKFLOW_ID;
 export const GENJUTSU_CONFIG={workflowId:GENJUTSU_WORKFLOW_ID,videoNodeId:'970',videoFieldName:'video',frameNodeId:'496',frameFieldName:'image',outputNodeId:'482',executionInstanceType:'ultra',executionVramGb:84,hardwarePolicy:'genjutsu_default_84gb'};
 export async function validateGenjutsuWorkflow(base:string,key:string){
@@ -51,12 +52,23 @@ export function genjutsuPromptWait(error:any,job:any){
 export async function genjutsuInputs(video:string,image:string,job:any){return genjutsuExecutionInputs(GENJUTSU_WORKFLOW_ID,video,image,job.meta.genjutsu_prompt);}
 export async function applyGenjutsuStatus(admin:any,job:any,state:any){
   if(!isGenjutsuJob(job)||!job.runninghub_task_id)return null;
+  // Status polling must not overwrite a node event or capture written since the list query.
+  const current=await admin.from('production_jobs').select('meta,status,result_video_id,progress,started_at,updated_at')
+    .eq('id',job.id).eq('user_id',job.user_id).eq('runninghub_task_id',job.runninghub_task_id).in('status',['queued','running']).maybeSingle();
+  if(current.error)throw current.error;if(!current.data)return null;
+  job={...job,...current.data};
   const status=String(state.status||'UNKNOWN'),known=['QUEUED','RUNNING','SUCCESS','FAILED','CANCELLED','CANCELED'].includes(status);
   const hasOutput=!!(job.result_video_id||job.meta?.motion_preview_file);
   const patch:any={meta:{...job.meta,provider_status:status,provider_status_task_id:job.runninghub_task_id,provider_status_error:known?null:'Status indisponível; aguardando nova consulta.'},updated_at:new Date().toISOString()};
   if(status==='QUEUED'){patch.status='queued';patch.progress=38;}
   if(status==='RUNNING'){patch.status='running';patch.progress=Math.max(62,Number(job.progress||0));patch.started_at=job.started_at||new Date().toISOString();}
-  if(['FAILED','CANCELLED','CANCELED'].includes(status)&&!hasOutput){patch.status='failed';patch.last_error='Genjutsu: o provedor encerrou a geração sem vídeo capturado.';patch.completed_at=new Date().toISOString();}
-  const {data,error}=await admin.from('production_jobs').update(patch).eq('id',job.id).eq('user_id',job.user_id).eq('runninghub_task_id',job.runninghub_task_id).in('status',['queued','running']).select('*').maybeSingle();
+  if(['FAILED','CANCELLED','CANCELED'].includes(status)&&!hasOutput){
+    const event=job.meta?.genjutsu_execution_error?.task_id===job.runninghub_task_id?job.meta.genjutsu_execution_error:null;
+    const detail=safeGenjutsuError(event?.error||state.error);
+    patch.status='failed';patch.last_error=detail?'Genjutsu: '+(event?.node_id?'node '+event.node_id+' · ':'')+detail:'Genjutsu: o provedor encerrou a geração sem vídeo capturado.';
+    patch.meta.genjutsu_provider_failure={task_id:job.runninghub_task_id,code:safeGenjutsuError(state.raw?.errorCode||''),node_id:event?.node_id||null,message:detail||null,checked_at:new Date().toISOString()};
+    patch.completed_at=new Date().toISOString();
+  }
+  const {data,error}=await admin.from('production_jobs').update(patch).eq('id',job.id).eq('user_id',job.user_id).eq('runninghub_task_id',job.runninghub_task_id).eq('updated_at',job.updated_at).in('status',['queued','running']).select('*').maybeSingle();
   if(error)throw error;return data;
 }

@@ -1,4 +1,5 @@
 import {applyGenjutsuStatus,genjutsuResultBlob} from '../_shared/genjutsu-stage.ts';
+import {genjutsuExecutionEvent} from '../_shared/genjutsu-diagnostics.ts';
 import {pipelineVideoWorkflow} from '../_shared/image-pipeline-workflows.ts';
 import {enrichFailedMotionJobs,enrichPreviousMotionFailure} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
@@ -129,7 +130,8 @@ function motionPreviewViewUrl(base:string,wss:string,file:any){
   const b=new URL(base),w=new URL(wss);
   if(w.protocol!=="wss:"||w.host!==b.host||!w.searchParams.get("Rh-Comfy-Auth"))throw new Error("Motion Control: canal de prévia inválido.");
   const u=new URL("/view",b);
-  for(const key of ["Rh-Comfy-Auth","Rh-Identify"]){const value=w.searchParams.get(key);if(value)u.searchParams.set(key,value);}
+  const routeKeys=file.node_id==='482'?["c_host","c_port","clientId","workflowId","target"]:[];
+  for(const key of ["Rh-Comfy-Auth","Rh-Identify",...routeKeys]){const value=w.searchParams.get(key);if(value)u.searchParams.set(key,value);}
   u.searchParams.set("filename",file.filename);u.searchParams.set("subfolder",file.subfolder||"");u.searchParams.set("type","output");
   return u.toString();
 }
@@ -146,6 +148,7 @@ async function ensureMotionPreviewMonitor(admin:any,job:any,base:string,apiKey:s
 }
 async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,master:string,lease:string,onCapture:any=null){
   let captured=false,continueWatching=false,loopSeen=false;const began=Date.now();
+  let lastDiagnostic:any=null,lastDiagnosticAt=0;
   try{
     const r=await fetch(base+"/task/openapi/outputs",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+apiKey},body:JSON.stringify({apiKey,taskId:job.runninghub_task_id}),signal:AbortSignal.timeout(10000)});
     const j=await r.json(),wss=j?.data?.netWssUrl;
@@ -161,6 +164,16 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
       ws.onmessage=async event=>{
         if(finished||typeof event.data!=="string")return;
         let message:any;try{message=JSON.parse(event.data)}catch{return;}
+        if(isGenjutsuPreviewJob(job)){
+          const diagnostic=genjutsuExecutionEvent(message,String(job.runninghub_task_id),lastDiagnostic);
+          if(diagnostic&&(diagnostic.error||diagnostic.node_id!==lastDiagnostic?.node_id||Date.now()-lastDiagnosticAt>=30000)){
+            lastDiagnosticAt=Date.now();lastDiagnostic=diagnostic;
+            try{
+              const {data:latest}=await admin.from('production_jobs').select('meta,updated_at').eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).eq('locked_by',lease).maybeSingle();
+              if(latest&&!latest.meta?.motion_preview_file){await admin.from('production_jobs').update({updated_at:new Date().toISOString(),meta:{...latest.meta,genjutsu_execution:diagnostic,...(diagnostic.error?{genjutsu_execution_error:diagnostic}:{})}}).eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).eq('locked_by',lease).eq('updated_at',latest.updated_at).is('result_video_id',null).is('meta->motion_preview_file',null);}
+            }catch{/* Diagnostics never interrupt output capture or restart a paid task. */}
+          }
+        }
         if(!loopSeen&&message.type==="executing"&&String(message.data?.prompt_id)===String(job.runninghub_task_id)&&["378","379","380"].includes(String(message.data?.display_node||message.data?.node))){
           loopSeen=true;
           const {data:current}=await admin.from("production_jobs").select("meta,runninghub_task_id").eq("id",job.id).maybeSingle();
