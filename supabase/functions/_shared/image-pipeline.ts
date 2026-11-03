@@ -17,13 +17,29 @@ export async function runImagePipeline(d:any){
   const {admin,workerId,rhJson,prepareInput,saveBlob,concurrency}=d;
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const patch=async(j:any,values:any)=>{check(await admin.from('face_swap_jobs').update({...values,updated_at:new Date().toISOString()}).eq('id',j.id).eq('locked_by',workerId));Object.assign(j,values);};
+  const handoffVideo=async(j:any,m:any,saved:any)=>{
+    const workflow=pipelineVideoWorkflow(m.video_workflow?.key||'motion_control');
+    const motion=workflow.key==='motion_control'||workflow.key==='genjutsu';
+    // Route to the existing executor selected for this individual upload.
+    const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
+    if(existing&&existing.user_id!==j.user_id)throw new Error('Motion owner mismatch');
+    if(!existing){
+      check(await admin.from('production_jobs').insert({id:j.id,user_id:j.user_id,storage_provider:j.storage_provider,
+        original_storage_path:j.original_storage_path,original_file_name:j.original_file_name,original_mime_type:j.original_mime_type,original_size_bytes:j.original_size_bytes,
+        frame_storage_path:saved.path,frame_file_name:saved.name,frame_mime_type:saved.mime,frame_size_bytes:saved.size,
+        status:motion?'motion_waiting':'waiting',progress:0,max_attempts:1,attempt_count:0,
+        meta:{workflow_key:workflow.key,workflow_label:workflow.label,video_workflow:workflow,workflow_nodes:{video:workflow.videoNodeId,frame:workflow.frameNodeId,...(workflow.outputNodeId?{output:workflow.outputNodeId}:{})},manual_run:true,auto_chained:true,image_pipeline_version:2,...(m.input_mode==='manual_frame'?{input_mode:'manual_frame'}:{}),...(workflow.key==='genjutsu'?{workflow_id:workflow.workflowId,source_duration_seconds:m.source_duration_seconds}:{}),face_swap_job_id:j.id,...(m.character_id?{character_id:m.character_id,character_name:m.character_name,tags:m.tags,character:m.character}:{})}}));
+    }
+    await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_WAITING'},last_error:null});
+    if(motion)await d.wakeMotion(workflow.key);
+  };
   // Lease only serializes polling/storage; dispatch intent is durable and never expires.
   // Independent bounded stage queues: a backlog in Motion cannot hide waiting images.
   const read=(stage?:string)=>{
     const q=admin.from('face_swap_jobs').select('*').contains('meta',stage?{pipeline_version:2,stage}:{pipeline_version:2});
     return (stage?q.in('status',['waiting']):q.in('status',['uploading','queued','running'])).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(50);
   };
-  const batches=await Promise.all([read(),read('face_swap'),read('upscale'),read('control_motion')]);
+  const batches=await Promise.all([read(),read('face_swap'),read('upscale'),read('control_motion'),read('frame_ready')]);
   const rows=batches.flatMap(r=>check(r)||[]);
   const priority=(j:any)=>j.runninghub_task_id||j.meta.stage==='control_motion'?0:j.meta.stage==='face_swap'?1:2;
   rows.sort((a:any,b:any)=>priority(a)-priority(b)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
@@ -40,6 +56,12 @@ export async function runImagePipeline(d:any){
         const p=check(await admin.from('production_jobs').select('id,status,result_video_id,last_error,runninghub_task_id,meta').eq('id',j.id).eq('user_id',j.user_id).maybeSingle());
         if(p?.status==='ready'&&p.result_video_id)await patch(j,{status:'ready',progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED',control_motion_task_id:p.runninghub_task_id}});
         else if(p?.status==='failed')await patch(j,{status:'failed',last_error:p.last_error,meta:{...m,error_stage:'control_motion',provider_failed:p.meta?.provider_status==='FAILED',dispatch_uncertain:!!p.meta?.pipeline_dispatch_uncertain,pipeline_status:'CONTROL_MOTION_FAILED'}});
+        continue;
+      }
+      if(m.stage==='frame_ready'){
+        if(m.input_mode!=='manual_frame'||m.video_workflow?.key!=='genjutsu'||!String(j.frame_storage_path).startsWith(j.user_id+'/'))throw new Error('Frame manual inválido.');
+        const saved={path:j.frame_storage_path,name:j.frame_file_name,mime:j.frame_mime_type,size:j.frame_size_bytes};
+        await handoffVideo(j,{...m,prepared_frame:saved},saved);
         continue;
       }
       const stage=m.stage;
@@ -102,20 +124,7 @@ export async function runImagePipeline(d:any){
         if(!handoffs.has(j.id)){handoffs.add(j.id);rows.push({...j,locked_by:null,locked_at:null});}
 
       }else if(m.source==='face_swap_natural'){
-        const workflow=pipelineVideoWorkflow(m.video_workflow?.key||'motion_control');
-        const motion=workflow.key==='motion_control'||workflow.key==='genjutsu';
-        // Route to the existing executor selected for this individual upload.
-        const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
-        if(existing&&existing.user_id!==j.user_id)throw new Error('Motion owner mismatch');
-        if(!existing){
-          check(await admin.from('production_jobs').insert({id:j.id,user_id:j.user_id,storage_provider:j.storage_provider,
-            original_storage_path:j.original_storage_path,original_file_name:j.original_file_name,original_mime_type:j.original_mime_type,original_size_bytes:j.original_size_bytes,
-            frame_storage_path:saved.path,frame_file_name:saved.name,frame_mime_type:saved.mime,frame_size_bytes:saved.size,
-            status:motion?'motion_waiting':'waiting',progress:0,max_attempts:1,attempt_count:0,
-            meta:{workflow_key:workflow.key,workflow_label:workflow.label,video_workflow:workflow,workflow_nodes:{video:workflow.videoNodeId,frame:workflow.frameNodeId,...(workflow.outputNodeId?{output:workflow.outputNodeId}:{})},manual_run:true,auto_chained:true,image_pipeline_version:2,...(workflow.key==='genjutsu'?{workflow_id:workflow.workflowId,source_duration_seconds:m.source_duration_seconds}:{}),face_swap_job_id:j.id,...(m.character_id?{character_id:m.character_id,character_name:m.character_name,tags:m.tags,character:m.character}:{})}}));
-        }
-        await patch(j,{status:'waiting',started_at:null,production_job_id:j.id,result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,runninghub_task_id:null,progress:75,meta:{...m,stage:'control_motion',pipeline_status:'CONTROL_MOTION_WAITING'},last_error:null});
-        if(motion)await d.wakeMotion(workflow.key);
+        await handoffVideo(j,m,saved);
       }else{
         await patch(j,{status:'ready',result_storage_path:saved.path,result_file_name:saved.name,result_mime_type:saved.mime,result_size_bytes:saved.size,progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED'},last_error:null});
       }
