@@ -64,7 +64,7 @@ function harness(config={}){
   };
   const run=(state=persisted,overrides={})=>prepareGenjutsuPrompt({apiKey:'private-test-key',video,image,durationSeconds:10,
     state,checkpoint,fetcher,now:()=>clock,...overrides});
-  return {run,calls,checkpoints,config,get state(){return persisted;},set clock(value){clock=value;}};
+  return {run,calls,checkpoints,config,fetcher,get state(){return persisted;},set clock(value){clock=value;}};
 }
 const count=(h,suffix)=>h.calls.filter(c=>c.url.endsWith(suffix)).length;
 const rejects=async(fn,code)=>assert.rejects(fn,error=>error.code===code&&!error.message.includes('private-test-key'));
@@ -132,7 +132,7 @@ for(const invalid of [prompt.replace('summary:','missing:'),prompt.replace('00:1
 }
 console.log('PASS quota wait without paid fallback; blocked/truncated/invalid responses never reach RunningHub inputs');
 
-// Explicit 503 responses back off durably, reuse files, and stop after five retries.
+// Explicit 503 responses back off durably, reuse files, and continue beyond the old count limit.
 const overloaded=harness({unavailable:true});
 await rejects(()=>overloaded.run(),'provider_waiting');
 assert.equal(overloaded.state.status,'provider_waiting');
@@ -141,19 +141,23 @@ const waitingCalls=overloaded.calls.length;await overloaded.run();assert.equal(o
 overloaded.clock=current+61000;overloaded.config.unavailable=false;
 assert.equal((await overloaded.run()).ready,true);
 assert.equal(count(overloaded,'/upload/v1beta/files'),2);
-const exhausted=harness({unavailable:true});
-for(let i=1;i<=5;i++){
+const exhausted=harness({unavailable:true});let retryClock=current;
+for(let i=1;i<=12;i++){
+  exhausted.clock=retryClock;
   await rejects(()=>exhausted.run(),'provider_waiting');
   assert.equal(exhausted.state.transientAttempts,i);
-  exhausted.clock=Date.parse(exhausted.state.retryAt)+1;
+  assert.equal(Date.parse(exhausted.state.retryAt)-retryClock,Math.min(3600000,60000*2**(i-1)));
+  retryClock=Date.parse(exhausted.state.retryAt)+1;exhausted.clock=retryClock;
 }
-await rejects(()=>exhausted.run(),'provider_unavailable');
-assert.equal(exhausted.state.status,'failed');
-assert.equal(count(exhausted,'/v1beta/interactions'),6);
+assert.equal(exhausted.state.status,'provider_waiting');
+assert.equal(exhausted.state.transientAttempts,12);
+assert.equal(count(exhausted,'/v1beta/interactions'),12);
+exhausted.config.unavailable=false;assert.equal((await exhausted.run()).ready,true);
 assert.equal(count(exhausted,'/upload/v1beta/files'),2);
+for(const status of [500,502,504]){const h=harness({modelStatus:status});await rejects(()=>h.run(),'provider_waiting');assert.deepEqual(h.state.providerFailureCodes,['HTTP_'+status]);}
 const preflight503=harness({modelStatus:503});await rejects(()=>preflight503.run(),'provider_waiting');
 assert.equal(count(preflight503,'/v1beta/interactions'),0);
-console.log('PASS explicit 503 backoff, due time, media reuse, bounded retry budget and preflight overload');
+console.log('PASS explicit 503 backoff, due time, media reuse, unlimited transient retries and preflight overload');
 
 // One background analysis survives worker boundaries; retrieval failures never create a second one.
 const asyncJob=harness({response:{id:'background-1',model:GENJUTSU_MODEL,status:'in_progress'}});
@@ -196,13 +200,17 @@ const retryCalls=internal.calls.length;await internal.run();assert.equal(interna
 internal.clock=Date.parse(internal.state.retryAt)+1;internal.config.response={id:'internal-2',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]};
 assert.equal((await internal.run()).ready,true);assert.equal(count(internal,'/upload/v1beta/files'),2);assert.equal(count(internal,'/v1beta/interactions'),2);
 const exhaustedInternal=harness({response:{id:'internal-final',status:'failed',errors:[{code:'INTERNAL'}]}});
-for(let i=0;i<5;i++){await rejects(()=>exhaustedInternal.run(),'provider_waiting');exhaustedInternal.clock=Date.parse(exhaustedInternal.state.retryAt)+1;}
-await rejects(()=>exhaustedInternal.run(),'provider_unavailable');assert.equal(exhaustedInternal.state.status,'failed');
+for(let i=0;i<12;i++){await rejects(()=>exhaustedInternal.run(),'provider_waiting');exhaustedInternal.clock=Date.parse(exhaustedInternal.state.retryAt)+1;}
+assert.equal(exhaustedInternal.state.status,'provider_waiting');assert.equal(exhaustedInternal.state.transientAttempts,12);
+exhaustedInternal.config.response={id:'finally-ready',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]};
+assert.equal((await exhaustedInternal.run()).ready,true);
+const quotaInternal=harness({response:{id:'quota',status:'failed',errors:[{code:'RESOURCE_EXHAUSTED'}]}});
+await rejects(()=>quotaInternal.run(),'quota_waiting');assert.equal(quotaInternal.state.status,'quota_waiting');
 for(const errors of [[],[{code:'INVALID_ARGUMENT'}],[{code:'INTERNAL'},{code:'SAFETY'}],[{code:'UNKNOWN'}]]){
  const terminal=harness({response:{id:'terminal',status:'failed',errors}});
  await rejects(()=>terminal.run(),'incomplete_response');assert.equal(terminal.state.status,'failed');assert.equal(terminal.state.retryAt,undefined);
 }
-console.log('PASS HTTP200 terminal INTERNAL recovery, same media/new independent analysis, bounded shared retry budget and refusal isolation');
+console.log('PASS HTTP200 terminal INTERNAL recovery, same media/new independent analysis, unlimited transient retry count and refusal isolation');
 // Exhausting a worker pass before POST leaves preparation resumable, never uncertain.
 const budget=harness();let budgetState;
 await rejects(()=>budget.run(undefined,{checkpoint:async state=>{budgetState=structuredClone(state);if(state.status==='generating')budget.clock=current+45000;}}),'pass_yield');
@@ -218,3 +226,16 @@ try{
  assert.equal(stageJob.meta.genjutsu_prompt.prompt,prompt);assert(stageWrites>=2);
 }finally{globalThis.fetch=savedFetch;}
 console.log('PASS pass deadline yields before dispatch, actual leased stage polls accepted analysis without re-reading media');
+
+// Long-lived retry renews expired provider files from the immutable owner paths.
+const renew=harness({unavailable:true});await rejects(()=>renew.run(),'provider_waiting');
+const expired=structuredClone(renew.state);expired.retryAt=undefined;
+for(const kind of ['video','image'])expired[kind].expirationTime=new Date(current-1).toISOString();
+const renewJob={...stageJob,original_mime_type:'video/mp4',frame_mime_type:'image/png',meta:{...stageJob.meta,genjutsu_prompt:expired}};let mediaReads=0;renew.config.unavailable=false;
+try{
+ globalThis.fetch=renew.fetcher;
+ assert.equal(await prepareGenjutsuStage({admin:stageAdmin,job:renewJob,workerId:'owner-lease',key:'key',now:()=>current,readBlob:async path=>{mediaReads++;return new Response(path.endsWith('/video')?video:image);}}),true);
+ assert.equal(mediaReads,2);assert.equal(count(renew,'/upload/v1beta/files'),4);
+ assert.equal(renewJob.meta.genjutsu_prompt.fingerprint,expired.fingerprint);
+}finally{globalThis.fetch=savedFetch;}
+console.log('PASS continuous retry refreshes expired files from original owner media without changing fingerprint');
