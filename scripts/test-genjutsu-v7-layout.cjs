@@ -27,7 +27,14 @@ const image='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.
  assert.equal(await page.locator('.genjutsu-upload-workspace').count(),1);assert.equal(await page.locator('.studio-production-result').count(),0);assert.equal(await page.locator('.production-queue-card').count(),1);assert.equal(await page.locator('[data-gen-job]').count(),3);assert.equal(await page.locator('[data-gen-job][hidden]').count(),0,'V7 decorator cannot hide Genjutsu jobs');
  assert.equal(await page.locator('[data-gen-modal]').count(),0);assert.equal(await page.evaluate(()=>testCalls.filter(c=>c.path.includes('image-pipeline-result')).length),0);
  assert.equal(await page.locator('[data-gen-job=failed] [data-delete]').count(),1);
- assert.equal(await page.locator('[data-gen-job=waiting] .genjutsu-steps [aria-current]').textContent(),'Prompt');
+ assert.equal(await page.locator('[data-gen-job=waiting] .production-progress.animated').count(),1);
+ assert((await page.locator('[data-gen-job=waiting] .production-status').textContent()).includes('Gemini'));
+ assert((await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent()).includes('aguardando início'));
+ await page.evaluate(()=>{Object.assign(fixtureJobs[1].production,{status:'running',execution_confirmed:true,started_at:new Date(Date.now()-65000).toISOString()});return CloudentGenjutsu.refresh();});
+ const clock=await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent();await page.waitForFunction(old=>document.querySelector('[data-gen-job=waiting] .genjutsu-elapsed').textContent!==old,clock,{timeout:5000});
+ await page.evaluate(()=>{Object.assign(fixtureJobs[1].production,{status:'ready',completed_at:new Date().toISOString()});return CloudentGenjutsu.refresh();});
+ const stopped=await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent();await page.waitForTimeout(1100);assert.equal(await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent(),stopped);
+ assert.equal(await page.locator('[data-gen-job=ready] [data-prompt]').count(),1);
  assert.equal(await page.locator('[data-gen-jobs] video').count(),0,'queue uses thumbnails, never full size players');
  for(const width of [360,390,430,768,1440]){
   await page.setViewportSize({width,height:900});await page.waitForTimeout(80);
