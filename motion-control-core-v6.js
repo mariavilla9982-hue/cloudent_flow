@@ -103,9 +103,9 @@
     if(head&&!root.querySelector(".production-workflow-tabs")){
       head.insertAdjacentHTML("afterend",
         '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
-          '<button type="button" class="production-workflow-tab '+(activeMode===STANDARD?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;standard&quot;)">video 7 minutos</button>'+
-          '<button type="button" class="production-workflow-tab '+(activeMode===MOTION?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;motion_control&quot;)">motion control v7</button>'+
-          '<button type="button" class="production-workflow-tab" onclick="CloudentMotionControl.setMode(&quot;genjutsu&quot;)">Genjutsu</button>'+
+          '<button type="button" class="production-workflow-tab '+(activeMode===STANDARD?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;standard&quot;)">Vídeo 7 minutos</button>'+
+          '<button type="button" class="production-workflow-tab '+(activeMode===MOTION?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;motion_control&quot;)">Motion Control v7</button>'+
+          '<button type="button" class="production-workflow-tab" onclick="CloudentMotionControl.setMode(&quot;genjutsu&quot;)">GENJUTSU</button>'+
         '</div>'
       );
     }

@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let genjutsu=true,motion=false;
+const title={textContent:'GENJUTSU'},subtitle={textContent:'Prepare a modelo e gere o vídeo automaticamente.'};
+const labels=['Vídeo 7 minutos','Motion Control v7','GENJUTSU'];
+const tabs=labels.map((textContent,i)=>({textContent,classList:{contains:()=>i===2},setAttribute(k,v){this[k]=v;}}));
+const root={dataset:{},classList:{contains:()=>motion,add(){}},querySelector(s){return s==='[data-genjutsu-root]'?(genjutsu?{}:null):s==='.production-head'?{querySelector:s=>s==='h2'?title:subtitle}:null;},querySelectorAll(s){return s==='.production-workflow-tab'?tabs:[];}};
+const c=vm.createContext({window:{},document:{getElementById:()=>root,addEventListener(){}},cloudSession:{user:{id:'owner'}},currentPage:'production',productionData:{jobs:[]},MutationObserver:class{observe(){} disconnect(){}},requestAnimationFrame(){},setInterval(){},console});
+vm.runInContext(fs.readFileSync('production-studio.js','utf8'),c);
+for(let i=0;i<4;i++)c.window.CloudentStudio.enhanceProduction();
+assert.equal(title.textContent,'GENJUTSU');assert.deepEqual(tabs.map(t=>t.textContent),labels);assert.equal(tabs[2]['aria-selected'],'true');
+assert.equal(subtitle.textContent,'Prepare a modelo e gere o vídeo automaticamente.');
+genjutsu=false;motion=true;c.window.CloudentStudio.enhanceProduction();assert.equal(title.textContent,'Produção IA');assert.deepEqual(tabs.map(t=>t.textContent),labels);
+console.log('PASS shared studio keeps GENJUTSU heading, subtitle, three distinct tabs and active state across repeated refreshes and mode changes');

@@ -91,9 +91,11 @@
     if(!filteredIds.size&&modelFilter!=='all'){
       const empty=root.querySelector('.production-empty b');if(empty)empty.textContent='Nenhum vídeo desta modelo neste fluxo';
     }
-    const head=root.querySelector('.production-head');if(head?.querySelector('h2'))head.querySelector('h2').textContent='Produção IA';
-    const subtitle=head?.querySelector('p');if(subtitle)subtitle.textContent='Prepare seus arquivos, acompanhe a fila e confira o resultado.';
-    root.querySelectorAll('.production-workflow-tab').forEach((b,i)=>{b.textContent=i?'Motion Control v7':'Vídeo 7 minutos';b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});
+    const genjutsu=!!root.querySelector('[data-genjutsu-root]');
+    const head=root.querySelector('.production-head');if(head?.querySelector('h2'))head.querySelector('h2').textContent=genjutsu?'GENJUTSU':'Produção IA';
+    const subtitle=head?.querySelector('p');if(subtitle&&!genjutsu)subtitle.textContent='Prepare seus arquivos, acompanhe a fila e confira o resultado.';
+    // Labels belong to each workflow renderer; additional tabs must keep their identity.
+    root.querySelectorAll('.production-workflow-tab').forEach(b=>{b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});
     for(const [selector,label,kind] of [['#productionVideoBox','Vídeo de referência','video'],['#productionFrameBox','Frame / personagem','frame']]){
       const box=root.querySelector(selector),title=box?.querySelector('.production-upload-title'),meta=box?.querySelector('.production-upload-meta');
       if(title)title.textContent=label;
