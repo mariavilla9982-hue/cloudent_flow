@@ -63,11 +63,15 @@ export async function applyGenjutsuStatus(admin:any,job:any,state:any){
   if(status==='QUEUED'){patch.status='queued';patch.progress=38;}
   if(status==='RUNNING'){patch.status='running';patch.progress=Math.max(62,Number(job.progress||0));patch.started_at=job.started_at||new Date().toISOString();}
   if(['FAILED','CANCELLED','CANCELED'].includes(status)&&!hasOutput){
+    const userStopped=String(job.meta?.genjutsu_stop_requested_task_id||'')===String(job.runninghub_task_id);
+    if(userStopped){patch.status='cancelled';patch.last_error=null;patch.meta.genjutsu_stop_confirmed_at=new Date().toISOString();patch.completed_at=new Date().toISOString();}
     const event=job.meta?.genjutsu_execution_error?.task_id===job.runninghub_task_id?job.meta.genjutsu_execution_error:null;
     const detail=safeGenjutsuError(event?.error||state.error);
-    patch.status='failed';patch.last_error=detail?'Genjutsu: '+(event?.node_id?'node '+event.node_id+' · ':'')+detail:'Genjutsu: o provedor encerrou a geração sem vídeo capturado.';
-    patch.meta.genjutsu_provider_failure={task_id:job.runninghub_task_id,code:safeGenjutsuError(state.raw?.errorCode||''),node_id:event?.node_id||null,message:detail||null,checked_at:new Date().toISOString()};
-    patch.completed_at=new Date().toISOString();
+    if(!userStopped){
+      patch.status='failed';patch.last_error=detail?'Genjutsu: '+(event?.node_id?'node '+event.node_id+' · ':'')+detail:'Genjutsu: o provedor encerrou a geração sem vídeo capturado.';
+      patch.meta.genjutsu_provider_failure={task_id:job.runninghub_task_id,code:safeGenjutsuError(state.raw?.errorCode||''),node_id:event?.node_id||null,message:detail||null,checked_at:new Date().toISOString()};
+      patch.completed_at=new Date().toISOString();
+    }
   }
   const {data,error}=await admin.from('production_jobs').update(patch).eq('id',job.id).eq('user_id',job.user_id).eq('runninghub_task_id',job.runninghub_task_id).eq('updated_at',job.updated_at).in('status',['queued','running']).select('*').maybeSingle();
   if(error)throw error;return data;
