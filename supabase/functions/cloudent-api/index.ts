@@ -2445,6 +2445,22 @@ Deno.serve(async (req: Request) => {
       removePaths:(provider,paths)=>storageDeletePathsBucket(admin,provider,paths,"production"),
       signPut:(config,path)=>r2PresignedUrl(config,"PUT",path,1800),
       signGet:(provider,path)=>storageSignedGetBucket(admin,String(provider||"supabase"),String(path),3600,"production"),
+      stopGenjutsu:async(taskId:string)=>{
+        const {data:integration,error:integrationError}=await admin.from('integrations').select('config').eq('provider','runninghub').maybeSingle();
+        if(integrationError)throw integrationError;
+        const cfg=integration?.config||{};
+        if(!cfg.apiKeyCipher||!cfg.apiKeyIv)throw new Error('RunningHub não está conectado.');
+        const {data:master,error:masterError}=await admin.rpc('get_cloudent_worker_secret');
+        if(masterError||!master)throw new Error('Credenciais do RunningHub indisponíveis.');
+        const apiKey=await runninghubDecrypt(String(cfg.apiKeyCipher),String(cfg.apiKeyIv),String(master));
+        const response=await fetch('https://www.runninghub.ai/task/openapi/cancel',{
+          method:'POST',headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
+          body:JSON.stringify({apiKey,taskId}),signal:AbortSignal.timeout(12000)
+        });
+        let payload:any={};try{payload=await response.json()}catch{}
+        if(!response.ok||Number(payload?.code)!==0)throw new Error('RunningHub não confirmou a parada. Atualize e tente novamente.');
+        return payload;
+      },
       wake:()=>wakeProductionWorkerNow({image_pipeline:true})
     });
     if(pipelineResponse)return pipelineResponse;

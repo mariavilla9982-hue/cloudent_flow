@@ -770,7 +770,7 @@ Deno.serve(async(req:Request)=>{
         if(isGenjutsuPreviewJob(job)){
           motionState=await readMotionProviderStatus(base,apiKey,String(job.runninghub_task_id));
           const synced=await applyGenjutsuStatus(admin,job,motionState);if(!synced)continue;Object.assign(job,synced);
-          if(job.status==='failed')continue;
+          if(!['queued','running'].includes(job.status))continue;
         }
         if(isMotionPreviewJob(job)){
           if(job.result_video_id&&job.meta?.motion_preview_available){

@@ -50,6 +50,7 @@
   function phase(job){
     const child=job.production,m=job.meta||{},state=child?.genjutsu;
     if(child?.result_video_id)return child.status==='ready'?'Vídeo pronto':'Vídeo salvo · encerrando task';
+    if(child?.genjutsu?.stopRequested)return 'Genjutsu · aguardando parada';
     if(child?.status==='failed'||job.status==='failed')return 'Precisa de atenção';
     if(m.stage==='control_motion'){
       if(state?.phase==='provider_waiting')return 'Gemini indisponível · nova tentativa agendada';
@@ -87,12 +88,14 @@
     const markup=jobs.map((job,i)=>{
       const child=job.production,hasResult=!!child?.result_video_id,failed=child?.status==='failed'||job.status==='failed';
       const retry=failed&&!job.meta?.dispatch_uncertain&&(job.meta?.provider_failed||child?.genjutsu?.canRetry);
-      const cancelled=job.status==='cancelled';
+      const cancelled=job.status==='cancelled'||child?.status==='cancelled';
+      const stopping=!!child?.genjutsu?.stopRequested;
       const finished=child?.status==='ready'||job.status==='ready'||cancelled;
       const old503=(child?.last_error||job.last_error)==='Gemini recusou a operação (HTTP 503).';
       const error=old503?'Gemini temporariamente indisponível (503). Seus arquivos foram preservados.':child?.last_error||job.last_error;
       const state=cancelled?'cancelled':failed?'failed':finished?'ready':child?.status==='running'?'running':'waiting';
       const label=cancelled?'Cancelado':phase(job);
+      const canStop=!finished&&!failed&&!stopping&&job.meta?.stage==='control_motion';
       const live=!finished&&!failed,raw=Number(child?.progress??job.progress),progress=finished&&!cancelled?100:Number.isFinite(raw)?Math.max(0,Math.min(99,raw)):null;
       const bar='<div class="production-progress '+(live?'animated':'')+'" role="progressbar" aria-label="'+e(label)+'" aria-valuemin="0" aria-valuemax="100"'+(progress===null?'':' aria-valuenow="'+progress+'"')+' aria-valuetext="'+e(label)+'"><i style="width:'+(progress??15)+'%"></i></div>';
       const id=e(job.id),n=jobs.length-i,model=job.meta?.character_name||(job.meta?.input_mode==='manual_frame'?'Frame enviado':'Modelo');
@@ -105,6 +108,8 @@
         '<button type="button" class="btn studio-frame-action" data-frame="'+id+'">Ver frame</button>'+(hasResult?'<button type="button" class="btn" data-original="'+id+'">Original</button>':'')+
         '<button type="button" class="btn" data-prompt="'+id+'">Ver prompt</button>'+
         (child?.status==='ready'?'<button type="button" class="btn" data-calendar="'+id+'">Calendário</button><button type="button" class="btn" data-trial="'+id+'">Reels Teste</button><button type="button" class="btn" data-bulk="'+id+'">Mandar para lote</button>':'')+
+        (canStop?'<button type="button" class="btn danger" data-stop="'+id+'">Parar</button>':'')+
+        (stopping?'<span class="genjutsu-stop-pending" role="status">Parada solicitada · aguardando RunningHub</span>':'')+
         (retry?'<button type="button" class="btn primary" data-retry="'+id+'">Tentar novamente</button>':'')+
         (finished||failed?'<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button>':'')+'</div></article>';
     }).join('')||'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
@@ -218,13 +223,18 @@
     }finally{busy=false;drawEntries();await refresh();}
   }
   async function action(button){
-    const id=button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt||button.dataset.download||button.dataset.calendar||button.dataset.trial||button.dataset.bulk||button.dataset.retry||button.dataset.delete;
+    const id=button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt||button.dataset.download||button.dataset.calendar||button.dataset.trial||button.dataset.bulk||button.dataset.retry||button.dataset.stop||button.dataset.delete;
     if(!id||pendingActions.has(id))return;pendingActions.add(id);
     const label=button.textContent;button.disabled=true;button.setAttribute('aria-busy','true');const uid=owner,rev=revision;
-    button.textContent=button.dataset.download?'Baixando…':button.dataset.calendar?'Abrindo…':button.dataset.delete?'Excluindo…':button.dataset.retry?'Retomando…':label;
+    button.textContent=button.dataset.download?'Baixando…':button.dataset.calendar?'Abrindo…':button.dataset.delete?'Excluindo…':button.dataset.retry?'Retomando…':button.dataset.stop?'Parando…':label;
     try{
       if(button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt){await showMedia(id,button.dataset.prompt?'prompt':button.dataset.original?'original':button.dataset.frame?'frame':'result');return;}
-      if(button.dataset.retry)await request('image-pipeline-retry',{id},'PATCH');
+      if(button.dataset.stop){
+        if(!confirm('Parar esta produção do GENJUTSU? A geração em andamento pode ser perdida. Seus arquivos não serão excluídos.'))return;
+        const result=await request('image-pipeline-stop',{id},'PATCH');
+        message(result.result_ready?'Vídeo salvo antes da parada.':result.stopped?'Produção parada.':result.already_finished?'A tarefa já terminou.':'Parada solicitada ao RunningHub. Aguarde a confirmação.');
+      }
+      else if(button.dataset.retry)await request('image-pipeline-retry',{id},'PATCH');
       else if(button.dataset.delete){if(!confirm('Remover este item da fila? O vídeo já preservado no calendário será mantido.'))return;await request('image-pipeline-job',{id},'DELETE');}
       else if(button.dataset.calendar||button.dataset.trial||button.dataset.bulk){
         const job=jobs.find(j=>j.id===id),productionId=job?.production?.id||id;
