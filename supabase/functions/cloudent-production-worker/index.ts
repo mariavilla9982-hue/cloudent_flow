@@ -1,5 +1,6 @@
+import {motionVideoDigest,motionBlobDigest,recoverMotionCheckpoint} from '../_shared/motion-video-integrity.ts';
 import {applyGenjutsuStatus,genjutsuResultBlob} from '../_shared/genjutsu-stage.ts';
-import {genjutsuExecutionEvent} from '../_shared/genjutsu-diagnostics.ts';
+import {genjutsuExecutionEvent,safeGenjutsuError} from '../_shared/genjutsu-diagnostics.ts';
 import {pipelineVideoWorkflow} from '../_shared/image-pipeline-workflows.ts';
 import {enrichFailedMotionJobs,enrichPreviousMotionFailure} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
@@ -201,7 +202,12 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
             captured=true;
             if(onCapture)await onCapture(file,wss,{...job,meta:{...(latest.meta||{}),motion_preview_file:file}});
           }
-        }catch{/* Retain the task and let the next listener retry. */}finally{try{ws.close()}catch{}resolve();}
+        }catch(e){
+          if(isGenjutsuPreviewJob(job)){
+            const {data:latest}=await admin.from('production_jobs').select('meta,updated_at').eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).maybeSingle();
+            if(latest)await admin.from('production_jobs').update({meta:{...latest.meta,motion_capture_error:{task_id:String(job.runninghub_task_id),node_id:'482',message:safeGenjutsuError(e instanceof Error?e.message:String(e)),at:new Date().toISOString()}},updated_at:new Date().toISOString()}).eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).eq('updated_at',latest.updated_at).is('result_video_id',null);
+          }
+        }finally{try{ws.close()}catch{}resolve();}
       };
     });
   }catch{/* A transient monitor error must never fail or restart the paid generation. */}
@@ -228,25 +234,21 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
   if(videoError)throw videoError;
   if(!video||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(meta.result_storage_provider||job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
   if(!meta.motion_preview_verified_at||!/^[a-f0-9]{64}$/.test(String(meta.motion_preview_sha256||""))||Number(meta.motion_preview_verified_bytes)!==Number(video.size_bytes)){
-    let blob:Blob;
+    let digest:any;
     if(String(video.storage_provider||"supabase")==="r2"){
       const config=await getCloudentR2Config(admin);if(!config)throw new Error("r2_not_configured");
       await requireMotionStorage(admin);
       const response=await motionStorageRead(admin,config,video.storage_path);
-      if(!response.ok)throw new Error("Motion Control: não foi possível verificar o vídeo salvo. Task preservada.");
-      blob=await response.blob();
+      if(!response.ok||!response.body)throw new Error("Motion Control: não foi possível verificar o vídeo salvo. Task preservada.");
+      digest=await motionVideoDigest(response.body,isGenjutsuPreviewJob(job)?40*1024*1024:Number(video.size_bytes));
     }else{
       const {data,error}=await admin.storage.from("videos").download(video.storage_path);
       if(error||!data)throw new Error("Motion Control: não foi possível verificar o vídeo salvo. Task preservada.");
-      blob=data;
+      digest=await motionBlobDigest(data,Number(video.size_bytes));
     }
-    const bytes=new Uint8Array(await blob.arrayBuffer());
-    const mp4=new TextDecoder().decode(bytes.slice(4,8))==="ftyp";
-    const webm=bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3;
-    if(bytes.length!==Number(video.size_bytes)||(!mp4&&!webm))throw new Error("Motion Control: cópia do vídeo inválida. Task preservada.");
-    const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(x=>x.toString(16).padStart(2,"0")).join("");
-    if(meta.motion_preview_source_sha256&&digest!==meta.motion_preview_source_sha256)throw new Error("Motion Control: cópia diferente do vídeo capturado. Task preservada.");
-    Object.assign(meta,{motion_preview_verified_at:new Date().toISOString(),motion_preview_sha256:digest,motion_preview_verified_bytes:bytes.length});
+    if(digest.size_bytes!==Number(video.size_bytes))throw new Error("Motion Control: cópia do vídeo inválida. Task preservada.");
+    if(meta.motion_preview_source_sha256&&digest.sha256!==meta.motion_preview_source_sha256)throw new Error("Motion Control: cópia diferente do vídeo capturado. Task preservada.");
+    Object.assign(meta,{motion_preview_verified_at:new Date().toISOString(),motion_preview_sha256:digest.sha256,motion_preview_verified_bytes:digest.size_bytes});
     const {data:verified,error:verificationError}=await admin.from("production_jobs").update({meta}).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]).select("id").maybeSingle();
     if(verificationError)throw verificationError;if(!verified)return false;
   }
@@ -387,6 +389,15 @@ Deno.serve(async(req:Request)=>{
       const ext=extFrom(fileUrl,item?.fileType||item?.outputType);
       const mime=mimeFor(ext);
       const path=job.user_id+"/production-results/"+new Date().toISOString().slice(0,10)+"/"+job.id+"."+ext;
+      const sourceDigest=early?await motionBlobDigest(blob,isGenjutsuPreviewJob(job)?40*1024*1024:blob.size):null;
+      if(early&&isGenjutsuPreviewJob(job)){
+        const {data:current,error:ce}=await admin.from('production_jobs').select('meta,updated_at,locked_by').eq('id',job.id).eq('user_id',job.user_id).eq('runninghub_task_id',job.runninghub_task_id).is('result_video_id',null).in('status',['queued','running']).maybeSingle();
+        if(ce)throw ce;if(!current)throw new Error('Genjutsu: captura substituída; tarefa preservada.');
+        const checkpoint={task_id:String(job.runninghub_task_id),node_id:'482',provider:'r2',path,date:path.split('/')[2],sha256:sourceDigest!.sha256,size_bytes:blob.size,state:'prepared',prepared_at:new Date().toISOString()};
+        const {data:written,error:we}=await admin.from('production_jobs').update({meta:{...current.meta,motion_capture_checkpoint:checkpoint},updated_at:new Date().toISOString()}).eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).eq('updated_at',current.updated_at).is('result_video_id',null).select('meta').maybeSingle();
+        if(we)throw we;if(!written)throw new Error('Genjutsu: estado mudou durante a captura; arquivo preservado.');
+        job={...job,meta:written.meta};
+      }
       let provider=String(job.storage_provider||"supabase")==="r2"?"r2":"supabase";
       const protectedMotion=isMotionStatusJob(job);
       if(isGenjutsuPreviewJob(job)){if(provider!=="r2"||blob.size>40*1024*1024)throw new Error("Genjutsu: resultado exige B2 e limite de 40 MiB.");await requireMotionStorage(admin);}
@@ -459,7 +470,7 @@ Deno.serve(async(req:Request)=>{
         runninghub_cost_money:Number.isFinite(costMoney)?costMoney:null,
         runninghub_third_party_cost_money:Number.isFinite(thirdPartyCost)?thirdPartyCost:null,
         runninghub_runtime_seconds:Number.isFinite(runtimeSeconds)?runtimeSeconds:null,
-        meta:{...(job.meta||{}),...(protectedMotion?{result_storage_provider:provider,storage_reserve_result:reserveResult}:{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,"0")).join(""),motion_preview_saved_at:new Date().toISOString(),result_node_id:motionOutputNode(job),provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
+        meta:{...(job.meta||{}),...(protectedMotion?{result_storage_provider:provider,storage_reserve_result:reserveResult}:{}),...(early?{motion_preview_available:true,motion_preview_source_sha256:sourceDigest!.sha256,motion_preview_saved_at:new Date().toISOString(),result_node_id:motionOutputNode(job),provider_task_pending:true}:{}),credit_source:creditSource,cost_source:(Number.isFinite(costMoney)||Number.isFinite(thirdPartyCost))?"runninghub_usage":null},
         completed_at:early?null:new Date().toISOString(),locked_at:null,locked_by:null,last_error:null,updated_at:new Date().toISOString()
       }).eq("id",job.id);
       if((early||protectedMotion||isGenjutsuPreviewJob(job))&&saveError)throw saveError;
@@ -735,11 +746,18 @@ Deno.serve(async(req:Request)=>{
     }
 
     const {data:active,error:ae}=await admin.from("production_jobs")
-      .select("*").in("status",["queued","running"]).order("created_at",{ascending:true}).limit(50);
+      .select("*").or("status.in.(queued,running),and(status.eq.failed,meta->>workflow_key.eq.genjutsu,meta->motion_capture_checkpoint.not.is.null)").order("created_at",{ascending:true}).limit(50);
     if(ae)throw ae;
 
     for(const job of active||[]){
       try{
+        if(isGenjutsuPreviewJob(job)&&!job.result_video_id&&job.meta?.motion_capture_checkpoint){
+          const recovered=await recoverMotionCheckpoint(admin,job,async(path:string)=>{
+            const config=await getCloudentR2Config(admin);if(!config)throw new Error('r2_not_configured');
+            return motionStorageRead(admin,config,path);
+          });
+          if(recovered){Object.assign(job,recovered);await cancelMotionAfterSave(admin,job.id,rhJson);touched++;continue;}
+        }
         let motionState:any=null;
         if(isMotionStatusJob(job)){
           if(!job.runninghub_task_id)continue;

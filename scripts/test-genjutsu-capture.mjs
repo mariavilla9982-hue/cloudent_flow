@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
+import {motionVideoDigest,motionBlobDigest} from '../supabase/functions/_shared/motion-video-integrity.ts';
 import {genjutsuExecutionEvent} from '../supabase/functions/_shared/genjutsu-diagnostics.ts';
 const source=fs.readFileSync('supabase/functions/cloudent-production-worker/index.ts','utf8');
 const functions=stripTypeScriptTypes(source.slice(source.indexOf('const MOTION_PREVIEW_WORKFLOW'),source.indexOf('Deno.serve')));
@@ -13,7 +14,7 @@ function harness(options={}){
   const video={id:'job',status:'ready',storage_path:row.result_storage_path,storage_provider:'r2',size_bytes:64,mime_type:'video/mp4'};
   const admin={from(table){let value;const q={select(){return q;},eq(){return q;},in(){return q;},is(){return q;},update(v){value=v;return q;},async maybeSingle(){if(value){writes.push(value);Object.assign(row,value);events.push('verify-saved');return {data:{id:row.id}};}return {data:table==='production_jobs'?structuredClone(row):video};},then(resolve){if(value){writes.push(value);Object.assign(row,value);}return Promise.resolve({error:null}).then(resolve);}};return q;}};
   const c=vm.createContext({Date,Number,String,Array,Uint8Array,TextDecoder,crypto,Blob,URL,AbortSignal,Error,Promise,JSON,setTimeout,clearTimeout,setInterval,clearInterval,
-    Deno:{env:{get:()=>''}},EdgeRuntime:{waitUntil(){}},genjutsuExecutionEvent,
+    motionVideoDigest,motionBlobDigest,Deno:{env:{get:()=>''}},EdgeRuntime:{waitUntil(){}},genjutsuExecutionEvent,
     getCloudentR2Config:async()=>({}),requireMotionStorage:async()=>{if(options.storageBlocked)throw Error('storage blocked');},
     motionStorageRead:async()=>{events.push('download-copy');return new Response(options.corrupt?new Blob(['bad']):blob);},
     fetch:async()=>Response.json({data:{netWssUrl:'wss://www.runninghub.ai/ws?Rh-Comfy-Auth=private-token'}})
