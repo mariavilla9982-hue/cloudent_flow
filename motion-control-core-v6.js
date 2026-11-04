@@ -10,11 +10,11 @@
     return;
   }
 
-  const MODE_KEY="cloudent_production_workflow_tab_v1";
+  const MODE_KEY="cloudent_production_workflow_tab_v2";
   const MOTION="motion_control";
   const STANDARD="standard";
   const GENJUTSU="genjutsu";
-  let activeMode=[MOTION,GENJUTSU].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):STANDARD;
+  let activeMode=[STANDARD,MOTION,GENJUTSU].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):GENJUTSU;
   let motionConfig=null;
   let configLoadedAt=0;
   const MOTION_EDGE=(window.CloudentConfig?.supabaseUrl||"")+"/functions/v1/cloudent-motion-control";
@@ -335,7 +335,7 @@
   };
 
   async function setMode(mode){
-    const next=[MOTION,GENJUTSU].includes(mode)?mode:STANDARD;
+    const next=[STANDARD,MOTION,GENJUTSU].includes(mode)?mode:STANDARD;
     if(next===activeMode)return;
     if(productionUploading||window.CloudentGenjutsu?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
     activeMode=next;

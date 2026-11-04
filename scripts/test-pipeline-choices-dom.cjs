@@ -26,13 +26,14 @@ const {PIPELINE_CHARACTERS}=require('../supabase/functions/_shared/image-pipelin
  choose('reference',new File(['ref2'],'next-target.jpg',{type:'image/jpeg'}));await send();assert.notEqual(calls.filter(c=>c.path.includes('ticket')).at(-1).body.job_id,customTicket.body.job_id);assert.equal(confirmed.length,3);
  photo.querySelector('[data-remove=original]').click();await tick();choose('reference',new File(['ref3'],'other.jpg',{type:'image/jpeg'}));await send();assert.equal(confirmed.length,3);assert(photo.querySelector('[data-pipeline-error]').textContent.includes('foto da sua modelo'));
  character.click();assert(photo.querySelector('[data-custom-model]').hidden);assert(photo.querySelector('input[name=original]').disabled);assert(!photo.querySelector('input[name=original]').required);await send();assert.equal(confirmed.length,4);assert.equal(calls.filter(c=>c.path.includes('ticket')).at(-1).body.original,null);assert.equal(uploads.at(-1),'other.jpg');
+ const create=w.document.createElement.bind(w.document);w.document.createElement=tag=>{const el=create(tag);if(tag==='video'){Object.defineProperty(el,'duration',{value:12.5});Object.defineProperty(el,'src',{set(){queueMicrotask(()=>el.onloadedmetadata?.());}});el.load=()=>{};}return el;};
  w.showPage('faceSwap');const videos=w.document.getElementById('faceSwap'),fileInput=videos.querySelector('input[name=original]');
  Object.defineProperty(fileInput,'files',{value:[new File(['v1'],'a.mp4',{type:'video/mp4'}),new File(['v2'],'b.mp4',{type:'video/mp4'})]});fileInput.dispatchEvent(new w.Event('change',{bubbles:true}));await tick();
- const rows=[...videos.querySelectorAll('[data-entry]')];assert.equal(rows.length,2);assert.equal(videos.querySelectorAll('select').length,2);assert.equal(rows[0].querySelectorAll('select option').length,2);
+ const rows=[...videos.querySelectorAll('[data-entry]')];assert.equal(rows.length,2);assert.equal(videos.querySelectorAll('select').length,2);assert.equal(rows[0].querySelectorAll('select option').length,3);
  for(const row of rows)row.querySelector('input[value=jujuh]').click();
  const select=rows[1].querySelector('select');select.value='standard';select.dispatchEvent(new w.Event('change',{bubbles:true}));
  videos.querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();
- const tickets=calls.filter(c=>c.body.source==='face_swap_natural');assert.equal(tickets.length,2);assert.equal(tickets[0].body.workflow_key,'motion_control');assert.equal(tickets[1].body.workflow_key,'standard');assert.equal(videos.querySelector('[data-pipeline-error]').textContent,'');
+ const tickets=calls.filter(c=>c.body.source==='face_swap_natural');assert.equal(tickets.length,2);assert.equal(tickets[0].body.workflow_key,'genjutsu');assert.equal(tickets[1].body.workflow_key,'standard');assert.equal(videos.querySelector('[data-pipeline-error]').textContent,'');
  w.showPage('faceSwapPhoto');assert(photo.querySelector('input[value=sahry_japah]').checked);
  w.showPage('upscale');assert.equal(w.document.querySelectorAll('#upscale input[type=file]').length,1);
  await tick();dom.window.close();console.log('PASS DOM: saved/custom models, validation, exact uploads, model retention/removal, switching, unique jobs, independent video workflows and tabs');

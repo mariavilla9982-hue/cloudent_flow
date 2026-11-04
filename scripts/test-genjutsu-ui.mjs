@@ -42,6 +42,8 @@ assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-job-media="existing
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-original="existing"'));
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-frame="existing"'));
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('production-job-state'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('studio-identity studio-model-tag'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('>Jujuh</span>'));
 assert(container.innerHTML.includes('genjutsu-upload-workspace'));assert(!container.innerHTML.includes('studio-production-result'));assert(container.innerHTML.includes('production-queue-card'));
 assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('<progress'));
 assert.equal(mediaBoxes.frame.media.src,'https://b2.test/frame.webp');

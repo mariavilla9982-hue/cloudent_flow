@@ -28,10 +28,11 @@
     root.querySelector('[data-character-count]').textContent=custom?'Envie a foto da modelo que você quer usar.':d?.character?'Folha selecionada: '+photoCharacters.find(c=>c.id===d.character).name:'Escolha uma modelo.';
   }
   let characterRequest=null;
-  const videoWorkflows=[{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
+  const defaultVideoWorkflow='genjutsu';
+  const videoWorkflows=[{key:'genjutsu',label:'GENJUTSU'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
   const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
   function workflowSelector(d){
-    return '<label class="pipeline-workflow"><b>Workflow após Face Swap e Upscale</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||'motion_control')===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>O vídeo original e a imagem pronta seguem para o workflow escolhido.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
+    return '<label class="pipeline-workflow"><b>Workflow após Face Swap e Upscale</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||defaultVideoWorkflow)===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>O vídeo original e a imagem pronta seguem para o workflow escolhido.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
   }
   function lockWorkflows(root){for(const entry of drafts.faceSwap?.entries||[]){const select=root.querySelector('[data-entry="'+entry.id+'"] select');if(select&&entry.workflowLocked)select.disabled=true;}}
   function characterSelector(photo=false){
@@ -57,7 +58,7 @@
       if(!f.type.startsWith('video/'))throw new Error('Selecione somente vídeos.');
       if(!f.size||f.size>500*1024*1024)throw new Error('Cada vídeo deve ter até 500 MB.');
     }
-    for(const f of files){if(d.entries.some(x=>x.original.name===f.name&&x.original.size===f.size&&x.original.lastModified===f.lastModified))continue;d.entries.push({id:crypto.randomUUID(),original:f,urls:{original:URL.createObjectURL(f)},characters:[],workflow:'motion_control',variantIds:{}});}
+    for(const f of files){if(d.entries.some(x=>x.original.name===f.name&&x.original.size===f.size&&x.original.lastModified===f.lastModified))continue;d.entries.push({id:crypto.randomUUID(),original:f,urls:{original:URL.createObjectURL(f)},characters:[],workflow:defaultVideoWorkflow,variantIds:{}});}
   }
   function drawBatch(root){
     const list=root.querySelector('[data-batch-list]');if(!list)return;
@@ -66,6 +67,16 @@
     for(const d of entries){const row=list.querySelector('[data-entry="'+d.id+'"]');for(const c of row.querySelectorAll('input[name=character]'))c.checked=d.characters.includes(c.value);row.querySelector('[data-character-count]').textContent=d.characters.length?d.characters.length+' vídeo(s) serão gerados para este arquivo.':'Escolha pelo menos uma modelo.';}
     if(entries.length)loadCharacters(list);
     const count=root.querySelector('[data-batch-count]');if(count)count.textContent=entries.length+' vídeo(s) selecionado(s)';
+  }
+  async function videoDuration(entry){
+    if(entry.duration)return entry.duration;
+    entry.duration=await new Promise((resolve,reject)=>{
+      const video=document.createElement('video');let done=false,value;
+      const finish=error=>{if(done)return;done=true;clearTimeout(timeout);video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();error?reject(error):resolve(value);};
+      const timeout=setTimeout(()=>finish(new Error('Não consegui ler a duração do vídeo.')),15000);
+      video.onloadedmetadata=()=>{value=video.duration;finish(Number.isFinite(value)&&value>0?null:new Error('Vídeo com duração inválida.'));};
+      video.onerror=()=>finish(new Error('Não consegui abrir o vídeo.'));video.preload='metadata';video.src=entry.urls.original;
+    });return entry.duration;
   }
   async function submitBatch(root){
     if(busy.has('faceSwap'))return;
@@ -85,13 +96,16 @@
           if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os vídeos novamente.');
           status.textContent='Vídeo '+(index+1)+' de '+entries.length+' · '+entry.original.name;
           if(row)row.textContent='Preparando envio…';
+          const genjutsu=(entry.workflow||defaultVideoWorkflow)==='genjutsu';
+          if(genjutsu&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU: use MP4, WebM ou MOV de até 30 MiB.');
+          const seconds=genjutsu?await videoDuration(entry):null;
           entry.workflowLocked=true;lockWorkflows(root);
           entry.reference=entry.reference||new File([await extractFirstFrameBlob(entry.urls.original)],'primeiro-frame.jpg',{type:'image/jpeg'});
           for(const c of characters.filter(c=>entry.characters.includes(c.id))){
             if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
-            const variant=(entry.workflow||'motion_control')+':'+c.id;const id=entry.variantIds[variant]||(entry.variantIds[variant]=crypto.randomUUID());
+            const variant=(entry.workflow||defaultVideoWorkflow)+':'+c.id;const id=entry.variantIds[variant]||(entry.variantIds[variant]=crypto.randomUUID());
             if(row)row.textContent='Enviando para '+c.name+'…';
-            const ticket=await request('image-pipeline-ticket',{source:sources.faceSwap,job_id:id,character_id:c.id,workflow_key:entry.workflow||'motion_control',original:describe(entry.original),reference:describe(entry.reference)});
+            const ticket=await request('image-pipeline-ticket',{source:sources.faceSwap,job_id:id,character_id:c.id,workflow_key:entry.workflow||defaultVideoWorkflow,...(genjutsu?{duration_seconds:seconds}:{}),original:describe(entry.original),reference:describe(entry.reference)});
             if(!ticket.registered){await uploadFaceSwapPart(ticket.original,entry.original,()=>{});if(!ticket.same_input)await uploadFaceSwapPart(ticket.reference,entry.reference,()=>{});if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');await request('image-pipeline-complete',{job_id:ticket.job_id});}
           }
           entry.sent=true;entry.error='';completed++;if(row)row.textContent='Envio confirmado. Processamento automático na fila.';
@@ -264,7 +278,7 @@
     root.onchange=evt=>{
       if(busy.has(page))return;
       if(page==='faceSwap'&&evt.target.name==='original'){try{addBatchFiles([...evt.target.files]);evt.target.value='';drawBatch(root);}catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}return;}
-      if(page==='faceSwap'&&evt.target.name==='video_workflow'){const entry=drafts.faceSwap?.entries?.find(x=>x.id===evt.target.closest('[data-entry]')?.dataset.entry);if(!entry)return;if(entry.workflowLocked){evt.target.value=entry.workflow||'motion_control';return;}if(videoWorkflows.some(w=>w.key===evt.target.value))entry.workflow=evt.target.value;return;}
+      if(page==='faceSwap'&&evt.target.name==='video_workflow'){const entry=drafts.faceSwap?.entries?.find(x=>x.id===evt.target.closest('[data-entry]')?.dataset.entry);if(!entry)return;if(entry.workflowLocked){evt.target.value=entry.workflow||defaultVideoWorkflow;return;}if(videoWorkflows.some(w=>w.key===evt.target.value))entry.workflow=evt.target.value;return;}
       if(page==='faceSwap'&&evt.target.name==='character'){
         const entry=drafts.faceSwap?.entries?.find(x=>x.id===evt.target.closest('[data-entry]')?.dataset.entry);if(!entry)return;const row=evt.target.closest('[data-entry]');entry.characters=[...row.querySelectorAll('input[name=character]:checked')].map(x=>x.value);const tags=row.querySelector('.studio-entry-tags');if(tags)tags.innerHTML=characters.filter(c=>entry.characters.includes(c.id)).map(c=>'<span class="studio-model-tag" data-character="'+c.id+'">'+e(c.name)+'</span>').join('');row.querySelector('[data-character-count]').textContent=entry.characters.length?entry.characters.length+' vídeo(s) serão gerados para este arquivo.':'Escolha pelo menos uma modelo.';return;
       }
