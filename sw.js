@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v82";
+const CACHE="cloudentflow-pwa-v83";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -28,7 +28,7 @@ async function injectCalendarPatch(response){
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
     const backblazeGuardTag='<script src="/backblaze-media-guard.js?v=1"></script>';
-    const genjutsuTag='<script src="/genjutsu-ui.js?v=11"></script>';
+    const genjutsuTag='<script src="/genjutsu-ui.js?v=12"></script>';
     if(!html.includes('genjutsu-ui.js'))html=html.replace('</body>',genjutsuTag+'</body>');
     const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
@@ -61,13 +61,13 @@ async function injectCalendarPatch(response){
     if(oldForYouWatchdog.test(html))html=html.replace(oldForYouWatchdog,forYouWatchdogTag);
     else html=html.includes("</body>")?html.replace("</body>",forYouWatchdogTag+"</body>"):html+forYouWatchdogTag;
 
-    html=html.replace(/genjutsu-ui\.js\?v=\d+/g,'genjutsu-ui.js?v=11');
+    html=html.replace(/genjutsu-ui\.js\?v=\d+/g,'genjutsu-ui.js?v=12');
     // Cached native and legacy documents share one selector controller.
     html=html.replace(oldFaceSwapCharacterClickHotfix,'');
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
-    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=16');
+    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=17');
     html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=6').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=9');
     if(html.includes('image-pipeline-ui.js')){
       if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=6"></script>$&');

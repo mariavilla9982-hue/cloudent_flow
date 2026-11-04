@@ -323,5 +323,6 @@
     drawEntries();drawJobs();refresh();
     if(!timer){timer=setInterval(()=>{reset();if(active()&&cloudSession&&!document.hidden)refresh();},10000);setInterval(tickElapsed,1000);}
   }
+  document.addEventListener?.('visibilitychange',()=>{if(!document.hidden&&cloudSession&&active()){reset();refresh();tickElapsed();}});
   window.CloudentGenjutsu={render,refresh,get busy(){return busy;}};
 })();
