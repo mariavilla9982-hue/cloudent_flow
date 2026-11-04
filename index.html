@@ -4712,6 +4712,7 @@ async function initCloud(){
 }
 async function loadDeferredCloudData(){
   if(!cloudSession||!backendOnline||cloudAccess?.role!=="admin")return;
+  if(currentPage!=="overview")return;
   try{
     // Atividade/logs ficam sob demanda. Evita uma chamada pesada logo no boot.
     await Promise.allSettled([
@@ -5088,17 +5089,17 @@ async function loadSystemHealth(){
 
 async function loadFollowerStats(days=30){
   if(!cloudSession){followerStats=null;return}
-  const version=++followerLoadVersion;
+  const version=++followerLoadVersion,uid=cloudSession.user?.id;
   try{
     const previous=Number(followerStats?.current?.followers_count??NaN);
     const account=metricsAccountId;
     const next=await edgeFetch(IG_FOLLOWERS_STATUS_URL+"?days="+Math.max(days,metricsPeriod)+metricsAccountQuery(),{method:"GET"});
-    if(version!==followerLoadVersion||(account!==metricsAccountId&&account))return;
+    if(version!==followerLoadVersion||uid!==cloudSession?.user?.id||account!==metricsAccountId)return;
     const current=Number(next?.current?.followers_count??NaN);
     followerChanged=Number.isFinite(previous)&&Number.isFinite(current)&&previous!==current;
     followerStats=next;
   }catch(e){
-    if(version!==followerLoadVersion)return;
+    if(version!==followerLoadVersion||uid!==cloudSession?.user?.id)return;
     followerStats={current:null,daily:[],worker:null,error:e.message};
     console.warn("Follower status unavailable:",e);
   }
@@ -5150,12 +5151,12 @@ async function removeInstagramWebSession(button=null){
 }
 async function loadInstagramMetricsStored(){
   if(!cloudSession)return;
-  const version=++metricsLoadVersion,account=metricsAccountId;
+  const version=++metricsLoadVersion,account=metricsAccountId,uid=cloudSession.user?.id;
   try{
     const stored=await edgeFetch(IG_METRICS_URL+"?timezone=America/Sao_Paulo&days=120"+metricsAccountQuery(),{method:"GET"});
-    if(version!==metricsLoadVersion||account!==metricsAccountId)return;
+    if(version!==metricsLoadVersion||uid!==cloudSession?.user?.id||account!==metricsAccountId)return;
     metricsAccountId=stored.account_id||metricsAccountId;liveInstagramMetrics=stored.media||[];metricsLastCollectedAt=stored.last_collected_at||null;metricsDataError="";
-  }catch(e){if(version===metricsLoadVersion){metricsDataError=e.message;console.warn("Stored Instagram metrics unavailable:",e)}}
+  }catch(e){if(version===metricsLoadVersion&&uid===cloudSession?.user?.id){metricsDataError=e.message;console.warn("Stored Instagram metrics unavailable:",e)}}
 }
 
 async function syncDashboardLiveMetrics(force=false){
@@ -5795,18 +5796,29 @@ async function refreshLiveData(showFeedback=false){
     const activityOpen=$("#activityPanelHost")?.classList.contains("open");
     const fullAutomation=currentPage==="automation"||currentPage==="smartTimes";
     const calendarVisible=currentPage==="calendar";
-    const tasks=[loadAutomationStatus(fullAutomation),loadFollowerStats(30),loadNotifications(currentPage==="settings"&&settingsTab==="notifications"),calendarVisible?refreshCalendarLiveData():syncFromBackend(),loadDashboardScheduleRows()];
-    if(currentPage==="overview")tasks.push(syncDashboardLiveMetrics(false));
+    const page=currentPage,uid=cloudSession.user?.id;
+    const ownsQueue=["production","faceSwap","faceSwapPhoto","upscale"].includes(page);
+    const tasks=[loadAutomationStatus(fullAutomation),loadNotifications(currentPage==="settings"&&settingsTab==="notifications")];
+    if(["overview","metrics","automation","smartTimes"].includes(page))tasks.push(loadFollowerStats(30));
+    if(calendarVisible)tasks.push(refreshCalendarLiveData());
+    if(page==="overview")tasks.push(syncFromBackend(),loadDashboardScheduleRows(),syncDashboardLiveMetrics(false));
     if(currentPage==="metrics")tasks.push(loadInstagramMetricsStored());
+    if(showFeedback&&ownsQueue){
+      if(page!=="production")tasks.push(window.ImagePipeline?.refresh());
+      else if(window.CloudentMotionControl?.mode==="genjutsu")tasks.push(window.CloudentGenjutsu?.refresh());
+      else tasks.push(loadProductionData());
+    }
     // Logs custam caro e não precisam ser baixados enquanto o usuário não os está vendo.
     if(activityOpen||(currentPage==="settings"&&settingsTab==="logs"))tasks.push(loadServerLogs());
-    if(currentPage==="production")tasks.push(loadProductionData());
+    // Production controllers already poll their own queue without replacing drafts/players.
     if(currentPage==="trialReels")tasks.push(loadTrialReels());
     if(currentPage==="settings"&&settingsTab==="health")tasks.push(loadSystemHealth());
     if(currentPage==="settings"&&settingsTab==="integrations")tasks.push(loadInstagramWebSessionStatus());
     await Promise.allSettled(tasks);
+    if(uid!==cloudSession?.user?.id||page!==currentPage)return;
     const editing=!!$("#modalHost")?.children?.length||document.activeElement?.matches?.("input,textarea,select,[contenteditable='true']");
-    updateLiveChrome();if((!calendarVisible||currentPage!=="calendar")&&!editing)renderAll();
+    updateLiveChrome();if(!calendarVisible&&!ownsQueue&&!editing)renderAll();
+    if(showFeedback&&page==="production"&&window.CloudentMotionControl?.mode!=="genjutsu"&&!editing)productionPage();
     if(activityOpen)toggleActivityPanel(true);
     if(showFeedback)toast("Dados atualizados.","ok");
   }catch(e){
@@ -6000,7 +6012,9 @@ function showPage(id){
   renderMobileNav();
   renderAll();
   if(["faceSwap","upscale","faceSwapPhoto"].includes(id)&&cloudSession){window.ImagePipeline?.render(id)}
-  if(id==="production"&&cloudSession){loadProductionData().then(()=>{if(currentPage==="production")productionPage()}).catch(e=>toast(e.message,"err"))}
+  if(id==="production"&&cloudSession&&window.CloudentMotionControl?.mode!=="genjutsu"){loadProductionData().then(()=>{if(currentPage==="production")productionPage()}).catch(e=>toast(e.message,"err"))}
+  if(id==="metrics"&&cloudSession){Promise.allSettled([loadInstagramMetricsStored(),loadFollowerStats(metricsPeriod)]).then(()=>{if(currentPage==="metrics")metrics()})}
+  if(id==="calendar"&&cloudSession){refreshCalendarLiveData().catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>{if(currentPage==="trialReels")trialReelsPage()}).catch(e=>toast(e.message,"err"))}
   if((id==="automation"||id==="smartTimes")&&cloudSession){
     loadAutomationStatus(true).then(()=>renderAll()).catch(e=>toast(e.message,"err"));
@@ -7301,11 +7315,19 @@ function updateCalendarLiveDom(){
   });
   updateCalendarClockDom();
 }
-async function refreshCalendarLiveData(){
+let calendarLivePending=null;
+function refreshCalendarLiveData(){
+  const session=cloudSession,accountId=calendarEnsureAccount();
+  if(calendarLivePending?.session===session&&calendarLivePending.accountId===accountId)return calendarLivePending.promise;
+  const entry={session,accountId,promise:null};
+  entry.promise=readCalendarLiveData().finally(()=>{if(calendarLivePending===entry)calendarLivePending=null;});
+  calendarLivePending=entry;return entry.promise;
+}
+async function readCalendarLiveData(){
   if($("#modalHost")?.children?.length)return;
   const session=cloudSession,accountId=calendarEnsureAccount();
   const [q]=await Promise.all([loadCalendarQueueRows(),loadTrialReels()]);
-  if(cloudSession!==session||calendarEnsureAccount()!==accountId||$("#modalHost")?.children?.length)return;
+  if(cloudSession!==session||calendarEnsureAccount()!==accountId||currentPage!=="calendar"||$("#modalHost")?.children?.length)return;
   updateTrialReelsBlock();
   const filtered=calendarFilterQueueRows(q);
   const rows=new Map(filtered.map(r=>[String(r.id),r]));
@@ -9224,6 +9246,7 @@ function ensureProductionTicker(){
   if(!window.__cloudentProductionLiveTicker){
     window.__cloudentProductionLiveTicker=setInterval(async()=>{
       if(currentPage!=="production"||!cloudSession||document.hidden||window.__cloudentProductionRefreshing)return;
+      if(window.CloudentMotionControl?.mode==="genjutsu")return;
       if($("#productionVideo")?.files?.length||$("#productionFrame")?.files?.length)return;
       window.__cloudentProductionRefreshing=true;
       const before=productionLiveSignature();
@@ -12085,10 +12108,10 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=4"></script>
-<script src="/genjutsu-ui.js?v=11"></script>
+<script src="/genjutsu-ui.js?v=12"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>
 <script src="/production-studio.js?v=6"></script>
-<script src="/image-pipeline-ui.js?v=16"></script>
+<script src="/image-pipeline-ui.js?v=17"></script>
 </body>
 </html>
 

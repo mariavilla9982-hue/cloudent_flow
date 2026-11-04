@@ -30,6 +30,7 @@ const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.s
     return {ok:true};
   },fetch:async()=>Response.json({active:true,readiness:{ready:true}})
 });
+let visibilityChanged;document.addEventListener=(name,fn)=>{if(name==='visibilitychange')visibilityChanged=fn;};
 vm.runInContext(fs.readFileSync('genjutsu-ui.js','utf8'),c);
 c.window.CloudentGenjutsu.render(container);
 await new Promise(setImmediate);await new Promise(setImmediate);
@@ -114,4 +115,6 @@ c.cloudSession={user:{id:'another'},access_token:'new-session'};timer();await ne
 assert.equal(section.dataset.owner,'another');
 assert.equal(nodes.get('[data-gen-drop="frame"]').querySelector('.production-upload-meta').textContent,'Clique para escolher o arquivo');
 assert.equal(c.window.CloudentGenjutsu.busy,false);
+await new Promise(setImmediate);const readsBeforeHidden=calls.length;document.hidden=true;timer();await new Promise(setImmediate);assert.equal(calls.length,readsBeforeHidden,'hidden tab does not poll');
+document.hidden=false;visibilityChanged();await new Promise(setImmediate);assert(calls.length>readsBeforeHidden,'returning to tab refreshes immediately');
 console.log('PASS Genjutsu UI: metadata-only models, isolated queue, safe text, result while cancel pending, required model, duration/970 inputs, stable retry ID/frame, session reset, click-only modal, close race, duplicate actions and preview error');

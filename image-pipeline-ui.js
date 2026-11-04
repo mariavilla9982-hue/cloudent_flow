@@ -331,7 +331,7 @@
     if(photo){loadCharacters(root);const d=drafts[page];if(d?.character)root.querySelector('input[value="'+d.character+'"]').checked=true;photoSelection(root,d);for(const k of ['original','reference'])if(d?.[k]){const preview=root.querySelector('[data-preview="'+k+'"]');preview.innerHTML='<img alt="Imagem selecionada" style="max-width:100%;max-height:220px">';preview.firstChild.src=d.urls[k];}}
     if(natural)drawBatch(root);
     drawJobs();refresh();
-    if(!timer)timer=setInterval(()=>{resetOwner();if(sources[currentPage]&&cloudSession)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
+    if(!timer)timer=setInterval(()=>{resetOwner();if(sources[currentPage]&&cloudSession&&!document.hidden)refresh();else if(!cloudSession){jobs=[];generation++;}},8000);
   }
   async function submit(page,root){
     if(page==='faceSwap'&&drafts.faceSwap?.entries)return submitBatch(root);
@@ -372,6 +372,7 @@
     }catch(err){error.textContent=err.message;status.textContent='Envio interrompido. Os vídeos já confirmados continuam na fila; tente novamente para concluir os restantes.';refresh();}
     finally{busy.delete(page);form.querySelectorAll('input,select,button').forEach(x=>x.disabled=false);if(page==='faceSwapPhoto')photoSelection(root,drafts[page]);form.querySelector('button[type=submit]')?.removeAttribute?.('aria-busy');}
   }
+  document.addEventListener?.('visibilitychange',()=>{if(!document.hidden&&cloudSession&&sources[currentPage]){resetOwner();refresh();}});
   window.ImagePipeline={render,refresh,draw:drawJobs,rowsForPage:page=>jobs.filter(j=>j.meta.source===sources[page])};
   if(sources[currentPage])render(currentPage);
 })();

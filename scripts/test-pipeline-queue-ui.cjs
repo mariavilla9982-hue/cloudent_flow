@@ -1,10 +1,11 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const file=fs.readFileSync('image-pipeline-ui.js','utf8');
 let rows=[];const list={dataset:{},innerHTML:'',querySelector:()=>null};
-const root={dataset:{pipelineMounted:'11'},querySelector:()=>null};
+const root={dataset:{pipelineMounted:'12'},querySelector:()=>null};
+let visibilityChanged,reads=0;
 const context={window:{},cloudSession:{user:{id:'owner'}},currentPage:'faceSwap',console,
- document:{createElement:()=>({textContent:''}),head:{appendChild(){}},getElementById:()=>root,querySelector:selector=>selector.includes('data-pipeline-jobs')?list:null},
- cloudFetch:async()=>({jobs:rows}),setInterval:()=>0,URL,Date};
+ document:{hidden:false,addEventListener:(name,fn)=>{if(name==='visibilitychange')visibilityChanged=fn},createElement:()=>({textContent:''}),head:{appendChild(){}},getElementById:()=>root,querySelector:selector=>selector.includes('data-pipeline-jobs')?list:null},
+ cloudFetch:async()=>{reads++;return {jobs:rows}},setInterval:()=>0,URL,Date};
 vm.createContext(context);vm.runInContext(file,context);
 const make=(id,status,stage='upscale')=>({id,status,created_at:'2026-10-18T10:0'+id+':00Z',original_file_name:'video-'+id+'.mp4',meta:{pipeline_version:2,source:'face_swap_natural',stage,face_swap_result:{path:'saved/'+id},pipeline_status:'UPSCALE_RUNNING'}});
 (async()=>{
@@ -26,5 +27,8 @@ const make=(id,status,stage='upscale')=>({id,status,created_at:'2026-10-18T10:0'
  await context.window.ImagePipeline.refresh();assert(list.innerHTML.includes('NA FILA'));assert(!list.innerHTML.includes('pipeline-stage-segment active'));
  rows=[{...make('7','waiting'),created_at:'2020-01-01'}, {...make('8','waiting','face_swap'),created_at:'2026-01-01',meta:{...make('8','waiting','face_swap').meta,face_swap_result:null}}];
  await context.window.ImagePipeline.refresh();assert(list.innerHTML.indexOf('video-8.mp4')<list.innerHTML.indexOf('video-7.mp4'));assert(list.innerHTML.includes('Fila de Face Swap'));assert(list.innerHTML.includes('Fila de Upscale'));assert.equal((list.innerHTML.match(/FILA 01/g)||[]).length,2,'positions restart per stage');
- console.log('PASS UI: ordered groups, FIFO numbering, preserved completed stages, no false error/animation while queued, real failures visible, Motion uses child status');
+ const before=reads;context.document.hidden=true;visibilityChanged();await new Promise(setImmediate);assert.equal(reads,before);
+ context.document.hidden=false;visibilityChanged();await new Promise(setImmediate);assert.equal(reads,before+1,'visible Face Swap resumes immediately');
+ context.currentPage='calendar';visibilityChanged();await new Promise(setImmediate);assert.equal(reads,before+1,'other pages do not load Face Swap');
+ console.log('PASS UI: ordered groups, FIFO numbering, preserved completed stages, no false error/animation while queued, real failures visible, Motion uses child status, visibility resume');
 })().catch(e=>{console.error(e);process.exitCode=1});
