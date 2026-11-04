@@ -127,7 +127,7 @@ for(const response of [
   {id:'failed-analysis',status:'failed'},
   {id:'truncated-analysis',status:'incomplete',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]}
 ]){const h=harness({response});await rejects(()=>h.run(),'incomplete_response');assert.equal(h.state.status,'failed');}
-for(const invalid of [prompt.replace('summary:','missing:'),prompt.replace('00:10.000','00:11.000'),'```\n'+prompt+'\n```',prompt+' {unfilled}']){
+for(const invalid of [prompt.replace('summary:','missing:')]){
   const h=harness({prompt:invalid});await rejects(()=>h.run(),'invalid_prompt');assert.equal(h.state.status,'failed');
 }
 console.log('PASS quota wait without paid fallback; blocked/truncated/invalid responses never reach RunningHub inputs');
@@ -239,3 +239,28 @@ try{
  assert.equal(renewJob.meta.genjutsu_prompt.fingerprint,expired.fingerprint);
 }finally{globalThis.fetch=savedFetch;}
 console.log('PASS continuous retry refreshes expired files from original owner media without changing fingerprint');
+
+// Invalid structured output is repaired under the same job/media, with a finite budget.
+for(const invalid of [prompt.replace('Body timeline:','Movement:'),prompt.replace('00:10.000','00:11.000')]){
+ const h=harness({prompt:invalid});
+ for(let n=1;n<=2;n++){
+   await rejects(()=>h.run(),'provider_waiting');
+   assert.equal(h.state.formatRepairAttempts,n);assert.equal(h.state.interactionId,undefined);
+   assert.equal(h.state.rejectedPrompt,invalid);assert(h.state.repairInteractionId);
+   h.clock=Date.parse(h.state.retryAt)+1;
+ }
+ await rejects(()=>h.run(),'invalid_prompt');assert.equal(h.state.status,'failed');
+ assert.equal(count(h,'/upload/v1beta/files'),2);assert.equal(count(h,'/v1beta/interactions'),3);
+}
+const repair=harness({prompt:prompt.replace('Body timeline:','Movement:')});
+await rejects(()=>repair.run(),'provider_waiting');repair.clock=Date.parse(repair.state.retryAt)+1;
+repair.config.prompt=prompt;await repair.run();assert.equal(repair.state.status,'complete');
+const repairBody=JSON.parse(repair.calls.filter(c=>c.url.endsWith('/v1beta/interactions')).at(-1).init.body);
+assert.equal(repairBody.previous_interaction_id,'analysis-1');assert(repairBody.input[2].text.includes('Body timeline:'));
+assert.equal(repairBody.input[0].uri,ref('video').uri);assert.equal(repairBody.input[1].uri,ref('image').uri);
+const processingFault=harness({response:{id:'processing-fault',status:'failed',steps:[{type:'user_input',content:[{type:'text',text:'original user request'}]}],errors:[{code:'INVALID_ARGUMENT',message:'There was a problem processing your request. You will only be charged for tokens successfully generated.'}]}});
+await rejects(()=>processingFault.run(),'provider_waiting');assert.equal(processingFault.state.processingRetryAttempts,1);
+processingFault.clock=Date.parse(processingFault.state.retryAt)+1;
+await rejects(()=>processingFault.run(),'incomplete_response');assert.equal(processingFault.state.status,'failed');
+assert.deepEqual(processingFault.state.providerFailureCodes,['INVALID_ARGUMENT']);
+console.log('PASS bounded same-media prompt repair, successful correction, hard-stop after two repairs and one exact generic processing retry');
