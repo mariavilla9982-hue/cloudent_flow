@@ -15,13 +15,17 @@ export async function retryPipelineMotion(admin:any,userId:string,id:string){
     if(updated?.length)check(await admin.from('face_swap_jobs').update({status:'waiting',last_error:null,completed_at:null,meta:{...j.meta,provider_failed:false,dispatch_uncertain:false,error_stage:null,pipeline_status:'CONTROL_MOTION_WAITING'}}).eq('id',id).eq('user_id',userId));
     return {ok:true,queued:true,reused_inputs:true};
   }
-  if(p.status!=='failed'||!p.runninghub_task_id||p.meta?.provider_status!=='FAILED'||String(p.meta?.provider_status_task_id)!==String(p.runninghub_task_id)||p.meta?.pipeline_dispatch_uncertain||p.result_video_id||p.meta?.motion_preview_file)return {ok:false,error:'Confirme a falha da tarefa antes de repetir. Uma saída existente deve ser recuperada.',status:409};
+  const recovery=p.meta?.genjutsu_capture_recovery;
+  const unavailableCapture=p.meta?.workflow_key==='genjutsu'&&recovery?.status==='provider_output_unavailable'&&recovery.node_id==='482'&&String(recovery.task_id)===String(p.runninghub_task_id)&&p.meta?.motion_preview_file?.node_id==='482'&&String(p.meta.motion_preview_file.task_id)===String(p.runninghub_task_id)&&!p.meta?.motion_preview_available;
+  if(p.status!=='failed'||!p.runninghub_task_id||p.meta?.provider_status!=='FAILED'||String(p.meta?.provider_status_task_id)!==String(p.runninghub_task_id)||p.meta?.pipeline_dispatch_uncertain||p.result_video_id||(p.meta?.motion_preview_file&&!unavailableCapture))return {ok:false,error:'Confirme a falha da tarefa antes de repetir. Uma saída existente deve ser recuperada.',status:409};
   const directFrame=p.meta.workflow_key==='genjutsu'&&p.meta.input_mode==='manual_frame'&&j.meta?.input_mode==='manual_frame';
   const image=directFrame?j.meta.prepared_frame:j.meta?.upscale_result;
   if(!p.original_storage_path||!image?.path||p.frame_storage_path!==image.path)return {ok:false,error:'Vídeo original ou frame preparado indisponível.',status:409};
   const meta={...p.meta,previous_motion_task_id:p.runninghub_task_id,pipeline_dispatch_intent:null,pipeline_dispatch_uncertain:false};
+  if(unavailableCapture)meta.previous_motion_capture={task_id:p.runninghub_task_id,file:p.meta.motion_preview_file,recovery};
+  delete meta.genjutsu_capture_recovery;delete meta.genjutsu_execution;delete meta.genjutsu_execution_error;
   for(const key of Object.keys(meta))if(key.startsWith('provider_')||key.startsWith('motion_preview_')||key.startsWith('motion_execution_'))delete meta[key];
-  const claimed=check(await admin.from('production_jobs').update({status:'motion_waiting',progress:0,runninghub_task_id:null,runninghub_video_file:null,runninghub_frame_file:null,attempt_count:0,next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,started_at:null,completed_at:null,meta,updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',userId).eq('status','failed').eq('runninghub_task_id',p.runninghub_task_id).select('id'));
+  const claimed=check(await admin.from('production_jobs').update({status:'motion_waiting',progress:0,runninghub_task_id:null,runninghub_video_file:null,runninghub_frame_file:null,attempt_count:0,next_attempt_at:new Date().toISOString(),last_error:null,locked_at:null,locked_by:null,started_at:null,completed_at:null,meta,updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',userId).eq('status','failed').eq('runninghub_task_id',p.runninghub_task_id).eq('updated_at',p.updated_at).is('result_video_id',null).select('id'));
   if(!claimed?.length)return {ok:true,queued:true,task_exists:true};
   check(await admin.from('face_swap_jobs').update({status:'waiting',last_error:null,completed_at:null,meta:{...j.meta,provider_failed:false,dispatch_uncertain:false,error_stage:null,pipeline_status:'CONTROL_MOTION_RUNNING'}}).eq('id',id).eq('user_id',userId));
   return {ok:true,queued:true,resumed_stage:'control_motion',reused_inputs:true};
