@@ -5094,7 +5094,7 @@ async function loadFollowerStats(days=30){
     const previous=Number(followerStats?.current?.followers_count??NaN);
     const account=metricsAccountId;
     const next=await edgeFetch(IG_FOLLOWERS_STATUS_URL+"?days="+Math.max(days,metricsPeriod)+metricsAccountQuery(),{method:"GET"});
-    if(version!==followerLoadVersion||uid!==cloudSession?.user?.id||account!==metricsAccountId)return;
+    if(version!==followerLoadVersion||uid!==cloudSession?.user?.id||(account!==metricsAccountId&&account))return;
     const current=Number(next?.current?.followers_count??NaN);
     followerChanged=Number.isFinite(previous)&&Number.isFinite(current)&&previous!==current;
     followerStats=next;

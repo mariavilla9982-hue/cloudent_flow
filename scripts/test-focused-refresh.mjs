@@ -39,4 +39,11 @@ const m=vm.createContext({console,cloudSession:{user:{id:'old'}},metricsAccountI
 vm.runInContext(between('async function loadInstagramMetricsStored(','async function syncDashboardLiveMetrics('),m);
 const old=m.loadInstagramMetricsStored();m.cloudSession={user:{id:'new'}};resolveMetrics({media:['old-owner']});await old;
 assert.deepEqual(m.liveInstagramMetrics,['current'],'old session metrics never populate the new session');
+let resolveFollowers;
+const f=vm.createContext({console,cloudSession:{user:{id:'owner'}},followerLoadVersion:0,followerStats:null,metricsAccountId:'',metricsPeriod:30,metricsAccountQuery:()=>'',IG_FOLLOWERS_STATUS_URL:'https://test/followers',edgeFetch:()=>new Promise(resolve=>{resolveFollowers=resolve})});
+vm.runInContext(between('async function loadFollowerStats(','async function loadInstagramStatus('),f);
+const followers=f.loadFollowerStats();f.metricsAccountId='default-account';resolveFollowers({account_id:'default-account',current:{followers_count:5}});await followers;
+assert.equal(f.followerStats.current.followers_count,5,'default account resolved concurrently keeps its followers');
+const oldFollowers=f.loadFollowerStats();f.cloudSession={user:{id:'another'}};resolveFollowers({current:{followers_count:99}});await oldFollowers;
+assert.equal(f.followerStats.current.followers_count,5,'old session followers are ignored');
 console.log('PASS focused refresh: production global reads 6→2, metrics 6→4, calendar 5→3; independent queue controllers, legacy timer isolation, navigation and session races');
