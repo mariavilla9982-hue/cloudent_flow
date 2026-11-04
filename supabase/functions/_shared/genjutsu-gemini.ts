@@ -290,6 +290,8 @@ export async function genjutsuExecutionInputs(workflowId:string,videoFile:string
   return {workflowId,instanceType:'ultra',nodeInfoList:[
     {nodeId:'970',fieldName:'video',fieldValue:videoFile},
     {nodeId:'496',fieldName:'image',fieldValue:imageFile},
-    {nodeId:'910',fieldName:'value',fieldValue:prompt}
+    {nodeId:'910',fieldName:'value',fieldValue:prompt},
+    // Let Cloudent verify the 482 copy before cancelling this task.
+    {nodeId:'1044',fieldName:'stop',fieldValue:'false'}
   ]};
 }

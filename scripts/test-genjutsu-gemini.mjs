@@ -88,7 +88,8 @@ const mapped=await genjutsuExecutionInputs('2111111111111111111','rh/source.mp4'
 assert.deepEqual(mapped,{workflowId:'2111111111111111111',instanceType:'ultra',nodeInfoList:[
   {nodeId:'970',fieldName:'video',fieldValue:'rh/source.mp4'},
   {nodeId:'496',fieldName:'image',fieldValue:'rh/upscale.png'},
-  {nodeId:'910',fieldName:'value',fieldValue:prompt}
+  {nodeId:'910',fieldName:'value',fieldValue:prompt},
+  {nodeId:'1044',fieldName:'stop',fieldValue:'false'}
 ]});
 assert(!happy.calls.some(c=>c.url.includes('runninghub')));
 const callsBefore=happy.calls.length;await happy.run();assert.equal(happy.calls.length,callsBefore,'persisted prompt is reused');
