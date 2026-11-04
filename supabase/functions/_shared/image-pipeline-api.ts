@@ -1,4 +1,4 @@
-import {cancelPipelineMotion} from './image-pipeline-cancel.ts';
+import {cancelPipelineMotion,stopGenjutsuMotion} from './image-pipeline-cancel.ts';
 import {retryPipelineMotion,knownGenjutsu503} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
 import {PIPELINE_CHARACTERS} from './image-pipeline-characters.ts';
@@ -12,7 +12,7 @@ export async function uploadedObjectMatches(address:string,size:number){
   return r.ok&&Number.isSafeInteger(actual)&&actual===Number(size)&&actual>0;
 }
 export async function imagePipelineApi(d:any){
-  const {req,url,admin,user,json,signGet,objectConfig,signPut,removePaths,wake}=d;
+  const {req,url,admin,user,json,signGet,objectConfig,signPut,removePaths,wake,stopGenjutsu}=d;
   const action=url.searchParams.get('action'),resource=url.searchParams.get('resource');
   if(['face-swap-upload-ticket','face-swap-upload-complete','face-swap-upload'].includes(action||''))return json({error:'Atualize a página para usar o novo Face Swap Natural.'},409);
   if(!String(action||resource).startsWith('image-pipeline'))return null;
@@ -41,7 +41,7 @@ export async function imagePipelineApi(d:any){
             const p=j.production,m=p.meta||{};
             p.execution_confirmed=!!p.started_at&&!!p.runninghub_task_id&&String(m.provider_status_task_id)===String(p.runninghub_task_id);
           }
-          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
+          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,stopRequested:String(j.production.meta?.genjutsu_stop_requested_task_id||'')===String(j.production.runninghub_task_id||'')&&!!j.production.runninghub_task_id,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
           delete j.production.meta;
         }
       }
@@ -152,6 +152,9 @@ export async function imagePipelineApi(d:any){
     }
     const updated=await admin.from('face_swap_jobs').update({status:'waiting',meta:m,next_attempt_at:new Date().toISOString()}).eq('id',j.id).eq('status','cancelled').contains('meta',{stage:'upload'}).select('id');check(updated);
     await wake();return json({ok:true,job_id:j.id});
+  }
+  if(req.method==='PATCH'&&action==='image-pipeline-stop'){
+    const b=await req.json();const r=await stopGenjutsuMotion(admin,user.id,String(b.id||''),stopGenjutsu);return json(r,r.status||200);
   }
   if(req.method==='PATCH'&&action==='image-pipeline-cancel'){
     const b=await req.json();const r=await cancelPipelineMotion(admin,user.id,String(b.id||''));return json(r,r.status||200);
