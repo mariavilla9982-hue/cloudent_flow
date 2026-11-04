@@ -1,0 +1,15 @@
+# GENJUTSU — validação de filas e prompts, 2026-11-04
+
+Implementação: commit 51ae1b2ffd7f24c4e58c64d43ac7abd366aa82e9; worker motion-control 23 ACTIVE, production 24 e API38 preservados. Vercel dpl_Dxapk8YFf4oKnN6FMRVNPbhz3CL1, production, cloudent-flow.vercel.app. Os quatro arquivos index.html/genjutsu-ui.js/production-studio.css/sw.js retornaram HTTP200 e bytes iguais ao local.
+
+Preparação usa claim_genjutsu_prompt_job, limite configurável 1–4/padrão2, lease independente; vídeo usa claim_genjutsu_job e lock compartilhado com teto2, incluindo reserva incerta. READY_FOR_VIDEO persistido, wake após preparo/transição terminal/captura e cron de recuperação. 503/429 com backoff e seis retries; create ambíguo não é reenviado. Fluxo externo não fornece prova geral de exactly-once em timeout sem recibo: reserva incerta permanece protegida até reconciliação.
+
+Correção adicional desta auditoria: dois jobs 2b03858b e a9c5bd7f tinham promptcomplete sem task/intenção e attempt_count1/max1 após reparo antigo de prompt. Restauração CAS/escopo exato para0, sem apagar/regenerar prompt nem alterar tasks ativas. No momento final2 running/3 motion_waiting; não afirmar conclusão desses vídeos.
+
+Node910.value vem do prompt validado do mesmo job, com verificação SHA256 e instruções. Teste envia dois prompts distintos em dois jobs e confirma substituição distinta; hash/fingerprint/nó persistidos no recibo de despacho novo, sem texto nos logs. Validação ocorre antes da intenção remota para não reservar vaga por prompt inválido. Nodes970/496/1040/910/482 e grafo interno preservados, sem override1044. Não foi feito teste pago nem auditoria retrospectiva do payload remoto de todos os vídeos.
+
+Cards compactos com menu de três pontos, miniatura/preview, TAG, estado real, espera e execução separadas. Sem porcentagem artificial; progresso numérico só para evento de node da mesma task, identificado como etapa local. Concluído oculta barra expandida. Respeita reduced-motion; CSS mobile revisado, sem homologação visual autenticada nesta sessão.
+
+PASS: SQL em tabelas/funções temporárias com rollback (duas vagas, terceiro bloqueado, duas preparações independentes, falha/conclusão avançam, leases vencidas, reinício sem duplicar, reserva incerta). Suites Node: preparação, dispatch, UI/controller, display, Gemini, captura482, stale-capture, cache/PWA, readiness/auth/configuração, diagnósticos, pipeline-motion-retry, manual, motion-dispatch, labels e prompt-adoption. Ações calendário/trial/lote/download/retry/exclusão verificadas com mocks; preview/corridas/sessão também. Teste visual Playwright não executado: Chromium ausente e instalação falhou; navegador cloud na tela login. Não contar mobile/browserE2E como aprovado.
+
+Limitações: RunningHub pode falhar antes do node482 (incluindo QueueStop1044 anteriormente diagnosticado); preservado pedido de não mexer workflow. Create sem recibo exige evidência confiável para reconciliação, nunca liberar por idade. Cotas: DB209508019bytes; sem carga de mídiaSupabase ou migração destrutiva; egress oficial não medido. Avisos de segurança preexistentes fora do escopo registrados no Brain.

@@ -16,7 +16,7 @@ let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],moda
 const modalHost=node();Object.defineProperty(modalHost,'innerHTML',{set(value){if(modal){modal.isConnected=false;modal.mediaController?.abort();}this.html=value;if(!value){modal=null;return;}modal=node();modal.isConnected=true;modal.canvas=node();modal.close=node();modal.close.focus=()=>{};modal.querySelector=s=>s==='[data-gen-close]'?modal.close:modal.canvas;modal.querySelectorAll=()=>[modal.close];},get(){return this.html;}});modalHost.querySelector=()=>modal;
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
 const document={hidden:false,querySelector:s=>s.includes('modalHost')?modal:section,getElementById:id=>id==='production'?container:id==='modalHost'?modalHost:node(),createElement(tag){const el=node();el.addEventListener=()=>{};el.play=async()=>{};el.replaceChildren=child=>el.child=child;el.appendChild=child=>el.child=child;if(tag==='video'){el.duration=10;Object.defineProperty(el,'src',{get(){return el.savedSrc;},set(value){el.savedSrc=value;queueMicrotask(()=>el.onloadedmetadata?.());}});}return el;}};
-const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.supabase.co'},CloudentMotionControl:{mode:'genjutsu'}},document,currentPage:'production',cloudSession:{user:{id:'owner'},access_token:'session'},SUPABASE_KEY:'publishable',crypto,File,Blob,AbortSignal,AbortController,URL:{createObjectURL:()=> 'blob:source',revokeObjectURL(){}},Date,Number,String,Error,Promise,setTimeout,clearTimeout,setInterval:(fn,ms)=>{if(ms===10000)timer=fn;},queueMicrotask,
+const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.supabase.co'},CloudentMotionControl:{mode:'genjutsu'}},document,currentPage:'production',cloudSession:{user:{id:'owner'},access_token:'session'},SUPABASE_KEY:'publishable',crypto,File,Blob,AbortSignal,AbortController,URL:{createObjectURL:()=> 'blob:source',revokeObjectURL(){}},Date,Number,String,Error,Promise,setTimeout:(fn,ms)=>{const id=setTimeout(fn,ms);if(ms>=60000)id.unref();return id;},clearTimeout,setInterval:(fn,ms)=>{if(ms===10000)timer=fn;},queueMicrotask,
   extractFirstFrameBlob:async()=>{frameReads++;return new Blob(['frame'],{type:'image/jpeg'});},
   uploadFaceSwapPart:async(part,file)=>{uploadedFiles.push(file);uploads.push(part.path);if(part.path==='reference'&&failUpload){failUpload=false;throw Error('upload interrupted');}},
   closeModal:()=>{modalHost.innerHTML='';},cloudFetch:async(path,options)=>{
@@ -95,6 +95,20 @@ const pending=clickAction({preview:'existing'});const requests=calls.filter(x=>x
 await c.window.CloudentGenjutsu.refresh();await clickAction({preview:'existing'});assert.equal(calls.filter(x=>x.path.includes('image-pipeline-result')).length,requests);
 resolveResult({url:'https://b2.test/result.mp4'});await pending;c.closeModal();deferResult=false;
 previewFailure=true;await clickAction({preview:'existing'});assert.equal(modal.canvas.textContent,'Falha de prévia');c.closeModal();previewFailure=false;
+// Secondary menu actions preserve the production handlers and HTTP contracts.
+c.confirm=()=>true;let calendarId=null,trialId=null,bulkId=null;
+c.loadProductionData=async()=>{};
+c.openProductionScheduleModal=async id=>{calendarId=id;};
+c.openProductionTrialModal=async id=>{trialId=id;};
+c.sendProductionResultToBulk=async id=>{bulkId=id;};
+await clickAction({calendar:'existing'});assert.equal(calendarId,'existing');
+await clickAction({trial:'existing'});assert.equal(trialId,'existing');
+await clickAction({bulk:'existing'});assert.equal(bulkId,'existing');
+await clickAction({download:'existing'});assert(calls.some(x=>x.path.includes('image-pipeline-result')));
+await clickAction({retry:'existing'});assert(calls.some(x=>x.path.includes('action=image-pipeline-retry')&&x.body.id==='existing'));
+await clickAction({delete:'existing'});assert(calls.some(x=>x.path.includes('action=image-pipeline-job')&&x.body.id==='existing'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('genjutsu-more'));
+console.log('PASS secondary menu calendar, trial, bulk, download, retry and deletion handler contracts');
 choose('video',video);choose('frame',customFrame);
 c.cloudSession={user:{id:'another'},access_token:'new-session'};timer();await new Promise(setImmediate);c.window.CloudentGenjutsu.render(container);
 assert.equal(section.dataset.owner,'another');
