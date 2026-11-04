@@ -270,6 +270,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
     last_error:null,updated_at:now
   }).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]);
   if(updateError)throw updateError;
+  if(done&&isGenjutsuPreviewJob(job))await admin.rpc("wake_genjutsu_queue");
   return done;
 }
 
@@ -639,7 +640,7 @@ Deno.serve(async(req:Request)=>{
         else{const {error}=await admin.storage.from("production").upload(path,blob,{contentType:mime,upsert:true});if(error)throw error;}
         return {path,name:stage+"."+ext,mime,size:blob.size,task_id:job.runninghub_task_id};
       },
-      wakeMotion:async(key:string="motion_control")=>{await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker"+(key==="genjutsu"?"?workflow=genjutsu":""),{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
+      wakeMotion:async(key:string="motion_control")=>{if(key==="genjutsu")await admin.rpc("wake_genjutsu_queue");await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker"+(key==="genjutsu"?"?workflow=genjutsu":""),{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
     });
 
     let touched=0;
@@ -1165,6 +1166,7 @@ Deno.serve(async(req:Request)=>{
       worker_name:"production",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),
       last_error:null,last_jobs:touched,updated_at:new Date().toISOString()
     },{onConflict:"worker_name"});
+    await admin.rpc('wake_genjutsu_queue');
     return out({ok:true,configured:true,face_swap_configured:faceSwapConfigured,processed:touched,concurrency});
   }catch(e:any){
     const message=e instanceof Error?e.message:String(e);

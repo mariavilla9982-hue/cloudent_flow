@@ -115,6 +115,10 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
   if(state.status==='generating'&&!state.interactionId)fail('generation_uncertain','Análise anterior sem confirmação. Não repetir automaticamente.');
   if(state.status==='failed')fail('previous_failure','Análise interrompida. Revise a falha antes de tentar novamente.');
   if(['quota_waiting','provider_waiting'].includes(state.status)&&Date.parse(state.retryAt||'')>now())return {ready:false,state};
+  const backoff=async(attempts:number)=>{
+    if(attempts>6){await save({status:'failed',transientAttempts:attempts,retryAt:undefined});
+      fail('retry_exhausted','Gemini permaneceu indisponível após 6 retentativas. Arquivos e análise preservados.');}
+  };
   const headers={'x-goog-api-key':o.apiKey};
   const interactionHeaders={...headers,'Api-Revision':'2026-05-20'};
   const yieldIfNeeded=()=>{if(deadline-now()<5000)fail('pass_yield','Análise em andamento; continuar na próxima passagem.');};
@@ -124,15 +128,16 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
     try{response=await fetcher(url,{...init,redirect:'error',signal:AbortSignal.timeout(Math.max(1000,Math.min(25000,deadline-now()-1000)))});}
     catch{fail('network_error','Falha de comunicação com Gemini. O envio não será repetido nesta passagem.');}
     if(response.status===429){
+      const attempts=(state.transientAttempts||0)+1;await backoff(attempts);
       const value=response.headers.get('retry-after')||'';
       const seconds=/^\d+$/.test(value)?Number(value):Math.max(60,(Date.parse(value)-now())/1000||60);
-      await save({status:'quota_waiting',retryAt:new Date(now()+Math.max(60,Math.min(86400,seconds))*1000).toISOString()});
+      await save({status:'quota_waiting',transientAttempts:attempts,retryAt:new Date(now()+Math.max(60,Math.min(86400,seconds))*1000).toISOString()});
       fail('quota_waiting','Cota Gemini indisponível. Aguardar nova tentativa; sem fallback pago.');
     }
     // An explicit 503 is a failed request, unlike an ambiguous timeout after dispatch.
-    // Retry transient faults until a valid prompt, with capped spacing, not a count limit.
+    // Bound recoverable requests to six retries with capped exponential spacing.
     if([500,502,503,504].includes(response.status)){
-      const attempts=(state.transientAttempts||0)+1;
+      const attempts=(state.transientAttempts||0)+1;await backoff(attempts);
       const value=response.headers.get('retry-after')||'';
       const requested=/^\d+$/.test(value)?Number(value):(Date.parse(value)-now())/1000;
       const seconds=Math.min(3600,Math.max(60*2**(attempts-1),Number.isFinite(requested)?requested:0));
@@ -168,7 +173,7 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
         !data.steps?.some((step:any)=>step.type==='model_output')&&(state.processingRetryAttempts||0)<1;
       if(processingFault)await save({processingRetryAttempts:(state.processingRetryAttempts||0)+1});
       if(processingFault||data.status==='failed'&&codes.length&&codes.every((code:string)=>transient.includes(code))){
-        const attempts=(state.transientAttempts||0)+1;
+        const attempts=(state.transientAttempts||0)+1;await backoff(attempts);
         const quota=codes.includes('RESOURCE_EXHAUSTED');
         await save({status:quota?'quota_waiting':'provider_waiting',previousInteractionId:id,interactionId:undefined,
           providerFailureCodes:[...new Set(codes)] as string[],transientAttempts:attempts,

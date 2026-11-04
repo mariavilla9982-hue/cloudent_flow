@@ -4,10 +4,10 @@ const c=vm.createContext({self:{location:{origin:'https://studio.test'},addEvent
 vm.runInContext(fs.readFileSync('sw.js','utf8'),c);
 for(const html of ['<html><head><link rel="stylesheet" href="/production-studio.css?v=5"></head><body><script src="/image-pipeline-ui.js?v=12"></script><script src="/production-studio.js?v=5"></script><script src="/genjutsu-ui.js?v=4"></script></body></html>','<html><head></head><body><script src="/image-pipeline-ui.js?v=12"></script></body></html>']){
  const output=await (await c.injectCalendarPatch(new Response(html,{headers:{'content-type':'text/html'}}))).text();
- for(const name of ['production-studio.css?v=8','production-studio.js?v=6','genjutsu-ui.js?v=9'])assert(output.includes(name),name);
+ for(const name of ['production-studio.css?v=9','production-studio.js?v=6','genjutsu-ui.js?v=11'])assert(output.includes(name),name);
  assert(!output.includes('production-studio.css?v=5'));assert(!output.includes('production-studio.js?v=5'));
 }
-for(const name of ['production-studio.css?v=8','production-studio.js?v=6']){
+for(const name of ['production-studio.css?v=9','production-studio.js?v=6']){
  const request={url:'https://studio.test/'+name,method:'GET',destination:name.includes('.css')?'style':'script'};let promise;
  const event={request,respondWith:p=>promise=p};offline=false;events.get('fetch')(event);assert.equal(await (await promise).text(),'fresh asset');
  offline=true;events.get('fetch')(event);assert.equal(await (await promise).text(),'fresh asset','offline retains the last good studio asset');

@@ -1,3 +1,4 @@
+import {runGenjutsuPreparation} from '../_shared/genjutsu-preparation.ts';
 import {GENJUTSU_CONFIG,isGenjutsuJob,validateGenjutsuWorkflow,prepareGenjutsuStage,genjutsuInputs,genjutsuPromptWait,applyGenjutsuStatus} from '../_shared/genjutsu-stage.ts';
 import {MotionCreateError,motionDispatchFailurePatch} from "./motion-dispatch.ts";
 import {motionStorageHealth,requireMotionStorage,motionCheckObject,MotionStorageSafetyError,storageRPC} from "./motion-storage-protection.ts";
@@ -188,6 +189,17 @@ Deno.serve(async(req:Request)=>{
       return out({ok:true,enabled,configured,processed:0,message});
     }
 
+    if(genjutsu&&new URL(req.url).searchParams.get('phase')==='prepare'){
+      const result=await runGenjutsuPreparation({admin,key:Deno.env.get('GEMINI_API_KEY')||'',readBlob:async(job:any,path:string)=>{
+        if(job.storage_provider!=='r2')throw new Error('Genjutsu exige armazenamento principal.');
+        await requireMotionStorage(admin);
+        const object=await getObjectConfig(admin);if(!object)throw new Error('Armazenamento principal indisponível.');
+        if(!await storageRPC(admin,'motion_storage_record_read',{p_count:1}))throw new MotionStorageSafetyError('Orçamento preventivo de leituras atingido.');
+        return fetch(await signed(object,'GET',path,900),{signal:AbortSignal.timeout(30000)});
+      }});
+      return out(result);
+    }
+    if(genjutsu)await admin.rpc('wake_genjutsu_queue');
     const storageState=await motionStorageHealth(admin);
     if(!storageState?.allow_primary)return out({ok:true,enabled:true,configured:true,processed:0,storage_paused:true,message:"Fila preservada: aguardando armazenamento."});
     const [{count:productionActive},{count:faceActive}]=await Promise.all([
@@ -228,6 +240,7 @@ Deno.serve(async(req:Request)=>{
     }catch(e:any){
       const message=e instanceof Error?e.message:String(e);
       await admin.from("app_settings").upsert({key:genjutsu?"genjutsu_workflow":"motion_control_workflow",value:{...cfg,lastValidationError:message},updated_at:new Date().toISOString()},{onConflict:"key"});
+      if(genjutsu)return out({ok:true,enabled:true,configured:true,processed:0,provider_workflow_unknown:true,message:"Validação temporariamente indisponível. Fila preservada."});
       const {data:toFail}=await admin.from("production_jobs").select("id").eq("status","motion_waiting").contains("meta",{workflow_key:workflowKey}).limit(slots);
       const ids=(toFail||[]).map((x:any)=>x.id);
       if(ids.length)await admin.from("production_jobs").update({status:"failed",last_error:message,locked_at:null,locked_by:null,updated_at:new Date().toISOString()}).in("id",ids);
@@ -253,6 +266,7 @@ Deno.serve(async(req:Request)=>{
         if(hardwareError)throw hardwareError;
         job.meta=hardwareMeta;
         if(genjutsu){
+          if(job.meta?.genjutsu_prompt?.status!=='complete')throw new Error('Prompt ainda não está pronto para envio.');
           const readBlob=async(path:string)=>{
             if(job.storage_provider!=="r2")throw new Error("Genjutsu exige o armazenamento principal para preservar a cota Supabase.");
             const object=await getObjectConfig(admin);if(!object)throw new Error("Armazenamento principal indisponível.");
@@ -275,13 +289,13 @@ Deno.serve(async(req:Request)=>{
         if(existingError)throw existingError;
         if(existingTask?.runninghub_task_id)continue;
         await requireMotionStorage(admin);
+        const requestInputs=genjutsu?await genjutsuInputs(videoInput,frameInput,job):{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}]};
         if(job.meta?.image_pipeline_version===2||ultra){
-          const intent={...(job.meta||{}),pipeline_dispatch_intent:crypto.randomUUID(),pipeline_dispatch_uncertain:true};
+          const intent={...(job.meta||{}),...(genjutsu?{genjutsu_dispatch_prompt:{sha256:job.meta.genjutsu_prompt.promptSha256,fingerprint:job.meta.genjutsu_prompt.fingerprint,node_id:'910',field:'value',prepared_at:new Date().toISOString()}}:{}),pipeline_dispatch_intent:crypto.randomUUID(),pipeline_dispatch_uncertain:true};
           const {data:reserved,error}=await admin.from("production_jobs").update({meta:intent}).eq("id",job.id).eq("locked_by",workerId).is("runninghub_task_id",null).select("id");
           if(error||!reserved?.length)throw new Error("Reserva de execução Motion indisponível.");
           job.meta=intent;
         }
-        const requestInputs=genjutsu?await genjutsuInputs(videoInput,frameInput,job):{...executionOptions,workflowId:String(cfg.workflowId),nodeInfoList:[{nodeId:String(cfg.videoNodeId||"275"),fieldName:String(cfg.videoFieldName||"video"),fieldValue:videoInput},{nodeId:String(cfg.frameNodeId||"299"),fieldName:String(cfg.frameFieldName||"image"),fieldValue:frameInput}]};
         const created=await rhJson(base,apiKey,"/task/openapi/create",{...requestInputs,addMetadata:true});
         if(Number(created?.code)!==0||!created?.data?.taskId)throw new MotionCreateError(created);
         const taskId=String(created.data.taskId);
@@ -317,6 +331,7 @@ Deno.serve(async(req:Request)=>{
       }
     }
     await admin.from("worker_runtime").upsert({worker_name:workflowKey,last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,last_jobs:processed,updated_at:new Date().toISOString()},{onConflict:"worker_name"});
+    if(genjutsu&&processed)await admin.rpc('wake_genjutsu_queue');
     return out({ok:true,enabled:true,configured:true,processed,active,concurrency});
   }catch(e:any){
     const message=e instanceof Error?e.message:String(e);

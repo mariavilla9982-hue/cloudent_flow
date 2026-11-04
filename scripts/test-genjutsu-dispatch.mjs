@@ -8,10 +8,11 @@ import {MotionCreateError,motionDispatchFailurePatch} from '../supabase/function
 const source=stripTypeScriptTypes(fs.readFileSync('supabase/functions/cloudent-motion-control-worker/index.ts','utf8')).replace(/^import .*;\n/gm,'');
 async function run(options={}){
   let handler;const creates=[],events=[];
-  const row={id:'job',user_id:'owner',status:'motion_waiting',attempt_count:0,max_attempts:1,storage_provider:'r2',original_storage_path:'owner/original.mp4',frame_storage_path:'owner/upscale.png',original_file_name:'video.mp4',frame_file_name:'upscale.png',original_mime_type:'video/mp4',frame_mime_type:'image/png',meta:{workflow_key:'genjutsu',workflow_id:GENJUTSU_CONFIG.workflowId,image_pipeline_version:2,source_duration_seconds:10}};
+  const row={id:'job',user_id:'owner',status:'motion_waiting',attempt_count:0,max_attempts:1,storage_provider:'r2',original_storage_path:'owner/original.mp4',frame_storage_path:'owner/upscale.png',original_file_name:'video.mp4',frame_file_name:'upscale.png',original_mime_type:'video/mp4',frame_mime_type:'image/png',meta:{genjutsu_prompt:{status:'complete',prompt:options.prompt||'dynamic prompt',promptSha256:'job-hash',fingerprint:'job-fingerprint'},workflow_key:'genjutsu',workflow_id:GENJUTSU_CONFIG.workflowId,image_pipeline_version:2,source_duration_seconds:10}};
   const admin={rpc:async(name,args)=>{
     if(name==='get_cloudent_worker_secret')return {data:'worker-secret'};
     if(name==='get_cloudent_r2_config')return {data:{access_key_id:'b2-id',secret_access_key:'b2-secret',bucket:'bucket',endpoint:'https://s3.region.backblazeb2.com'}};
+    if(name==='wake_genjutsu_queue')return {data:true};
     assert.equal(name,'claim_genjutsu_job');assert.equal(args.p_limit,1);events.push('claim');
     Object.assign(row,{status:'uploading',attempt_count:1,locked_by:args.p_worker});return {data:[structuredClone(row)]};
   },from(table){let key,values,update=false,filters=[];const q={select(){return q;},eq(k,v){key=v;filters.push(x=>x[k]===v);return q;},is(k,v){filters.push(x=>(x[k]??null)===v);return q;},in(k,v){if(table==='production_jobs'&&k==='status'&&v.includes('queued'))q.count=options.expired?1:0;return q;},lt(){return q;},contains(){return q;},lte(){return q;},limit(){return q;},single(){return q.maybeSingle();},upsert(){return Promise.resolve({error:null});},update(value){values=value;update=true;return q;},async maybeSingle(){
@@ -45,12 +46,12 @@ async function run(options={}){
     validateGenjutsuWorkflow:async()=>{events.push('validate');return [];},GENJUTSU_CONFIG,genjutsuPromptWait,MotionCreateError,motionDispatchFailurePatch,
     prepareGenjutsuStage:async({job,key})=>{
       assert.equal(key,'gemini-secret');assert.equal(job.frame_storage_path,'owner/upscale.png');assert.equal(job.original_storage_path,'owner/original.mp4');events.push('llm');
-      job.meta.genjutsu_prompt={status:options.provider503?'provider_waiting':options.quota?'quota_waiting':options.uncertain?'generating':'complete',prompt:'dynamic prompt',retryAt:new Date(Date.now()+120000).toISOString()};
+      job.meta.genjutsu_prompt={status:options.provider503?'provider_waiting':options.quota?'quota_waiting':options.uncertain?'generating':'complete',prompt:options.prompt||'dynamic prompt',promptSha256:'job-hash',fingerprint:'job-fingerprint',retryAt:new Date(Date.now()+120000).toISOString()};
       if(options.provider503)throw new GenjutsuPromptError('provider_waiting','503');
       if(options.quota)throw new GenjutsuPromptError('quota_waiting','quota');
       if(options.uncertain)throw new GenjutsuPromptError('generation_uncertain','uncertain');
       return !options.pending;
-    },genjutsuInputs:async(video,image,job)=>({workflowId:GENJUTSU_CONFIG.workflowId,instanceType:'ultra',nodeInfoList:[{nodeId:'970',fieldName:'video',fieldValue:video},{nodeId:'496',fieldName:'image',fieldValue:image},{nodeId:'910',fieldName:'value',fieldValue:job.meta.genjutsu_prompt.prompt}]}),
+    },genjutsuInputs:async(video,image,job)=>{if(options.invalidPrompt)throw new Error('Invalid prompt hash');return ({workflowId:GENJUTSU_CONFIG.workflowId,instanceType:'ultra',nodeInfoList:[{nodeId:'970',fieldName:'video',fieldValue:video},{nodeId:'496',fieldName:'image',fieldValue:image},{nodeId:'910',fieldName:'value',fieldValue:job.meta.genjutsu_prompt.prompt}]});},
     applyGenjutsuStatus:async()=>{if(options.afterAttachFailure)throw Error('poll unavailable');events.push('status');}
   });
   vm.runInContext(source,context);vm.runInContext('decrypt=async()=>"provider-secret"',context);
@@ -71,3 +72,12 @@ const expired=await run({expired:true});assert.equal(expired.body.ok,true);asser
 const backgroundJob={meta:{genjutsu_prompt:{status:'generating',interactionId:'background-id'}}};
 for(const code of ['network_error','invalid_response','pass_yield'])assert.equal(genjutsuPromptWait(new GenjutsuPromptError(code,'wait'),backgroundJob),true);
 assert.equal(genjutsuPromptWait(new GenjutsuPromptError('network_error','wait'),{meta:{genjutsu_prompt:{status:'generating'}}}),false);
+
+const second=await run({prompt:'another video specific prompt'});
+assert.equal(second.creates[0].nodeInfoList[2].fieldValue,'another video specific prompt');
+assert.notEqual(second.creates[0].nodeInfoList[2].fieldValue,ready.creates[0].nodeInfoList[2].fieldValue);
+assert.equal(second.row.meta.genjutsu_dispatch_prompt.node_id,'910');
+assert.equal(second.row.meta.genjutsu_dispatch_prompt.sha256,'job-hash');
+const invalid=await run({invalidPrompt:true});assert.equal(invalid.creates.length,0);
+assert(!invalid.row.meta.pipeline_dispatch_intent);assert(!invalid.row.meta.pipeline_dispatch_uncertain);
+console.log('PASS per-video 910 replacement, dispatch hash evidence, invalid prompt rejected before reserving remote intent');

@@ -13,14 +13,14 @@ const iv=crypto.getRandomValues(new Uint8Array(12));
 const cryptoKey=await crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',new TextEncoder().encode(master)),{name:'AES-GCM'},false,['encrypt']);
 const encrypted=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},cryptoKey,new TextEncoder().encode(key)));
 const b64=bytes=>Buffer.from(bytes).toString('base64');
-let cached=null,writes=0,role='admin',active=true,providerCalls=[];
+let cached=null,queueConfig=null,writes=0,role='admin',active=true,providerCalls=[];
 const admin={
   auth:{getUser:async()=>({data:{user:{id:'owner'}}})},
   rpc:async name=>({data:name==='get_cloudent_worker_secret'?master:active}),
-  from(table){let value,op='read';const q={select(){return q;},eq(){return q;},maybeSingle(){return q.then(x=>x);},
+  from(table){let value,op='read',settingKey;const q={select(){return q;},eq(k,v){if(k==='key')settingKey=v;return q;},maybeSingle(){return q.then(x=>x);},
     upsert(x){value=x;op='write';return q;},then(resolve){
-      if(op==='write'){assert.equal(table,'app_settings');assert.equal(value.key,'genjutsu_readiness');cached=value.value;writes++;return Promise.resolve({data:null}).then(resolve);}
-      const data=table==='integrations'?{enabled:true,config:{apiKeyCipher:b64(encrypted),apiKeyIv:b64(iv)}}:table==='app_members'?{role,enabled:true}:cached?{value:cached}:null;
+      if(op==='write'){assert.equal(table,'app_settings');assert(['genjutsu_readiness','genjutsu_queue_config'].includes(value.key));if(value.key==='genjutsu_readiness')cached=value.value;else queueConfig=value.value;writes++;return Promise.resolve({data:null}).then(resolve);}
+      const data=table==='integrations'?{enabled:true,config:{apiKeyCipher:b64(encrypted),apiKeyIv:b64(iv)}}:table==='app_members'?{role,enabled:true}:settingKey==='genjutsu_queue_config'?(queueConfig?{value:queueConfig}:null):cached?{value:cached}:null;
       return Promise.resolve({data}).then(resolve);
     }};return q;}
 };
@@ -51,3 +51,9 @@ assert.equal((await genjutsuApi(post({'x-cloudent-worker-secret':master},{action
 for(const secret of [master,key,options.apiKey])assert(!JSON.stringify(data).includes(secret));
 assert.equal((await genjutsuApi(new Request('https://example',{method:'OPTIONS'}),env)).status,204);
 console.log('PASS internal secret/admin+active-session auth, X restriction, bounded cache, no generation route or leaked secrets');
+
+for(const value of [0,5,1.5,'2'])assert.equal((await genjutsuApi(post({'x-cloudent-worker-secret':master},{action:'prompt-concurrency',value}),env)).status,400);
+const changed=await genjutsuApi(post({'x-cloudent-worker-secret':master},{action:'prompt-concurrency',value:3}),env);assert.equal(changed.status,200);assert.equal(queueConfig.prompt_concurrency,3);
+const queueStatus=await (await genjutsuApi(new Request(env.supabaseUrl+'/functions/v1/cloudent-genjutsu',{headers:{'x-cloudent-worker-secret':master}}),env)).json();assert.equal(queueStatus.queue.promptConcurrency,3);assert.equal(queueStatus.queue.videoConcurrency,2);
+role='x_user';assert.equal((await genjutsuApi(post({Authorization:'Bearer '+token},{action:'prompt-concurrency',value:4}),env)).status,403);
+console.log('PASS admin-only bounded prompt concurrency setting and independent fixed video concurrency');

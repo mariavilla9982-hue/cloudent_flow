@@ -1,3 +1,4 @@
+import {genjutsuDisplay} from './genjutsu-display.ts';
 import {cancelPipelineMotion,stopGenjutsuMotion} from './image-pipeline-cancel.ts';
 import {retryPipelineMotion,knownGenjutsu503} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
@@ -35,13 +36,13 @@ export async function imagePipelineApi(d:any){
     const rows=check(await query.order('created_at',{ascending:false}).limit(100));
     for(const j of rows||[]){
       if(j.production_job_id){
-        j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
+        j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds,created_at,updated_at').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
         if(j.production){
           if(j.meta?.video_workflow?.key==='genjutsu'){
             const p=j.production,m=p.meta||{};
             p.execution_confirmed=!!p.started_at&&!!p.runninghub_task_id&&String(m.provider_status_task_id)===String(p.runninghub_task_id);
           }
-          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,stopRequested:String(j.production.meta?.genjutsu_stop_requested_task_id||'')===String(j.production.runninghub_task_id||'')&&!!j.production.runninghub_task_id,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
+          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={display:genjutsuDisplay(j.production,j),phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,stopRequested:String(j.production.meta?.genjutsu_stop_requested_task_id||'')===String(j.production.runninghub_task_id||'')&&!!j.production.runninghub_task_id,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
           delete j.production.meta;
         }
       }

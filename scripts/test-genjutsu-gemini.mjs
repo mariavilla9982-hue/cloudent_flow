@@ -142,7 +142,7 @@ overloaded.clock=current+61000;overloaded.config.unavailable=false;
 assert.equal((await overloaded.run()).ready,true);
 assert.equal(count(overloaded,'/upload/v1beta/files'),2);
 const exhausted=harness({unavailable:true});let retryClock=current;
-for(let i=1;i<=12;i++){
+for(let i=1;i<=6;i++){
   exhausted.clock=retryClock;
   await rejects(()=>exhausted.run(),'provider_waiting');
   assert.equal(exhausted.state.transientAttempts,i);
@@ -150,14 +150,14 @@ for(let i=1;i<=12;i++){
   retryClock=Date.parse(exhausted.state.retryAt)+1;exhausted.clock=retryClock;
 }
 assert.equal(exhausted.state.status,'provider_waiting');
-assert.equal(exhausted.state.transientAttempts,12);
-assert.equal(count(exhausted,'/v1beta/interactions'),12);
+assert.equal(exhausted.state.transientAttempts,6);
+assert.equal(count(exhausted,'/v1beta/interactions'),6);
 exhausted.config.unavailable=false;assert.equal((await exhausted.run()).ready,true);
 assert.equal(count(exhausted,'/upload/v1beta/files'),2);
 for(const status of [500,502,504]){const h=harness({modelStatus:status});await rejects(()=>h.run(),'provider_waiting');assert.deepEqual(h.state.providerFailureCodes,['HTTP_'+status]);}
 const preflight503=harness({modelStatus:503});await rejects(()=>preflight503.run(),'provider_waiting');
 assert.equal(count(preflight503,'/v1beta/interactions'),0);
-console.log('PASS explicit 503 backoff, due time, media reuse, unlimited transient retries and preflight overload');
+console.log('PASS explicit 503 backoff, due time, media reuse, six bounded transient retries and preflight overload');
 
 // One background analysis survives worker boundaries; retrieval failures never create a second one.
 const asyncJob=harness({response:{id:'background-1',model:GENJUTSU_MODEL,status:'in_progress'}});
@@ -200,8 +200,8 @@ const retryCalls=internal.calls.length;await internal.run();assert.equal(interna
 internal.clock=Date.parse(internal.state.retryAt)+1;internal.config.response={id:'internal-2',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]};
 assert.equal((await internal.run()).ready,true);assert.equal(count(internal,'/upload/v1beta/files'),2);assert.equal(count(internal,'/v1beta/interactions'),2);
 const exhaustedInternal=harness({response:{id:'internal-final',status:'failed',errors:[{code:'INTERNAL'}]}});
-for(let i=0;i<12;i++){await rejects(()=>exhaustedInternal.run(),'provider_waiting');exhaustedInternal.clock=Date.parse(exhaustedInternal.state.retryAt)+1;}
-assert.equal(exhaustedInternal.state.status,'provider_waiting');assert.equal(exhaustedInternal.state.transientAttempts,12);
+for(let i=0;i<6;i++){await rejects(()=>exhaustedInternal.run(),'provider_waiting');exhaustedInternal.clock=Date.parse(exhaustedInternal.state.retryAt)+1;}
+assert.equal(exhaustedInternal.state.status,'provider_waiting');assert.equal(exhaustedInternal.state.transientAttempts,6);
 exhaustedInternal.config.response={id:'finally-ready',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]};
 assert.equal((await exhaustedInternal.run()).ready,true);
 const quotaInternal=harness({response:{id:'quota',status:'failed',errors:[{code:'RESOURCE_EXHAUSTED'}]}});
@@ -210,7 +210,7 @@ for(const errors of [[],[{code:'INVALID_ARGUMENT'}],[{code:'INTERNAL'},{code:'SA
  const terminal=harness({response:{id:'terminal',status:'failed',errors}});
  await rejects(()=>terminal.run(),'incomplete_response');assert.equal(terminal.state.status,'failed');assert.equal(terminal.state.retryAt,undefined);
 }
-console.log('PASS HTTP200 terminal INTERNAL recovery, same media/new independent analysis, unlimited transient retry count and refusal isolation');
+console.log('PASS HTTP200 terminal INTERNAL recovery, same media/new independent analysis, bounded transient retry count and refusal isolation');
 // Exhausting a worker pass before POST leaves preparation resumable, never uncertain.
 const budget=harness();let budgetState;
 await rejects(()=>budget.run(undefined,{checkpoint:async state=>{budgetState=structuredClone(state);if(state.status==='generating')budget.clock=current+45000;}}),'pass_yield');
@@ -219,7 +219,7 @@ assert.equal(budgetState.status,'preparing');assert.equal(count(budget,'/v1beta/
 const {prepareGenjutsuStage,GENJUTSU_CONFIG}=await import('../supabase/functions/_shared/genjutsu-stage.ts');
 const savedFetch=globalThis.fetch;const stageJob={id:'job',user_id:'owner',original_storage_path:'owner/video',frame_storage_path:'owner/image',meta:{workflow_key:'genjutsu',workflow_id:GENJUTSU_CONFIG.workflowId,source_duration_seconds:10,genjutsu_prompt:started.state}};
 let stageWrites=0;
-const stageAdmin={from(){const q={update(value){stageWrites++;return q;},eq(){return q;},is(){return q;},select(){return q;},maybeSingle:async()=>({data:{id:'job'}})};return q;}};
+const stageAdmin={from(){const q={update(value){stageWrites++;return q;},eq(){return q;},is(){return q;},in(){return q;},select(){return q;},maybeSingle:async()=>({data:{id:'job'}})};return q;}};
 try{
  globalThis.fetch=async url=>{assert(String(url).endsWith('/interactions/background-1'));return Response.json({id:'background-1',status:'completed',steps:[{type:'model_output',content:[{type:'text',text:prompt}]}]});};
  assert.equal(await prepareGenjutsuStage({admin:stageAdmin,job:stageJob,workerId:'owner-lease',key:'key',readBlob:()=>{throw Error('must reuse uploaded files');},now:()=>current+31000}),true);
@@ -264,3 +264,7 @@ processingFault.clock=Date.parse(processingFault.state.retryAt)+1;
 await rejects(()=>processingFault.run(),'incomplete_response');assert.equal(processingFault.state.status,'failed');
 assert.deepEqual(processingFault.state.providerFailureCodes,['INVALID_ARGUMENT']);
 console.log('PASS bounded same-media prompt repair, successful correction, hard-stop after two repairs and one exact generic processing retry');
+
+const hardLimit=harness({unavailable:true});for(let i=0;i<6;i++){await rejects(()=>hardLimit.run(),'provider_waiting');hardLimit.clock=Date.parse(hardLimit.state.retryAt)+1;}
+await rejects(()=>hardLimit.run(),'retry_exhausted');assert.equal(hardLimit.state.status,'failed');assert.equal(count(hardLimit,'/upload/v1beta/files'),2);
+console.log('PASS persistent 503 stops after six retries and preserves uploaded references');

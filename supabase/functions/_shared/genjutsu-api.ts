@@ -32,8 +32,18 @@ export async function genjutsuApi(req:Request,{admin,apiKey,supabaseUrl,fetcher=
     }
     const cached=await admin.from('app_settings').select('value').eq('key','genjutsu_readiness').maybeSingle();
     if(cached.error)return json({error:'status_unavailable'},503);
-    if(req.method==='GET')return json({ok:true,active:true,readiness:cached.data?.value??null,workflowId:GENJUTSU_WORKFLOW_ID,model:GENJUTSU_MODEL});
+    const config=await admin.from('app_settings').select('value').eq('key','genjutsu_queue_config').maybeSingle();
+    if(config.error)return json({error:'queue_config_unavailable'},503);
+    const promptConcurrency=Math.max(1,Math.min(4,Number(config.data?.value?.prompt_concurrency)||2));
+    if(req.method==='GET')return json({ok:true,active:true,readiness:cached.data?.value??null,workflowId:GENJUTSU_WORKFLOW_ID,model:GENJUTSU_MODEL,queue:{promptConcurrency,videoConcurrency:2}});
     let body:any;try{body=await req.json();}catch{return json({error:'invalid_request'},400);}
+    if(body?.action==='prompt-concurrency'){
+      if(!Number.isInteger(body.value)||body.value<1||body.value>4)return json({error:'invalid_prompt_concurrency'},400);
+      const saved=await admin.from('app_settings').upsert({key:'genjutsu_queue_config',value:{...(config.data?.value||{}),prompt_concurrency:body.value},updated_at:new Date(now()).toISOString()},{onConflict:'key'});
+      if(saved.error)return json({error:'queue_config_save_failed'},503);
+      await admin.rpc('wake_genjutsu_queue');
+      return json({ok:true,queue:{promptConcurrency:body.value,videoConcurrency:2}});
+    }
     if(body?.action!=='preflight')return json({error:'operation_not_available'},409);
     const previous=cached.data?.value;
     if(previous?.checkedAt&&Date.parse(previous.checkedAt)>now()-60000)

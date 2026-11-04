@@ -27,9 +27,9 @@ export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=
   if(['quota_waiting','provider_waiting'].includes(previous?.status)&&Date.parse(previous.retryAt||'')>now())return false;
   if(previous?.status==='generating'&&!previous.interactionId)throw new GenjutsuPromptError('generation_uncertain','Análise sem confirmação; não será repetida automaticamente.');
   const checkpoint=async(state:any)=>{
-    const meta={...job.meta,genjutsu_prompt:state};
+    const meta={...job.meta,genjutsu_prompt:state,preparation_status:state.status==='complete'?'READY_FOR_VIDEO':'PREPARING',...(state.status==='complete'?{prompt_completed_at:job.meta.prompt_completed_at||new Date(now()).toISOString()}:{} )};
     const {data,error}=await admin.from('production_jobs').update({meta,locked_at:new Date(now()).toISOString(),updated_at:new Date(now()).toISOString()})
-      .eq('id',job.id).eq('user_id',job.user_id).eq('locked_by',workerId).is('runninghub_task_id',null).select('id').maybeSingle();
+      .eq('id',job.id).eq('user_id',job.user_id).eq('locked_by',workerId).in('status',['motion_waiting','uploading']).is('runninghub_task_id',null).select('id').maybeSingle();
     if(error||!data)throw new Error('Genjutsu: reserva da análise perdida.');job.meta=meta;
   };
   const read=async(path:string,mime:string,limit:number)=>{
@@ -76,11 +76,14 @@ export async function applyGenjutsuStatus(admin:any,job:any,state:any){
       safeGenjutsuError(event?.error||reason?.exception_message||reason?.node_name||state.error);
 
     if(!userStopped){
+      patch.meta.pipeline_dispatch_uncertain=false;
       patch.status='failed';patch.last_error=detail?'Genjutsu: '+(nodeId?'node '+nodeId+' · ':'')+detail:'Genjutsu: o provedor encerrou a geração sem vídeo capturado.';
       patch.meta.genjutsu_provider_failure={task_id:job.runninghub_task_id,code:safeGenjutsuError(state.raw?.errorCode||''),node_id:nodeId||null,message:detail||null,checked_at:new Date().toISOString()};
       patch.completed_at=new Date().toISOString();
     }
   }
   const {data,error}=await admin.from('production_jobs').update(patch).eq('id',job.id).eq('user_id',job.user_id).eq('runninghub_task_id',job.runninghub_task_id).eq('updated_at',job.updated_at).in('status',['queued','running']).select('*').maybeSingle();
-  if(error)throw error;return data;
+  if(error)throw error;
+  if(data&&['failed','cancelled'].includes(patch.status))await admin.rpc('wake_genjutsu_queue');
+  return data;
 }

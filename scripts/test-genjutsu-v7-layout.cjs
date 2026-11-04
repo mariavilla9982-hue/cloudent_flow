@@ -27,19 +27,20 @@ const image='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.
  assert.equal(await page.locator('.genjutsu-upload-workspace').count(),1);assert.equal(await page.locator('.studio-production-result').count(),0);assert.equal(await page.locator('.production-queue-card').count(),1);assert.equal(await page.locator('[data-gen-job]').count(),3);assert.equal(await page.locator('[data-gen-job][hidden]').count(),0,'V7 decorator cannot hide Genjutsu jobs');
  assert.equal(await page.locator('[data-gen-modal]').count(),0);assert.equal(await page.evaluate(()=>testCalls.filter(c=>c.path.includes('image-pipeline-result')).length),0);
  assert.equal(await page.locator('[data-gen-job=failed] [data-delete]').count(),1);
- assert.equal(await page.locator('[data-gen-job=waiting] .production-progress.animated').count(),1);
+ assert.equal(await page.locator('[data-gen-job=waiting] .production-progress.animated').count(),0);
  assert((await page.locator('[data-gen-job=waiting] .production-status').textContent()).includes('Gemini'));
  assert((await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent()).includes('aguardando início'));
  await page.evaluate(()=>{Object.assign(fixtureJobs[1].production,{status:'running',execution_confirmed:true,started_at:new Date(Date.now()-65000).toISOString()});return CloudentGenjutsu.refresh();});
  const clock=await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent();await page.waitForFunction(old=>document.querySelector('[data-gen-job=waiting] .genjutsu-elapsed').textContent!==old,clock,{timeout:5000});
  await page.evaluate(()=>{Object.assign(fixtureJobs[1].production,{status:'ready',completed_at:new Date().toISOString()});return CloudentGenjutsu.refresh();});
- const stopped=await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent();await page.waitForTimeout(1100);assert.equal(await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').textContent(),stopped);
+ assert.equal(await page.locator('[data-gen-job=waiting] .production-progress').count(),0);
+ assert.equal(await page.locator('[data-gen-job=waiting] .genjutsu-elapsed').count(),0);
  assert.equal(await page.locator('[data-gen-job=ready] [data-prompt]').count(),1);
  assert.equal(await page.locator('[data-gen-jobs] video').count(),0,'queue uses thumbnails, never full size players');
  for(const width of [360,390,430,768,1440]){
   await page.setViewportSize({width,height:900});await page.waitForTimeout(80);
   const dims=await page.locator('#production').evaluate(n=>({width:n.clientWidth,scroll:n.scrollWidth}));assert(dims.scroll<=dims.width+2,'overflow at '+width+': '+JSON.stringify(dims));
-  const buttons=await page.locator('[data-gen-jobs] .production-job-actions button').evaluateAll(ns=>ns.map(n=>n.getBoundingClientRect().height));assert(buttons.every(h=>h>=44),'touch targets at '+width+': '+buttons);
+  const buttons=await page.locator('[data-gen-jobs] .production-job-actions button').evaluateAll(ns=>ns.filter(n=>n.getClientRects().length).map(n=>n.getBoundingClientRect().height));assert(buttons.every(h=>h>=44),'touch targets at '+width+': '+buttons);
   const drops=await page.locator('[data-gen-drop]').evaluateAll(ns=>ns.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height})));assert(drops.every(d=>d.h<=342&&d.w>90),JSON.stringify({width,drops}));
   const thumbs=await page.locator('[data-job-media]').evaluateAll(ns=>ns.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height})));await page.screenshot({path:'/tmp/genjutsu-check.png',fullPage:true});assert(thumbs.every(t=>t.w<=50&&t.h<=60),JSON.stringify({width,thumbs}));
   await page.screenshot({path:'/tmp/genjutsu-v7-'+width+'.png',fullPage:true});
@@ -48,9 +49,9 @@ const image='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.
  await page.locator('[data-gen-drop="video"] input').setInputFiles({name:'reference.mp4',mimeType:'video/mp4',buffer:fs.readFileSync('/tmp/genjutsu-fixture.mp4')});
  await page.locator('[data-gen-drop="frame"] input').setInputFiles({name:'custom.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')});
  assert.equal(await page.locator('[data-gen-drop].has-preview').count(),2);await page.locator('[data-clear="frame"]').click();assert.equal(await page.locator('[data-gen-drop].has-preview').count(),1);
- await page.locator('[data-gen-jobs] [data-frame="ready"]').click();await page.waitForSelector('[data-gen-modal] img');
+ await page.locator('[data-gen-job=ready] .genjutsu-more summary').click();await page.locator('[data-gen-jobs] [data-frame="ready"]').click();await page.waitForSelector('[data-gen-modal] img');
  assert.equal(await page.locator('[data-gen-modal] img').getAttribute('src'),image);
- await page.locator('[data-gen-close]').click();await page.locator('[data-gen-jobs] [data-original="ready"]').click();await page.waitForSelector('[data-gen-modal] video');
+ await page.locator('[data-gen-close]').click();await page.locator('[data-gen-job=ready] .genjutsu-more summary').click();await page.locator('[data-gen-jobs] [data-original="ready"]').click();await page.waitForSelector('[data-gen-modal] video');
  assert((await page.locator('[data-gen-modal] video').getAttribute('src')).includes('fixture.mp4'));
  await page.locator('[data-gen-close]').click();await page.locator('[data-gen-jobs] .production-media-cell[data-preview="ready"]').click();await page.waitForSelector('[data-gen-modal] video');
  await page.locator('[data-gen-modal] video').evaluate(v=>v.dataset.identity='preserved');

@@ -198,3 +198,34 @@
 @media(max-width:700px){#production [data-genjutsu-root] .production-job-actions{gap:8px}#production.studio-page.studio-page [data-genjutsu-root] .production-job-actions .btn{flex:1 1 auto!important}}
 #production [data-genjutsu-root] .production-media-preview-shell{position:relative}
 #production [data-genjutsu-root] .production-media-preview-shell::after{content:'▶';position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#fff;text-shadow:0 1px 5px #000;background:#0002;pointer-events:none}
+
+/* GENJUTSU only: compact result cards and truthful indeterminate activity. */
+#production [data-genjutsu-root] .genjutsu-card{position:relative;overflow:visible;align-items:center}
+#production [data-genjutsu-root] .genjutsu-card .production-job-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;justify-content:flex-end}
+#production [data-genjutsu-root] .genjutsu-card.is-complete{padding-top:10px;padding-bottom:10px}
+#production [data-genjutsu-root] .genjutsu-card .production-job-state{min-width:0}
+#production [data-genjutsu-root] .genjutsu-more{position:relative;flex:0 0 44px}
+#production [data-genjutsu-root] .genjutsu-more>summary{list-style:none;display:grid;place-items:center;cursor:pointer;width:44px;height:44px;border:1px solid #37373d;border-radius:12px;font-size:26px;color:#e8e8eb;background:#101013;user-select:none}
+#production [data-genjutsu-root] .genjutsu-more>summary::-webkit-details-marker{display:none}
+#production [data-genjutsu-root] .genjutsu-more[open]>summary{background:#27272d}
+#production [data-genjutsu-root] .genjutsu-menu{position:absolute;right:0;top:49px;width:230px;max-width:calc(100vw - 48px);z-index:40;display:grid;gap:3px;padding:6px;border:1px solid #414149;border-radius:14px;background:#151518;box-shadow:0 14px 40px #0009}
+#production.studio-page.studio-page [data-genjutsu-root] .genjutsu-menu .btn{width:100%!important;display:block!important;text-align:left;min-height:44px!important;border:0!important;background:transparent!important;border-radius:8px!important;margin:0!important}
+#production.studio-page.studio-page [data-genjutsu-root] .genjutsu-menu .btn:hover{background:#ffffff12!important}
+#production [data-genjutsu-root] .genjutsu-track{height:5px;background:#ffffff0c;overflow:hidden;border-radius:5px;--gen-accent:#8db5ce}
+#production [data-genjutsu-root] [data-gen-state="prompt"] .genjutsu-track{--gen-accent:#b6a1d9}
+#production [data-genjutsu-root] [data-gen-state="recovering"] .genjutsu-track{--gen-accent:#c6b37d}
+#production [data-genjutsu-root] .genjutsu-track i{display:block;height:100%;background:var(--gen-accent);border-radius:inherit;transition:width .4s ease;animation:none}
+#production [data-genjutsu-root] .genjutsu-track.indeterminate i{width:35%;min-width:0;animation:genjutsu-travel 1.7s ease-in-out infinite}
+#production [data-genjutsu-root] .genjutsu-track.is-waiting i{width:100%;opacity:.13;background:#aaa;animation:none}
+#production [data-genjutsu-root] .genjutsu-activity{display:inline-block;width:6px;height:6px;background:#a8bdd1;border-radius:50%;margin-right:7px;animation:genjutsu-pulse 1.5s ease-in-out infinite}
+#production [data-genjutsu-root] .genjutsu-times{display:flex;gap:12px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+#production [data-genjutsu-root] .genjutsu-wait,#production [data-genjutsu-root] .genjutsu-node-progress{font-size:10px;color:#93939f;margin-top:5px;display:block}
+#production [data-genjutsu-root] [data-gen-state="complete"] .production-status{color:#9fbea9}
+#production [data-genjutsu-root] [data-gen-state="recovering"] .production-status{color:#c6b37d}
+#production [data-genjutsu-root] .production-queue{overflow:visible}
+@keyframes genjutsu-travel{0%{transform:translateX(-110%)}100%{transform:translateX(390%)}}
+@keyframes genjutsu-pulse{50%{opacity:.3}}
+@media(prefers-reduced-motion:reduce){#production [data-genjutsu-root] .genjutsu-track.indeterminate i,#production [data-genjutsu-root] .genjutsu-activity{animation:none}}
+@media(max-width:700px){#production [data-genjutsu-root] .genjutsu-card{grid-template-columns:24px minmax(0,1fr) auto!important;gap:10px!important}#production [data-genjutsu-root] .genjutsu-card .production-job-state{grid-column:2 / -1!important}#production [data-genjutsu-root] .genjutsu-card .production-job-actions{grid-column:3!important;grid-row:1!important;width:auto!important;min-width:44px}#production.studio-page.studio-page [data-genjutsu-root] .genjutsu-card .studio-select-result{min-width:0!important;padding:8px!important;font-size:10px!important}#production [data-genjutsu-root] .genjutsu-card.is-complete .production-job-state{padding-bottom:0}}
+
+#production [data-genjutsu-root] .genjutsu-limit{display:inline-flex;align-items:center;gap:12px;margin:12px 16px 12px 0;font-size:12px;color:#b4b4be}#production [data-genjutsu-root] .genjutsu-limit select{width:70px;min-height:44px;background:#111;color:#eee;border:1px solid #414149;border-radius:10px;padding:8px}

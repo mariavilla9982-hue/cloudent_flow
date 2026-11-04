@@ -15,7 +15,7 @@ const job={id:'job',user_id:'owner',status:'running',runninghub_task_id:'task',m
 function adminFor(options={}){
  let row={...job,updated_at:'2026-11-03T00:00:00Z',locked_by:options.lease||null,locked_at:options.lockedAt||null,meta:{...job.meta,genjutsu_execution_error:options.noEvent?null:event,...(options.output?{motion_preview_file:{node_id:'482',task_id:'task'}}:{})}};
  let writes=0;
- const admin={from(){let patch,filters=[];const q={select(){return q;},eq(k,v){filters.push(r=>r[k]===v);return q;},in(k,v){filters.push(r=>v.includes(r[k]));return q;},update(p){patch=p;return q;},async maybeSingle(){
+ const admin={rpc:async name=>{assert.equal(name,'wake_genjutsu_queue');return {data:true};},from(){let patch,filters=[];const q={select(){return q;},eq(k,v){filters.push(r=>r[k]===v);return q;},in(k,v){filters.push(r=>v.includes(r[k]));return q;},update(p){patch=p;return q;},async maybeSingle(){
    if(patch){if(options.concurrent)row={...row,updated_at:'newer',meta:{...row.meta,motion_preview_file:{node_id:'482',task_id:'task'}}};if(!filters.every(f=>f(row)))return {data:null};writes++;Object.assign(row,patch);}
    return {data:structuredClone(row)};
  }};return q;}};
