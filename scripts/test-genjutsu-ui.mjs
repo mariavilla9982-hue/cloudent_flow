@@ -12,6 +12,7 @@ const mediaBoxes={};
 for(const kind of ['original','frame']){const placeholder=node();placeholder.replaceWith=media=>mediaBoxes[kind].media=media;mediaBoxes[kind]={querySelector:()=>placeholder};}
 const target={dataset:{jobMedia:'existing'},isConnected:true,querySelector:s=>s==='.genjutsu-preview-placeholder'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
 nodes.get('[data-gen-jobs]').querySelectorAll=()=>[target];
+let recoveryJob=null;
 let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],modal=null,resolveResult=null,deferResult=false,previewFailure=false;
 const modalHost=node();Object.defineProperty(modalHost,'innerHTML',{set(value){if(modal){modal.isConnected=false;modal.mediaController?.abort();}this.html=value;if(!value){modal=null;return;}modal=node();modal.isConnected=true;modal.canvas=node();modal.close=node();modal.close.focus=()=>{};modal.querySelector=s=>s==='[data-gen-close]'?modal.close:modal.canvas;modal.querySelectorAll=()=>[modal.close];},get(){return this.html;}});modalHost.querySelector=()=>modal;
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
@@ -22,7 +23,7 @@ const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.s
   closeModal:()=>{modalHost.innerHTML='';},cloudFetch:async(path,options)=>{
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
     if(path.includes('resource=image-pipeline-characters')){assert(path.includes('metadata=1'));return {characters:[{id:'jujuh',name:'Jujuh'}]};}
-    if(path.includes('resource=image-pipeline&'))return {jobs:[{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
+    if(path.includes('resource=image-pipeline&'))return {jobs:[...(recoveryJob?[recoveryJob]:[]),{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
     if(path.includes('resource=image-pipeline-prompt'))return {prompt:'subject_definitions: <script>alert(1)</script>'};
     if(path.includes('resource=image-pipeline-result')){if(previewFailure)throw Error('Falha de prévia');return deferResult?new Promise(resolve=>{resolveResult=resolve;}):{url:'https://b2.test/result.mp4'};}
     if(path.includes('resource=image-pipeline-preview'))return {url:path.includes('kind=original')?'https://b2.test/original.mp4':'https://b2.test/frame.webp'};
@@ -118,3 +119,14 @@ assert.equal(c.window.CloudentGenjutsu.busy,false);
 await new Promise(setImmediate);const readsBeforeHidden=calls.length;document.hidden=true;timer();await new Promise(setImmediate);assert.equal(calls.length,readsBeforeHidden,'hidden tab does not poll');
 document.hidden=false;visibilityChanged();await new Promise(setImmediate);assert(calls.length>readsBeforeHidden,'returning to tab refreshes immediately');
 console.log('PASS Genjutsu UI: metadata-only models, isolated queue, safe text, result while cancel pending, required model, duration/970 inputs, stable retry ID/frame, session reset, click-only modal, close race, duplicate actions and preview error');
+
+// A persisted retry must identify the prompt and its deadline; running removes it.
+recoveryJob={id:'retrying',status:'waiting',meta:{stage:'control_motion',video_workflow:{key:'genjutsu'}},production:{status:'motion_waiting',genjutsu:{display:{key:'recovering',label:'Recuperação · nova tentativa agendada',activity:false,retryAt:'2026-11-05T01:00:00Z'}}}};
+c.cloudSession={user:{id:'owner'},access_token:'session'};c.currentPage='production';document.hidden=false;
+await c.window.CloudentGenjutsu.refresh();
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('Prompt · aguardando nova tentativa automática'));
+assert(nodes.get('[data-gen-jobs]').innerHTML.includes('data-gen-retry="1793840400000"'));
+recoveryJob.production.status='running';recoveryJob.production.genjutsu.display={key:'running',label:'Gerando vídeo',activity:true};
+await c.window.CloudentGenjutsu.refresh();
+assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('data-gen-retry='));
+console.log('PASS prompt retry deadline and automatic transition to video execution');

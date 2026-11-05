@@ -48,13 +48,15 @@
     drawDraft();
   }
   function phase(job){
-    if(job.production?.genjutsu?.display?.label)return job.production.genjutsu.display.label;
+    const display=job.production?.genjutsu?.display;
+    if(display?.key==='recovering')return 'Prompt · aguardando nova tentativa automática';
+    if(display?.label)return display.label;
     const child=job.production,m=job.meta||{},state=child?.genjutsu;
     if(child?.result_video_id)return child.status==='ready'?'Vídeo pronto':'Vídeo salvo · encerrando task';
     if(child?.genjutsu?.stopRequested)return 'Genjutsu · aguardando parada';
     if(child?.status==='failed'||job.status==='failed')return 'Precisa de atenção';
     if(m.stage==='control_motion'){
-      if(state?.phase==='provider_waiting')return 'Gemini indisponível · nova tentativa agendada';
+      if(state?.phase==='provider_waiting')return 'Prompt · aguardando nova tentativa automática';
       if(state?.phase==='quota_waiting')return 'Aguardando cota do Gemini';
       if(state?.phase==='generating')return 'Gemini · preparando prompt';
       if(state?.phase==='processing'||state?.phase==='preparing')return 'Gemini · analisando as mídias';
@@ -66,6 +68,12 @@
     if(m.stage==='face_swap')return job.status==='waiting'?'Na fila do Face Swap':'Preparando foto · Face Swap';
     if(m.stage==='frame_ready')return 'Frame pronto · aguardando a fila';
     return 'Preparando envio';
+  }
+  function retryMarkup(job){
+    const p=job.production,d=p?.genjutsu?.display;
+    const waiting=d?d.key==='recovering':p?.status==='motion_waiting'&&['provider_waiting','quota_waiting'].includes(p?.genjutsu?.phase);
+    const at=Date.parse(d?.retryAt||p?.genjutsu?.retryAt||'');
+    return waiting&&Number.isFinite(at)?'<small class="genjutsu-retry" data-gen-retry="'+at+'"></small>':'';
   }
   function elapsedMarkup(job,terminal){
     const p=job.production,d=p?.genjutsu?.display;
@@ -79,6 +87,10 @@
   function tickElapsed(){
     if(!active()||document.hidden)return;
     const format=seconds=>{const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');};
+    for(const el of root()?.querySelectorAll?.('[data-gen-retry]')||[]){
+      const seconds=Math.max(0,Math.ceil((Number(el.dataset.genRetry)-Date.now())/1000));
+      el.textContent=seconds?'Próxima tentativa do prompt em '+format(seconds):'Retomada do prompt pendente · aguardando o servidor';
+    }
     for(const el of root()?.querySelectorAll?.('[data-gen-wait]')||[])el.textContent='Espera · '+format(Math.max(0,Math.floor(((Number(el.dataset.genWaitEnd)||Date.now())-Number(el.dataset.genWait))/1000)));
     for(const el of root()?.querySelectorAll?.('[data-gen-start]')||[]){
       const seconds=Math.max(0,Math.floor(((Number(el.dataset.genEnd)||Date.now())-Number(el.dataset.genStart))/1000));
@@ -120,7 +132,7 @@
         '<button type="button" class="production-media-cell" '+(hasResult?'data-preview':'data-original')+'="'+id+'" aria-label="'+(hasResult?'Ver resultado':'Ver vídeo original')+' · Vídeo '+n+'" title="'+e(job.meta?.source_file_name||job.original_file_name)+'">'+
         '<span class="production-media-preview-shell" data-job-media="'+id+'" style="width:42px;height:58px;overflow:hidden"><span class="genjutsu-preview-placeholder">▶</span></span><div><b>Vídeo '+n+'</b><small>'+e(model)+'</small></div></button>'+
         '<div class="production-job-state">'+(job.meta?.character_name?'<span class="studio-identity studio-model-tag" data-character="'+e(window.CloudentStudio?.modelOf?.(job)||job.meta?.character_id||job.meta?.character?.id||'')+'">'+e(job.meta.character_name)+'</span>':'')+bar+
-        '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+detail+
+        '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+detail+retryMarkup(job)+
         (!finished?'<div class="genjutsu-times">'+elapsedMarkup(job,failed||cancelled)+'</div>':'')+
         (error?'<em role="alert" title="'+e(error)+'">'+e(error)+'</em>':'')+'</div>'+
         '<div class="production-job-actions">'+(hasResult?'<button type="button" class="btn studio-select-result" data-preview="'+id+'">Ver resultado</button>':'')+
