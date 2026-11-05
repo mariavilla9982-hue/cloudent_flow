@@ -840,6 +840,13 @@ Deno.serve(async(req:Request)=>{
             if(["QUEUED","FAILED"].includes(status))continue;
           }
           if(vr.ok&&["QUEUED","RUNNING","SUCCESS","FAILED"].includes(status)){
+            // Genjutsu's task-bound transition owns capture leases and terminal
+            // reasons. The generic retry path below must not undo its decision
+            // to keep a 482 saver alive or recreate a paid task after failure.
+            if(isGenjutsuPreviewJob(job)&&status!=="SUCCESS"){
+              await applyGenjutsuStatus(admin,job,{status,source:"v2",raw:vj,error:vj?.failedReason?.exception_message||vj?.errorMessage||null,checkedAt:new Date().toISOString()});
+              continue;
+            }
             handledByV2=true;
             if(status==="SUCCESS"&&Array.isArray(vj?.results)&&vj.results.length){
               let item=vj.results.find((x:any)=>String(x?.outputType||"").toLowerCase().match(/mp4|mov|webm|mkv|avi/))||vj.results[0];

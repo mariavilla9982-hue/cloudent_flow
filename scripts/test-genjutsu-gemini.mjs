@@ -268,3 +268,9 @@ console.log('PASS bounded same-media prompt repair, successful correction, hard-
 const hardLimit=harness({unavailable:true});for(let i=0;i<6;i++){await rejects(()=>hardLimit.run(),'provider_waiting');hardLimit.clock=Date.parse(hardLimit.state.retryAt)+1;}
 await rejects(()=>hardLimit.run(),'retry_exhausted');assert.equal(hardLimit.state.status,'failed');assert.equal(count(hardLimit,'/upload/v1beta/files'),2);
 console.log('PASS persistent 503 stops after six retries and preserves uploaded references');
+
+const {genjutsuTimelineGuidance}=await import('../supabase/functions/_shared/genjutsu-gemini.ts');
+for(const [seconds,end] of [[10.051383,'00:10.051'],[65.1239,'01:05.123'],[0.9999,'00:00.999']]){
+ const text=genjutsuTimelineGuidance(seconds);assert(text.includes('ends at '+end+' ('+seconds+' seconds)'));assert(text.includes('Three seconds is 00:03.000'));
+}
+console.log('PASS timeline guidance uses minute/second units and truncates the actual clip end');

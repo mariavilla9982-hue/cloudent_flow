@@ -9,6 +9,15 @@ export async function retryPipelineMotion(admin:any,userId:string,id:string){
   if(p.meta?.workflow_key==='genjutsu'&&p.status==='failed'&&!p.runninghub_task_id&&!p.meta?.pipeline_dispatch_intent&&!p.meta?.pipeline_dispatch_uncertain&&(p.meta?.genjutsu_prompt?.status!=='generating'||!!p.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(p))){
     const state=p.meta.genjutsu_prompt?{...p.meta.genjutsu_prompt,status:p.meta.genjutsu_prompt.status==='complete'?'complete':'preparing'}:undefined;
     if(state){delete state.retryAt;delete state.transientAttempts;}
+    // An explicit retry starts a fresh analysis only after a terminal prompt
+    // failure. Polling the rejected/completed interaction would replay the same
+    // invalid output forever; in-progress interactions must still be resumed.
+    if(state&&p.meta.genjutsu_prompt.status==='failed'){
+      state.previousInteractionId=state.interactionId||state.previousInteractionId;
+      delete state.interactionId;delete state.repairInteractionId;
+      delete state.formatRepairAttempts;delete state.processingRetryAttempts;
+      delete state.interactionStartedAt;delete state.interactionStatus;
+    }
     for(const kind of ['video','image'])if(!state?.interactionId&&state?.[kind]&&(state[kind].state==='FAILED'||Date.parse(state[kind].expirationTime)<=Date.now()))delete state[kind];
     const meta={...p.meta,...(state?{genjutsu_prompt:state}:{})};
     const updated=check(await admin.from('production_jobs').update({status:'motion_waiting',attempt_count:0,next_attempt_at:new Date().toISOString(),last_error:null,completed_at:null,locked_at:null,locked_by:null,meta}).eq('id',id).eq('user_id',userId).eq('status','failed').is('runninghub_task_id',null).eq('updated_at',p.updated_at).select('id'));

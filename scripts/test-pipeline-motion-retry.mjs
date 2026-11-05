@@ -38,3 +38,13 @@ for(const change of [p=>p.updated_at='version2',p=>p.result_video_id='concurrent
 }
 console.log('PASS: preserved inputs/prompt; confirmed unavailable482 retries once; saved output, mismatched task/node, active/uncertain state, foreign owner and concurrent writes guarded');
 
+
+for(const status of ['failed','generating','complete']){
+ const {p,admin}=fixture();p.runninghub_task_id=null;p.meta={image_pipeline_version:2,workflow_key:'genjutsu',genjutsu_prompt:{status,interactionId:'previous-analysis',repairInteractionId:'repair',formatRepairAttempts:2,processingRetryAttempts:1,video:{uri:'video-ref'},image:{uri:'image-ref'},prompt:'saved-prompt'}};
+ const r=await retry(admin,'owner','job');assert.equal(r.ok,true);
+ const state=p.meta.genjutsu_prompt;
+ assert.equal(state.video.uri,'video-ref');assert.equal(state.image.uri,'image-ref');
+ if(status==='failed'){assert.equal(state.status,'preparing');assert.equal(state.interactionId,undefined);assert.equal(state.previousInteractionId,'previous-analysis');assert.equal(state.repairInteractionId,undefined);assert.equal(state.formatRepairAttempts,undefined);assert.equal(state.processingRetryAttempts,undefined);}
+ else {assert.equal(state.interactionId,'previous-analysis');assert.equal(state.status,status==='complete'?'complete':'preparing');}
+}
+console.log('PASS explicit terminal prompt retry starts fresh; active analysis and completed prompt stay reusable');
