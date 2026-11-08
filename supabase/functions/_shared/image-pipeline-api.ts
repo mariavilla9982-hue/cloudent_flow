@@ -4,6 +4,7 @@ import {retryPipelineMotion,knownGenjutsu503} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
 import {PIPELINE_CHARACTERS} from './image-pipeline-characters.ts';
 import {PIPELINE_VIDEO_WORKFLOWS,pipelineVideoWorkflow} from './image-pipeline-workflows.ts';
+const JOB_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function uploadedObjectMatches(address:string,size:number){
   // A presigned GET URL cannot be reused for HEAD: S3 signs the HTTP method.
   const r=await fetch(address,{method:'GET',headers:{Range:'bytes=0-0'},signal:AbortSignal.timeout(15000)});
@@ -12,8 +13,18 @@ export async function uploadedObjectMatches(address:string,size:number){
   try{await r.body?.cancel();}catch{}
   return r.ok&&Number.isSafeInteger(actual)&&actual===Number(size)&&actual>0;
 }
+function genjutsuMedia(job:any,userId:string,kind:string){
+  if(job?.meta?.video_workflow?.key!=='genjutsu'||job.meta.stage==='upload')return [];
+  const original={path:job.original_storage_path,name:job.meta.source_file_name||job.original_file_name,mime:job.original_mime_type,size:job.original_size_bytes};
+  const frame={path:job.frame_storage_path,name:job.frame_file_name,mime:job.frame_mime_type,size:job.frame_size_bytes};
+  const candidates=kind==='original'?[original]:[job.meta.prepared_frame,job.meta.upscale_result,job.meta.face_swap_result,frame];
+  return candidates.filter((asset:any,index:number)=>asset&&typeof asset.path==='string'&&asset.path.startsWith(userId+'/')&&
+    typeof asset.name==='string'&&Number.isSafeInteger(asset.size)&&asset.size>0&&
+    (kind==='original'?['video/mp4','video/webm','video/quicktime']:['image/jpeg','image/png','image/webp']).includes(asset.mime)&&
+    candidates.findIndex((other:any)=>other?.path===asset.path)===index);
+}
 export async function imagePipelineApi(d:any){
-  const {req,url,admin,user,json,signGet,objectConfig,signPut,removePaths,wake,stopGenjutsu}=d;
+  const {req,url,admin,user,json,signGet,objectConfig,signPut,removePaths,wake,stopGenjutsu,copyObject}=d;
   const action=url.searchParams.get('action'),resource=url.searchParams.get('resource');
   if(['face-swap-upload-ticket','face-swap-upload-complete','face-swap-upload'].includes(action||''))return json({error:'Atualize a página para usar o novo Face Swap Natural.'},409);
   if(!String(action||resource).startsWith('image-pipeline'))return null;
@@ -35,6 +46,14 @@ export async function imagePipelineApi(d:any){
     if(url.searchParams.get('workflow')==='genjutsu')query=query.contains('meta',{video_workflow:{key:'genjutsu'}});
     const rows=check(await query.order('created_at',{ascending:false}).limit(100));
     for(const j of rows||[]){
+      if(j.meta?.video_workflow?.key==='genjutsu'){
+        const original=genjutsuMedia(j,user.id,'original'),frames=genjutsuMedia(j,user.id,'frame');
+        j.media={original:!!original.length,frame:!!frames.length,
+          reuseOriginal:j.storage_provider==='r2'&&original.some((asset:any)=>asset.size<=30*1024*1024),
+          reuseFrame:j.storage_provider==='r2'&&frames.some((asset:any)=>asset.size<=12*1024*1024)};
+        delete j.meta.manual_prompt;
+        delete j.meta.reused_inputs;
+      }
       if(j.production_job_id){
         j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds,created_at,updated_at').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
         if(j.production){
@@ -42,7 +61,7 @@ export async function imagePipelineApi(d:any){
             const p=j.production,m=p.meta||{};
             p.execution_confirmed=!!p.started_at&&!!p.runninghub_task_id&&String(m.provider_status_task_id)===String(p.runninghub_task_id);
           }
-          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={display:genjutsuDisplay(j.production,j),phase:j.production.meta?.genjutsu_prompt?.status||null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,stopRequested:String(j.production.meta?.genjutsu_stop_requested_task_id||'')===String(j.production.runninghub_task_id||'')&&!!j.production.runninghub_task_id,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
+          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={display:genjutsuDisplay(j.production,j),phase:j.production.meta?.genjutsu_prompt?.status||null,promptSource:j.production.meta?.genjutsu_prompt?.source==='manual'?'manual':j.production.meta?.genjutsu_prompt?'automatic':null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,stopRequested:String(j.production.meta?.genjutsu_stop_requested_task_id||'')===String(j.production.runninghub_task_id||'')&&!!j.production.runninghub_task_id,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
           delete j.production.meta;
         }
       }
@@ -58,11 +77,26 @@ export async function imagePipelineApi(d:any){
     const prompt=p.meta.genjutsu_prompt;
     if(prompt?.status!=='complete'||typeof prompt.prompt!=='string'||!prompt.prompt.trim())return json({error:'O prompt ainda não foi concluído.'},409);
     // Return only generated text, never Files URIs, credentials or checkpoints.
-    const response=json({prompt:prompt.prompt});response.headers.set('Cache-Control','private, no-store');return response;
+    const response=json({prompt:prompt.prompt,source:prompt.source==='manual'?'manual':'automatic'});response.headers.set('Cache-Control','private, no-store');return response;
   }
   if(req.method==='GET'&&resource==='image-pipeline-preview'){
     const j=await owner(url.searchParams.get('id')||'');if(!j)return json({error:'Job não encontrado'},404);
     const original=url.searchParams.get('kind')==='original';
+    if(url.searchParams.get('verified')==='1'){
+      const kind=original?'original':'frame';
+      for(const asset of genjutsuMedia(j,user.id,kind)){
+        let address:string;
+        try{address=await signGet(j.storage_provider,asset.path);}
+        catch(error){if([404,'404','not_found'].includes((error as any)?.statusCode))continue;throw error;}
+        if(!await uploadedObjectMatches(address,asset.size))continue;
+        const response=json({url:address,name:asset.name,mime:asset.mime,size:asset.size,asset:asset.path,
+          reusable:j.storage_provider==='r2'&&asset.size<=(original?30:12)*1024*1024,
+          ...(original?{duration:j.meta.source_duration_seconds}:{})});
+        response.headers?.set('Cache-Control','private, no-store');
+        return response;
+      }
+      return json({error:original?'Vídeo original indisponível.':'Frame indisponível.'},404);
+    }
     const result=j.meta?.upscale_result||j.meta?.face_swap_result;
     const path=original?j.original_storage_path:result?.path||j.frame_storage_path;
     if(!path||!String(path).startsWith(user.id+'/'))return json({error:'Prévia indisponível'},404);
@@ -82,33 +116,52 @@ export async function imagePipelineApi(d:any){
   if(req.method==='POST'&&action==='image-pipeline-ticket'){
     const b=await req.json();
     if(!['face_swap_natural','face_swap_photo','upscale_manual'].includes(b.source))return json({error:'Origem inválida'},400);
-    const id=String(b.job_id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return json({error:'Job inválido'},400);
+    const id=String(b.job_id||'');if(!JOB_ID.test(id))return json({error:'Job inválido'},400);
     const image=(p:any)=>p&&['image/jpeg','image/png','image/webp'].includes(p.type)&&Number.isSafeInteger(p.size)&&p.size>0&&p.size<=10*1024*1024;
     const photo=b.source==='face_swap_photo',natural=b.source==='face_swap_natural';
     const directFrame=natural&&b.workflow_key==='genjutsu'&&b.input_mode==='manual_frame';
+    if(b.manual_prompt!=null&&(!directFrame||typeof b.manual_prompt!=='string'||b.manual_prompt.length>64000||b.manual_prompt.includes('\0')))return json({error:'Prompt manual inválido. Use até 64.000 caracteres.'},400);
+    const manualPrompt=typeof b.manual_prompt==='string'&&b.manual_prompt.trim()?b.manual_prompt:null;
+    if(b.reuse!=null&&(!directFrame||typeof b.reuse!=='object'||Array.isArray(b.reuse)||Object.keys(b.reuse).some(key=>!['original','reference'].includes(key))))return json({error:'Mídia para reutilizar inválida.'},400);
     if(b.input_mode&&b.input_mode!=='manual_frame'||b.input_mode==='manual_frame'&&!directFrame)return json({error:'Modo de entrada inválido.'},400);
     const selected=!directFrame&&(natural||photo)?PIPELINE_CHARACTERS.find(c=>c.id===b.character_id&&(natural||['jujuh','sahry_japah'].includes(c.id))):null;
     const manual=photo&&b.character_id==='custom';
     const old=await owner(id);
+    if(old&&directFrame&&(old.meta.manual_prompt??null)!==manualPrompt)return json({error:'O prompt deste envio já foi fixado. Crie um novo envio para trocar.'},409);
+    const reuse:any={};
+    for(const key of ['original','reference']){
+      const requested=b.reuse?.[key];
+      const previous=old?.meta?.reused_inputs?.[key];
+      if(!requested&&!previous)continue;
+      if(!requested||typeof requested.id!=='string'||!JOB_ID.test(requested.id)||requested.id===id||typeof requested.asset!=='string'||
+        old&&(previous?.id!==requested.id||previous?.path!==requested.asset))return json({error:'Os arquivos deste envio já foram fixados.'},409);
+      if(previous){reuse[key]=previous;continue;}
+      const source=await owner(requested.id);
+      const asset=genjutsuMedia(source,user.id,key==='original'?'original':'frame').find((candidate:any)=>candidate.path===requested.asset);
+      if(source?.storage_provider!=='r2'||!asset)return json({error:key==='original'?'Vídeo original indisponível.':'Frame indisponível.'},404);
+      reuse[key]={...asset,id:source.id};
+    }
     if(old&&(old.meta.input_mode==='manual_frame')!==directFrame)return json({error:'O modo deste envio já foi fixado. Crie um novo envio.'},409);
     if((natural||photo)&&!selected&&!manual&&!directFrame&&!old)return json({error:photo?'Escolha uma folha salva ou Outra modelo antes de gerar.':'Escolha Jujuh, Sahry japah ou Sahry grávida antes de gerar.'},400);
     if(photo&&b.character_id&&!selected&&!manual)return json({error:'Modelo inválida.'},400);
     const workflowKey=String(b.workflow_key||old?.meta?.video_workflow?.key||'motion_control');
     if(natural&&!PIPELINE_VIDEO_WORKFLOWS.some(w=>w.key===workflowKey))return json({error:'Workflow de vídeo inválido.'},400);
     if(old&&natural&&old.meta.video_workflow&&old.meta.video_workflow.key!==workflowKey)return json({error:'O workflow deste envio já foi fixado. Crie um novo envio para mudar.'},409);
+    const descriptor=(asset:any)=>({name:asset.name,type:asset.mime,size:asset.size});
+    const first=reuse.original?descriptor(reuse.original):photo&&selected?{name:selected.file_name,type:selected.mime_type,size:selected.size_bytes}:b.original;
+    const ref=reuse.reference?descriptor(reuse.reference):b.reference;
     if(natural&&workflowKey==='genjutsu'){
       const readiness=check(await admin.from('app_settings').select('value').eq('key','genjutsu_readiness').maybeSingle());
-      if(!readiness?.value?.ready||readiness.value.workflowId!=='2117411301344411649')return json({error:'Genjutsu ainda não está validado no servidor.'},409);
-      if(!['video/mp4','video/webm','video/quicktime'].includes(b.original?.type)||Number(b.original?.size)>30*1024*1024||!Number.isFinite(b.duration_seconds)||b.duration_seconds<=0)return json({error:'Genjutsu: envie um vídeo válido de até 30 MiB, com duração identificável.'},400);
+      if(!(manualPrompt?(readiness?.value?.runninghub?.available??readiness?.value?.ready):readiness?.value?.ready)||readiness.value.workflowId!=='2117411301344411649')return json({error:'Genjutsu ainda não está validado no servidor.'},409);
+      if(!['video/mp4','video/webm','video/quicktime'].includes(first?.type)||Number(first?.size)>30*1024*1024||!Number.isFinite(b.duration_seconds)||b.duration_seconds<=0)return json({error:'Genjutsu: envie um vídeo válido de até 30 MiB, com duração identificável.'},400);
       if(old&&Number(old.meta.source_duration_seconds)!==b.duration_seconds)return json({error:'A duração deste envio já foi fixada. Crie outro envio.'},409);
     }
-    const first=photo&&selected?{name:selected.file_name,type:selected.mime_type,size:selected.size_bytes}:b.original,ref=b.reference;
     if(b.source==='face_swap_natural'?!first?.type?.startsWith('video/')||!Number.isSafeInteger(first.size)||first.size<=0||first.size>500*1024*1024:!image(first))return json({error:'Arquivo de entrada inválido'},400);
-    if(b.source!=='upscale_manual'&&!image(ref))return json({error:'Referência inválida'},400);
+    if(b.source!=='upscale_manual'&&!(reuse.reference?ref.size<=12*1024*1024:image(ref)))return json({error:'Referência inválida'},400);
     if(old&&old.meta.source!==b.source)return json({error:'Job já utilizado'},409);
     if(old&&(natural||photo)&&b.character_id&&(old.meta.character_id||(photo?'custom':null))!==b.character_id)return json({error:'A personagem deste envio já foi fixada. Crie um novo envio para mudar.'},409);
     if(old&&old.meta.stage!=='upload')return json({ok:true,registered:true,job_id:id});
-    if(old&&directFrame&&(['name','type','size'].some(k=>b.original?.[k]!==({name:old.original_file_name,type:old.original_mime_type,size:old.original_size_bytes} as any)[k])||['name','type','size'].some(k=>b.reference?.[k]!==({name:old.frame_file_name,type:old.frame_mime_type,size:old.frame_size_bytes} as any)[k])))return json({error:'Os arquivos deste envio já foram fixados. Crie outro envio para trocar.'},409);
+    if(old&&directFrame&&(['name','type','size'].some(k=>first?.[k]!==({name:old.original_file_name,type:old.original_mime_type,size:old.original_size_bytes} as any)[k])||['name','type','size'].some(k=>ref?.[k]!==({name:old.frame_file_name,type:old.frame_mime_type,size:old.frame_size_bytes} as any)[k])))return json({error:'Os arquivos deste envio já foram fixados. Crie outro envio para trocar.'},409);
     const cfg=await objectConfig();
     if(!cfg)return json({error:'Configure o Backblaze B2 antes de enviar mídia para este fluxo.'},409);
     const provider=old?.storage_provider||'r2';
@@ -126,11 +179,21 @@ export async function imagePipelineApi(d:any){
     const framePath=b.source==='upscale_manual'?originalPath:prefix+'/reference';
     const originalName=String(photo&&selected?ref.name:first.name||'entrada');
     const taggedName=selected?selected.name+' · '+originalName.slice(0,200):originalName;
-    if(!old){check(await admin.from('face_swap_jobs').insert({id,user_id:user.id,storage_provider:provider,original_storage_path:originalPath,original_file_name:taggedName.slice(0,255),original_mime_type:first.type,original_size_bytes:first.size,frame_storage_path:framePath,frame_file_name:String(ref?.name||first.name||'referencia').slice(0,255),frame_mime_type:ref?.type||first.type,frame_size_bytes:ref?.size||first.size,status:'cancelled',auto_send:false,max_attempts:1,meta:{pipeline_version:2,source:b.source,stage:'upload',pipeline_status:'UPLOADING',character,manual_run:true,...(directFrame?{input_mode:'manual_frame',source_file_name:originalName.slice(0,255)}:{}),...(natural?{video_workflow:pipelineVideoWorkflow(workflowKey),...(workflowKey==='genjutsu'?{source_duration_seconds:b.duration_seconds}:{})}:{}),...(selected?{character_id:selected.id,character_name:selected.name,tags:[selected.name],source_file_name:originalName.slice(0,255)}:{})}}));}
+    if(!old){check(await admin.from('face_swap_jobs').insert({id,user_id:user.id,storage_provider:provider,original_storage_path:originalPath,original_file_name:taggedName.slice(0,255),original_mime_type:first.type,original_size_bytes:first.size,frame_storage_path:framePath,frame_file_name:String(ref?.name||first.name||'referencia').slice(0,255),frame_mime_type:ref?.type||first.type,frame_size_bytes:ref?.size||first.size,status:'cancelled',auto_send:false,max_attempts:1,meta:{pipeline_version:2,source:b.source,stage:'upload',pipeline_status:'UPLOADING',character,manual_run:true,...(directFrame?{input_mode:'manual_frame',source_file_name:originalName.slice(0,255),...(manualPrompt?{manual_prompt:manualPrompt}:{}),...(Object.keys(reuse).length?{reused_inputs:reuse}:{})}:{}),...(natural?{video_workflow:pipelineVideoWorkflow(workflowKey),...(workflowKey==='genjutsu'?{source_duration_seconds:b.duration_seconds}:{})}:{}),...(selected?{character_id:selected.id,character_name:selected.name,tags:[selected.name],source_file_name:originalName.slice(0,255)}:{})}}));}
     else if(old.meta.stage!=='upload')return json({ok:true,registered:true,job_id:id});
     const parts:any={};
     for(const [key,path,type,p] of [['original',originalPath,first.type,provider],['reference',framePath,ref?.type||first.type,provider]] as any[]){
       if(photo&&character&&key==='original')continue;
+      if(reuse[key]){
+        const asset=reuse[key];
+        const copied=await uploadedObjectMatches(await signGet(provider,path),asset.size);
+        if(!copied){
+          if(!await uploadedObjectMatches(await signGet(provider,asset.path),asset.size))
+            return json({error:key==='original'?'Vídeo original indisponível.':'Frame indisponível.'},404);
+          await copyObject(cfg,asset.path,path);
+        }
+        continue;
+      }
       // Manual models must remain in private Supabase, independently of the reference provider.
       const actual=b.source==='face_swap_photo'&&key==='original'?'supabase':p;
       if(actual==='r2')parts[key]={path,upload_url:await signPut(cfg,path),content_type:type,provider:actual};

@@ -1,4 +1,4 @@
-import {prepareGenjutsuPrompt,GenjutsuPromptError,genjutsuExecutionInputs} from './genjutsu-gemini.ts';
+import {prepareGenjutsuPrompt,GenjutsuPromptError,genjutsuExecutionInputs,GENJUTSU_PROMPT_IMAGE_MAX_BYTES} from './genjutsu-gemini.ts';
 import {GENJUTSU_WORKFLOW_ID,validateGenjutsuGraph} from './genjutsu-readiness.ts';
 import {safeGenjutsuError} from './genjutsu-diagnostics.ts';
 export const isGenjutsuJob=(job:any)=>job?.meta?.workflow_key==='genjutsu'&&job?.meta?.workflow_id===GENJUTSU_WORKFLOW_ID;
@@ -20,9 +20,10 @@ export async function genjutsuResultBlob(response:Response){return boundedBlob(r
 // The caller owns the existing provider/job lease. No RH create is performed here.
 export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=Date.now}:any){
   if(!isGenjutsuJob(job)||job.runninghub_task_id||job.meta.pipeline_dispatch_intent)throw new Error('Genjutsu: envio já realizado ou identidade inválida.');
-  if(!key)throw new Error('Genjutsu: chave Gemini ausente no servidor.');
   if(![job.original_storage_path,job.frame_storage_path].every(path=>String(path||'').startsWith(job.user_id+'/')))throw new Error('Genjutsu: mídia não pertence ao trabalho.');
   const previous=job.meta.genjutsu_prompt;
+  if(previous?.source==='manual'){await genjutsuInputs('saved-video','saved-image',job);return true;}
+  if(!key)throw new Error('Genjutsu: chave Gemini ausente no servidor.');
   if(previous?.status==='complete'){await genjutsuInputs('saved-video','saved-image',job);return true;}
   if(['quota_waiting','provider_waiting'].includes(previous?.status)&&Date.parse(previous.retryAt||'')>now())return false;
   if(previous?.status==='generating'&&!previous.interactionId)throw new GenjutsuPromptError('generation_uncertain','Análise sem confirmação; não será repetida automaticamente.');
@@ -39,7 +40,7 @@ export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=
   const resumeUploadedFiles=!!(previous?.video&&previous?.image&&(previous.interactionId||
     [previous.video,previous.image].every(file=>Date.parse(file.expirationTime)>now())));
   const video=resumeUploadedFiles?new Blob(['saved'],{type:previous.video.mimeType}):await read(job.original_storage_path,job.original_mime_type||'video/mp4',30*1024*1024);
-  const image=resumeUploadedFiles?new Blob(['saved'],{type:previous.image.mimeType}):await read(job.frame_storage_path,job.frame_mime_type||'image/jpeg',10*1024*1024);
+  const image=resumeUploadedFiles?new Blob(['saved'],{type:previous.image.mimeType}):await read(job.frame_storage_path,job.frame_mime_type||'image/jpeg',GENJUTSU_PROMPT_IMAGE_MAX_BYTES);
   const result=await prepareGenjutsuPrompt({apiKey:key,video,image,resumeUploadedFiles,durationSeconds:Number(job.meta.source_duration_seconds),state:job.meta.genjutsu_prompt,checkpoint,now});
   return result.ready;
 }
