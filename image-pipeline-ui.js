@@ -54,11 +54,40 @@
   function batchDraft(){return drafts.faceSwap||(drafts.faceSwap={id:crypto.randomUUID(),urls:{},entries:[]});}
   function addBatchFiles(files){
     const d=batchDraft();d.entries=d.entries||[];
+    const invalid=[];
     for(const f of files){
-      if(!f.type.startsWith('video/'))throw new Error('Selecione somente vídeos.');
-      if(!f.size||f.size>500*1024*1024)throw new Error('Cada vídeo deve ter até 500 MB.');
+      if(!f.type.startsWith('video/')||!f.size||f.size>500*1024*1024){invalid.push(f.name);continue;}
+      if(d.entries.some(x=>x.original.name===f.name&&x.original.size===f.size&&x.original.lastModified===f.lastModified))continue;
+      d.entries.push({id:crypto.randomUUID(),original:f,urls:{original:URL.createObjectURL(f)},characters:[],workflow:defaultVideoWorkflow,variantIds:{}});
     }
-    for(const f of files){if(d.entries.some(x=>x.original.name===f.name&&x.original.size===f.size&&x.original.lastModified===f.lastModified))continue;d.entries.push({id:crypto.randomUUID(),original:f,urls:{original:URL.createObjectURL(f)},characters:[],workflow:defaultVideoWorkflow,variantIds:{}});}
+    return invalid;
+  }
+  function selectBatchFiles(root,files){
+    const invalid=addBatchFiles(files);
+    drawBatch(root);
+    root.querySelector('[data-pipeline-error]').textContent=invalid.length?'Arquivos inválidos: '+invalid.join(', ')+'. Escolha vídeos de até 500 MB.':'';
+  }
+  function bindDesktopDrop(root){
+    const zone=root.querySelector('[data-batch-drop]');if(!zone)return;
+    const hint=zone.querySelector('[data-drop-hint]');
+    const desktop=window.matchMedia?.('(hover: hover) and (pointer: fine)');
+    const enabled=()=>!!desktop?.matches&&!window.navigator?.userAgentData?.mobile&&!/Android|iPhone|iPad|iPod/.test(window.navigator?.userAgent||'');
+    const sync=()=>{hint.hidden=!enabled();zone.classList.remove('is-dragging');};
+    const hasFiles=event=>enabled()&&Array.from(event.dataTransfer?.types||[]).includes('Files');
+    zone.ondragover=event=>{
+      if(!hasFiles(event))return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect=busy.has('faceSwap')?'none':'copy';
+      zone.classList.toggle('is-dragging',!busy.has('faceSwap'));
+    };
+    zone.ondragleave=event=>{if(!zone.contains(event.relatedTarget))zone.classList.remove('is-dragging');};
+    zone.ondrop=event=>{
+      if(!hasFiles(event))return;
+      event.preventDefault();zone.classList.remove('is-dragging');
+      if(!busy.has('faceSwap'))selectBatchFiles(root,[...event.dataTransfer.files]);
+    };
+    desktop?.addEventListener?.('change',sync);
+    sync();
   }
   function drawBatch(root){
     const list=root.querySelector('[data-batch-list]');if(!list)return;
@@ -271,13 +300,14 @@
     root.dataset.pipelineMounted='12';
     const photo=page==='faceSwapPhoto',natural=page==='faceSwap';
     const tabs='<div class="studio-tabs" role="tablist" aria-label="Modo de produção">'+[['faceSwap','Produção automática'],['faceSwapPhoto','Apenas foto'],['upscale','Upscale']].map(([id,label])=>'<button type="button" role="tab" aria-selected="'+(id===page)+'" class="btn '+(id===page?'primary':'')+'" data-mode="'+id+'">'+label+'</button>').join('')+'</div>';
-    const upload=(kind,title,help)=>'<div class="studio-form-inputs"><label class="studio-upload"><input name="'+kind+'" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" '+(natural?'multiple':photo&&kind==='original'?'':'required')+'><span><b>'+title+'</b><small>'+help+'</small></span><span class="studio-upload-action">Escolher '+(natural?'vídeos':'foto')+'</span><div data-preview="'+kind+'"></div></label><button class="btn" type="button" data-remove="'+kind+'">Remover '+(kind==='reference'?'foto alvo':natural?'vídeos':'imagem')+'</button></div>';
+    const upload=(kind,title,help)=>'<div class="studio-form-inputs"><label class="studio-upload" '+(natural?'data-batch-drop':'')+'><input name="'+kind+'" type="file" accept="'+(natural?'video/*':'image/jpeg,image/png,image/webp')+'" '+(natural?'multiple':photo&&kind==='original'?'':'required')+'><span><b>'+title+'</b><small>'+help+'</small>'+(natural?'<small data-drop-hint hidden>Solte os vídeos aqui</small>':'')+'</span><span class="studio-upload-action">Escolher '+(natural?'vídeos':'foto')+'</span><div data-preview="'+kind+'"></div></label><button class="btn" type="button" data-remove="'+kind+'">Remover '+(kind==='reference'?'foto alvo':natural?'vídeos':'imagem')+'</button></div>';
     root.classList?.add('studio-page');
     root.innerHTML='<div class="face-swap-shell"><div class="studio-page-header"><div><span class="studio-eyebrow">FACE SWAP</span><h2>'+titles[page]+'</h2><p>'+(natural?'Envie seus vídeos e escolha uma ou mais modelos para cada arquivo.':photo?'Escolha a modelo e a foto alvo. Compare o original com a imagem final.':'Melhore a imagem e confira a diferença antes de baixar.')+'</p></div></div>'+tabs+'<div class="'+(natural?'':'studio-image-workspace')+'"><div class="card studio-input-card"><form data-pipeline-form><div class="studio-form-inputs">'+(photo?characterSelector(true)+'<div data-custom-model hidden>'+upload('original','Foto da sua modelo','JPG, PNG ou WebP · até 10 MB. Esta foto define a identidade.')+'</div>':upload('original',natural?'Adicionar vídeos':photo?'Foto da modelo':'Imagem para upscale',natural?'Selecione vários arquivos de uma vez.':photo?'Modelo fixada ou uma foto enviada por você.':'JPG, PNG ou WebP'))+(photo?upload('reference','Foto alvo','Envie apenas a foto de referência onde a personagem será aplicada.'):'')+'</div>'+(natural?'<div data-batch-list></div>':'')+'<div class="studio-submit-bar"><small '+(natural?'data-batch-count':'')+'>'+(natural?'0 vídeos selecionados':'O processamento continua no servidor.')+'</small><button class="btn primary" type="submit">'+(natural?'Iniciar produção':photo?'Gerar imagem':'Iniciar upscale')+'</button></div><p role="status" data-pipeline-status></p><p role="alert" data-pipeline-error></p></form></div>'+(natural?'':'<aside class="card studio-result-dock"><h3>Comparar resultado</h3><div data-studio-result><div class="studio-empty"><span>↔</span><b>Antes e depois, no mesmo lugar</b><p>Abra um resultado concluído abaixo para comparar arrastando a linha central.</p></div></div></aside>')+'</div><div class="studio-queue-head"><h3>'+(natural?'Fila de produção':'Resultados recentes')+'</h3><button class="btn" type="button" data-refresh>Atualizar</button></div><div class="studio-filters" aria-label="Filtrar resultados">'+[['all','Todos'],['active','Em produção'],['ready','Prontos'],['failed','Erro']].map(([key,label])=>'<button type="button" class="btn" data-filter="'+key+'" aria-pressed="'+((viewFilters[page]||'all')===key)+'">'+label+'</button>').join('')+'<input type="search" data-pipeline-search aria-label="Buscar por nome ou modelo" placeholder="Buscar vídeo ou modelo" value="'+e(searchTerms[page]||'')+'"></div><div class="'+(natural?'studio-queue-workspace':'')+'"><div class="face-swap-jobs" data-pipeline-jobs></div>'+(natural?'<aside class="card studio-result-dock"><h3>Resultado selecionado</h3><div data-studio-result><div class="studio-empty"><span>▷</span><b>Confira imagem ou vídeo</b><p>Selecione Comparar imagem ou Ver resultado em um dos vídeos da fila.</p></div></div></aside>':'')+'</div></div>';
+    if(natural)bindDesktopDrop(root);
     root.oninput=evt=>{if(evt.target.hasAttribute('data-pipeline-search')){searchTerms[page]=evt.target.value;drawJobs();}};
     root.onchange=evt=>{
       if(busy.has(page))return;
-      if(page==='faceSwap'&&evt.target.name==='original'){try{addBatchFiles([...evt.target.files]);evt.target.value='';drawBatch(root);}catch(err){root.querySelector('[data-pipeline-error]').textContent=err.message;}return;}
+      if(page==='faceSwap'&&evt.target.name==='original'){selectBatchFiles(root,[...evt.target.files]);evt.target.value='';return;}
       if(page==='faceSwap'&&evt.target.name==='video_workflow'){const entry=drafts.faceSwap?.entries?.find(x=>x.id===evt.target.closest('[data-entry]')?.dataset.entry);if(!entry)return;if(entry.workflowLocked){evt.target.value=entry.workflow||defaultVideoWorkflow;return;}if(videoWorkflows.some(w=>w.key===evt.target.value))entry.workflow=evt.target.value;return;}
       if(page==='faceSwap'&&evt.target.name==='character'){
         const entry=drafts.faceSwap?.entries?.find(x=>x.id===evt.target.closest('[data-entry]')?.dataset.entry);if(!entry)return;const row=evt.target.closest('[data-entry]');entry.characters=[...row.querySelectorAll('input[name=character]:checked')].map(x=>x.value);const tags=row.querySelector('.studio-entry-tags');if(tags)tags.innerHTML=characters.filter(c=>entry.characters.includes(c.id)).map(c=>'<span class="studio-model-tag" data-character="'+c.id+'">'+e(c.name)+'</span>').join('');row.querySelector('[data-character-count]').textContent=entry.characters.length?entry.characters.length+' vídeo(s) serão gerados para este arquivo.':'Escolha pelo menos uma modelo.';return;

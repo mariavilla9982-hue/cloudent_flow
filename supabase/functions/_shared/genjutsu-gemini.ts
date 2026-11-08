@@ -2,11 +2,14 @@
 import {GENJUTSU_INSTRUCTIONS} from './genjutsu-instructions.ts';
 
 export const GENJUTSU_MODEL = 'gemini-3.5-flash-lite';
+// Reused prepared frames may be larger than the manual upload limit.
+export const GENJUTSU_PROMPT_IMAGE_MAX_BYTES = 12*1024*1024;
 const ORIGIN = 'https://generativelanguage.googleapis.com';
 const SECTIONS = ['subject_definitions','summary','retention_analysis','detailed_description','overall_soundscape','non_diegetic_music'];
 type FileRef = {name:string; uri:string; mimeType:string; state:string; expirationTime:string};
 export type PromptState = {
   fingerprint:string;
+  source?:'manual'|'automatic';
   model:string;
   durationSeconds:number;
   instructionsSha256:string;
@@ -66,8 +69,8 @@ function safeFile(raw:any,mime:string,now:number):FileRef {
 function validMedia(video:Blob,image:Blob,duration:number){
   if(!(video instanceof Blob)||!['video/mp4','video/webm','video/quicktime'].includes(video.type)||video.size<1||video.size>30*1024*1024)
     fail('invalid_video','Vídeo ausente, formato inválido ou acima de 30 MiB.');
-  if(!(image instanceof Blob)||!['image/jpeg','image/png','image/webp'].includes(image.type)||image.size<1||image.size>10*1024*1024)
-    fail('invalid_image','Foto final ausente, formato inválido ou acima de 10 MiB.');
+  if(!(image instanceof Blob)||!['image/jpeg','image/png','image/webp'].includes(image.type)||image.size<1||image.size>GENJUTSU_PROMPT_IMAGE_MAX_BYTES)
+    fail('invalid_image','Foto final ausente, formato inválido ou acima de 12 MiB.');
   if(!Number.isFinite(duration)||duration<=0)fail('invalid_duration','Duração real do vídeo obrigatória.');
 }
 export function genjutsuTimelineGuidance(duration:number){
@@ -113,6 +116,7 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
   if(o.state&&(o.state.fingerprint!==fingerprint||o.state.model!==GENJUTSU_MODEL||o.state.durationSeconds!==o.durationSeconds||o.state.instructionsSha256!==instructionsSha256))
     fail('inputs_changed','Foto, vídeo ou instruções mudaram; crie outro trabalho.');
   let state:PromptState=o.state?structuredClone(o.state):{fingerprint,model:GENJUTSU_MODEL,durationSeconds:o.durationSeconds,instructionsSha256,status:'preparing'};
+  state.source='automatic';
   const save=async(patch:Partial<PromptState>)=>{
     const next={...state,...patch};await o.checkpoint(structuredClone(next));state=next;
   };
@@ -293,12 +297,19 @@ export async function prepareGenjutsuPrompt(o:Options):Promise<{ready:boolean;st
   return acceptInteraction(await json(response));
 }
 
+export async function createManualGenjutsuPrompt(prompt:string,durationSeconds:number,jobId:string):Promise<PromptState>{
+  const encoder=new TextEncoder();
+  const promptSha256=await sha(encoder.encode(prompt));
+  return {source:'manual',model:'manual',status:'complete',prompt,promptSha256,durationSeconds,
+    instructionsSha256:'',fingerprint:await sha(encoder.encode(JSON.stringify([jobId,durationSeconds,promptSha256])))};
+}
+
 export async function genjutsuExecutionInputs(workflowId:string,videoFile:string,imageFile:string,state:PromptState){
   if(!/^\d{16,24}$/.test(workflowId))fail('missing_workflow','Configure o ID publicado do workflow Genjutsu.');
-  if(!videoFile?.trim()||!imageFile?.trim()||state.status!=='complete'||!state.prompt||state.model!==GENJUTSU_MODEL)
+  if(!videoFile?.trim()||!imageFile?.trim()||state.status!=='complete'||!state.prompt||(state.source!=='manual'&&state.model!==GENJUTSU_MODEL))
     fail('prompt_not_ready','Mídias ou prompt Genjutsu ainda não estão prontos.');
-  if(state.instructionsSha256!==await sha(new TextEncoder().encode(GENJUTSU_INSTRUCTIONS)))fail('inputs_changed','As instruções deste prompt mudaram.');
-  const prompt=validateGenjutsuPrompt(state.prompt,state.durationSeconds);
+  if(state.source!=='manual'&&state.instructionsSha256!==await sha(new TextEncoder().encode(GENJUTSU_INSTRUCTIONS)))fail('inputs_changed','As instruções deste prompt mudaram.');
+  const prompt=state.source==='manual'?state.prompt:validateGenjutsuPrompt(state.prompt,state.durationSeconds);
   if(!Number.isFinite(state.durationSeconds)||state.durationSeconds<=0||
     await sha(new TextEncoder().encode(prompt))!==state.promptSha256)
     fail('invalid_cache','Prompt salvo não confere com seu hash.');

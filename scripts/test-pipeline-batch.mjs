@@ -7,7 +7,7 @@ const form={querySelector:s=>s==='[data-pipeline-status]'?status:s==='[data-pipe
 const root={querySelector:s=>s==='form'?form:null};
 const confirmed=new Set(),tickets=[],revoked=[];let frameCount=0,fail='sahry_japah';
 const ui={document:{createElement:tag=>tag==='video'?{duration:12.5,removeAttribute(){},load(){},set src(v){queueMicrotask(()=>this.onloadedmetadata?.());}}:{textContent:''},head:{appendChild(){}},querySelector:()=>null,getElementById:()=>null},cloudSession:{user:{id:'owner'}},currentPage:'other',window:{},setInterval(){},setTimeout,clearTimeout,queueMicrotask,File,URL:{createObjectURL:f=>'blob:'+f.name,revokeObjectURL:u=>revoked.push(u)},crypto:webcrypto,extractFirstFrameBlob:async()=>{frameCount++;return new Blob(['frame']);},uploadFaceSwapPart:async()=>{},cloudFetch:async(path,options)=>{if(!options)return {jobs:[]};const b=JSON.parse(options.body);if(path.includes('ticket')){tickets.push(b);if(b.character_id===fail)throw Error('offline');return {job_id:b.job_id,registered:confirmed.has(b.job_id),original:{},reference:{}};}confirmed.add(b.job_id);return {ok:true};}};
-const source=fs.readFileSync('image-pipeline-ui.js','utf8');vm.createContext(ui);vm.runInContext(source.replace('  if(sources[currentPage])render(currentPage);','  window.test={addBatchFiles,submitBatch,drafts,resetOwner,workflowSelector};'),ui);
+const source=fs.readFileSync('image-pipeline-ui.js','utf8');vm.createContext(ui);vm.runInContext(source.replace('  if(sources[currentPage])render(currentPage);','  window.test={addBatchFiles,bindDesktopDrop,submitBatch,drafts,resetOwner,workflowSelector};'),ui);
 const t=ui.window.test;
 assert(t.workflowSelector({}).includes('value="genjutsu" selected'));
 assert(t.workflowSelector({workflow:'motion_control'}).includes('value="motion_control" selected'));
@@ -30,3 +30,21 @@ for(const [saved,expected] of [[null,'genjutsu'],['motion_control','motion_contr
  vm.runInNewContext(initial+';this.mode=activeMode',state);assert.equal(state.mode,expected);
 }
 console.log('PASS GENJUTSU default, explicit V7/standard choices and new tab preference persistence');
+
+const hint={hidden:true},classes=new Set();
+const zone={querySelector:()=>hint,contains:()=>false,classList:{remove:k=>classes.delete(k),toggle:(k,v)=>v?classes.add(k):classes.delete(k)}};
+const dropRoot={querySelector:selector=>selector==='[data-batch-drop]'?zone:selector==='[data-pipeline-error]'?error:null};
+const device={matches:true,addEventListener(event,listener){this.change=listener;}};
+ui.window.matchMedia=query=>{assert.match(query,/hover.*pointer: fine/);return device;};
+ui.cloudSession={user:{id:'owner'}};t.resetOwner();
+t.bindDesktopDrop(dropRoot);assert.equal(hint.hidden,false);
+const invalid=new File(['x'],'imagem.png',{type:'image/png'});
+let prevented=0;const beforeDrop=tickets.length;
+const dropped={preventDefault(){prevented++;},dataTransfer:{types:['Files'],files:[...files,invalid]}};
+zone.ondragover(dropped);assert(classes.has('is-dragging'));
+zone.ondrop(dropped);assert(!classes.has('is-dragging'));
+assert.equal(prevented,2);assert.equal(t.drafts.faceSwap.entries.length,2);assert.match(error.textContent,/imagem.png/);
+zone.ondrop(dropped);assert.equal(t.drafts.faceSwap.entries.length,2);assert.equal(tickets.length,beforeDrop,'dropping never starts production');
+device.matches=false;device.change();assert.equal(hint.hidden,true);
+zone.ondrop(dropped);assert.equal(prevented,3,'touch-only device does not activate drop');
+console.log('PASS desktop drag/drop: multi-select, invalid file feedback, duplicate suppression, no implicit dispatch, touch-only fallback');

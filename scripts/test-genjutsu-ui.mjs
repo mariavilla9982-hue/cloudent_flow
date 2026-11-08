@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const nodes=new Map();
 function node(){return {innerHTML:'',textContent:'',dataset:{},style:{},disabled:false,value:'',classList:{add(){},remove(){},toggle(){}},setAttribute(k,v){this[k]=v;},removeAttribute(){},replaceChildren(child){this.child=child;},load(){},click(){}};}
 const container=node();let section=null;
-for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-error]','[data-gen-status]'])nodes.set(selector,node());
+for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-manual-prompt]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-error]','[data-gen-status]'])nodes.set(selector,node());
 Object.defineProperty(container,'innerHTML',{set(value){this.html=value;section=node();section.dataset.owner=(value.match(/data-owner="([^"]*)"/)||[])[1];section.querySelector=selector=>nodes.get(selector);},get(){return this.html;}});
 for(const kind of ['video','frame']){const box=node(),parts=new Map(['.production-upload-preview','input','[data-clear]','.production-upload-meta'].map(s=>[s,node()]));box.querySelector=s=>parts.get(s);nodes.set('[data-gen-drop="'+kind+'"]',box);}
 const mediaBoxes={};
@@ -26,10 +26,11 @@ const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.s
     if(path.includes('resource=image-pipeline&'))return {jobs:[...(recoveryJob?[recoveryJob]:[]),{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
     if(path.includes('resource=image-pipeline-prompt'))return {prompt:'subject_definitions: <script>alert(1)</script>'};
     if(path.includes('resource=image-pipeline-result')){if(previewFailure)throw Error('Falha de prévia');return deferResult?new Promise(resolve=>{resolveResult=resolve;}):{url:'https://b2.test/result.mp4'};}
+    if(path.includes('verified=1')){const original=path.includes('kind=original');return {url:'https://b2.test/signed',name:original?'reused.mp4':'reused.webp',mime:original?'video/mp4':'image/webp',size:50,asset:original?'owner/original':'owner/frame',reusable:true,...(original?{duration:10}:{})};}
     if(path.includes('resource=image-pipeline-preview'))return {url:path.includes('kind=original')?'https://b2.test/original.mp4':'https://b2.test/frame.webp'};
     if(path.includes('image-pipeline-ticket'))return {job_id:JSON.parse(options.body).job_id,original:{path:'original'},reference:{path:'reference'}};
     return {ok:true};
-  },fetch:async()=>Response.json({active:true,readiness:{ready:true}})
+  },fetch:async address=>String(address).startsWith('https://b2.test/')?new Response('downloaded media'):Response.json({active:true,readiness:{ready:true}})
 });
 let visibilityChanged;document.addEventListener=(name,fn)=>{if(name==='visibilitychange')visibilityChanged=fn;};
 vm.runInContext(fs.readFileSync('genjutsu-ui.js','utf8'),c);
@@ -130,3 +131,29 @@ recoveryJob.production.status='running';recoveryJob.production.genjutsu.display=
 await c.window.CloudentGenjutsu.refresh();
 assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('data-gen-retry='));
 console.log('PASS prompt retry deadline and automatic transition to video execution');
+
+c.cloudSession={user:{id:'owner'},access_token:'session'};
+c.currentPage='production';c.window.CloudentMotionControl.mode='genjutsu';
+recoveryJob={id:'failed-media',status:'failed',media:{original:true,frame:true,reuseOriginal:true,reuseFrame:true},meta:{video_workflow:{key:'genjutsu'}},production:{status:'failed'}};
+c.window.CloudentGenjutsu.render(container);
+await new Promise(setImmediate);await new Promise(setImmediate);
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-use-video="failed-media"/);
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-use-frame="failed-media"/);
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-download-frame="failed-media"/);
+const beforeReuse=calls.filter(x=>x.path.includes('image-pipeline-ticket')).length;
+let downloadedName;const createElement=document.createElement;
+document.createElement=tag=>tag==='a'?{click(){downloadedName=this.download;}}:createElement(tag);
+await clickAction({downloadFrame:'failed-media'});assert.equal(downloadedName,'reused.webp');
+await clickAction({useVideo:'failed-media'});await clickAction({useFrame:'failed-media'});
+assert.equal(calls.filter(x=>x.path.includes('image-pipeline-ticket')).length,beforeReuse);
+assert.equal(nodes.get('[data-gen-drop="video"]').querySelector('.production-upload-meta').textContent,'reused.mp4');
+assert.equal(nodes.get('[data-gen-drop="frame"]').querySelector('.production-upload-meta').textContent,'reused.webp');
+const text=nodes.get('[data-manual-prompt]');text.value='  First line\nSecond line.  ';
+section.oninput({target:{value:text.value,hasAttribute:key=>key==='data-manual-prompt'}});
+const beforeUploads=uploads.length;
+await manualClick();
+const sent=calls.filter(x=>x.path.includes('image-pipeline-ticket')).at(-1).body;
+assert.equal(sent.manual_prompt,'  First line\nSecond line.  ');
+assert.equal(sent.reuse.original.id,'failed-media');assert.equal(sent.reuse.reference.asset,'owner/frame');
+assert.equal(uploads.length,beforeUploads,'reused media does not upload through the browser');
+console.log('PASS manual prompt and card actions: exact text, download, two draft fields, no implicit dispatch or browser re-upload');

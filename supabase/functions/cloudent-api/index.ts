@@ -62,13 +62,12 @@ function s3RegionFromEndpoint(endpoint:string){
   }catch{return "auto"}
 }
 function r2KeyPath(key:string){return String(key||"").split("/").map(encodeURIComponent).join("/")}
-async function r2PresignedUrl(config:CloudentR2Config,method:string,key:string,expires=3600,contentType=""){
+async function r2PresignedUrl(config:CloudentR2Config,method:string,key:string,expires=3600,contentType="",headers:Record<string,string>={}){
   const aws=new AwsClient({
     service:"s3",region:s3RegionFromEndpoint(config.endpoint),
     accessKeyId:config.access_key_id,
     secretAccessKey:config.secret_access_key
   });
-  const headers:Record<string,string>={};
   if(contentType)headers["Content-Type"]=contentType;
   const request=new Request(
     config.endpoint+"/"+encodeURIComponent(config.bucket)+"/"+r2KeyPath(key)+"?X-Amz-Expires="+Math.max(1,Math.min(604800,Number(expires)||3600)),
@@ -2444,6 +2443,12 @@ Deno.serve(async (req: Request) => {
       objectConfig:()=>getCloudentR2Config(admin),
       removePaths:(provider,paths)=>storageDeletePathsBucket(admin,provider,paths,"production"),
       signPut:(config,path)=>r2PresignedUrl(config,"PUT",path,1800),
+      copyObject:async(config,source,path)=>{
+        const headers={"x-amz-copy-source":"/"+encodeURIComponent(config.bucket)+"/"+r2KeyPath(source)};
+        const address=await r2PresignedUrl(config,"PUT",path,300,"",headers);
+        const result=await fetch(address,{method:"PUT",headers,signal:AbortSignal.timeout(20000),redirect:"error"});
+        if(!result.ok||!/<CopyObjectResult(?:\s|>)/.test(await result.text()))throw new Error("Não foi possível reutilizar o arquivo no armazenamento.");
+      },
       signGet:(provider,path)=>storageSignedGetBucket(admin,String(provider||"supabase"),String(path),3600,"production"),
       stopGenjutsu:async(taskId:string)=>{
         const {data:integration,error:integrationError}=await admin.from('integrations').select('config').eq('provider','runninghub').maybeSingle();
