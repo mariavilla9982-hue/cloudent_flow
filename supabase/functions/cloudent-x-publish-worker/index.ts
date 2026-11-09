@@ -540,8 +540,7 @@ async function followBufferLink(admin:any,req:Request,url:URL){
 }
 
 async function publishOne(admin:any,userId:string,config:any,master:string,workerId:string){
-  const configuredAccount=await resolveXAccount(admin,userId,{platform_account_id:config.platform_account_id});
-  const bufferConfig=configuredAccount.config||{};
+  const bufferConfig=config.platform_accounts?.config||{};
   const bufferChannel=String(bufferConfig.buffer_channel_id||bufferChannelFor(config.platform_account_id));
   const bufferKey=bufferConfig.buffer_key_cipher&&bufferConfig.buffer_key_iv
    ?await decryptSecret(bufferConfig.buffer_key_cipher,bufferConfig.buffer_key_iv,master):Deno.env.get("CLOUDENT_X_BUFFER_API_KEY");
@@ -696,12 +695,12 @@ async function runWorker(admin:any,master:string){
   const workerId="xdrive-"+crypto.randomUUID();const now=new Date().toISOString();
   await admin.rpc("release_stale_x_drive_posts");
   await admin.from("worker_runtime").upsert({worker_name:"x_drive_publisher",last_heartbeat:now,updated_at:now},{onConflict:"worker_name"});
-  const {data:configs,error}=await admin.from("x_account_configs").select("*").eq("enabled",true).order("last_worker_at",{ascending:true,nullsFirst:true}).limit(7);if(error)throw error;
+  const {data:configs,error}=await admin.from("x_account_configs").select("*,platform_accounts(config)").eq("enabled",true).order("last_worker_at",{ascending:true,nullsFirst:true}).limit(7);if(error)throw error;
   const results:any[]=[];
   for(const cfg of configs||[]){
     const userId=String(cfg.user_id);
     try{
-      const buffer=!!bufferChannelFor(cfg.platform_account_id);
+      const buffer=cfg.platform_accounts?.config?.publish_provider==="buffer"||!!bufferChannelFor(cfg.platform_account_id);
       if(!buffer)try{await reconcileUncertain(admin,cfg,master);}catch(e){await admin.from("x_account_configs").update({last_error:"Reconciliação pendente: "+cleanError(e)}).eq("platform_account_id",cfg.platform_account_id);}
       const sync={files:0};
       // The atomic claim checks both calendar due dates and the FIFO interval.
