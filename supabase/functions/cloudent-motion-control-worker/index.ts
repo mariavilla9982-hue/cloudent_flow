@@ -1,3 +1,4 @@
+import {retryNextFailedGenjutsu} from '../_shared/image-pipeline-retry.ts';
 import {runGenjutsuPreparation} from '../_shared/genjutsu-preparation.ts';
 import {GENJUTSU_CONFIG,isGenjutsuJob,validateGenjutsuWorkflow,prepareGenjutsuStage,genjutsuInputs,genjutsuPromptWait,applyGenjutsuStatus} from '../_shared/genjutsu-stage.ts';
 import {MotionCreateError,motionDispatchFailurePatch} from "./motion-dispatch.ts";
@@ -190,6 +191,8 @@ Deno.serve(async(req:Request)=>{
     }
 
     if(genjutsu&&new URL(req.url).searchParams.get('phase')==='prepare'){
+      try{await retryNextFailedGenjutsu(admin);}
+      catch(error){console.error('GENJUTSU: falha ao avaliar retry automático',error instanceof Error?error.name:'database_error');}
       const result=await runGenjutsuPreparation({admin,key:Deno.env.get('GEMINI_API_KEY')||'',readBlob:async(job:any,path:string)=>{
         if(job.storage_provider!=='r2')throw new Error('Genjutsu exige armazenamento principal.');
         await requireMotionStorage(admin);

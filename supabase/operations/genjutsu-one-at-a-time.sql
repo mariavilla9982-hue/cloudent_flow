@@ -9,9 +9,11 @@ returns uuid language sql stable security invoker set search_path=public as $$
  and nullif(c.meta->>'pipeline_dispatch_intent','') is null
  and (c.status='uploading' or (c.status='motion_waiting' and c.attempt_count<c.max_attempts))
  and coalesce(c.meta->'genjutsu_prompt'->>'status','')<>'failed'
- -- An existing turn survives retries and a switch from parallel mode.
+ -- A reserved turn survives an earlier video becoming eligible or being retried.
  order by (c.status='uploading') desc,
-   (c.meta->>'prompt_started_at' is not null or c.meta->'genjutsu_prompt'->>'interactionId' is not null) desc,
+   (c.meta->>'genjutsu_serial_turn_at') desc nulls last,
+   (coalesce(c.meta->'genjutsu_prompt'->>'status','')<>'complete'
+      and c.meta->'genjutsu_prompt'->>'interactionId' is not null) desc,
    c.created_at,c.id
  limit 1;
 $$;
@@ -50,7 +52,9 @@ begin
   if active>=cap and j.meta->'genjutsu_prompt'->>'interactionId' is null then return;end if;
  end if;
  return query update production_jobs set status='motion_waiting',locked_at=now(),locked_by=p_worker,updated_at=now(),
- meta=meta||jsonb_build_object('prompt_started_at',coalesce(meta->>'prompt_started_at',now()::text),'preparation_status','PREPARING') where id=j.id returning *;
+ meta=meta||jsonb_build_object('prompt_started_at',coalesce(meta->>'prompt_started_at',now()::text),'preparation_status','PREPARING')||
+   case when cap=1 then jsonb_build_object('genjutsu_serial_turn_at',coalesce(meta->>'genjutsu_serial_turn_at',now()::text)) else '{}'::jsonb end
+ where id=j.id returning *;
 end $$;
 revoke all on function public.claim_genjutsu_prompt_job(text,integer) from public,anon,authenticated;
 grant execute on function public.claim_genjutsu_prompt_job(text,integer) to service_role;
@@ -87,15 +91,40 @@ begin
  if n>=coalesce(capacity,1) then return;end if;
  return query update production_jobs set status='uploading',progress=5,
  attempt_count=case when j.status='uploading' then attempt_count else attempt_count+1 end,
- locked_at=now(),locked_by=p_worker,last_error=null,updated_at=now() where id=j.id returning *;
+ locked_at=now(),locked_by=p_worker,last_error=null,updated_at=now(),
+ meta=meta||case when cap=1 then jsonb_build_object('genjutsu_serial_turn_at',coalesce(meta->>'genjutsu_serial_turn_at',now()::text)) else '{}'::jsonb end
+ where id=j.id returning *;
 end $$;
 revoke all on function public.claim_genjutsu_job(text,integer) from public,anon,authenticated;
 grant execute on function public.claim_genjutsu_job(text,integer) to service_role;
 
+-- Leave a durable retry request when a visible GENJUTSU video newly fails.
+-- The worker evaluates it using the same safety checks as the manual retry.
+create or replace function public.request_genjutsu_auto_retry()
+returns trigger language plpgsql security invoker set search_path=public as $$
+begin
+ if new.meta->>'workflow_key' is distinct from 'genjutsu'
+ or new.meta->>'workflow_id' is distinct from '2117411301344411649' then return new;end if;
+ if old.status='failed' and new.status is distinct from 'failed' then
+  new.meta:=new.meta-array['genjutsu_serial_turn_at','genjutsu_auto_retry_pending_at'];
+ elsif old.status is distinct from 'failed' and new.status='failed'
+ and new.hidden_at is null and new.result_video_id is null
+ and new.meta->>'retry_scope_hold' is null
+ and new.meta->>'genjutsu_auto_retry_at' is null then
+  new.meta:=new.meta||jsonb_build_object('genjutsu_auto_retry_pending_at',now());
+ end if;
+ return new;
+end $$;
+revoke all on function public.request_genjutsu_auto_retry() from public,anon,authenticated;
+grant execute on function public.request_genjutsu_auto_retry() to service_role;
+drop trigger if exists trg_request_genjutsu_auto_retry on public.production_jobs;
+create trigger trg_request_genjutsu_auto_retry before update of status on public.production_jobs
+for each row execute function public.request_genjutsu_auto_retry();
+
 -- Metadata-only wake, at most one request per lane per 10 seconds. Cron remains recovery fallback.
 create or replace function public.wake_genjutsu_queue()
 returns boolean language plpgsql security invoker set search_path=public as $$
-declare stamp jsonb; lane text; due boolean; sent boolean:=false; prev timestamptz; repetitions integer; k integer; cap integer; head_id uuid;
+declare stamp jsonb; lane text; due boolean; sent boolean:=false; prev timestamptz; repetitions integer; k integer; cap integer; head_id uuid; retry_due boolean;
 begin
  perform pg_advisory_xact_lock(hashtext('cloudent-genjutsu-wake')::bigint);
  select value into stamp from app_settings where key='genjutsu_queue_wake';stamp:=coalesce(stamp,'{}'::jsonb);
@@ -105,8 +134,11 @@ begin
   if head_id is null or exists(select 1 from production_jobs c
     where c.id<>head_id and c.meta->>'workflow_key'='genjutsu'
     and (c.status in ('uploading','queued','running') or c.meta->>'pipeline_dispatch_uncertain'='true'))
-  then return false;end if;
+  then head_id:=null;end if;
  end if;
+ select exists(select 1 from production_jobs c where c.meta->>'workflow_key'='genjutsu'
+  and c.status='failed' and c.hidden_at is null and c.result_video_id is null and c.locked_by is null
+  and c.meta->>'genjutsu_auto_retry_pending_at' is not null) into retry_due;
  foreach lane in array array['prepare','video'] loop
   prev:=nullif(stamp->>lane,'')::timestamptz;
   if prev is not null and prev>now()-interval '10 seconds' then continue;end if;
@@ -118,8 +150,8 @@ begin
    and case when lane='prepare' then coalesce(c.meta->'genjutsu_prompt'->>'status','') not in ('complete','failed')
             else c.meta->'genjutsu_prompt'->>'status'='complete' end) into due;
   if cap<>1 and lane='video' and (select count(*) from production_jobs where meta->>'workflow_key'='genjutsu' and (status in ('uploading','queued','running') or meta->>'pipeline_dispatch_uncertain'='true'))>=2 then due:=false;end if;
-  if due then
-   repetitions:=case when cap=1 then 1 when lane='prepare' then cap else 2 end;
+  if due or (lane='prepare' and retry_due) then
+   repetitions:=case when cap=1 or not due then 1 when lane='prepare' then cap else 2 end;
    for k in 1..repetitions loop
    perform net.http_post(url:='https://iubzjfidmxfjvvonusos.supabase.co/functions/v1/cloudent-motion-control-worker?workflow=genjutsu'||case when lane='prepare' then '&phase=prepare' else '' end,
     headers:=jsonb_build_object('Content-Type','application/json','x-cloudent-worker-secret',public.get_cloudent_worker_secret()),body:='{}'::jsonb,timeout_milliseconds:=60000);

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import {retryPipelineMotion as retry} from '../supabase/functions/_shared/image-pipeline-retry.ts';
+import {retryPipelineMotion as retry,retryNextFailedGenjutsu} from '../supabase/functions/_shared/image-pipeline-retry.ts';
 function fixture(){
  const p={id:'job',user_id:'owner',status:'failed',updated_at:'version1',result_video_id:null,runninghub_task_id:'task',original_storage_path:'owner/original',frame_storage_path:'owner/upscale',meta:{image_pipeline_version:2,workflow_id:'v7',provider_status:'FAILED',provider_status_task_id:'task',pipeline_dispatch_intent:'old',motion_execution_phase:'waiting_loop'}};
  const j={id:'job',user_id:'owner',status:'failed',meta:{pipeline_version:2,stage:'control_motion',face_swap_result:{path:'owner/face'},upscale_result:{path:'owner/upscale'},provider_failed:true}};
  const db={production_jobs:p,face_swap_jobs:j};
- const admin={beforeWrite:null,from(table){let filters=[],patch=null;const q={select(){return q},eq(k,v){filters.push(x=>x[k]===v);return q},is(k,v){filters.push(x=>(x[k]??null)===v);return q},contains(k,v){filters.push(x=>Object.entries(v).every(([a,b])=>x[k]?.[a]===b));return q},update(v){patch=v;return q},maybeSingle(){return Promise.resolve({data:filters.every(f=>f(db[table]))?structuredClone(db[table]):null})},then(resolve){if(patch&&admin.beforeWrite){const hook=admin.beforeWrite;admin.beforeWrite=null;hook(db[table]);}const ok=filters.every(f=>f(db[table]));if(ok&&patch)Object.assign(db[table],structuredClone(patch));return Promise.resolve({data:ok?[{id:'job'}]:[]}).then(resolve)}};return q}};
+ const admin={beforeWrite:null,from(table){let filters=[],patch=null;const q={select(){return q},eq(k,v){filters.push(x=>x[k]===v);return q},is(k,v){filters.push(x=>(x[k]??null)===v);return q},contains(k,v){filters.push(x=>Object.entries(v).every(([a,b])=>x[k]?.[a]===b));return q},not(k,op,v){assert.equal(op,'is');const [column,key]=k.split('->>');filters.push(x=>(x[column]?.[key]??null)!==v);return q},order(){return q},limit(){return q},update(v){patch=v;return q},maybeSingle(){return Promise.resolve({data:filters.every(f=>f(db[table]))?structuredClone(db[table]):null})},then(resolve){if(patch&&admin.beforeWrite){const hook=admin.beforeWrite;admin.beforeWrite=null;hook(db[table]);}const ok=filters.every(f=>f(db[table]));if(ok&&patch)Object.assign(db[table],structuredClone(patch));return Promise.resolve({data:ok?[{id:'job'}]:[]}).then(resolve)}};return q}};
  return {p,j,admin};
 }
 {
@@ -44,3 +44,40 @@ for(const status of ['failed','generating','complete']){
  else {assert.equal(state.interactionId,'previous-analysis');assert.equal(state.status,status==='complete'?'complete':'preparing');}
 }
 console.log('PASS explicit terminal prompt retry starts fresh; active analysis and completed prompt stay reusable');
+
+{
+ const {p,admin}=unavailableFixture();
+ Object.assign(p.meta,{genjutsu_auto_retry_pending_at:'2026-11-09T12:00:00Z',genjutsu_serial_turn_at:'2026-11-09T11:00:00Z'});
+ await retryNextFailedGenjutsu(admin);
+ assert.equal(p.status,'motion_waiting');
+ assert.equal(p.runninghub_task_id,null);
+ assert.equal(p.meta.genjutsu_serial_turn_at,undefined);
+ assert.equal(p.meta.genjutsu_auto_retry_pending_at,undefined);
+ assert.ok(p.meta.genjutsu_auto_retry_at);
+ p.status='failed';
+ await retryNextFailedGenjutsu(admin);
+ assert.equal(p.status,'failed');
+}
+{
+ const {p,admin}=fixture();
+ p.runninghub_task_id=null;
+ p.meta={image_pipeline_version:2,workflow_key:'genjutsu',genjutsu_auto_retry_pending_at:'2026-11-09T12:00:00Z',
+   genjutsu_prompt:{status:'failed',interactionId:'failed-analysis'}};
+ await retryNextFailedGenjutsu(admin);
+ assert.equal(p.status,'motion_waiting');
+ assert.equal(p.meta.genjutsu_prompt.previousInteractionId,'failed-analysis');
+ assert.equal(p.meta.genjutsu_prompt.interactionId,undefined);
+}
+for(const patch of [
+ {status:'failed',verifiedProviderFinishReason:'PROHIBITED_CONTENT'},
+ {status:'generating'}
+]){
+ const {p,admin}=fixture();
+ p.runninghub_task_id=null;
+ p.meta={image_pipeline_version:2,workflow_key:'genjutsu',genjutsu_auto_retry_pending_at:'2026-11-09T12:00:00Z',genjutsu_prompt:patch};
+ await retryNextFailedGenjutsu(admin);
+ assert.equal(p.status,'failed');
+ assert.equal(p.meta.genjutsu_auto_retry_pending_at,undefined);
+ assert.equal(p.meta.genjutsu_auto_retry_at,undefined);
+}
+console.log('PASS automatic retry consumes a new failure once and preserves refused or unconfirmed requests');

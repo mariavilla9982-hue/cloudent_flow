@@ -24,6 +24,12 @@ async function signedMediaUrl(admin:any,key:string,expires=7200){
   const req=new Request(String(r.endpoint).replace(/\/$/,"")+"/"+encodeURIComponent(String(r.bucket))+"/"+keyPath(key)+"?X-Amz-Expires="+expires,{method:"GET"});
   return (await aws.sign(req,{aws:{signQuery:true}})).url.toString();
 }
+// Use the current setting so the pause also applies to already scheduled Reels.
+async function firstCommentsEnabled(admin:any){
+  const {data,error}=await admin.from("app_settings").select("value").eq("key","instagram_first_comments").maybeSingle();
+  return !error&&data?.value?.enabled===true;
+}
+
 async function pickFirstComment(admin:any,caption:string,scheduleId:string){
   const {data,error}=await admin.rpc("pick_instagram_first_comment",{p_caption:caption,p_seed:scheduleId});
   if(error)throw error;
@@ -89,7 +95,7 @@ Deno.serve(async(req:Request)=>{
       await verifyMediaReadable(mediaUrl);
       await admin.from("app_settings").delete().eq("key","calendar_media_block_"+scheduleId);
       const coverOffsetMs=3500;
-      const firstCommentMessage=await pickFirstComment(admin,caption,scheduleId);
+      const firstCommentMessage=await firstCommentsEnabled(admin)?await pickFirstComment(admin,caption,scheduleId):null;
       // Normal Reels must appear only in the Reels tab, never in the main profile/feed grid.
       const created=await graph(base,igId+"/media",String(token),"POST",{media_type:"REELS",video_url:mediaUrl,caption,share_to_feed:"false",thumb_offset:String(coverOffsetMs)});
       containerId=String(created.id);
@@ -129,8 +135,9 @@ Deno.serve(async(req:Request)=>{
     const publishedAt=String(payload.published_at||new Date().toISOString());
     let firstCommentId=String(payload.first_comment_id||"")||null;
     let firstCommentError:string|null=null;
-    let comment=String(payload.first_comment_message||"").trim();
-    if(!comment||comment===caption.trim())comment=String(await pickFirstComment(admin,caption,scheduleId)||"").trim();
+    const skipFirstComment=!await firstCommentsEnabled(admin);
+    let comment=skipFirstComment?"":String(payload.first_comment_message||"").trim();
+    if(!skipFirstComment&&(!comment||comment===caption.trim()))comment=String(await pickFirstComment(admin,caption,scheduleId)||"").trim();
     if(comment&&!firstCommentId){
       try{const c=await graph(base,mediaId+"/comments",String(token),"POST",{message:comment.slice(0,2200)});firstCommentId=String(c.id||"")||null;}catch(e:any){firstCommentError=e instanceof Error?e.message:String(e);}
     }
