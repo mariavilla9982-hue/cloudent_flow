@@ -63,8 +63,9 @@ function scheduleValue(value:any){
  if(!Number.isFinite(date.getTime())||date.getTime()<=Date.now())throw new HttpError("Escolha uma data e um horário futuros.",400);
  return date.toISOString();
 }
-function captionValue(value:any){
+function captionValue(value:any,optional=false){
  const text=String(value||"").trim();
+ if(optional&&!text)return "";
  if(!text||!twitterText.parseTweet(text).valid)throw new HttpError("Defina uma legenda de até 280 caracteres.",400);
  return text;
 }
@@ -366,7 +367,7 @@ async function uploadVideoX(driveToken:string,file:any,xToken:string,sourceUrl="
 async function createTweet(xToken:string,text:string,mediaId:string){
   let r:Response;
   try{
-    r=await fetch("https://api.x.com/2/tweets",{method:"POST",headers:{Authorization:"Bearer "+xToken,"Content-Type":"application/json"},body:JSON.stringify({text,media:{media_ids:[mediaId]}})});
+    r=await fetch("https://api.x.com/2/tweets",{method:"POST",headers:{Authorization:"Bearer "+xToken,"Content-Type":"application/json"},body:JSON.stringify({...(text?{text}:{}),media:{media_ids:[mediaId]}})});
   }catch(e){throw new HttpError("Resposta do X ficou incerta após enviar o post. Verifique a conta antes de repetir.",599,{cause:cleanError(e)},true);}
   let j:any={};try{j=await r.json()}catch{}
   if(!r.ok){
@@ -535,13 +536,13 @@ async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,w
  if(xAccount.external_account_id&&String(channel.serviceId)!==String(xAccount.external_account_id))throw new HttpError("O ID do canal do Buffer difere da conta cadastrada no X Studio.",409);
  const path=String(meta.storage_path||"");
  if(meta.source!=="upload"||meta.storage_provider!=="r2"||!path.startsWith(file.user_id+"/x-uploads/"))throw new HttpError("Para publicar via Buffer, envie o vídeo pelo X Studio para o armazenamento principal.",409);
- const text=captionValue(file.post_text);
+ const text=captionValue(file.post_text,true);
  const videoUrl=await bufferVideoUrl(file.id,path,master);
  const assets=[{video:{url:videoUrl}}];
  const workerUrl=Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-x-publish-worker";
  const reply=file.reply_text?bufferReplyLink(captionValue(file.reply_text),file.id,workerUrl):null;
  const thread=reply?[{text,assets},{text:captionValue(reply.text),assets:[]}]:null;
- const input={channelId,text,assets,schedulingType:"automatic",mode:"shareNow",...(thread?{metadata:{twitter:{thread}}}:{})};
+ const input={channelId,...(text||thread?{text}:{}),assets,schedulingType:"automatic",mode:"shareNow",...(thread?{metadata:{twitter:{thread}}}:{})};
  Object.assign(meta,{publish_provider:"buffer",publish_request_started:true,publish_started_at:new Date().toISOString(),buffer_click_target:reply?.target??null});
  const {data:marked,error:markError}=await admin.from("x_drive_posts").update({meta}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing").select("id").maybeSingle();
  if(markError||!marked)throw markError||new Error("publication_claim_lost");
@@ -617,7 +618,7 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
     const xAccount=await resolveXAccount(admin,userId,{platform_account_id:file.platform_account_id});
     if(!xAccount.enabled||xAccount.config?.status!=="connected")throw new HttpError("x_reconnection_required",409);
     if(bufferChannel)return await sendBufferPost(admin,file,xAccount,bufferChannel,workerId,publicationMeta,master,bufferKey);
-    const text=captionValue(file.post_text);
+    const text=captionValue(file.post_text,true);
     const xToken=await usableXToken(admin,xAccount,master);
     let sourceUrl="",driveToken="";
     if(file.meta?.source==="upload"){
@@ -887,7 +888,7 @@ Deno.serve(async(req:Request)=>{
       const account=await resolveXAccount(admin,String(user.id),body);
       const {data:p,error}=await admin.from("x_drive_posts").select("*").eq("id",String(body.id||"")).eq("platform_account_id",account.id).maybeSingle();if(error)throw error;if(!p)return json({error:"not_found"},404);
       const scheduled=scheduleValue(body.scheduled_at);
-      const {data:copy,error:ce}=await admin.from("x_drive_posts").insert({user_id:p.user_id,workspace_id:member.workspace_id,platform_account_id:p.platform_account_id,drive_file_id:"copy:"+crypto.randomUUID(),drive_file_name:p.drive_file_name,drive_mime_type:p.drive_mime_type,drive_size_bytes:p.drive_size_bytes,post_text:captionValue(body.caption??p.post_text),reply_text:body.reply_text===undefined?p.reply_text:String(body.reply_text||"").trim()||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),status:"queued",meta:{source:p.meta?.source,storage_provider:p.meta?.storage_provider,storage_path:p.meta?.storage_path,thumbnail_path:p.meta?.thumbnail_path}}).select("id").single();if(ce){if(ce.code==="23505")return json({error:"slot_taken"},409);throw ce;}return json({ok:true,id:copy.id});
+      const {data:copy,error:ce}=await admin.from("x_drive_posts").insert({user_id:p.user_id,workspace_id:member.workspace_id,platform_account_id:p.platform_account_id,drive_file_id:"copy:"+crypto.randomUUID(),drive_file_name:p.drive_file_name,drive_mime_type:p.drive_mime_type,drive_size_bytes:p.drive_size_bytes,post_text:captionValue(body.caption??p.post_text,true),reply_text:body.reply_text===undefined?p.reply_text:String(body.reply_text||"").trim()||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),status:"queued",meta:{source:p.meta?.source,storage_provider:p.meta?.storage_provider,storage_path:p.meta?.storage_path,thumbnail_path:p.meta?.thumbnail_path,allow_empty_caption:body.caption===undefined?p.meta?.allow_empty_caption===true:!String(body.caption||"").trim()}}).select("id").single();if(ce){if(ce.code==="23505")return json({error:"slot_taken"},409);throw ce;}return json({ok:true,id:copy.id});
     }
     if(action==="google-configure"){
       if(member.role!=="admin")return json({error:"forbidden"},403);
@@ -919,11 +920,11 @@ Deno.serve(async(req:Request)=>{
     }
     if(action==="schedule"){
       const scheduled=scheduleValue(body.scheduled_at);if(!scheduled)return json({error:"missing_schedule"},400);
-      const caption=captionValue(body.caption);if(body.reply_text)captionValue(body.reply_text);
+      const caption=body.caption===undefined?undefined:captionValue(body.caption,true);if(body.reply_text)captionValue(body.reply_text);
       const {data:p,error:pe}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
       if(pe)throw pe;if(!p)return json({error:"not_found"},404);
       if(p.meta?.publish_uncertain)return json({error:"publish_uncertain",user_message:"Confira a publicação na conta X antes de reagendar."},409);
-      const {data,error}=await admin.from("x_drive_posts").update({scheduled_at:scheduled,post_text:caption,...(body.reply_text===undefined?{}:{reply_text:String(body.reply_text||"").trim()||null}),next_attempt_at:scheduled,updated_at:new Date().toISOString()}).eq("id",String(body.id||"")).eq("user_id",userId).in("status",["queued","failed"]).select("id").maybeSingle();
+      const {data,error}=await admin.from("x_drive_posts").update({scheduled_at:scheduled,...(caption===undefined?{}:{post_text:caption,meta:{...p.meta,allow_empty_caption:!caption}}),...(body.reply_text===undefined?{}:{reply_text:String(body.reply_text||"").trim()||null}),next_attempt_at:scheduled,updated_at:new Date().toISOString()}).eq("id",String(body.id||"")).eq("user_id",userId).in("status",["queued","failed"]).select("id").maybeSingle();
       if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Já existe um vídeo nesse horário. Escolha outra vaga."},409);throw error;}
       if(!data)return json({error:"post_locked",user_message:"Essa postagem já está sendo enviada ou foi finalizada."},409);
       return json({ok:true});
@@ -949,7 +950,7 @@ Deno.serve(async(req:Request)=>{
       }
       const scheduled=body.gallery===true?null:scheduleValue(body.scheduled_at);
       const gallery=body.gallery===true;
-      const text=gallery&&!String(body.caption||"").trim()?"":captionValue(body.caption),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
+      const text=captionValue(body.caption,true),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
       if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video"},400);
       const source=await uploadReadUrl(admin,provider,path);
       if(!await uploadedVideoMatches(source,size))return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
@@ -957,7 +958,7 @@ Deno.serve(async(req:Request)=>{
       if(!ids.length||ids.length>100)return json({error:"invalid_accounts"},400);
       const accounts=[];for(const id of ids){const a=await resolveXAccount(admin,userId,{platform_account_id:id});if(!a.enabled)throw new HttpError("x_disconnected",409);accounts.push(a);}
       const reply=String(body.reply_text||"").trim();if(reply)captionValue(reply);
-      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path,gallery}}));
+      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path,gallery,allow_empty_caption:!gallery&&!text}}));
       const {data,error}=await admin.from("x_drive_posts").upsert(rows,{onConflict:"user_id,drive_file_id,platform_account_id",ignoreDuplicates:true}).select("id,platform_account_id");
       if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Horário já ocupado nesta conta."},409);throw error;}
       for(const a of accounts)await auditX(admin,member,userId,a.id,"post_created",{count:1});
@@ -965,12 +966,10 @@ Deno.serve(async(req:Request)=>{
     }
 
     if(action==="edit-caption"||action==="skip"){
-      const text=action==="edit-caption"?captionValue(body.caption):null;
-      if(action==="skip"){
-        const {data:original,error:oe}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();if(oe)throw oe;
-        if(original?.meta?.publish_uncertain)return json({error:"Confira a publicação incerta no X antes de remover."},409);
-      }
-      const patch=action==="skip"?{status:"skipped"}:{post_text:text};
+      const text=action==="edit-caption"?captionValue(body.caption,true):null;
+      const {data:original,error:oe}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();if(oe)throw oe;
+      if(original?.meta?.publish_uncertain)return json({error:"Confira a publicação incerta no X antes de alterar."},409);
+      const patch=action==="skip"?{status:"skipped"}:{post_text:text,meta:{...original?.meta,allow_empty_caption:!text}};
       const {data,error}=await admin.from("x_drive_posts").update({...patch,updated_at:new Date().toISOString()}).eq("id",String(body.id||"")).eq("user_id",userId).in("status",["queued","failed"]).select("id").maybeSingle();
       if(error)throw error;if(!data)return json({error:"post_locked",user_message:"Essa postagem já está sendo enviada ou foi finalizada."},409);
       if(action==="skip"){const {error:releaseError}=await admin.from("x_caption_queue").update({status:"pending",post_id:null}).eq("post_id",String(body.id||"")).eq("user_id",userId).eq("status","reserved");if(releaseError)throw releaseError;}
