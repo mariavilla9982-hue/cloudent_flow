@@ -1843,7 +1843,16 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .runninghub-credit-pill b{font-size:11px;color:#ffe08a}
 .runninghub-commandbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;margin-bottom:12px;border:1px solid #262626;border-radius:11px;background:#0e0e0e}
 .runninghub-command-info span,.runninghub-command-info b,.runninghub-command-info small{display:block}.runninghub-command-info span{font-size:8px;color:#666f7d;text-transform:uppercase;letter-spacing:.08em;font-weight:900}.runninghub-command-info b{font-size:11px;margin-top:2px}.runninghub-command-info small{font-size:8px;color:#727b89;margin-top:2px}.runninghub-command-actions{display:flex;gap:7px;flex-wrap:wrap}
-.runninghub-settings-intro-4{grid-template-columns:repeat(4,1fr)}.rh-credit-number{font-size:16px!important;color:#f2cc68!important;font-weight:900!important;margin-top:2px!important}
+.runninghub-settings-intro-4{grid-template-columns:repeat(3,minmax(0,1fr))}
+.rh-billing{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.rh-billing>div{padding:13px;border:1px solid #333;border-radius:10px;background:#101010}
+.rh-billing>div:first-child{background:#151a10;border-color:#3d4b2c}
+.rh-billing small,.rh-billing strong,.rh-billing span{display:block}
+.rh-billing small{color:#b8b8b8;font-size:10px}
+.rh-billing strong{color:#eee;font-size:21px;margin:4px 0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.rh-billing>div:first-child strong{color:#dcf3a8}
+.rh-billing span{color:#aaa;font-size:10px}
+.rh-billing-link{display:inline-block;margin:8px 0 4px;font-size:10px;color:#c6c6c6;text-decoration:underline}
 @media(max-width:900px){.runninghub-settings-intro-4{grid-template-columns:1fr 1fr}.runninghub-commandbar{align-items:flex-start;flex-direction:column}}
 @media(max-width:560px){.runninghub-settings-intro-4{grid-template-columns:1fr}.runninghub-command-actions{width:100%}.runninghub-command-actions .btn{flex:1}}
 
@@ -11682,6 +11691,22 @@ function systemHealthMarkup(){
   '</div>';
 }
 
+function runningHubBillingCards(status){
+  const fmt=new Intl.NumberFormat("pt-BR",{maximumFractionDigits:6});
+  const points=Number.isFinite(status.points)?status.points:null;
+  const credits=Number.isFinite(status.credits)?status.credits:null;
+  const balance=points??credits;
+  const wallet=Number.isFinite(status.walletBalance)?status.walletBalance:null;
+  const money=wallet===null?"—":status.currency
+    ? new Intl.NumberFormat("pt-BR",{style:"currency",currency:status.currency,maximumFractionDigits:6}).format(wallet)
+    : fmt.format(wallet);
+  return `<div class="rh-billing" aria-label="Saldos RunningHub">
+    <div><small>${points!==null?"Pontos disponíveis":credits!==null?"Saldo de créditos RH":"Pontos e créditos"}</small><strong>${balance===null?"—":fmt.format(balance)}</strong><span>${balance===null?"Saldo indisponível":"Saldo informado pelo RunningHub"}</span></div>
+    <div><small>Carteira</small><strong>${esc(money)}</strong><span>${wallet===null?"Saldo indisponível":status.currency?"Saldo monetário": "Moeda não informada pela API"}</span></div>
+  </div>
+  <a class="rh-billing-link" href="https://www.runninghub.ai/call-api/bill-task?tab=detail" target="_blank" rel="noopener noreferrer">Ver extrato no RunningHub ↗</a>`;
+}
+
 function settings(){
   const user=cloudSession?.user,ig=instagramIntegration;
   const rh=productionData?.integration||{},rhCfg=rh.config||{},rhWorker=productionData?.worker,rhStatus=productionData?.runninghubStatus||{};
@@ -11813,8 +11838,8 @@ function settings(){
           <span class="status-pill ${rhReady?"ok":"warn"}">${rhReady?"Configurado":"Configurar"}</span>
         </div>
 
+        ${runningHubBillingCards(rhStatus)}
         <div class="runninghub-settings-intro runninghub-settings-intro-4">
-          <div><b>Créditos</b><span class="rh-credit-number">${Number.isFinite(Number(rhStatus.credits))?Number(rhStatus.credits).toLocaleString("pt-BR"):"—"}</span></div>
           <div><b>Load Video</b><span>Node #336 · vídeo original</span></div>
           <div><b>Reference Image</b><span>Node #338 · frame da modelo</span></div>
           <div><b>Worker</b><span>${rhWorker?.online?"Online 24/7":"Aguardando"}</span></div>
@@ -12111,7 +12136,7 @@ init();
 <script src="/genjutsu-ui.js?v=14"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>
 <script src="/production-studio.js?v=6"></script>
-<script src="/image-pipeline-ui.js?v=18"></script>
+<script src="/image-pipeline-ui.js?v=19"></script>
 </body>
 </html>
 

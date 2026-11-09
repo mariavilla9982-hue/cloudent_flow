@@ -15,6 +15,7 @@
 .face-swap-jobs{display:grid;gap:12px;width:100%;max-width:1120px;margin:0 auto}.pipeline-queue-summary{display:flex;gap:18px;flex-wrap:wrap;padding:14px 16px;border:1px solid #292929;border-radius:12px;background:#101010;font-size:12px;color:#aaa}.pipeline-queue-summary strong{color:#eee}.pipeline-group-title{margin:16px 0 2px;font-size:12px;font-weight:600;color:#aaa;letter-spacing:.03em}.pipeline-step.queued{color:#aaa}.pipeline-step.queued .pipeline-step-icon{border-style:dashed}.pipeline-stage-segment.queued{background:#444}.pipeline-job-number{color:#777;font-size:10px;white-space:nowrap}.pipeline-job-notice{font-size:11px;line-height:1.5;color:#aaa;background:#151515;border:1px solid #292929;border-radius:8px;padding:10px;margin:10px 0}
 @keyframes pipeline-stage-sweep{to{transform:translateX(100%)}}
 @media(max-width:600px){.pipeline-job{grid-template-columns:74px minmax(0,1fr);gap:12px;padding:12px!important}.pipeline-job-head{flex-wrap:wrap;gap:6px;margin-bottom:10px}.pipeline-job-name{width:100%;font-size:11px}.pipeline-job-current{font-size:12px}.pipeline-job-subtitle{font-size:10px;margin-bottom:14px}.pipeline-step{flex-direction:column;align-items:flex-start;gap:5px;font-size:9px}.pipeline-job-actions{gap:6px}.pipeline-job-actions .btn{font-size:10px;padding:6px 9px}.pipeline-job-actions .pipeline-delete{margin-left:0}}
+.pipeline-costs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}.pipeline-costs>span{padding:5px 8px;border:1px solid #333;border-radius:7px;color:#aaa;font-size:10px;line-height:1.4}.pipeline-costs b{color:#eee;font-weight:600}.pipeline-costs .pipeline-cost-total{border-color:#465030;background:#14190f;color:#c8d9a5}.pipeline-cost-total b{color:#e4f4c5}
 @media(prefers-reduced-motion:reduce){.pipeline-stage-segment.active::after{animation:none;transform:none;background:#777}}
 `;
   const sources={faceSwap:'face_swap_natural',upscale:'upscale_manual',faceSwapPhoto:'face_swap_photo'};
@@ -252,6 +253,39 @@
       }catch{previewCache.delete(key);const hint=target.querySelector('.pipeline-job-placeholder span');if(hint)hint.textContent='Prévia indisponível';}
     }
   }
+  function imageCosts(j){
+    const m=j.meta, charges=m.image_task_charges||{};
+    const stages=[['face_swap','Face Swap'],['upscale','Upscaling']];
+    const number=new Intl.NumberFormat('pt-BR',{maximumFractionDigits:6});
+    const valid=charge=>Number.isFinite(charge?.amount)&&['points','coins'].includes(charge.unit);
+    const totals={};
+    const sum=values=>{
+      const units={};
+      for(const {unit,amount} of values){
+        units[unit]=(units[unit]||0)+amount;
+        totals[unit]=(totals[unit]||0)+amount;
+      }
+      return format(units);
+    };
+    const format=units=>Object.entries(units).map(([unit,amount])=>number.format(amount)+(unit==='points'?' pts':' RH Coins')).join(' + ');
+    let partial=false,stageCount=0;
+    const labels=stages.map(([stage,label])=>{
+      const id=m[stage+'_task_id'];
+      const entries=Object.values(charges).filter(charge=>charge?.stage===stage);
+      if(!entries.length&&!id&&!m[stage+'_result'])return '';
+      const confirmed=entries.filter(valid);
+      const complete=confirmed.length===entries.length&&entries.length>0&&(!id||valid(charges[id]));
+      const current=m.stage===stage&&j.runninghub_task_id===id&&['queued','running'].includes(j.status);
+      partial||=!complete;
+      stageCount++;
+      const value=confirmed.length?sum(confirmed)+(complete?'':' · parcial'):current?'Em apuração':'Sem valor confirmado';
+      return '<span>'+label+' <b>'+e(value)+'</b></span>';
+    }).join('');
+    if(!labels)return '';
+    const total=format(totals);
+    return '<div class="pipeline-costs" aria-label="Consumo de imagem no RunningHub">'+labels+
+      (total&&stageCount>1?'<span class="pipeline-cost-total">'+(partial?'Subtotal confirmado':'Total de imagem')+' <b>'+e(total)+'</b></span>':'')+'</div>';
+  }
   function drawJobs(){
     const node=document.querySelector('#'+currentPage+' [data-pipeline-jobs]');if(!node)return;
     const rank=j=>j.meta?.stage==='control_motion'&&(j.status==='cancelled'||j.production?.status==='cancelled')?4:j.status==='ready'||j.production?.status==='ready'?2:j.status==='failed'||j.production?.status==='failed'?3:queueState(j)?1:0;
@@ -262,7 +296,7 @@
     if(dock?.dataset.selectedJob&&!visibleRows.some(j=>j.id===dock.dataset.selectedJob)){delete dock.dataset.selectedJob;delete dock.dataset.resultToken;dock.innerHTML='<p class="studio-empty">Selecione um resultado na lista.</p>';}
     const filter=viewFilters[currentPage]||'all',term=(searchTerms[currentPage]||'').trim().toLocaleLowerCase('pt-BR');
     const rows=visibleRows.filter(j=>(filter==='all'||filter==='active'&&rank(j)<2||filter==='ready'&&rank(j)===2||filter==='failed'&&rank(j)===3)&&(!term||String(j.original_file_name+' '+(j.meta?.character_name||'')).toLocaleLowerCase('pt-BR').includes(term)));
-    const signature=JSON.stringify([filter,term,typeof panelViews==='undefined'?null:panelViews[currentPage],rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.meta?.face_swap_result?.path,j.meta?.upscale_result?.path,j.last_error,j.meta?.provider_queue_waiting,j.meta?.queue_reason,j.production?.meta?.provider_queue_waiting,j.production?.status,j.production?.progress])]);
+    const signature=JSON.stringify([filter,term,typeof panelViews==='undefined'?null:panelViews[currentPage],rows.map(j=>[j.id,j.status,j.meta?.pipeline_status,j.meta?.face_swap_result?.path,j.meta?.upscale_result?.path,j.last_error,j.meta?.provider_queue_waiting,j.meta?.queue_reason,j.production?.meta?.provider_queue_waiting,j.production?.status,j.production?.progress,j.runninghub_task_id,j.meta?.face_swap_task_id,j.meta?.upscale_task_id,j.meta?.image_task_charges])]);
     if(node.dataset.signature===signature)return;node.dataset.signature=signature;
     const groups=['Em processamento','Na fila','Concluídos','Precisam de atenção','Cancelados'];
     const counts=groups.map((_,i)=>rows.filter(j=>rank(j)===i).length);
@@ -288,6 +322,7 @@
         (j.meta.source==='face_swap_natural'?'<span class="pipeline-character-tag">'+e(workflowLabel(j))+'</span>':'')+(j.meta.character_name?'<span class="pipeline-character-tag studio-model-tag" data-character="'+e(window.CloudentStudio?.modelOf?.(j)||'')+'">'+e(j.meta.character_name)+'</span>':'')+'<p class="pipeline-job-current"><span class="pipeline-status-dot"></span>'+e(title)+'</p><p class="pipeline-job-subtitle">'+e(subtitle)+'</p>'+
         '<div class="pipeline-stage-track" role="progressbar" aria-label="Etapas concluídas" aria-valuemin="0" aria-valuemax="'+steps.length+'" aria-valuenow="'+state.done+'" aria-valuetext="'+e(title)+'">'+steps.map(step=>'<span class="pipeline-stage-segment '+step.state+'"></span>').join('')+'</div>'+
         '<ol class="pipeline-step-list">'+steps.map((step,i)=>'<li class="pipeline-step '+step.state+'" '+(step.state==='active'?'aria-current="step"':'')+'><span class="pipeline-step-icon">'+(step.done?'✓':step.state==='failed'?'!':i+1)+'</span><span>'+step.name+'</span></li>').join('')+'</ol>'+
+        imageCosts(j)+
         (j.last_error?'<p class="'+(failed?'pipeline-job-error':'pipeline-job-notice')+'">'+e(j.last_error)+'</p>':'')+
         '<div class="pipeline-job-actions">'+(j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-original="'+j.id+'">▷ Vídeo original</button>':'')+(j.meta.source==='face_swap_natural'&&(j.meta.upscale_result||j.meta.face_swap_result)?'<button type="button" class="btn" data-compare="'+j.id+'">Comparar imagem</button>':'')+(ready?'<button type="button" class="btn primary" data-open="'+j.id+'">Ver resultado</button><button type="button" class="btn" data-download="'+j.id+'">↓ Baixar</button>':'')+(ready&&j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(stage==='control_motion'&&j.status==='waiting'&&j.production?.status==='motion_waiting'?'<button type="button" class="btn" data-cancel="'+j.id+'">Cancelar espera</button>':'')+(retry?'<button type="button" class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button type="button" class="btn pipeline-delete" data-delete="'+j.id+'" '+(deletable?'':'disabled title="Disponível após o processamento"')+'>Excluir</button></div></div><div data-result="'+j.id+'"></div></article>';
     }).join(''):'<div class="card"><p class="muted">Envie um arquivo para acompanhar as etapas e a prévia aqui.</p></div>');

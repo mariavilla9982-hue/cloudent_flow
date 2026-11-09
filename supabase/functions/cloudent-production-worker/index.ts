@@ -4,6 +4,7 @@ import {genjutsuExecutionEvent,safeGenjutsuError} from '../_shared/genjutsu-diag
 import {pipelineVideoWorkflow} from '../_shared/image-pipeline-workflows.ts';
 import {enrichFailedMotionJobs,enrichPreviousMotionFailure} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
+import {reconcileImageCharges} from '../_shared/image-pipeline-billing.ts';
 import {motionStorageHealth,motionStorageRead,requireMotionStorage,reserveMotionStorage,commitMotionStorage,putMotionPrimary,MotionStorageSafetyError} from "./motion-storage-protection.ts";
 import {isMotionStatusJob,readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 
@@ -337,11 +338,11 @@ Deno.serve(async(req:Request)=>{
       }catch{return null}
     }
 
-    async function rhJson(path:string,body:any){
+    async function rhJson(path:string,body:any,signal?:AbortSignal){
       const r=await fetch(base+path,{
         method:"POST",
         headers:{"Authorization":"Bearer "+apiKey,"Content-Type":"application/json"},
-        body:JSON.stringify({...body,apiKey})
+        body:JSON.stringify(path.startsWith("/openapi/v2/")?body:{...body,apiKey}),signal
       });
       let j:any={};try{j=await r.json()}catch{}
       if(!r.ok)throw new Error(j?.msg||j?.message||("RunningHub HTTP "+r.status));
@@ -643,6 +644,7 @@ Deno.serve(async(req:Request)=>{
       wakeMotion:async(key:string="motion_control")=>{if(key==="genjutsu")await admin.rpc("wake_genjutsu_queue");await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker"+(key==="genjutsu"?"?workflow=genjutsu":""),{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
     });
 
+    EdgeRuntime.waitUntil(reconcileImageCharges(admin,rhJson).catch(()=>null));
     let touched=0;
     const {data:activeFaceSwap,error:faceActiveError}=await admin.from("face_swap_jobs")
       .select("*").in("status",["queued","running"]).order("created_at",{ascending:true}).limit(50);
@@ -947,6 +949,7 @@ Deno.serve(async(req:Request)=>{
       const {data:missingFaceCosts}=await admin.from("face_swap_jobs")
         .select("id,runninghub_task_id,credits_used,runninghub_cost_money,runninghub_third_party_cost_money,runninghub_runtime_seconds,updated_at")
         .eq("status","ready")
+        .not("meta","cs",'{"pipeline_version":2}')
         .is("credits_used",null)
         .not("runninghub_task_id","is",null)
         .gte("completed_at",cutoff)

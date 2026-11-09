@@ -1,6 +1,7 @@
 // New jobs only. Legacy face-swap jobs keep their original executor.
 import {createManualGenjutsuPrompt} from './genjutsu-gemini.ts';
 import {pipelineVideoWorkflow} from './image-pipeline-workflows.ts';
+import {readImageCharge} from './image-pipeline-billing.ts';
 export const FACE_WORKFLOW='2111452526003380225';
 export const UPSCALE_WORKFLOW='2111453733402390530';
 export const isPipeline=(j:any)=>j?.meta?.pipeline_version===2;
@@ -105,7 +106,12 @@ export async function runImagePipeline(d:any){
         continue;
       }
       const result=await rhJson('/task/openapi/outputs',{taskId:j.runninghub_task_id});
-      if(Number(result?.code)===805){await patch(j,{status:'failed',last_error:String(result?.msg||'Workflow falhou'),meta:{...m,dispatch_uncertain:false,provider_failed:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});continue;}
+      const billedMeta=async()=>{
+        const id=String(j.runninghub_task_id);
+        const charges={...m.image_task_charges,[id]:await readImageCharge(rhJson,id,stage,result)};
+        return {...m,[stage+'_task_id']:id,image_task_charges:charges,image_billing_reconciled_at:null};
+      };
+      if(Number(result?.code)===805){await patch(j,{status:'failed',last_error:String(result?.msg||'Workflow falhou'),meta:{...await billedMeta(),dispatch_uncertain:false,provider_failed:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});continue;}
       if(Number(result?.code)!==0||!Array.isArray(result.data)||!result.data.length){
         // Never infer RUNNING from an arbitrary API error or empty outputs.
         const response=await rhJson('/task/openapi/status',{taskId:j.runninghub_task_id});
@@ -115,13 +121,13 @@ export async function runImagePipeline(d:any){
         }else if(provider==='RUNNING'){
           await patch(j,{status:'running',started_at:j.started_at||new Date().toISOString(),last_error:null,meta:{...m,provider_status:'RUNNING',provider_queue_waiting:false,pipeline_status:stage.toUpperCase()+'_RUNNING'}});
         }else if(provider==='FAILED'){
-          await patch(j,{status:'failed',last_error:String(result?.msg||'Workflow falhou'),meta:{...m,provider_status:'FAILED',provider_queue_waiting:false,dispatch_uncertain:false,provider_failed:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});
+          await patch(j,{status:'failed',last_error:String(result?.msg||'Workflow falhou'),meta:{...await billedMeta(),provider_status:'FAILED',provider_queue_waiting:false,dispatch_uncertain:false,provider_failed:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});
         }
         continue;
       }
       const item=exactOutput(result.data,stage==='face_swap'?'240':'131');
       const saved=await saveBlob(j,stage,item);
-      m={...m,[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
+      m={...await billedMeta(),[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
       if(stage==='face_swap'){
         await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'UPSCALE_WAITING'},last_error:null});
         // One bounded handoff after releasing this lease; the database still enforces
