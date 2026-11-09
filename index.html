@@ -12053,6 +12053,17 @@ async function addXPostingBatch(){
 }
 async function xDisconnectAccount(remove){if(!xSelectedAccountId||xSelectedAccountId==='all')return;try{await xPostingRequest(remove?'account-remove':'account-status',{});await switchXAccount('');}catch(e){toast(e.message,'err');}}
 function xMetricsMarkup(){
+ const buffered=(xPostingData?.accounts||[]).filter(a=>a.publish_provider==='buffer'&&(xSelectedAccountId==='all'||a.id===xSelectedAccountId));
+ if(buffered.length){
+  const bars=buffered.map(a=>{
+   const handle=String(a.username||'').replace(/^@/,'');
+   const views=/^[A-Za-z0-9_]{1,15}$/.test(handle)?`<a href="https://x.com/${handle}" target="_blank" rel="noopener noreferrer">Consultar no X ↗</a>`:'Consultar no X';
+   const recent=(xPostingData?.posts||[]).filter(p=>p.platform_account_id===a.id&&p.status==='published'&&p.x_post_id).sort((left,right)=>Date.parse(right.published_at)-Date.parse(left.published_at));
+   const rows=recent.map(p=>`<div class="x-batch-row"><a href="https://x.com/i/status/${encodeURIComponent(p.x_post_id)}" target="_blank" rel="noopener noreferrer">${esc(p.drive_file_name||'Ver publicação')} ↗</a><small>Visualizações no X · ${p.meta?.buffer_click_target?`Cliques: ${Number(p.meta.buffer_link_clicks||0).toLocaleString('pt-BR')}`:'Link sem rastreamento'}</small></div>`).join('');
+   return `<section class="x-settings-panel"><h3>@${esc(handle)}</h3><div class="x-metric-grid"><div><small>Visualizações</small><p>${views}</p></div><div><small>Cliques nos links · posts dos últimos 30 dias</small><h3>${typeof a.clicks==='number'?a.clicks.toLocaleString('pt-BR'):'—'}</h3></div></div><h3>Por publicação</h3>${rows||'<p>Nenhum post publicado pelo Cloudent nesta conta.</p>'}</section>`;
+  }).join('');
+  return `<section><p class="x-muted">O contador registra cliques nos links rastreados, incluindo cliques repetidos. As visualizações ficam no X.</p>${bars}</section>`;
+ }
  const cfg=xPostingData?.config||{},snapshot=cfg.metrics_snapshot||{},profile=snapshot.account||{};
  const cards=[['followers_count','Seguidores'],['following_count','Seguindo'],['tweet_count','Publicações']].map(([key,label])=>`<div><small>${label}</small><h3>${typeof profile[key]==='number'?profile[key].toLocaleString('pt-BR'):'—'}</h3></div>`).join('');
  const recent=snapshot.recent_posts||[];
