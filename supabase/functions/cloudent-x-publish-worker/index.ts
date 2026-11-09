@@ -427,8 +427,9 @@ async function listBufferChannels(key:string){
  const organizations=Array.isArray(account?.organizations)?account.organizations.slice(0,5):[];
  const results=await Promise.all(organizations.map((org:any)=>bufferGraph(
   "query Channels($id: OrganizationId!) { channels(input:{organizationId:$id}) { id name service isDisconnected isLocked } }",{id:org.id},false,key)));
- return results.flatMap(result=>result.channels||[]).filter(channel=>channel.service==="twitter"&&!channel.isDisconnected&&!channel.isLocked)
-  .map(channel=>({id:String(channel.id),username:String(channel.name).replace(/^@/,"")}));
+ return results.flatMap((result,index)=>(result.channels||[]).map(channel=>({...channel,organizationId:String(organizations[index].id)})))
+  .filter(channel=>channel.service==="twitter"&&!channel.isDisconnected&&!channel.isLocked)
+  .map(channel=>({id:String(channel.id),username:String(channel.name).replace(/^@/,""),organizationId:channel.organizationId}));
 }
 
 async function connectOwnBufferAccount(admin:any,userId:string,master:string,body:any){
@@ -648,6 +649,48 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
   }
 }
 
+async function canUseXDashboard(admin:any,userId:string,member:any){
+ if(member.role!=="x_user")return false;
+ const {data,error}=await admin.from("app_settings").select("value").eq("key","x_studio_private_dashboard").maybeSingle();
+ return !error&&data?.value?.user_id===userId;
+}
+
+function xDashboardMetric(metrics:any[],type:string){
+ const value=metrics.find(m=>m?.type===type&&m.unit==="count")?.value;
+ return typeof value==="number"&&Number.isFinite(value)&&value>=0?value:null;
+}
+
+async function xDashboardPayload(admin:any,userId:string,member:any,master:string){
+ const [{data:accounts,error},{data:grants,error:grantError}]=await Promise.all([
+  admin.from("platform_accounts").select("id,account_label,config").eq("platform","x").eq("workspace_id",member.workspace_id).eq("owner_user_id",userId).eq("enabled",true).order("created_at"),
+  admin.from("x_account_access").select("platform_account_id").eq("workspace_id",member.workspace_id).eq("user_id",userId)
+ ]);
+ if(error||grantError)throw error||grantError;
+ const visibleIds=new Set((grants||[]).map(g=>g.platform_account_id));
+ const channelLists=new Map<string,ReturnType<typeof listBufferChannels>>();
+ const end=new Date(),start=new Date(end.getTime()-30*86400000);
+ const rows=await Promise.all((accounts||[]).filter(a=>visibleIds.has(a.id)).map(async a=>{
+  const username=String(a.config?.username||a.account_label||"").replace(/^@/,"");
+  const row={id:a.id,username,views:null as number|null,impressions:null as number|null,updated_at:null as string|null,message:"Métricas indisponíveis para esta conexão."};
+  const cfg=a.config||{},channelId=String(cfg.buffer_channel_id||"");
+  if(!channelId||!cfg.buffer_key_cipher||!cfg.buffer_key_iv)return row;
+  try{
+   const key=await decryptSecret(cfg.buffer_key_cipher,cfg.buffer_key_iv,master);
+   if(!channelLists.has(key))channelLists.set(key,listBufferChannels(key));
+   const channel=(await channelLists.get(key)!).find(c=>c.id===channelId);
+   if(!channel||channel.username.toLowerCase()!==username.toLowerCase())return row;
+   const input={organizationId:channel.organizationId,channelIds:[channelId],startDateTime:start.toISOString(),endDateTime:end.toISOString()};
+   const {aggregatedPostMetrics}=await bufferGraph("query XDashboard($input: AggregatedPostMetricsInput!) { aggregatedPostMetrics(input:$input) { metrics { type value unit } metricsUpdatedAt } }",{input},false,key);
+   const metrics=Array.isArray(aggregatedPostMetrics?.metrics)?aggregatedPostMetrics.metrics:[];
+   const views=xDashboardMetric(metrics,"views"),impressions=xDashboardMetric(metrics,"impressions");
+   return {...row,views,impressions,updated_at:aggregatedPostMetrics?.metricsUpdatedAt??null,message:views===null&&impressions===null?"O Buffer ainda não retornou dados para esta conta.":""};
+  }catch{
+   return {...row,message:"Não foi possível consultar o Buffer. Confira a permissão de leitura de métricas da chave (insightsRead)."};
+  }
+ }));
+ return {ok:true,accounts:rows};
+}
+
 async function statusPayload(admin:any,userId:string,master:string,url:URL){
  const member=await requireXMember(admin,userId);
  const {data:all,error}=await admin.from("platform_accounts").select("id,account_label,enabled,config,workspace_id,owner_user_id,external_account_id").eq("platform","x").eq("workspace_id",member.workspace_id).order("created_at");if(error)throw error;
@@ -823,8 +866,13 @@ Deno.serve(async(req:Request)=>{
 
     const user=await requireUser(admin,req);let userId=String(user.id);
     const member=await requireXMember(admin,userId);
-    const {data:rateOk,error:rateError}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:action==="status"?"x-read":"x-write",p_limit:action==="status"?120:100});if(rateError)throw rateError;if(!rateOk)return json({error:"rate_limit"},429);
-    if(action==="status")return json(await statusPayload(admin,userId,master,url));
+    const {data:rateOk,error:rateError}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:action==="dashboard"?"x-dashboard":action==="status"?"x-read":"x-write",p_limit:action==="dashboard"?4:action==="status"?120:100});if(rateError)throw rateError;if(!rateOk)return json({error:"rate_limit"},429);
+    if(action==="status")return json({...await statusPayload(admin,userId,master,url),dashboard_access:await canUseXDashboard(admin,userId,member)});
+    if(action==="dashboard"){
+      if(req.method!=="GET")return json({error:"method_not_allowed"},405);
+      if(!await canUseXDashboard(admin,userId,member))return json({error:"forbidden"},403);
+      return json(await xDashboardPayload(admin,userId,member,master));
+    }
     if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     const body=await parseBody(req);
     if(member.role!=="admin"&&["google-configure","google-start","google-folder","sync"].includes(action))return json({error:"forbidden"},403);
@@ -832,7 +880,7 @@ Deno.serve(async(req:Request)=>{
       const {data:allowed,error}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:"x-buffer-connect",p_limit:20});
       if(error)throw error;
       if(!allowed)return json({error:"rate_limit"},429);
-      if(action==="buffer-channels")return json({ok:true,channels:await listBufferChannels(submittedBufferKey(body))});
+      if(action==="buffer-channels")return json({ok:true,channels:(await listBufferChannels(submittedBufferKey(body))).map(({id,username})=>({id,username}))});
       return json(await connectOwnBufferAccount(admin,userId,master,body));
     }
     if(action==="audit-session"){await auditX(admin,member,userId,null,body.event==="logout"?"logout":"login");return json({ok:true});}
