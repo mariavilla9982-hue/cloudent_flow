@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { webcrypto } = require('node:crypto');
 const { stripTypeScriptTypes } = require('node:module');
 
 const accountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -14,6 +15,7 @@ const env = {
 };
 const context = vm.createContext({
   URL, Request, Response, Headers, AbortSignal, TextEncoder, TextDecoder,
+  crypto: webcrypto, btoa, atob,
   Deno: { env: { get: key => env[key] }, serve() {} },
   twitterText: {
     parseTweet: text => ({ valid: text.length > 0 }),
@@ -38,6 +40,7 @@ let creates = 0;
 let connection = 'reistest';
 let remoteState = 'buffer';
 let registeredAccount;
+let ownConnection;
 const updates = [];
 const admin = {
   from(table) {
@@ -82,6 +85,10 @@ const admin = {
       registeredAccount = args;
       return { data: args.p_id };
     }
+    if (name === 'x_buffer_connect_own_account') {
+      ownConnection = args;
+      return { data: accountId };
+    }
     throw new Error('Unexpected RPC ' + name);
   },
 };
@@ -92,6 +99,17 @@ context.usableXToken = async () => { paidCalls++; throw Error('Paid X call'); };
 context.fetch = async (url, options) => {
   assert.equal(url, 'https://api.buffer.com');
   const { query, variables } = JSON.parse(options.body);
+  if (query.startsWith('query Organizations')) {
+    return Response.json({ data: { account: { organizations: [{ id: 'org' }] } } });
+  }
+  if (query.startsWith('query Channels')) {
+    assert.equal(variables.id, 'org');
+    return Response.json({ data: { channels: [
+      { id: 'buffer-channel', name: 'ReisTest', service: 'twitter' },
+      { id: 'other-social', name: 'ReisTest', service: 'instagram' },
+      { id: 'locked', name: 'locked', service: 'twitter', isLocked: true },
+    ] } });
+  }
   if (query.startsWith('query Channel')) {
     return Response.json({ data: { channel: { service: 'twitter', serviceId: '42', name: variables.id === 'second-channel' ? 'secondtest' : connection } } });
   }
@@ -123,6 +141,15 @@ context.fetch = async (url, options) => {
   assert.equal((await context.registerBufferAccount(admin, registration)).account_id, accountId);
   assert.equal(registeredAccount.p_x_user_id, '42');
   await assert.rejects(context.registerBufferAccount(admin, { ...registration, username: 'wrong' }), /outra conta X/);
+  const channels = await context.listBufferChannels('personal-key');
+  assert.equal(channels.length, 1);
+  assert.equal(channels[0].id, 'buffer-channel');
+  const connected = await context.connectOwnBufferAccount(admin, otherAccountId, 'master', { api_key: 'personal-key', channel_id: channels[0].id, username: channels[0].username });
+  assert.equal(connected.account_id, accountId);
+  assert.equal(ownConnection.p_owner, otherAccountId);
+  assert.equal(ownConnection.p_x_user_id, '42');
+  assert.equal(JSON.stringify(ownConnection).includes('personal-key'), false);
+  assert.equal(await context.decryptSecret(ownConnection.p_cipher, ownConnection.p_iv, 'master'), 'personal-key');
   const run = () => context.publishOne(admin, file.user_id, config, '', 'worker');
   assert.equal((await run()).state, 'buffer_processing');
   assert.equal(file.meta.buffer_post_id, 'buffer-post-1');

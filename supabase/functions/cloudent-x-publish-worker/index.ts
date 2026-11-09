@@ -392,8 +392,7 @@ function bufferChannelFor(accountId:string):string{
  }catch{throw new HttpError("Configuração dos canais do Buffer inválida.",503);}
 }
 
-async function bufferGraph(query:string,variables:Record<string,unknown>,write=false){
- const key=Deno.env.get("CLOUDENT_X_BUFFER_API_KEY");
+async function bufferGraph(query:string,variables:Record<string,unknown>,write=false,key=Deno.env.get("CLOUDENT_X_BUFFER_API_KEY")){
  if(!key)throw new HttpError("Conecte o Buffer antes de publicar.",409);
  let response:Response;
  try{
@@ -409,11 +408,39 @@ function isBufferAccount(account:any){
  return account.config?.publish_provider==="buffer"||!!bufferChannelFor(account.id);
 }
 
-async function verifiedBufferChannel(channelId:string,username:string){
- const {channel}=await bufferGraph("query Channel($id: ChannelId!) { channel(input:{id:$id}) { service serviceId name isDisconnected isLocked isQueuePaused } }",{id:channelId});
+async function verifiedBufferChannel(channelId:string,username:string,key?:string){
+ const {channel}=await bufferGraph("query Channel($id: ChannelId!) { channel(input:{id:$id}) { service serviceId name isDisconnected isLocked isQueuePaused } }",{id:channelId},false,key);
  const handle=username.replace(/^@/,"").toLowerCase();
  if(channel?.service!=="twitter"||!handle||String(channel.name||"").replace(/^@/,"").toLowerCase()!==handle||channel.isDisconnected||channel.isLocked||channel.isQueuePaused)throw new HttpError("O canal do Buffer está indisponível ou pertence a outra conta X.",409);
  return channel;
+}
+
+function submittedBufferKey(body:any){
+ const key=String(body.api_key||"").trim();
+ if(!key||key.length>1024||!/^[!-~]+$/.test(key))throw new HttpError("Informe uma chave válida do Buffer.",400);
+ return key;
+}
+
+async function listBufferChannels(key:string){
+ const {account}=await bufferGraph("query Organizations { account { organizations { id } } }",{},false,key);
+ const organizations=Array.isArray(account?.organizations)?account.organizations.slice(0,5):[];
+ const results=await Promise.all(organizations.map((org:any)=>bufferGraph(
+  "query Channels($id: OrganizationId!) { channels(input:{organizationId:$id}) { id name service isDisconnected isLocked } }",{id:org.id},false,key)));
+ return results.flatMap(result=>result.channels||[]).filter(channel=>channel.service==="twitter"&&!channel.isDisconnected&&!channel.isLocked)
+  .map(channel=>({id:String(channel.id),username:String(channel.name).replace(/^@/,"")}));
+}
+
+async function connectOwnBufferAccount(admin:any,userId:string,master:string,body:any){
+ const key=submittedBufferKey(body);
+ const channelId=String(body.channel_id||"");
+ const username=String(body.username||"");
+ if(!channelId||channelId.length>160||!/^\w{1,15}$/.test(username))throw new HttpError("Selecione uma conta X autorizada no Buffer.",400);
+ const channel=await verifiedBufferChannel(channelId,username,key);
+ if(!/^\d+$/.test(String(channel.serviceId)))throw new HttpError("O Buffer não confirmou o ID da conta X.",409);
+ const encrypted=await encryptSecret(key,master);
+ const {data,error}=await admin.rpc("x_buffer_connect_own_account",{p_owner:userId,p_username:username,p_x_user_id:String(channel.serviceId),p_channel_id:channelId,p_cipher:encrypted.cipher,p_iv:encrypted.iv});
+ if(error)throw new HttpError("Não foi possível conectar esta conta. Confira se ela já pertence a outro usuário do Cloudent.",409);
+ return {ok:true,account_id:data};
 }
 
 async function registerBufferAccount(admin:any,body:any){
@@ -449,8 +476,8 @@ function bufferXPostId(url:unknown){
 
 const BUFFER_POST_FIELDS="id status externalLink sentAt error { message }";
 
-async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,workerId:string,meta:any){
- const channel=await verifiedBufferChannel(channelId,String(xAccount.config?.username||xAccount.account_label||""));
+async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,workerId:string,meta:any,key?:string){
+ const channel=await verifiedBufferChannel(channelId,String(xAccount.config?.username||xAccount.account_label||""),key);
  if(xAccount.external_account_id&&String(channel.serviceId)!==String(xAccount.external_account_id))throw new HttpError("O ID do canal do Buffer difere da conta cadastrada no X Studio.",409);
  const path=String(meta.storage_path||"");
  if(meta.source!=="upload"||meta.storage_provider!=="r2"||!path.startsWith(file.user_id+"/x-uploads/"))throw new HttpError("Para publicar via Buffer, envie o vídeo pelo X Studio para o armazenamento principal.",409);
@@ -464,7 +491,7 @@ async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,w
  Object.assign(meta,{publish_provider:"buffer",publish_request_started:true,publish_started_at:new Date().toISOString(),buffer_click_target:reply?.target??null});
  const {data:marked,error:markError}=await admin.from("x_drive_posts").update({meta}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing").select("id").maybeSingle();
  if(markError||!marked)throw markError||new Error("publication_claim_lost");
- const {createPost}=await bufferGraph("mutation Send($input: CreatePostInput!) { createPost(input:$input) { __typename ... on PostActionSuccess { post { "+BUFFER_POST_FIELDS+" } } } }",{input},true);
+ const {createPost}=await bufferGraph("mutation Send($input: CreatePostInput!) { createPost(input:$input) { __typename ... on PostActionSuccess { post { "+BUFFER_POST_FIELDS+" } } } }",{input},true,key);
  if(!createPost?.post?.id){
   if(createPost?.__typename==="PostLimitReachedError")throw new HttpError("A fila grátis do Buffer está ocupada. O Cloudent vai tentar novamente.",429);
   if(createPost?.__typename&&createPost.__typename!=="PostActionSuccess")throw new HttpError("O Buffer recusou esta publicação. Confira a conta e o vídeo.",409);
@@ -476,12 +503,12 @@ async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,w
  return {id:file.id,state:"buffer_processing"};
 }
 
-async function pollBufferPost(admin:any,cfg:any){
+async function pollBufferPost(admin:any,cfg:any,key?:string){
  const {data:file,error}=await admin.from("x_drive_posts").select("id,locked_by,post_text,reply_text,meta").eq("platform_account_id",cfg.platform_account_id).eq("status","processing").maybeSingle();
  if(error)throw error;
  if(!file)return null;
  if(!file.meta?.buffer_post_id)return {id:file.id,state:"processing"};
- const {post}=await bufferGraph("query Status($id: PostId!) { post(input:{id:$id}) { "+BUFFER_POST_FIELDS+" } }",{id:file.meta.buffer_post_id});
+ const {post}=await bufferGraph("query Status($id: PostId!) { post(input:{id:$id}) { "+BUFFER_POST_FIELDS+" } }",{id:file.meta.buffer_post_id},false,key);
  if(post?.id!==file.meta.buffer_post_id)throw new HttpError("O Buffer não confirmou o identificador do envio.",502);
  const postId=bufferXPostId(post.externalLink);
  if(postId&&(post.status==="sent"||post.error)){
@@ -513,11 +540,15 @@ async function followBufferLink(admin:any,req:Request,url:URL){
 }
 
 async function publishOne(admin:any,userId:string,config:any,master:string,workerId:string){
-  const bufferChannel=bufferChannelFor(config.platform_account_id);
+  const configuredAccount=await resolveXAccount(admin,userId,{platform_account_id:config.platform_account_id});
+  const bufferConfig=configuredAccount.config||{};
+  const bufferChannel=String(bufferConfig.buffer_channel_id||bufferChannelFor(config.platform_account_id));
+  const bufferKey=bufferConfig.buffer_key_cipher&&bufferConfig.buffer_key_iv
+   ?await decryptSecret(bufferConfig.buffer_key_cipher,bufferConfig.buffer_key_iv,master):Deno.env.get("CLOUDENT_X_BUFFER_API_KEY");
   if(bufferChannel){
-   const pending=await pollBufferPost(admin,config);
+   if(!bufferKey)throw new HttpError("Conecte o Buffer antes de publicar.",409);
+   const pending=await pollBufferPost(admin,config,bufferKey);
    if(pending)return pending;
-   if(!Deno.env.get("CLOUDENT_X_BUFFER_API_KEY"))throw new HttpError("Conecte o Buffer antes de publicar.",409);
   }
   const {data:file,error:claimErr}=await admin.rpc("claim_x_account_post",{p_account:config.platform_account_id,p_worker:workerId});
   if(claimErr)throw claimErr;if(!file)return null;
@@ -527,7 +558,7 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
   try{
     const xAccount=await resolveXAccount(admin,userId,{platform_account_id:file.platform_account_id});
     if(!xAccount.enabled||xAccount.config?.status!=="connected")throw new HttpError("x_reconnection_required",409);
-    if(bufferChannel)return await sendBufferPost(admin,file,xAccount,bufferChannel,workerId,publicationMeta);
+    if(bufferChannel)return await sendBufferPost(admin,file,xAccount,bufferChannel,workerId,publicationMeta,bufferKey);
     const text=captionValue(file.post_text);
     const xToken=await usableXToken(admin,xAccount,master);
     let sourceUrl="",driveToken="";
@@ -737,12 +768,20 @@ Deno.serve(async(req:Request)=>{
     if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     const body=await parseBody(req);
     if(member.role!=="admin"&&["google-configure","google-start","google-folder","sync"].includes(action))return json({error:"forbidden"},403);
+    if(action==="buffer-channels"||action==="buffer-connect"){
+      const {data:allowed,error}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:"x-buffer-connect",p_limit:20});
+      if(error)throw error;
+      if(!allowed)return json({error:"rate_limit"},429);
+      if(action==="buffer-channels")return json({ok:true,channels:await listBufferChannels(submittedBufferKey(body))});
+      return json(await connectOwnBufferAccount(admin,userId,master,body));
+    }
     if(action==="audit-session"){await auditX(admin,member,userId,null,body.event==="logout"?"logout":"login");return json({ok:true});}
     if(action==="account-status"||action==="account-remove"){
       const account=await resolveXAccount(admin,userId,body);
-      if(member.role!=="admin")return json({error:"forbidden"},403);
+      if(member.role!=="admin"&&(!isBufferAccount(account)||account.owner_user_id!==userId))return json({error:"forbidden"},403);
       const cfg={...account.config,status:action==="account-remove"?"removed":"disconnected"};
       for(const k of ["accessTokenCipher","accessTokenIv","refreshTokenCipher","refreshTokenIv"])delete cfg[k];
+      for(const k of ["buffer_key_cipher","buffer_key_iv"])delete cfg[k];
       const {error}=await admin.from("platform_accounts").update({enabled:false,config:cfg,updated_at:new Date().toISOString()}).eq("id",account.id);if(error)throw error;
       await admin.from("x_account_configs").update({enabled:false}).eq("platform_account_id",account.id);
       await auditX(admin,member,userId,account.id,action==="account-remove"?"account_removed":"account_disconnected");return json({ok:true});
