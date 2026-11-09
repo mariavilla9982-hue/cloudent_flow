@@ -474,15 +474,69 @@ function bufferXPostId(url:unknown){
  return typeof url==="string"?url.match(/^https:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/(?:[\w]+\/status|i\/web\/status)\/(\d+)(?:[/?#]|$)/i)?.[1]||"": "";
 }
 
+const BUFFER_VIDEO_TTL_SECONDS=6*60*60;
+
+async function bufferVideoKey(master:string){
+ return crypto.subtle.importKey("raw",enc.encode(master),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
+}
+function bufferVideoClaim(id:string,expires:number){
+ return enc.encode("cloudent-buffer-video:"+id+":"+expires);
+}
+async function bufferVideoUrl(id:string,path:string,master:string){
+ const expires=Math.floor(Date.now()/1000)+BUFFER_VIDEO_TTL_SECONDS;
+ const signature=await crypto.subtle.sign("HMAC",await bufferVideoKey(master),bufferVideoClaim(id,expires));
+ const token=Array.from(new Uint8Array(signature),b=>b.toString(16).padStart(2,"0")).join("");
+ const suffix=path.endsWith(".mov")?"mov":"mp4";
+ const url=new URL(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-x-publish-worker/buffer-video."+suffix);
+ url.search=new URLSearchParams({action:"buffer-video",id,expires:String(expires),token}).toString();
+ return url.href;
+}
+
+async function serveBufferVideo(admin:any,req:Request,url:URL,master:string){
+ const method=req.method;
+ if(method!=="HEAD"&&method!=="GET")return new Response(null,{status:405,headers:{Allow:"GET, HEAD"}});
+ const id=url.searchParams.get("id")||"",token=url.searchParams.get("token")||"";
+ const expires=Number(url.searchParams.get("expires"));
+ if(!/^[0-9a-f-]{36}$/.test(id)||!Number.isSafeInteger(expires)||expires<=Date.now()/1000||!/^[0-9a-f]{64}$/.test(token))return new Response(null,{status:404});
+ const signature=Uint8Array.from(token.match(/../g)!,part=>parseInt(part,16));
+ if(!await crypto.subtle.verify("HMAC",await bufferVideoKey(master),signature,bufferVideoClaim(id,expires)))return new Response(null,{status:404});
+
+ const {data:post,error}=await admin.from("x_drive_posts").select("user_id,meta").eq("id",id).maybeSingle();
+ if(error)return new Response(null,{status:502});
+ const path=String(post?.meta?.storage_path||"");
+ if(post?.meta?.source!=="upload"||post.meta.storage_provider!=="r2"||!path.startsWith(post.user_id+"/x-uploads/")||!/[.](mp4|mov)$/.test(path))return new Response(null,{status:404});
+ const cfg=await getCloudentR2Config(admin);
+ if(!cfg)return new Response(null,{status:502});
+ const range=req.headers.get("range");
+ if(range&&method==="GET"&&!/^bytes=(?:\d+-\d*|-\d+)$/.test(range))return new Response(null,{status:416});
+ const source=await fetch(await r2PresignedUrl(cfg,method,path,60),{
+  method,headers:range&&method==="GET"?{Range:range}:{},redirect:"error",signal:AbortSignal.timeout(60_000)
+ });
+ if(![200,206,416].includes(source.status)){
+  await source.body?.cancel();
+  return new Response(null,{status:source.status===404?404:502});
+ }
+ const headers=new Headers({
+  "Content-Type":path.endsWith(".mov")?"video/quicktime":"video/mp4",
+  "Accept-Ranges":"bytes",
+  "Cache-Control":"private, no-store"
+ });
+ for(const name of ["content-length","content-range"]){
+  const value=source.headers.get(name);
+  if(value!==null)headers.set(name,value);
+ }
+ return new Response(method==="HEAD"?null:source.body,{status:source.status,headers});
+}
+
 const BUFFER_POST_FIELDS="id status externalLink sentAt error { message }";
 
-async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,workerId:string,meta:any,key?:string){
+async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,workerId:string,meta:any,master:string,key?:string){
  const channel=await verifiedBufferChannel(channelId,String(xAccount.config?.username||xAccount.account_label||""),key);
  if(xAccount.external_account_id&&String(channel.serviceId)!==String(xAccount.external_account_id))throw new HttpError("O ID do canal do Buffer difere da conta cadastrada no X Studio.",409);
  const path=String(meta.storage_path||"");
  if(meta.source!=="upload"||meta.storage_provider!=="r2"||!path.startsWith(file.user_id+"/x-uploads/"))throw new HttpError("Para publicar via Buffer, envie o vídeo pelo X Studio para o armazenamento principal.",409);
  const text=captionValue(file.post_text);
- const videoUrl=await uploadReadUrl(admin,"r2",path);
+ const videoUrl=await bufferVideoUrl(file.id,path,master);
  const assets=[{video:{url:videoUrl}}];
  const workerUrl=Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-x-publish-worker";
  const reply=file.reply_text?bufferReplyLink(captionValue(file.reply_text),file.id,workerUrl):null;
@@ -562,7 +616,7 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
   try{
     const xAccount=await resolveXAccount(admin,userId,{platform_account_id:file.platform_account_id});
     if(!xAccount.enabled||xAccount.config?.status!=="connected")throw new HttpError("x_reconnection_required",409);
-    if(bufferChannel)return await sendBufferPost(admin,file,xAccount,bufferChannel,workerId,publicationMeta,bufferKey);
+    if(bufferChannel)return await sendBufferPost(admin,file,xAccount,bufferChannel,workerId,publicationMeta,master,bufferKey);
     const text=captionValue(file.post_text);
     const xToken=await usableXToken(admin,xAccount,master);
     let sourceUrl="",driveToken="";
@@ -735,6 +789,7 @@ Deno.serve(async(req:Request)=>{
   try{
     if(action==="link")return await followBufferLink(admin,req,url);
     const master=await masterSecret(admin);
+    if(action==="buffer-video")return await serveBufferVideo(admin,req,url,master);
     if(action==="worker"||action==="buffer-register"){
       const supplied=String(req.headers.get("x-cloudent-worker-secret")||"");
       if(!supplied||supplied!==master)return json({ok:false,error:"unauthorized"},401);
