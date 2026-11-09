@@ -37,6 +37,7 @@ let paidCalls = 0;
 let creates = 0;
 let connection = 'reistest';
 let remoteState = 'buffer';
+let registeredAccount;
 const updates = [];
 const admin = {
   from(table) {
@@ -77,17 +78,22 @@ const admin = {
       updates.push(args.p_count);
       return { data: args.p_post_id === postId ? file.meta.buffer_click_target : null };
     }
+    if (name === 'x_buffer_register_account') {
+      registeredAccount = args;
+      return { data: args.p_id };
+    }
     throw new Error('Unexpected RPC ' + name);
   },
 };
 context.resolveXAccount = async (_admin, _user, { platform_account_id }) => platform_account_id === otherAccountId ? secondAccount : account;
 context.uploadReadUrl = async () => 'https://storage.test/video.mp4?signature=abc';
+const originalXToken = context.usableXToken;
 context.usableXToken = async () => { paidCalls++; throw Error('Paid X call'); };
 context.fetch = async (url, options) => {
   assert.equal(url, 'https://api.buffer.com');
   const { query, variables } = JSON.parse(options.body);
   if (query.startsWith('query Channel')) {
-    return Response.json({ data: { channel: { service: 'twitter', name: variables.id === 'second-channel' ? 'secondtest' : connection } } });
+    return Response.json({ data: { channel: { service: 'twitter', serviceId: '42', name: variables.id === 'second-channel' ? 'secondtest' : connection } } });
   }
   if (query.startsWith('mutation Send')) {
     creates++;
@@ -113,6 +119,10 @@ context.fetch = async (url, options) => {
 
 (async () => {
   assert.equal(context.bufferChannelFor(otherAccountId), '');
+  const registration = { account_id: accountId, owner_user_id: otherAccountId, username: '@ReisTest' };
+  assert.equal((await context.registerBufferAccount(admin, registration)).account_id, accountId);
+  assert.equal(registeredAccount.p_x_user_id, '42');
+  await assert.rejects(context.registerBufferAccount(admin, { ...registration, username: 'wrong' }), /outra conta X/);
   const run = () => context.publishOne(admin, file.user_id, config, '', 'worker');
   assert.equal((await run()).state, 'buffer_processing');
   assert.equal(file.meta.buffer_post_id, 'buffer-post-1');
@@ -164,6 +174,10 @@ context.fetch = async (url, options) => {
   assert.equal(await runSecond(), null);
   delete env.CLOUDENT_X_BUFFER_API_KEY;
   await assert.rejects(run, /Conecte o Buffer/);
+  delete env.CLOUDENT_X_BUFFER_CHANNELS;
+  const bufferOnly = { ...account, config: { ...account.config, publish_provider: 'buffer' } };
+  await assert.rejects(originalXToken(admin, bufferOnly, ''), /exclusivamente pelo Buffer/);
+  assert.equal((await context.syncAccountMetrics(admin, bufferOnly, '')).ok, true);
   assert.equal(paidCalls, 0);
   console.log('PASS six videos and six replies on each of two accounts, isolated queues, no duplicate or paid X fallback, and tracked redirects');
 })().catch(error => { console.error(error); process.exitCode = 1; });
