@@ -1,4 +1,5 @@
 import {genjutsuDisplay} from './genjutsu-display.ts';
+import {genjutsuContentBlockMessage} from './genjutsu-diagnostics.ts';
 import {cancelPipelineMotion,stopGenjutsuMotion} from './image-pipeline-cancel.ts';
 import {retryPipelineMotion,knownGenjutsu503} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
@@ -30,6 +31,23 @@ export async function imagePipelineApi(d:any){
   if(!String(action||resource).startsWith('image-pipeline'))return null;
   const check=(r:any)=>{if(r.error)throw r.error;return r.data;};
   const owner=async(id:string)=>check(await admin.from('face_swap_jobs').select('*').eq('id',id).eq('user_id',user.id).contains('meta',{pipeline_version:2}).maybeSingle());
+  const retryJob=async(j:any,failedOnly=false):Promise<{ok:boolean;status?:number;error?:string}>=>{
+    if(j.meta.stage==='control_motion')return retryPipelineMotion(admin,user.id,j.id,j,failedOnly);
+    if(j.status!=='failed'||j.meta.dispatch_uncertain||!j.meta.provider_failed)return {ok:false,error:'A tarefa ainda está ativa ou exige reconciliação com o provedor. Nenhuma geração foi repetida.',status:409};
+    const m={...j.meta,dispatch_intent:null,provider_failed:false,error_stage:null};
+    let retry=admin.from('face_swap_jobs').update({status:'waiting',runninghub_task_id:null,last_error:null,meta:m}).eq('id',j.id).eq('user_id',user.id).eq('status','failed').is('hidden_at',null);
+    retry=j.runninghub_task_id?retry.eq('runninghub_task_id',j.runninghub_task_id):retry.is('runninghub_task_id',null);
+    const updated=check(await retry.select('id'));
+    return updated?.length?{ok:true}:{ok:false,error:'O estado do vídeo mudou. Atualize a fila.',status:409};
+  };
+  const retryQueue=(j:any)=>j.meta?.stage==='control_motion'&&j.meta?.video_workflow?.key==='genjutsu'?'genjutsu':'image_pipeline';
+  const wakeAfterRetry=async(queues:Iterable<string>)=>{
+    const pending=Promise.all([...new Set(queues)].map(queue=>Promise.resolve().then(()=>wake(queue))
+      .catch(error=>console.error('image_pipeline_retry_wake',error))));
+    const runtime=(globalThis as any).EdgeRuntime;
+    if(runtime?.waitUntil)runtime.waitUntil(pending);
+    else await pending;
+  };
   if(req.method==='GET'&&resource==='image-pipeline-characters'){
     if(url.searchParams.get('metadata')==='1')return json({characters:PIPELINE_CHARACTERS.map(c=>({id:c.id,name:c.name}))});
     return json({characters:PIPELINE_CHARACTERS.map(({base64,...c})=>({...c,preview_url:'data:'+c.mime_type+';base64,'+base64}))});
@@ -45,6 +63,11 @@ export async function imagePipelineApi(d:any){
     let query=admin.from('face_swap_jobs').select('*').eq('user_id',user.id).contains('meta',{pipeline_version:2}).is('hidden_at',null);
     if(url.searchParams.get('workflow')==='genjutsu')query=query.contains('meta',{video_workflow:{key:'genjutsu'}});
     const rows=check(await query.order('created_at',{ascending:false}).limit(100));
+    const childIds=[...new Set((rows||[]).map((j:any)=>j.production_job_id).filter(Boolean))];
+    const children=childIds.length?check(await admin.from('production_jobs')
+      .select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds,created_at,updated_at')
+      .in('id',childIds).eq('user_id',user.id)):[];
+    const childrenById=new Map<string,any>((children||[]).map((p:any)=>[p.id,p]));
     for(const j of rows||[]){
       if(j.meta?.video_workflow?.key==='genjutsu'){
         const original=genjutsuMedia(j,user.id,'original'),frames=genjutsuMedia(j,user.id,'frame');
@@ -55,13 +78,20 @@ export async function imagePipelineApi(d:any){
         delete j.meta.reused_inputs;
       }
       if(j.production_job_id){
-        j.production=check(await admin.from('production_jobs').select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds,created_at,updated_at').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
+        const child=childrenById.get(j.production_job_id);
+        j.production=child?{...child}:null;
         if(j.production){
           if(j.meta?.video_workflow?.key==='genjutsu'){
-            const p=j.production,m=p.meta||{};
+            const p=j.production,m=p.meta||{},prompt=m.genjutsu_prompt,task=p.runninghub_task_id;
             p.execution_confirmed=!!p.started_at&&!!p.runninghub_task_id&&String(m.provider_status_task_id)===String(p.runninghub_task_id);
+            const canRetryPrompt=!genjutsuContentBlockMessage(prompt?.verifiedProviderFinishReason)&&!m.pipeline_dispatch_intent&&
+              (prompt?.status!=='generating'||!!prompt.interactionId||knownGenjutsu503(p));
+            p.genjutsu={display:genjutsuDisplay(p,j),phase:prompt?.status||null,promptSource:prompt?.source==='manual'?'manual':prompt?'automatic':null,retryAt:prompt?.retryAt||null,
+              providerStatus:m.provider_status||null,providerPending:!!m.provider_task_pending,
+              stopRequested:!!task&&String(m.genjutsu_stop_requested_task_id||'')===String(task),
+              canRetry:p.status==='failed'&&!m.pipeline_dispatch_uncertain&&!p.result_video_id&&
+                (task?m.provider_status==='FAILED':canRetryPrompt)};
           }
-          if(j.meta?.video_workflow?.key==='genjutsu')j.production.genjutsu={display:genjutsuDisplay(j.production,j),phase:j.production.meta?.genjutsu_prompt?.status||null,promptSource:j.production.meta?.genjutsu_prompt?.source==='manual'?'manual':j.production.meta?.genjutsu_prompt?'automatic':null,retryAt:j.production.meta?.genjutsu_prompt?.retryAt||null,providerStatus:j.production.meta?.provider_status||null,providerPending:!!j.production.meta?.provider_task_pending,stopRequested:String(j.production.meta?.genjutsu_stop_requested_task_id||'')===String(j.production.runninghub_task_id||'')&&!!j.production.runninghub_task_id,canRetry:j.production.status==='failed'&&!j.production.meta?.pipeline_dispatch_uncertain&&!j.production.result_video_id&&(!j.production.runninghub_task_id?!j.production.meta?.pipeline_dispatch_intent&&(j.production.meta?.genjutsu_prompt?.status!=='generating'||!!j.production.meta?.genjutsu_prompt?.interactionId||knownGenjutsu503(j.production)):j.production.meta?.provider_status==='FAILED')};
           delete j.production.meta;
         }
       }
@@ -104,6 +134,17 @@ export async function imagePipelineApi(d:any){
     return json({url:await signGet(provider,path),type:original&&j.original_mime_type?.startsWith('video/')?'video':'image',label:original?'Vídeo original':j.meta?.upscale_result?'Upscale pronto':j.meta?.face_swap_result?'Face Swap pronto':j.meta?.source==='face_swap_natural'?'Primeiro frame':'Referência'});
   }
   if(req.method==='GET'&&resource==='image-pipeline-result'){
+    if(url.searchParams.get('workflow')==='genjutsu'){
+      const id=url.searchParams.get('id')||'';
+      if(!JOB_ID.test(id))return json({error:'Job não encontrado'},404);
+      const p=check(await admin.from('production_jobs').select('result_storage_path,storage_provider,meta')
+        .eq('id',id).eq('user_id',user.id).contains('meta',{image_pipeline_version:2,workflow_key:'genjutsu'}).is('hidden_at',null).maybeSingle());
+      if(!p)return json({error:'Job não encontrado'},404);
+      if(!p.result_storage_path?.startsWith(user.id+'/'))return json({error:'Vídeo ainda não disponível'},409);
+      const response=json({url:await signGet(p.meta?.result_storage_provider||p.storage_provider,p.result_storage_path),type:'video'});
+      response.headers.set('Cache-Control','private, no-store');
+      return response;
+    }
     const j=await owner(url.searchParams.get('id')||'');if(!j)return json({error:'Job não encontrado'},404);
     if(j.meta.source==='face_swap_natural'){
       const p=check(await admin.from('production_jobs').select('result_storage_path,storage_provider,meta').eq('id',j.id).eq('user_id',user.id).maybeSingle());
@@ -224,17 +265,34 @@ export async function imagePipelineApi(d:any){
     const b=await req.json();const r=await cancelPipelineMotion(admin,user.id,String(b.id||''));return json(r,r.status||200);
   }
   if(req.method==='PATCH'&&action==='image-pipeline-retry'){
-    const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);
-    if(j.meta.stage==='control_motion'){
-      const r=await retryPipelineMotion(admin,user.id,j.id);
-      if(r.ok)await wake();
-      return json(r,r.status||200);
+    const b=await req.json(),j=await owner(String(b.id||''));if(!j||j.hidden_at)return json({error:'Job não encontrado'},404);
+    const result=await retryJob(j);
+    if(result.ok)await wakeAfterRetry([retryQueue(j)]);
+    return json(result,result.status||200);
+  }
+  if(req.method==='PATCH'&&action==='image-pipeline-retry-genjutsu'){
+    const {ids}=await req.json();
+    if(!Array.isArray(ids)||!ids.length||ids.length>100||ids.some(id=>typeof id!=='string'||!JOB_ID.test(id)))return json({error:'Seleção de vídeos inválida.'},400);
+    const selected=[...new Set<string>(ids)];
+    const rows=check(await admin.from('face_swap_jobs').select('*').eq('user_id',user.id)
+      .contains('meta',{pipeline_version:2,video_workflow:{key:'genjutsu'}}).is('hidden_at',null).in('id',selected));
+    const byId=new Map<string,any>((rows||[]).map((j:any)=>[j.id,j]));
+    const results=[];
+    for(let i=0;i<selected.length;i+=8){
+      results.push(...await Promise.all(selected.slice(i,i+8).map(async id=>{
+        const j=byId.get(id);
+        if(!j)return {id,ok:false,error:'Job não encontrado'};
+        try{
+          const result=await retryJob(j,true);
+          return {id,ok:result.ok,error:result.error};
+        }catch(error){
+          console.error('image_pipeline_batch_retry',id,error);
+          return {id,ok:false,error:'Não foi possível confirmar a retomada deste vídeo.'};
+        }
+      })));
     }
-    if(j.status!=='failed'||j.meta.dispatch_uncertain||!j.meta.provider_failed)return json({error:'A tarefa ainda está ativa ou exige reconciliação com o provedor. Nenhuma geração foi repetida.'},409);
-    const m={...j.meta,dispatch_intent:null,provider_failed:false,error_stage:null};
-    let retry=admin.from('face_swap_jobs').update({status:'waiting',runninghub_task_id:null,last_error:null,meta:m}).eq('id',j.id).eq('status','failed');
-    retry=j.runninghub_task_id?retry.eq('runninghub_task_id',j.runninghub_task_id):retry.is('runninghub_task_id',null);check(await retry);
-    await wake();return json({ok:true});
+    if(results.some(result=>result.ok))await wakeAfterRetry(results.filter(result=>result.ok).map(result=>retryQueue(byId.get(result.id))));
+    return json({results});
   }
   if(req.method==='DELETE'&&action==='image-pipeline-job'){
     const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);

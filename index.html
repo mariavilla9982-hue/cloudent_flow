@@ -1952,6 +1952,7 @@ button:not(:disabled):active,.btn:not(:disabled):active{
 .production-ready-actions button.danger{color:#ff8a91;border-color:#2d2d2d;background:#0f0f0f}
 .production-ready-actions button.danger:hover{background:#141414;border-color:#3d3d3d}
 .production-schedule-modal{max-width:610px}
+#production [data-retry-all][hidden]{display:none!important}
 @media(min-width:1051px){
   .production-job{grid-template-columns:35px minmax(150px,1fr) 24px minmax(150px,1fr) minmax(180px,.9fr) minmax(210px,.8fr)!important}
 }
@@ -5390,9 +5391,9 @@ function resetCalendarData(){
   calendarQueueRequest=null;
   state.slots={};
 }
-function loadCalendarQueueRows(){
-  const session=cloudSession,path=queueResourcePath();
-  if(calendarQueueRequest?.session===session&&calendarQueueRequest.path===path)return calendarQueueRequest.promise;
+function loadCalendarQueueRows(compact=false){
+  const session=cloudSession,path=queueResourcePath()+(compact?"&compact=1":"");
+  if(!compact&&calendarQueueRequest?.session===session&&calendarQueueRequest.path===path)return calendarQueueRequest.promise;
   const request={session,path,promise:null};
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
   request.promise=cloudFetch(path,{signal:controller.signal}).then(rows=>{
@@ -5402,7 +5403,7 @@ function loadCalendarQueueRows(){
     if(controller.signal.aborted)throw new Error("O calendário demorou para responder. Tente atualizar novamente.");
     throw error;
   }).finally(()=>{clearTimeout(timeout);if(calendarQueueRequest===request)calendarQueueRequest=null});
-  calendarQueueRequest=request;
+  if(!compact)calendarQueueRequest=request;
   return request.promise;
 }
 function calendarAccountId(a){return String(a?.id||a?.platform_account_id||"")}
@@ -9282,9 +9283,12 @@ function actionButtonBusy(button,busy,label=""){
     }
   }
 }
-function productionCalendarCapacity(accountId=calendarEnsureAccount()){
+function productionCalendarCapacity(accountId=calendarEnsureAccount(),queue=calendarAllQueueRows){
   if(!accountId)return [];
-  return calendarAccountCapacity(accountId,weekDates(),calendarAllQueueRows)||[];
+  return calendarAccountCapacity(accountId,weekDates(),queue)||[];
+}
+function productionScheduleQueue(){
+  return $(".production-schedule-modal")?.scheduleQueue||calendarAllQueueRows;
 }
 function productionScheduleAccountId(){
   const id=String($("#productionScheduleAccount")?.value||"");
@@ -9292,7 +9296,7 @@ function productionScheduleAccountId(){
 }
 function productionScheduleRows(accountId,date){
   const policy=calendarAccountPolicy(accountId);
-  const rows=calendarAllQueueRows||Object.values(state.slots).filter(Boolean);
+  const rows=productionScheduleQueue()||Object.values(state.slots).filter(Boolean);
   return rows.filter(x=>calendarRowAccountId(x)===accountId&&String(x.platform||"instagram").toLowerCase()==="instagram"&&x.status!=="cancelled"&&(policy?calendarPolicyClock(x.scheduled_at||x.scheduledAt,policy).date:localISO(new Date(x.scheduled_at||x.scheduledAt)))===date);
 }
 function validateProductionSchedule(accountId,date,time){
@@ -9309,7 +9313,8 @@ function validateProductionSchedule(accountId,date,time){
   return occupied?{ok:false,msg:`Já existe um vídeo às ${time} nessa conta.`}:{ok:true};
 }
 function productionScheduleDefaultTime(accountId,date){
-  if(calendarAccountPolicy(accountId))return calendarPolicyAvailableTimes(accountId,date,calendarAllQueueRows||Object.values(state.slots).filter(Boolean))[0]||"";
+  if(calendarAccountPolicy(accountId))return calendarPolicyAvailableTimes(accountId,date,productionScheduleQueue()||Object.values(state.slots).filter(Boolean))[0]||"";
+  if(!accountId||productionScheduleRows(accountId,date).length>=15)return "12:00";
   const base=calendarDayVolume(date,accountId);
   const preferred=base===15
     ? ["07:30","08:30","09:30","10:30","11:30","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00"]
@@ -9322,7 +9327,7 @@ function productionScheduleDefaultTime(accountId,date){
   return "12:00";
 }
 function refreshProductionScheduleAccount(){
-  const accountId=productionScheduleAccountId(),rows=productionCalendarCapacity(accountId);
+  const accountId=productionScheduleAccountId(),rows=productionCalendarCapacity(accountId,productionScheduleQueue());
   const day=$("#productionScheduleDay"),time=$("#productionScheduleTime"),save=$("#productionScheduleSave");
   const date=rows.find(x=>x.date===day?.value&&x.free>0)?.date||rows.find(x=>x.free>0)?.date||rows[0]?.date||"";
   if(day)day.value=date;
@@ -9335,7 +9340,7 @@ function refreshProductionScheduleAccount(){
   }
 }
 function productionCalendarCapacityMarkup(selectedDate="",interactive=true,accountId=calendarEnsureAccount()){
-  return '<div class="production-calendar-capacity">'+productionCalendarCapacity(accountId).map(x=>
+  return '<div class="production-calendar-capacity">'+productionCalendarCapacity(accountId,productionScheduleQueue()).map(x=>
     '<button type="button" data-calendar-date="'+x.date+'" class="production-calendar-day '+(x.date===selectedDate?"selected ":"")+(x.free?"has-space":"is-full")+'" '+
       (interactive&&x.free?'onclick="setProductionScheduleDay(\''+x.date+'\')"':'disabled')+'>'+
       '<span>'+esc(x.label)+'</span><b>'+x.free+(x.free===1?" vaga":" vagas")+'</b><small>'+x.number+' · '+x.used+'/'+x.base+'</small>'+
@@ -9344,7 +9349,7 @@ function productionCalendarCapacityMarkup(selectedDate="",interactive=true,accou
 }
 function setProductionScheduleDay(date){
   const accountId=productionScheduleAccountId();
-  const row=productionCalendarCapacity(accountId).find(x=>x.date===date);
+  const row=productionCalendarCapacity(accountId,productionScheduleQueue()).find(x=>x.date===date);
   if(!row||row.free<=0)return;
   const day=$("#productionScheduleDay"),time=$("#productionScheduleTime");
   if(day)day.value=date;
@@ -9448,30 +9453,32 @@ async function sendProductionResultToBulk(id,button=null){
     toast("Vídeo enviado para a fila. Trial → 1 min → Reel normal.","ok");
   }catch(e){actionButtonBusy(button,false);toast(friendlyCloudentError(e?.message||"erro"),"err")}
 }
-async function openProductionScheduleModal(id,number){
+async function openProductionScheduleModal(id,number,knownJob=null){
   if(!cloudSession)return;
-  const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+  const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
   if(!job)return;
   const session=cloudSession,page=currentPage,host=$("#modalHost");
   if(host.innerHTML.includes('id="productionScheduleLoading"'))return;
   host.innerHTML='<div class="modal"><div class="modal-box production-schedule-modal" id="productionScheduleLoading"><div class="modal-head"><b>Adicionar ao calendário</b><button class="btn" onclick="closeModal()">Fechar</button></div><p role="status" aria-live="polite">Carregando contas e vagas…</p></div></div>';
   const loadingNode=host.querySelector('#productionScheduleLoading');
   const openingCurrent=()=>cloudSession===session&&currentPage===page&&host.querySelector('#productionScheduleLoading')===loadingNode;
+  let queue;
   try{
-    const [,queue]=await Promise.all([loadPlatformAccounts(),loadCalendarQueueRows()]);
+    const [,rows]=await Promise.all([loadPlatformAccounts(),loadCalendarQueueRows(true)]);
     if(!openingCurrent())return;
-    calendarAllQueueRows=queue;
+    queue=rows;
+    loadingNode.scheduleQueue=queue;
   }catch(e){
     if(openingCurrent()){closeModal();toast("Não consegui carregar as contas e vagas: "+friendlyCloudentError(e.message),"err")}
     return;
   }
   const scheduled=!!job.meta?.scheduled;
-  const linked=calendarAllQueueRows.find(x=>String(x.id)===String(job.meta?.schedule_id));
+  const linked=queue.find(x=>String(x.id)===String(job.meta?.schedule_id));
   const accountId=scheduled?calendarRowAccountId(linked):calendarEnsureAccount();
   const accounts=calendarInstagramAccounts();
   const scheduledAt=job.meta?.scheduled_at?new Date(job.meta.scheduled_at):null;
   const today=new Date(),tomorrow=new Date(today);tomorrow.setDate(today.getDate()+1);
-  const rows=productionCalendarCapacity(accountId);
+  const rows=productionCalendarCapacity(accountId,queue);
   const preferred=localISO(tomorrow);
   const initial=scheduled&&scheduledAt
     ? localISO(scheduledAt)
@@ -9500,47 +9507,57 @@ async function openProductionScheduleModal(id,number){
           '<div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="'+esc(initialTime)+'"></div>'+
           '<div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>'+
         '</div>'+
-        '<div class="toolbar production-calendar-modal-actions"><button id="productionScheduleSave" class="btn primary" '+(noSpace?'disabled':'')+' onclick="scheduleProductionResult(\''+esc(id)+'\',this)">'+(!accountId?'Escolha uma conta':noSpace?'Semana sem vagas base':'＋ Adicionar ao calendário')+'</button></div>'
+        '<div class="toolbar production-calendar-modal-actions"><button id="productionScheduleSave" class="btn primary" '+(noSpace?'disabled':'')+'>'+(!accountId?'Escolha uma conta':noSpace?'Semana sem vagas base':'＋ Adicionar ao calendário')+'</button></div>'
     )+
   '</div></div>';
+  const modal=host.querySelector(".production-schedule-modal");
+  if(modal)modal.scheduleQueue=queue;
+  const save=$("#productionScheduleSave");
+  if(save)save.onclick=()=>scheduleProductionResult(id,save,job);
 }
-async function scheduleProductionResult(id,button=null){
+async function scheduleProductionResult(id,button=null,knownJob=null){
+  if(button?.disabled)return;
   const accountId=productionScheduleAccountId();
   if(!accountId){toast("Escolha uma conta Instagram disponível.","err");return}
   const day=$("#productionScheduleDay")?.value,time=$("#productionScheduleTime")?.value,caption=$("#productionScheduleCaption")?.value||"";
   if(!day||!time){toast("Escolha dia e horário.","err");return}
-  const capacity=productionCalendarCapacity(accountId).find(x=>x.date===day);
+  const capacity=productionCalendarCapacity(accountId,productionScheduleQueue()).find(x=>x.date===day);
   if(!capacity||capacity.free<=0){toast("Esse dia não tem vaga base livre.","err");return}
   const check=validateProductionSchedule(accountId,day,time);
   if(!check.ok){toast(check.msg,"err");return}
   const [h,m]=time.split(":").map(Number),at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
   const accountPicker=$("#productionScheduleAccount");
+  const userId=cloudSession?.user?.id;
   if(accountPicker)accountPicker.disabled=true;
   actionButtonBusy(button,true,"Adicionando…");
   try{
-    const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+    const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
     let clean={status:"legacy"};
     if(job?.result_video_id){
       if(button)button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>Preparando vídeo…</span>';
       clean=await runMediaCleaner("video",job.result_video_id,{quiet:true});
       if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
     }
+    if(!cloudSession||cloudSession.user?.id!==userId||button?.isConnected===false)return;
+    actionButtonBusy(button,true,"Salvando horário…");
     const result=await cloudFetch("?action=production-schedule",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual",platform_account_id:accountId})
     });
+    if(!cloudSession||cloudSession.user?.id!==userId)return;
     if(job){
       job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:at.toISOString(),platform_account_id:accountId};
     }
     if(productionData?.jobs){
       productionData.jobs=productionData.jobs.filter(x=>String(x.id)!==String(id));
     }
+    window.CloudentGenjutsu?.scheduled?.(id);
     productionSelectedJobs.delete(String(id));
-    closeModal();
+    if(button?.isConnected!==false)closeModal();
     if(currentPage==="production")productionPage();
     toast(clean?.status==="ready"?"Metadados removidos e vídeo adicionado ao calendário.":"Vídeo adicionado ao calendário.","ok");
-    Promise.allSettled([loadProductionData(false),syncFromBackend()]).then(()=>{
+    Promise.allSettled([window.CloudentMotionControl?.mode==="genjutsu"?null:loadProductionData(false),syncFromBackend()]).then(()=>{
       if(currentPage==="production")productionPage();
     });
   }catch(e){
@@ -12108,7 +12125,7 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=4"></script>
-<script src="/genjutsu-ui.js?v=14"></script>
+<script src="/genjutsu-ui.js?v=15"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>
 <script src="/production-studio.js?v=6"></script>
 <script src="/image-pipeline-ui.js?v=18"></script>

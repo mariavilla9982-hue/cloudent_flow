@@ -2,6 +2,7 @@ import {handleInstagramDisconnect} from "./instagram-disconnect.ts";
 import {healthWorkers,healthFailures} from "./system-health.ts";
 import {panelViewApi} from './panel-view.ts';
 import {imagePipelineApi} from '../_shared/image-pipeline-api.ts';
+import {runningHubAmount} from '../_shared/image-pipeline-billing.ts';
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {handleCalendarTrial} from "./calendar-trial.ts";
@@ -2043,14 +2044,15 @@ Deno.serve(async (req: Request) => {
       const caption=String(body.caption||"");
       const smartMode=String(body.smart_mode||"manual");
       const smartStrategy=String(body.smart_strategy|| (smartMode==="auto"?"stable":"manual"));
-      const platformAccountId=await resolveCalendarInstagramAccount(admin,body.platform_account_id);
 
       if(!id)return json({error:"id_required"},400);
       if(!scheduledAt||Number.isNaN(Date.parse(scheduledAt)))return json({error:"scheduled_at_invalid"},400);
 
-      const {data:job,error:jobError}=await admin.from("production_jobs")
-        .select("id,user_id,status,result_video_id,meta")
-        .eq("id",id).eq("user_id",userData.user.id).maybeSingle();
+      const [platformAccountId,{data:job,error:jobError}]=await Promise.all([
+        resolveCalendarInstagramAccount(admin,body.platform_account_id),
+        admin.from("production_jobs").select("id,user_id,status,result_video_id,meta")
+          .eq("id",id).eq("user_id",userData.user.id).maybeSingle()
+      ]);
       if(jobError)throw jobError;
       if(!job)return json({error:"production_job_not_found"},404);
       if(job.status!=="ready"||!job.result_video_id)return json({error:"production_job_not_ready"},409);
@@ -2466,7 +2468,12 @@ Deno.serve(async (req: Request) => {
         if(!response.ok||Number(payload?.code)!==0)throw new Error('RunningHub não confirmou a parada. Atualize e tente novamente.');
         return payload;
       },
-      wake:()=>wakeProductionWorkerNow({image_pipeline:true})
+      wake:async(queue?:string)=>{
+        if(queue==='genjutsu'){
+          const {error}=await admin.rpc("wake_genjutsu_queue");
+          if(error)throw error;
+        }else await wakeProductionWorkerNow({image_pipeline:true});
+      }
     });
     if(pipelineResponse)return pipelineResponse;
 
@@ -2835,8 +2842,11 @@ Deno.serve(async (req: Request) => {
       return json({
         configured:true,
         enabled:!!integration?.enabled,
-        credits:Number(account?.data?.remainCoins ?? 0),
-        activeTasks:Number(account?.data?.currentTaskCounts ?? 0),
+        credits:runningHubAmount(account?.data?.remainCoins),
+        points:runningHubAmount(account?.data?.remainPoints),
+        walletBalance:runningHubAmount(account?.data?.remainMoney),
+        currency:/^[A-Z]{3}$/.test(account?.data?.currency)?account.data.currency:null,
+        activeTasks:runningHubAmount(account?.data?.currentTaskCounts),
         apiType:account?.data?.apiType||null,
         workflowId
       });

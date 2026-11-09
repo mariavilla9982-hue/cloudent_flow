@@ -4,6 +4,7 @@ let now=new Date('2026-10-30T18:00:00Z');
 class Clock extends Date{constructor(...args){super(...(args.length?args:[now]))}static now(){return now.getTime()}}
 const times=['07:30','10:00','13:00','16:00','18:30'];
 const ctx=vm.createContext({Date:Clock,Intl,localStorage:{getItem:()=> 'J',setItem(){}},platformAccounts:[{id:'J',platform:'instagram',config:{calendar_policy:{enabled:true,locked:true,times,timezone:'America/Sao_Paulo'}}},{id:'A',platform:'instagram'}],state:{slots:{},defaultTimes:['06:00','07:00','07:30','08:00'],accountDayVolumeModes:{J:{'2026-10-31':15}}},weekDates:()=>[new Date('2026-10-31T12:00:00Z')],localISO:d=>d.toISOString().slice(0,10)});
+ctx.$=()=>null;
 const run=s=>vm.runInContext(s,ctx);
 run(html.slice(html.indexOf('function minutesOf('),html.indexOf('function dateSlots(')));
 run(html.slice(html.indexOf('const CALENDAR_ACCOUNT_KEY='),html.indexOf('function calendarReconnectButton(')));

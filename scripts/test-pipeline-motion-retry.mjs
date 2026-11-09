@@ -1,9 +1,5 @@
-import fs from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
-import {stripTypeScriptTypes} from 'node:module';
-const src=stripTypeScriptTypes(fs.readFileSync('supabase/functions/_shared/image-pipeline-retry.ts','utf8')).replaceAll('export ','');
-const retry=vm.runInNewContext(src+';retryPipelineMotion',{Date});
+import {retryPipelineMotion as retry} from '../supabase/functions/_shared/image-pipeline-retry.ts';
 function fixture(){
  const p={id:'job',user_id:'owner',status:'failed',updated_at:'version1',result_video_id:null,runninghub_task_id:'task',original_storage_path:'owner/original',frame_storage_path:'owner/upscale',meta:{image_pipeline_version:2,workflow_id:'v7',provider_status:'FAILED',provider_status_task_id:'task',pipeline_dispatch_intent:'old',motion_execution_phase:'waiting_loop'}};
  const j={id:'job',user_id:'owner',status:'failed',meta:{pipeline_version:2,stage:'control_motion',face_swap_result:{path:'owner/face'},upscale_result:{path:'owner/upscale'},provider_failed:true}};

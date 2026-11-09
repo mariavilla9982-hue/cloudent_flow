@@ -5,14 +5,14 @@ import assert from 'node:assert/strict';
 const nodes=new Map();
 function node(){return {innerHTML:'',textContent:'',dataset:{},style:{},disabled:false,value:'',classList:{add(){},remove(){},toggle(){}},setAttribute(k,v){this[k]=v;},removeAttribute(){},replaceChildren(child){this.child=child;},load(){},click(){}};}
 const container=node();let section=null;
-for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-manual-prompt]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-error]','[data-gen-status]'])nodes.set(selector,node());
+for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-manual-prompt]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-error]','[data-gen-status]','[data-retry-all]'])nodes.set(selector,node());
 Object.defineProperty(container,'innerHTML',{set(value){this.html=value;section=node();section.dataset.owner=(value.match(/data-owner="([^"]*)"/)||[])[1];section.querySelector=selector=>nodes.get(selector);},get(){return this.html;}});
 for(const kind of ['video','frame']){const box=node(),parts=new Map(['.production-upload-preview','input','[data-clear]','.production-upload-meta'].map(s=>[s,node()]));box.querySelector=s=>parts.get(s);nodes.set('[data-gen-drop="'+kind+'"]',box);}
 const mediaBoxes={};
 for(const kind of ['original','frame']){const placeholder=node();placeholder.replaceWith=media=>mediaBoxes[kind].media=media;mediaBoxes[kind]={querySelector:()=>placeholder};}
 const target={dataset:{jobMedia:'existing'},isConnected:true,querySelector:s=>s==='.genjutsu-preview-placeholder'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
 nodes.get('[data-gen-jobs]').querySelectorAll=()=>[target];
-let recoveryJob=null;
+let recoveryJob=null,failedJobs=[],resolveBulk=null;
 let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],modal=null,resolveResult=null,deferResult=false,previewFailure=false;
 const modalHost=node();Object.defineProperty(modalHost,'innerHTML',{set(value){if(modal){modal.isConnected=false;modal.mediaController?.abort();}this.html=value;if(!value){modal=null;return;}modal=node();modal.isConnected=true;modal.canvas=node();modal.close=node();modal.close.focus=()=>{};modal.querySelector=s=>s==='[data-gen-close]'?modal.close:modal.canvas;modal.querySelectorAll=()=>[modal.close];},get(){return this.html;}});modalHost.querySelector=()=>modal;
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
@@ -23,7 +23,8 @@ const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.s
   closeModal:()=>{modalHost.innerHTML='';},cloudFetch:async(path,options)=>{
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
     if(path.includes('resource=image-pipeline-characters')){assert(path.includes('metadata=1'));return {characters:[{id:'jujuh',name:'Jujuh'}]};}
-    if(path.includes('resource=image-pipeline&'))return {jobs:[...(recoveryJob?[recoveryJob]:[]),{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
+    if(path.includes('resource=image-pipeline&'))return {jobs:[...failedJobs,...(recoveryJob?[recoveryJob]:[]),{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{id:'existing',status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
+    if(path.includes('action=image-pipeline-retry-genjutsu'))return new Promise(resolve=>{resolveBulk=resolve;});
     if(path.includes('resource=image-pipeline-prompt'))return {prompt:'subject_definitions: <script>alert(1)</script>'};
     if(path.includes('resource=image-pipeline-result')){if(previewFailure)throw Error('Falha de prévia');return deferResult?new Promise(resolve=>{resolveResult=resolve;}):{url:'https://b2.test/result.mp4'};}
     if(path.includes('verified=1')){const original=path.includes('kind=original');return {url:'https://b2.test/signed',name:original?'reused.mp4':'reused.webp',mime:original?'video/mp4':'image/webp',size:50,asset:original?'owner/original':'owner/frame',reusable:true,...(original?{duration:10}:{})};}
@@ -91,26 +92,48 @@ await clickAction({prompt:'existing'});assert.equal(modal.canvas.child.textConte
 await clickAction({preview:'existing'});assert(modal.isConnected);assert.equal(modal.canvas.child.savedSrc,'https://b2.test/result.mp4');
 const playing=modal.canvas.child;await c.window.CloudentGenjutsu.refresh();assert.equal(modal.canvas.child,playing);
 modal.onkeydown({key:'Escape',preventDefault(){}});assert.equal(modal,null);
+const cachedReads=calls.filter(x=>x.path.includes('image-pipeline-result')).length;
+await clickAction({preview:'existing'});assert.equal(calls.filter(x=>x.path.includes('image-pipeline-result')).length,cachedReads);c.closeModal();
+const now=Date.now;let advance=16*60*1000;
+c.Date=class extends Date{static now(){return now()+advance;}};
 // Closing while the URL request is pending cannot resurrect the preview.
 deferResult=true;const opening=clickAction({preview:'existing'});assert(modal.isConnected);c.closeModal();resolveResult({url:'https://b2.test/late.mp4'});await opening;assert.equal(modal,null);
 // Suppress double clicks even if polling rerenders the originating row.
+advance+=16*60*1000;
 const pending=clickAction({preview:'existing'});const requests=calls.filter(x=>x.path.includes('image-pipeline-result')).length;
 await c.window.CloudentGenjutsu.refresh();await clickAction({preview:'existing'});assert.equal(calls.filter(x=>x.path.includes('image-pipeline-result')).length,requests);
 resolveResult({url:'https://b2.test/result.mp4'});await pending;c.closeModal();deferResult=false;
-previewFailure=true;await clickAction({preview:'existing'});assert.equal(modal.canvas.textContent,'Falha de prévia');c.closeModal();previewFailure=false;
+advance+=16*60*1000;previewFailure=true;await clickAction({preview:'existing'});assert.equal(modal.canvas.textContent,'Falha de prévia');c.closeModal();previewFailure=false;
 // Secondary menu actions preserve the production handlers and HTTP contracts.
-c.confirm=()=>true;let calendarId=null,trialId=null,bulkId=null;
-c.loadProductionData=async()=>{};
-c.openProductionScheduleModal=async id=>{calendarId=id;};
+c.confirm=()=>true;let calendarId=null,trialId=null,bulkId=null,productionLoads=0;
+c.loadProductionData=async()=>{productionLoads++;};
+c.openProductionScheduleModal=async(id,_,job)=>{calendarId=id;assert.equal(job.result_video_id,'saved');};
 c.openProductionTrialModal=async id=>{trialId=id;};
 c.sendProductionResultToBulk=async id=>{bulkId=id;};
-await clickAction({calendar:'existing'});assert.equal(calendarId,'existing');
+await clickAction({calendar:'existing'});assert.equal(calendarId,'existing');assert.equal(productionLoads,0);
 await clickAction({trial:'existing'});assert.equal(trialId,'existing');
 await clickAction({bulk:'existing'});assert.equal(bulkId,'existing');
 await clickAction({download:'existing'});assert(calls.some(x=>x.path.includes('image-pipeline-result')));
 await clickAction({retry:'existing'});assert(calls.some(x=>x.path.includes('action=image-pipeline-retry')&&x.body.id==='existing'));
 await clickAction({delete:'existing'});assert(calls.some(x=>x.path.includes('action=image-pipeline-job')&&x.body.id==='existing'));
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('genjutsu-more'));
+const failed=(id,canRetry)=>({id,status:'failed',last_error:'falhou',meta:{video_workflow:{key:'genjutsu'},stage:'control_motion'},production:{status:'failed',genjutsu:{canRetry}}});
+assert.equal(nodes.get('[data-retry-all]').hidden,true);
+failedJobs=[failed('first',true),failed('second',true),failed('blocked',false)];
+await c.window.CloudentGenjutsu.refresh();
+assert.match(nodes.get('[data-retry-all]').textContent,/\(2\)/);
+const retryAll=node();retryAll.hasAttribute=key=>key==='data-retry-all';
+const retryAllClick=()=>section.onclick({target:{closest:()=>retryAll}});
+const batch=retryAllClick();assert.match(nodes.get('[data-gen-jobs]').innerHTML,/Retomando…/);
+assert.equal(nodes.get('[data-retry-all]').disabled,true);
+await retryAllClick();await clickAction({retry:'second'});
+assert.deepEqual(calls.filter(x=>x.path.includes('retry-genjutsu')).map(x=>x.body),[{ids:['first','second']}]);
+failedJobs=failedJobs.slice(1);
+resolveBulk({results:[{id:'first',ok:true},{id:'second',ok:false,error:'Arquivo indisponível.'}]});await batch;
+assert.match(nodes.get('[data-gen-status]').textContent,/1 de 2/);
+assert.equal(nodes.get('[data-gen-error]').textContent,'Arquivo indisponível.');
+assert.match(nodes.get('[data-retry-all]').textContent,/\(1\)/);
+failedJobs=[];
 console.log('PASS secondary menu calendar, trial, bulk, download, retry and deletion handler contracts');
 choose('video',video);choose('frame',customFrame);
 c.cloudSession={user:{id:'another'},access_token:'new-session'};timer();await new Promise(setImmediate);c.window.CloudentGenjutsu.render(container);

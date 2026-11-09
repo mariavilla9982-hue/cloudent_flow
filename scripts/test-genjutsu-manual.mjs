@@ -5,7 +5,8 @@ import {runImagePipeline} from '../supabase/functions/_shared/image-pipeline.ts'
 import {retryPipelineMotion} from '../supabase/functions/_shared/image-pipeline-retry.ts';
 const db={face_swap_jobs:[],production_jobs:[],app_settings:[{key:'genjutsu_readiness',value:{ready:true,workflowId:'2117411301344411649'}}]};
 let storageWrites=0,wakes=0,mediaCreates=0,failUpload=false;
-const admin={storage:{from(){storageWrites++;throw Error('manual inputs must use B2');}},from(table){let filters=[],op='select',values,single=false;const q={select(){return q;},eq(k,v){filters.push(r=>r[k]===v);return q;},is(k,v){filters.push(r=>(r[k]??null)===v);return q;},contains(k,v){filters.push(r=>Object.entries(v).every(([a,b])=>r[k]?.[a]===b));return q;},in(k,v){filters.push(r=>v.includes(r[k]));return q;},order(){return q;},limit(){return q;},insert(v){op='insert';values=v;return q;},update(v){op='update';values=v;return q;},maybeSingle(){single=true;return q;},then(resolve,reject){try{let rows=db[table].filter(r=>filters.every(f=>f(r)));if(op==='insert'){assert(!db[table].some(r=>r.id===values.id),'duplicate insert');const r=structuredClone(values);r.created_at=new Date().toISOString();db[table].push(r);rows=[r];}if(op==='update')for(const r of rows)Object.assign(r,structuredClone(values));return Promise.resolve({data:structuredClone(single?rows[0]||null:rows),error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject);}}};return q;},async rpc(name,{p_id,p_worker}){assert.equal(name,'lease_image_pipeline');const j=db.face_swap_jobs.find(r=>r.id===p_id);if(j.locked_by)return {data:[]};j.locked_by=p_worker;return {data:[structuredClone(j)]};}};
+const contains=(row,value)=>Object.entries(value).every(([key,expected])=>typeof expected==="object"&&expected!==null?contains(row?.[key],expected):row?.[key]===expected);
+const admin={storage:{from(){storageWrites++;throw Error('manual inputs must use B2');}},from(table){let filters=[],op='select',values,single=false;const q={select(){return q;},eq(k,v){filters.push(r=>r[k]===v);return q;},is(k,v){filters.push(r=>(r[k]??null)===v);return q;},contains(k,v){filters.push(r=>contains(r[k],v));return q;},in(k,v){filters.push(r=>v.includes(r[k]));return q;},order(){return q;},limit(){return q;},insert(v){op='insert';values=v;return q;},update(v){op='update';values=v;return q;},maybeSingle(){single=true;return q;},then(resolve,reject){try{let rows=db[table].filter(r=>filters.every(f=>f(r)));if(op==='insert'){assert(!db[table].some(r=>r.id===values.id),'duplicate insert');const r=structuredClone(values);r.created_at=new Date().toISOString();db[table].push(r);rows=[r];}if(op==='update')for(const r of rows)Object.assign(r,structuredClone(values));return Promise.resolve({data:structuredClone(single?rows[0]||null:rows),error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject);}}};return q;},async rpc(name,{p_id,p_worker}){assert.equal(name,'lease_image_pipeline');const j=db.face_swap_jobs.find(r=>r.id===p_id);if(j.locked_by)return {data:[]};j.locked_by=p_worker;return {data:[structuredClone(j)]};}};
 const original={name:'test.mp4',type:'video/mp4',size:500},reference={name:'any-model.webp',type:'image/webp',size:100};
 const body={source:'face_swap_natural',workflow_key:'genjutsu',input_mode:'manual_frame',job_id:'10000000-0000-4000-8000-000000000001',original,reference,duration_seconds:10};
 const copies=[];
@@ -97,3 +98,34 @@ try{
   assert(objects.has(j.original_storage_path)&&objects.has(j.frame_storage_path),'reusing preserves the source objects');
 }finally{globalThis.fetch=savedFetch;}
 console.log('PASS manual prompt and failed-job media: exact node text, no LLM, retry, download, fallback, owner isolation and idempotent Backblaze copies');
+
+// One request queues the eligible jobs and wakes the serial dispatcher only once.
+const second=db.production_jobs.find(row=>row.id===reused.job_id);
+const secondParent=db.face_swap_jobs.find(row=>row.id===second.id);
+for(const row of [p,second]){row.status='failed';row.runninghub_task_id=null;}
+p.meta.genjutsu_prompt={status:'failed',interactionId:'retry-me'};
+second.meta.genjutsu_prompt={status:'failed',verifiedProviderFinishReason:'PROHIBITED_CONTENT'};
+const copy=(id,overrides)=>db.face_swap_jobs.push({...structuredClone(secondParent),id,...overrides});
+const foreign='10000000-0000-4000-8000-000000000003',otherWorkflow='10000000-0000-4000-8000-000000000004';
+copy(foreign,{user_id:'stranger'});
+copy(otherWorkflow,{meta:{pipeline_version:2,video_workflow:{key:'motion_control'},provider_failed:true,stage:'face_swap'},status:'failed'});
+const url=new URL('https://api.test/?action=image-pipeline-retry-genjutsu');
+const queueWakes=[];
+const batch=ids=>imagePipelineApi({req:new Request(url,{method:'PATCH',body:JSON.stringify({ids})}),url,admin,user:{id:'owner'},json:(body,status=200)=>({body,status}),wake:async key=>queueWakes.push(key)});
+assert.equal((await batch(['invalid'])).status,400);
+const results=(await batch([p.id,second.id,p.id,foreign,otherWorkflow])).body.results;
+assert.deepEqual(results.map(x=>[x.id,x.ok]),[[p.id,true],[second.id,false],[foreign,false],[otherWorkflow,false]]);
+assert.match(results[1].error,/filtro de conteúdo/);
+assert.equal(p.status,'motion_waiting');
+assert.equal(second.status,'failed');
+assert.equal((await batch([p.id])).body.results[0].ok,false,'a stale batch does not retry an already queued video');
+assert.deepEqual(queueWakes,['genjutsu']);
+const outputUrl=new URL('https://api.test/?resource=image-pipeline-result&workflow=genjutsu&id='+p.id);
+p.result_storage_path='owner/production-results/video.mp4';
+p.meta.result_storage_provider='r2';
+const result=async(user='owner')=>imagePipelineApi({req:new Request(outputUrl),url:outputUrl,admin,user:{id:user},json:(body,status=200)=>Response.json(body,{status}),signGet:async(provider,path)=>'https://'+provider+'.test/'+path});
+assert.equal((await result('stranger')).status,404);
+assert.deepEqual(await (await result()).json(),{url:'https://r2.test/owner/production-results/video.mp4',type:'video'});
+p.hidden_at=new Date().toISOString();
+assert.equal((await result()).status,404);
+console.log('PASS batch retry: dedupe, partial results, content block, ownership, workflow isolation, single wake and protected result URL');

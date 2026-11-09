@@ -1,3 +1,9 @@
+export function genjutsuContentBlockMessage(reason:unknown){
+  if(reason==='PROHIBITED_CONTENT'||reason==='SAFETY'||reason==='BLOCKLIST')
+    return 'O Gemini bloqueou esta análise pelo filtro de conteúdo ('+reason+').';
+  return null;
+}
+
 // Provider messages can contain inputs or credentials. Store a bounded, redacted reason only.
 export function safeGenjutsuError(value:any){
   return String(value||'').replace(/https?:\/\/\S+/gi,'[url]')
