@@ -5335,7 +5335,7 @@ async function signInCloud(){
 async function signOutCloud(){
   document.body.classList.remove("x-only");
   await xPostingRequest("audit-session",{event:"logout"}).catch(()=>{});
-  xAccountGeneration++;xSelectedAccountId="";xAccountList=[];xPostingData=null;xPostingFile=null;xPostingFiles=[];xUploadTicket=null;xPostingDraft={caption:"",interval:120,start:""};xPreviewCache.clear();xSelectedPost=null;xDetailDraft=null;xComposeOpen=false;xMembersData=null;cloudAccess=null;
+  xAccountGeneration++;xDashboardState=null;xSelectedAccountId="";xAccountList=[];xPostingData=null;xPostingFile=null;xPostingFiles=[];xUploadTicket=null;xPostingDraft={caption:"",interval:120,start:""};xPreviewCache.clear();xSelectedPost=null;xDetailDraft=null;xComposeOpen=false;xMembersData=null;cloudAccess=null;
   document.querySelectorAll(".page").forEach(el=>el.innerHTML="");
   for(const key of ["cloudentflow-stage4","cloudentflow-stage3"])localStorage.removeItem(key);
 
@@ -11148,7 +11148,7 @@ function xOpenBufferConnection(){
    const selected=channels[Number(form.elements.channel.value)];
    if(!selected)return;
    const result=await xPostingRequest('buffer-connect',{api_key:key.value,channel_id:selected.id,username:selected.username});
-   dialog.close();await switchXAccount(result.account_id);
+   dialog.close();xDashboardState=null;await switchXAccount(result.account_id);
    toast('Conta conectada. Confira os horários no calendário.','ok');
   }catch(e){status.textContent=e.message;}
   finally{submit.disabled=false;key.disabled=false;}
@@ -11286,7 +11286,11 @@ function xAllPosts(){if(!cloudSession)return [];const map=new Map();for(const p 
 function xCalendarPosts(){const r=xCalendarRange();return xAllPosts().filter(p=>p.scheduled_at&&xDateKey(p.scheduled_at)>=r.start&&xDateKey(p.scheduled_at)<r.end).sort((a,b)=>new Date(a.scheduled_at)-new Date(b.scheduled_at));}
 function xEditable(p){return p&&["queued","failed"].includes(p.status)&&!p.meta?.publish_uncertain;}
 function xSlotTimes(){return xPostingData?.config?.daily_slots?.length?xPostingData.config.daily_slots:["12:00","18:00"];}
-function xSetTab(tab){if(xPostingBusy)return;xClearSelected();xStudioTab=tab;xComposeOpen=false;xSelectedPost=null;xDetailDraft=null;xStudioPage(true);}
+function xSetTab(tab){
+ if(xPostingBusy||(tab==="dashboard"&&!xPostingData?.dashboard_access))return;
+ xClearSelected();xStudioTab=tab;xComposeOpen=false;xSelectedPost=null;xDetailDraft=null;xStudioPage(true);
+ if(tab==="dashboard"&&!xDashboardState)loadXDashboard();
+}
 async function xSetCalendarView(view){xCalendarView=view;await refreshXPosting();}
 async function xMoveCalendar(direction){
  const anchor=xCalendarAnchor||xDateKey();
@@ -11413,20 +11417,38 @@ function xSettingsMarkup(){
  <label for="xPostingStart">Próximo início da fila por intervalo</label><input id="xPostingStart" type="datetime-local" value="${esc(draft.start)}" oninput="xSettingsState().start=this.value;xSettingsState().startDirty=true"><small>Deixe vazio para manter o próximo envio da fila. Todos os horários são de Brasília.</small>
  <button class="x-primary-btn" onclick="saveXPosting(${Boolean(cfg.enabled)})" ${xPostingBusy?"disabled":""}>Salvar configurações</button><div class="x-settings-note"><strong>Conta conectada</strong><p>${esc(xPostingData?.x?.account?.username?"@"+xPostingData.x.account.username:"Nenhuma conta conectada")}</p></div>${cloudAccess?.role==='admin'?`<button class="x-subtle-btn" onclick="connectXOfficial()">${xPostingData?.x?.account?"Reconectar conta":"Conectar conta X"}</button><button class="x-subtle-btn" onclick="connectXOfficial()" ${xAccountList.filter(a=>a.enabled).length>=7?"disabled":""}>＋ Adicionar conta (${xAccountList.filter(a=>a.enabled).length}/7)</button>${xSelectedAccountId&&xSelectedAccountId!=='all'?`<button class="x-subtle-btn" onclick="xDisconnectAccount(false)">Desconectar</button><button class="x-subtle-btn" onclick="xDisconnectAccount(true)">Remover conta</button>`:""}`+xMembersMarkup():""}${cloudAccess?.role==='x_user'?`<button class="x-subtle-btn" onclick="connectXOfficial()">＋ Conectar outra conta X</button>`:""}${cfg.last_error?`<p class="x-error">${esc(cfg.last_error)}</p>`:""}</section>`;
 }
+let xDashboardState=null;
+async function loadXDashboard(){
+ if(!xPostingData?.dashboard_access||xDashboardState?.loading)return;
+ const state={loading:true,accounts:xDashboardState?.accounts,error:""};
+ xDashboardState=state;xStudioPage(true);
+ try{state.accounts=(await xPostingRequest("dashboard")).accounts||[];}
+ catch(e){state.error=e.message;}
+ finally{state.loading=false;if(xDashboardState===state&&currentPage==="xStudio"&&xStudioTab==="dashboard")xStudioPage(true);}
+}
+function xDashboardMarkup(){
+ const state=xDashboardState||{},number=n=>typeof n==="number"?n.toLocaleString("pt-BR"):"—";
+ const accounts=state.accounts||[];
+ const rows=accounts.map(a=>`<div class="x-batch-row"><h3>@${esc(a.username)}</h3><div class="x-metric-grid"><div><small>Views de vídeo</small><h3>${number(a.views)}</h3></div><div><small>Impressões dos posts</small><h3>${number(a.impressions)}</h3></div></div>${a.message?`<p class="x-muted">${esc(a.message)}</p>`:""}${a.updated_at?`<small>Dados atualizados pelo Buffer em ${esc(new Date(a.updated_at).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ}))}</small>`:""}</div>`).join("");
+ return `<section class="x-settings-panel"><h3>Dashboard do X</h3><p class="x-muted">Últimos 30 dias por conta. Os dados do Buffer podem levar até um dia para atualizar.</p><button class="x-subtle-btn" onclick="loadXDashboard()" ${state.loading?"disabled":""}>${state.loading?"Carregando…":"Atualizar métricas"}</button>${state.error?`<p class="x-error">${esc(state.error)}</p>`:""}${rows||(!state.loading&&!state.error&&state.accounts?"<p>Nenhuma conta conectada neste login.</p>":"")}</section>`;
+}
+
 function xStudioPage(force=false){
  const root=$("#xStudio");if(!root)return;
  if(xPostingBusy&&root.querySelector("#xAddPost"))return;
  if(!force&&((xComposeOpen&&root.querySelector("#xAddPost"))||(xStudioTab==='settings'&&root.querySelector("#xDailySlots"))||(xSelectedPost&&(root.querySelector("#xDetailDate")||root.querySelector("#xDetailVideo")))))return;
  const data=cloudSession?xPostingData:null,cfg=data?.config||{},account=data?.x?.account,posts=xCalendarPosts(),active=cfg.enabled===true;
+ if(xStudioTab==="dashboard"&&!data?.dashboard_access)xStudioTab="calendar";
+ const dashboard=xStudioTab==="dashboard";
  const next=[data?.next_scheduled_at,...(data?.counts?.interval_queued&&cfg.next_publish_at?[cfg.next_publish_at]:[])].filter(Boolean).sort((a,b)=>new Date(a)-new Date(b))[0];
  const nextLabel=next?new Date(next).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Sem agendamento";
  root.innerHTML=`<div class="x-studio"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Vídeos e legendas, publicados no horário certo.</p></div><div class="x-header-actions">${xAccountSelectorMarkup()}<span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${esc(account?.status||"Selecione uma conta")}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button>${account||['admin','x_user'].includes(cloudAccess?.role)?`<button class="x-primary-btn" onclick="${account?"xOpenComposer()":cloudAccess?.role==="x_user"?"xOpenBufferConnection()":"connectXOfficial()"}">${account?"＋ Agendar vídeo":"Conectar conta X"}</button>`:'<span class="x-muted">Selecione uma conta autorizada</span>'}</div></header>
- <nav class="x-studio-tabs" aria-label="Abas do X Studio">${[["overview","Visão geral"],["calendar","Calendário"],["queue","Galeria de vídeos"],["captions","Fila de legendas"],["metrics","Métricas"],["settings","Configurações"]].map(([id,label])=>`<button class="${xStudioTab===id?"active":""}" aria-selected="${xStudioTab===id}" onclick="xSetTab('${id}')">${label}</button>`).join("")}</nav>
+ <nav class="x-studio-tabs" aria-label="Abas do X Studio">${[...(data?.dashboard_access?[["dashboard","Dashboard"]]:[]),["overview","Visão geral"],["calendar","Calendário"],["queue","Galeria de vídeos"],["captions","Fila de legendas"],["metrics","Métricas"],["settings","Configurações"]].map(([id,label])=>`<button class="${xStudioTab===id?"active":""}" aria-selected="${xStudioTab===id}" onclick="xSetTab('${id}')">${label}</button>`).join("")}</nav>
  ${cloudSession&&xAccountList.length?'<div class="x-notice"><button class="x-subtle-btn" onclick="xOpenBufferConnection()">Adicionar conta pelo Buffer</button></div>':''}
  ${!cloudSession?'<div class="x-notice">Entre no CloudentFlow para organizar suas publicações. <button class="x-subtle-btn" onclick="focusCloudLogin()">Entrar</button></div>':""}
  ${xPostingError?`<div class="x-notice x-error">${esc(xPostingError)} <button class="x-subtle-btn" onclick="refreshXPosting()">Tentar novamente</button></div>`:""}
  <div class="x-summary"><div><small>${xCalendarView==="month"?"Agendados neste mês":"Agendados nesta semana"}</small><b>${posts.filter(p=>["queued","processing"].includes(p.status)).length}</b><span>${data?.counts?.failed?data.counts.failed+" com falha · confira a agenda":"Seu calendário de publicações"}</span></div><div><small>Próxima publicação</small><b class="x-next-label">${active?esc(nextLabel):"Pausada"}</b><span>Horário de Brasília</span></div><div><small>Postagem automática</small><div class="x-automation-line"><b>${active?"Ativa":"Pausada"}</b><button class="x-toggle ${active?"on":""}" role="switch" aria-checked="${active}" aria-label="Postagem automática" onclick="xToggleAutomation()" ${!account||xPostingBusy?"disabled":""}><span></span></button></div><span>${active?"Calendário e fila ativados":"Ative para publicar os agendamentos"}</span></div></div>
- <div class="x-studio-content">${cloudSession&&!xAccountList.length?'<div class="x-notice"><strong>Conecte sua conta X</strong><p>Autorize sua própria conta para começar a agendar vídeos.</p><button class="x-primary-btn" onclick="xOpenBufferConnection()">Conectar minha conta pelo Buffer</button></div>':xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xStudioTab==="metrics"?xMetricsMarkup():xStudioTab==="captions"?xCaptionQueueMarkup():xStudioTab==="queue"?xGalleryMarkup():xQueueMarkup(xStudioTab==="overview")}${xComposeOpen?xComposerMarkup():xStudioTab==="queue"?xGalleryDetail():xDetailMarkup()}</div></div>`;
+ <div class="x-studio-content">${dashboard?xDashboardMarkup():cloudSession&&!xAccountList.length?'<div class="x-notice"><strong>Conecte sua conta X</strong><p>Autorize sua própria conta para começar a agendar vídeos.</p><button class="x-primary-btn" onclick="xOpenBufferConnection()">Conectar minha conta pelo Buffer</button></div>':xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xStudioTab==="metrics"?xMetricsMarkup():xStudioTab==="captions"?xCaptionQueueMarkup():xStudioTab==="queue"?xGalleryMarkup():xQueueMarkup(xStudioTab==="overview")}${dashboard?"":xComposeOpen?xComposerMarkup():xStudioTab==="queue"?xGalleryDetail():xDetailMarkup()}</div></div>`;
  if(currentPage==="xStudio"&&!xPostingPoll)xPostingPoll=setInterval(()=>{
   if(currentPage!=="xStudio"){clearInterval(xPostingPoll);xPostingPoll=null;return;}
   if(!xPostingBusy&&!xComposeOpen&&!xSelectedPost&&xStudioTab!=="settings"&&xStudioTab!=="captions"&&!(root.contains(document.activeElement)&&document.activeElement.matches("input,textarea,select")))refreshXPosting();
