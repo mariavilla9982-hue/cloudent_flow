@@ -2,6 +2,7 @@ import {handleInstagramDisconnect} from "./instagram-disconnect.ts";
 import {healthWorkers,healthFailures} from "./system-health.ts";
 import {panelViewApi} from './panel-view.ts';
 import {imagePipelineApi} from '../_shared/image-pipeline-api.ts';
+import {runningHubAmount} from '../_shared/image-pipeline-billing.ts';
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {handleCalendarTrial} from "./calendar-trial.ts";
@@ -2835,8 +2836,11 @@ Deno.serve(async (req: Request) => {
       return json({
         configured:true,
         enabled:!!integration?.enabled,
-        credits:Number(account?.data?.remainCoins ?? 0),
-        activeTasks:Number(account?.data?.currentTaskCounts ?? 0),
+        credits:runningHubAmount(account?.data?.remainCoins),
+        points:runningHubAmount(account?.data?.remainPoints),
+        walletBalance:runningHubAmount(account?.data?.remainMoney),
+        currency:/^[A-Z]{3}$/.test(account?.data?.currency)?account.data.currency:null,
+        activeTasks:runningHubAmount(account?.data?.currentTaskCounts),
         apiType:account?.data?.apiType||null,
         workflowId
       });

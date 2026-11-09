@@ -93,3 +93,54 @@ const genWakes=[];gen.deps.wakeMotion=async(key)=>genWakes.push(key);
 for(let i=0;i<4;i++)await runImagePipeline(gen.deps);
 assert.equal(gen.production.length,1);assert.equal(gen.production[0].status,'motion_waiting');assert.equal(gen.production[0].meta.workflow_key,'genjutsu');assert.equal(gen.production[0].meta.workflow_id,'2117411301344411649');assert.equal(gen.production[0].meta.source_duration_seconds,8.5);assert.equal(gen.production[0].original_storage_path,'gen/video');assert.equal(gen.production[0].frame_storage_path,'gen/upscale');assert.deepEqual(genWakes,['genjutsu']);assert.equal(gen.production[0].meta.workflow_nodes.output,'482');
 console.log('PASS Genjutsu handoff: original video, final Upscale, duration, fixed workflow/482 mapping, separate worker wake');
+
+const billed=harness([job('billing')]);
+const existingRh=billed.deps.rhJson;
+let failUpscale=true,queries=0;
+billed.deps.rhJson=async(path,body)=>{
+  if(path==='/openapi/v2/query'){
+    queries++;
+    assert.equal(body.taskId,'task-2');
+    return {taskId:body.taskId,status:'FAILED',usage:{consumePoints:'0.25'}};
+  }
+  if(path.endsWith('/outputs')&&body.taskId==='task-2'&&failUpscale)return {code:805};
+  const result=await existingRh(path,body);
+  if(path.endsWith('/outputs')){
+    const points=body.taskId==='task-1'?'1.75':'0';
+    result.data=[...result.data.map(item=>({...item,consumePoints:points,consumeCoins:'100'})),{consumePoints:points}];
+  }
+  return result;
+};
+for(let i=0;i<3;i++)await runImagePipeline(billed.deps);
+assert.equal(billed.rows[0].status,'failed');
+assert.equal(queries,1);
+assert.deepEqual(billed.rows[0].meta.image_task_charges,{
+  'task-1':{stage:'face_swap',amount:1.75,unit:'points'},
+  'task-2':{stage:'upscale',amount:0.25,unit:'points'}
+});
+failUpscale=false;
+Object.assign(billed.rows[0],{status:'waiting',runninghub_task_id:null});
+Object.assign(billed.rows[0].meta,{dispatch_intent:null,provider_failed:false});
+await runImagePipeline(billed.deps);
+await runImagePipeline(billed.deps);
+assert.equal(billed.rows[0].status,'ready');
+assert.deepEqual(billed.rows[0].meta.image_task_charges['task-3'],{stage:'upscale',amount:0,unit:'points'});
+assert.equal(Object.keys(billed.rows[0].meta.image_task_charges).length,3);
+assert(!billed.production.length);
+
+const {readImageCharge,runningHubAmount}=await import('../supabase/functions/_shared/image-pipeline-billing.ts');
+const unavailable=()=>{throw new Error('billing unavailable');};
+assert.equal(runningHubAmount(' 1941.07 '),1941.07);
+for(const invalid of [null,undefined,'',' ',true,-1,Infinity])assert.equal(runningHubAmount(invalid),null);
+assert.deepEqual(await readImageCharge(unavailable,'123','face_swap',{data:[{consumeCoins:'17'}]}),{stage:'face_swap',amount:17,unit:'coins'});
+assert.deepEqual(await readImageCharge(unavailable,'123','upscale'),{stage:'upscale',amount:null,unit:null});
+
+const ui=fs.readFileSync('image-pipeline-ui.js','utf8'), html=fs.readFileSync('index.html','utf8');
+const renderCost=vm.runInNewContext(ui.slice(ui.indexOf('  function imageCosts('),ui.indexOf('  function drawJobs('))+'\nimageCosts',{e:String});
+const renderBalance=vm.runInNewContext(html.slice(html.indexOf('function runningHubBillingCards('),html.indexOf('function settings(){'))+'\nrunningHubBillingCards',{esc:String});
+assert.match(renderCost(billed.rows[0]),/Face Swap <b>1,75 pts<\/b>.*Upscaling <b>0,25 pts<\/b>.*Total de imagem <b>2 pts/);
+assert.match(renderCost({...billed.rows[0],meta:{...billed.rows[0].meta,image_task_charges:{'task-1':{stage:'face_swap',amount:0,unit:'points'}}}}),/0 pts.*Sem valor confirmado.*Subtotal confirmado/);
+assert.equal(renderCost({meta:{stage:'frame_ready'}}),'');
+assert.match(renderBalance({points:1941.07,credits:28877,walletBalance:0,currency:'USD'}),/1\.941,07[\s\S]*US\$\s*0,00/);
+assert.match(renderBalance({points:null,credits:null,walletBalance:null}),/Saldo indisponível/);
+console.log('PASS billing: per-task decimal and zero, one charge per task, failed retry retained, legacy units, partial or unknown totals, separate wallet');
