@@ -24,6 +24,14 @@ async function signedMediaUrl(admin:any,key:string,expires=7200){
   const req=new Request(String(r.endpoint).replace(/\/$/,"")+"/"+encodeURIComponent(String(r.bucket))+"/"+keyPath(key)+"?X-Amz-Expires="+expires,{method:"GET"});
   return (await aws.sign(req,{aws:{signQuery:true}})).url.toString();
 }
+// Apply the pause by calendar entry time so later publication keeps the same choice.
+const FIRST_COMMENT_PAUSE_START=Date.parse("2026-11-09T00:50:00Z");
+const FIRST_COMMENT_PAUSE_END=Date.parse("2026-11-16T03:00:00Z");
+function pauseFirstComment(createdAt:string){
+  const timestamp=Date.parse(createdAt);
+  return timestamp>=FIRST_COMMENT_PAUSE_START&&timestamp<FIRST_COMMENT_PAUSE_END;
+}
+
 async function pickFirstComment(admin:any,caption:string,scheduleId:string){
   const {data,error}=await admin.rpc("pick_instagram_first_comment",{p_caption:caption,p_seed:scheduleId});
   if(error)throw error;
@@ -55,7 +63,7 @@ Deno.serve(async(req:Request)=>{
     const body=await req.json().catch(()=>({}));
     const scheduleId=String(body.schedule_id||"");if(!scheduleId)return out({ok:false,error:"schedule_id_required"},400);
 
-    const {data:s,error:se}=await admin.from("schedules").select("id,video_id,status,published_at,instagram_media_id,platform_account_id,attempt_count,last_error").eq("id",scheduleId).maybeSingle();if(se)throw se;
+    const {data:s,error:se}=await admin.from("schedules").select("id,video_id,status,created_at,published_at,instagram_media_id,platform_account_id,attempt_count,last_error").eq("id",scheduleId).maybeSingle();if(se)throw se;
     if(!s)return out({ok:false,error:"schedule_not_found"},404);
     if(s.instagram_media_id||s.status==="published")return out({ok:true,state:"already_published",instagram_media_id:s.instagram_media_id});
     if(!s.platform_account_id)throw new Error("schedule_without_platform_account");
@@ -82,6 +90,7 @@ Deno.serve(async(req:Request)=>{
     let payload:any={...(j.payload||{})};
     let containerId=String(payload.container_id||"");
     const caption=String(v.caption||"").slice(0,2200);
+    const skipFirstComment=pauseFirstComment(s.created_at);
     const now=new Date().toISOString();
 
     if(!containerId){
@@ -89,7 +98,7 @@ Deno.serve(async(req:Request)=>{
       await verifyMediaReadable(mediaUrl);
       await admin.from("app_settings").delete().eq("key","calendar_media_block_"+scheduleId);
       const coverOffsetMs=3500;
-      const firstCommentMessage=await pickFirstComment(admin,caption,scheduleId);
+      const firstCommentMessage=skipFirstComment?null:await pickFirstComment(admin,caption,scheduleId);
       // Normal Reels must appear only in the Reels tab, never in the main profile/feed grid.
       const created=await graph(base,igId+"/media",String(token),"POST",{media_type:"REELS",video_url:mediaUrl,caption,share_to_feed:"false",thumb_offset:String(coverOffsetMs)});
       containerId=String(created.id);
@@ -129,8 +138,8 @@ Deno.serve(async(req:Request)=>{
     const publishedAt=String(payload.published_at||new Date().toISOString());
     let firstCommentId=String(payload.first_comment_id||"")||null;
     let firstCommentError:string|null=null;
-    let comment=String(payload.first_comment_message||"").trim();
-    if(!comment||comment===caption.trim())comment=String(await pickFirstComment(admin,caption,scheduleId)||"").trim();
+    let comment=skipFirstComment?"":String(payload.first_comment_message||"").trim();
+    if(!skipFirstComment&&(!comment||comment===caption.trim()))comment=String(await pickFirstComment(admin,caption,scheduleId)||"").trim();
     if(comment&&!firstCommentId){
       try{const c=await graph(base,mediaId+"/comments",String(token),"POST",{message:comment.slice(0,2200)});firstCommentId=String(c.id||"")||null;}catch(e:any){firstCommentError=e instanceof Error?e.message:String(e);}
     }
