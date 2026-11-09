@@ -11121,8 +11121,39 @@ let xPostingFile=null,xPostingPoll=null,xPostingReload=false;
 let xSelectedAccountId="",xAccountList=[],xAccountGeneration=0,xPostingFiles=[],xTargetAccounts=[],xBatchDrafts=[];
 async function xPostingRequest(action,body){
  const account=xSelectedAccountId;
- if(!account&&!/^(status(?:&|$)|audit-session$)/.test(action))throw new Error("Conecte e selecione uma conta X para continuar.");
+ if(!account&&!/^(status(?:&|$)|audit-session$|buffer-channels$|buffer-connect$)/.test(action))throw new Error("Conecte e selecione uma conta X para continuar.");
  return edgeFetch(X_POSTING_URL+"?action="+action+"&platform_account_id="+encodeURIComponent(account),body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:account,...body})});
+}
+function xOpenBufferConnection(){
+ if(!cloudSession){focusCloudLogin();return;}
+ const existing=$('#xBufferConnection');if(existing){existing.focus();return;}
+ const dialog=document.createElement('dialog');dialog.id='xBufferConnection';dialog.className='x-settings-panel';
+ dialog.innerHTML=`<form><h3>Conectar conta pelo Buffer</h3><p>Autorize suas contas X no Buffer e gere uma chave. Use a chave aqui uma vez para escolher quais contas entram no Cloudent.</p><p><a href="https://publish.buffer.com/settings/channels" target="_blank" rel="noopener noreferrer">Autorizar contas no Buffer ↗</a> · <a href="https://publish.buffer.com/settings/api" target="_blank" rel="noopener noreferrer">Gerar chave ↗</a></p><label>Chave do Buffer<input name="key" type="password" autocomplete="off" spellcheck="false" required maxlength="1024"></label><div data-buffer-channels></div><p role="status" data-buffer-status></p><button class="x-primary-btn" type="submit">Buscar contas</button> <button class="x-subtle-btn" type="button" data-buffer-close>Fechar</button></form>`;
+ const form=dialog.querySelector('form'),key=form.elements.key,options=form.querySelector('[data-buffer-channels]'),status=form.querySelector('[data-buffer-status]'),submit=form.querySelector('[type=submit]');
+ let channels=[];
+ key.addEventListener('input',()=>{channels=[];options.replaceChildren();submit.textContent='Buscar contas';});
+ dialog.querySelector('[data-buffer-close]').onclick=()=>dialog.close();
+ dialog.addEventListener('close',()=>{key.value='';dialog.remove();},{once:true});
+ form.onsubmit=async event=>{
+  event.preventDefault();if(submit.disabled)return;
+  submit.disabled=true;key.disabled=true;status.textContent='';
+  try{
+   if(!channels.length){
+    const result=await xPostingRequest('buffer-channels',{api_key:key.value});
+    channels=result.channels||[];
+    if(!channels.length){status.textContent='Nenhuma conta X autorizada no Buffer.';return;}
+    options.innerHTML=`<p>Selecione a conta que quer adicionar.</p>${channels.map((channel,i)=>`<label><input type="radio" name="channel" value="${i}" required> @${esc(channel.username)}</label>`).join('')}`;
+    submit.textContent='Conectar conta selecionada';return;
+   }
+   const selected=channels[Number(form.elements.channel.value)];
+   if(!selected)return;
+   const result=await xPostingRequest('buffer-connect',{api_key:key.value,channel_id:selected.id,username:selected.username});
+   dialog.close();await switchXAccount(result.account_id);
+   toast('Conta conectada. Confira os horários no calendário.','ok');
+  }catch(e){status.textContent=e.message;}
+  finally{submit.disabled=false;key.disabled=false;}
+ };
+ document.body.append(dialog);dialog.showModal();
 }
 let xSettingsDraft=null,xGalleryCompose=false,xDraftReply='',xCaptionBusy=false,xMetricsBusy=false,xStatusRevision=0,xCaptionDraft='';
 function xClearSelected(){xPostingFiles=[];xPostingFile=null;xBatchDrafts=[];xUploadTicket=null;xPostingDraft.caption='';xDraftReply='';xComposeDate='';}
@@ -11389,12 +11420,13 @@ function xStudioPage(force=false){
  const data=cloudSession?xPostingData:null,cfg=data?.config||{},account=data?.x?.account,posts=xCalendarPosts(),active=cfg.enabled===true;
  const next=[data?.next_scheduled_at,...(data?.counts?.interval_queued&&cfg.next_publish_at?[cfg.next_publish_at]:[])].filter(Boolean).sort((a,b)=>new Date(a)-new Date(b))[0];
  const nextLabel=next?new Date(next).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Sem agendamento";
- root.innerHTML=`<div class="x-studio"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Vídeos e legendas, publicados no horário certo.</p></div><div class="x-header-actions">${xAccountSelectorMarkup()}<span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${esc(account?.status||"Selecione uma conta")}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button>${account||['admin','x_user'].includes(cloudAccess?.role)?`<button class="x-primary-btn" onclick="${account?"xOpenComposer()":"connectXOfficial()"}">${account?"＋ Agendar vídeo":"Conectar conta X"}</button>`:'<span class="x-muted">Selecione uma conta autorizada</span>'}</div></header>
+ root.innerHTML=`<div class="x-studio"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Vídeos e legendas, publicados no horário certo.</p></div><div class="x-header-actions">${xAccountSelectorMarkup()}<span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${esc(account?.status||"Selecione uma conta")}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button>${account||['admin','x_user'].includes(cloudAccess?.role)?`<button class="x-primary-btn" onclick="${account?"xOpenComposer()":cloudAccess?.role==="x_user"?"xOpenBufferConnection()":"connectXOfficial()"}">${account?"＋ Agendar vídeo":"Conectar conta X"}</button>`:'<span class="x-muted">Selecione uma conta autorizada</span>'}</div></header>
  <nav class="x-studio-tabs" aria-label="Abas do X Studio">${[["overview","Visão geral"],["calendar","Calendário"],["queue","Galeria de vídeos"],["captions","Fila de legendas"],["metrics","Métricas"],["settings","Configurações"]].map(([id,label])=>`<button class="${xStudioTab===id?"active":""}" aria-selected="${xStudioTab===id}" onclick="xSetTab('${id}')">${label}</button>`).join("")}</nav>
+ ${cloudSession&&xAccountList.length?'<div class="x-notice"><button class="x-subtle-btn" onclick="xOpenBufferConnection()">Adicionar conta pelo Buffer</button></div>':''}
  ${!cloudSession?'<div class="x-notice">Entre no CloudentFlow para organizar suas publicações. <button class="x-subtle-btn" onclick="focusCloudLogin()">Entrar</button></div>':""}
  ${xPostingError?`<div class="x-notice x-error">${esc(xPostingError)} <button class="x-subtle-btn" onclick="refreshXPosting()">Tentar novamente</button></div>`:""}
  <div class="x-summary"><div><small>${xCalendarView==="month"?"Agendados neste mês":"Agendados nesta semana"}</small><b>${posts.filter(p=>["queued","processing"].includes(p.status)).length}</b><span>${data?.counts?.failed?data.counts.failed+" com falha · confira a agenda":"Seu calendário de publicações"}</span></div><div><small>Próxima publicação</small><b class="x-next-label">${active?esc(nextLabel):"Pausada"}</b><span>Horário de Brasília</span></div><div><small>Postagem automática</small><div class="x-automation-line"><b>${active?"Ativa":"Pausada"}</b><button class="x-toggle ${active?"on":""}" role="switch" aria-checked="${active}" aria-label="Postagem automática" onclick="xToggleAutomation()" ${!account||xPostingBusy?"disabled":""}><span></span></button></div><span>${active?"Calendário e fila ativados":"Ative para publicar os agendamentos"}</span></div></div>
- <div class="x-studio-content">${cloudSession&&!xAccountList.length?'<div class="x-notice"><strong>Conecte sua conta X</strong><p>Autorize sua própria conta para começar a agendar vídeos.</p><button class="x-primary-btn" onclick="connectXOfficial()">Conectar minha conta X</button></div>':xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xStudioTab==="metrics"?xMetricsMarkup():xStudioTab==="captions"?xCaptionQueueMarkup():xStudioTab==="queue"?xGalleryMarkup():xQueueMarkup(xStudioTab==="overview")}${xComposeOpen?xComposerMarkup():xStudioTab==="queue"?xGalleryDetail():xDetailMarkup()}</div></div>`;
+ <div class="x-studio-content">${cloudSession&&!xAccountList.length?'<div class="x-notice"><strong>Conecte sua conta X</strong><p>Autorize sua própria conta para começar a agendar vídeos.</p><button class="x-primary-btn" onclick="xOpenBufferConnection()">Conectar minha conta pelo Buffer</button></div>':xStudioTab==="calendar"?xCalendarMarkup():xStudioTab==="settings"?xSettingsMarkup():xStudioTab==="metrics"?xMetricsMarkup():xStudioTab==="captions"?xCaptionQueueMarkup():xStudioTab==="queue"?xGalleryMarkup():xQueueMarkup(xStudioTab==="overview")}${xComposeOpen?xComposerMarkup():xStudioTab==="queue"?xGalleryDetail():xDetailMarkup()}</div></div>`;
  if(currentPage==="xStudio"&&!xPostingPoll)xPostingPoll=setInterval(()=>{
   if(currentPage!=="xStudio"){clearInterval(xPostingPoll);xPostingPoll=null;return;}
   if(!xPostingBusy&&!xComposeOpen&&!xSelectedPost&&xStudioTab!=="settings"&&xStudioTab!=="captions"&&!(root.contains(document.activeElement)&&document.activeElement.matches("input,textarea,select")))refreshXPosting();
@@ -12053,6 +12085,17 @@ async function addXPostingBatch(){
 }
 async function xDisconnectAccount(remove){if(!xSelectedAccountId||xSelectedAccountId==='all')return;try{await xPostingRequest(remove?'account-remove':'account-status',{});await switchXAccount('');}catch(e){toast(e.message,'err');}}
 function xMetricsMarkup(){
+ const buffered=(xPostingData?.accounts||[]).filter(a=>a.publish_provider==='buffer'&&(xSelectedAccountId==='all'||a.id===xSelectedAccountId));
+ if(buffered.length){
+  const bars=buffered.map(a=>{
+   const handle=String(a.username||'').replace(/^@/,'');
+   const views=/^[A-Za-z0-9_]{1,15}$/.test(handle)?`<a href="https://x.com/${handle}" target="_blank" rel="noopener noreferrer">Consultar no X ↗</a>`:'Consultar no X';
+   const recent=(xPostingData?.posts||[]).filter(p=>p.platform_account_id===a.id&&p.status==='published'&&p.x_post_id).sort((left,right)=>Date.parse(right.published_at)-Date.parse(left.published_at));
+   const rows=recent.map(p=>`<div class="x-batch-row"><a href="https://x.com/i/status/${encodeURIComponent(p.x_post_id)}" target="_blank" rel="noopener noreferrer">${esc(p.drive_file_name||'Ver publicação')} ↗</a><small>Visualizações no X · ${p.meta?.buffer_click_target?`Cliques: ${Number(p.meta.buffer_link_clicks||0).toLocaleString('pt-BR')}`:'Link sem rastreamento'}</small></div>`).join('');
+   return `<section class="x-settings-panel"><h3>@${esc(handle)}</h3><div class="x-metric-grid"><div><small>Visualizações</small><p>${views}</p></div><div><small>Cliques nos links · posts dos últimos 30 dias</small><h3>${typeof a.clicks==='number'?a.clicks.toLocaleString('pt-BR'):'—'}</h3></div></div><h3>Por publicação</h3>${rows||'<p>Nenhum post publicado pelo Cloudent nesta conta.</p>'}</section>`;
+  }).join('');
+  return `<section><p class="x-muted">O contador registra cliques nos links rastreados, incluindo cliques repetidos. As visualizações ficam no X.</p>${bars}</section>`;
+ }
  const cfg=xPostingData?.config||{},snapshot=cfg.metrics_snapshot||{},profile=snapshot.account||{};
  const cards=[['followers_count','Seguidores'],['following_count','Seguindo'],['tweet_count','Publicações']].map(([key,label])=>`<div><small>${label}</small><h3>${typeof profile[key]==='number'?profile[key].toLocaleString('pt-BR'):'—'}</h3></div>`).join('');
  const recent=snapshot.recent_posts||[];
