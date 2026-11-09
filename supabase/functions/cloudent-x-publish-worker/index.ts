@@ -491,10 +491,15 @@ async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,w
  Object.assign(meta,{publish_provider:"buffer",publish_request_started:true,publish_started_at:new Date().toISOString(),buffer_click_target:reply?.target??null});
  const {data:marked,error:markError}=await admin.from("x_drive_posts").update({meta}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing").select("id").maybeSingle();
  if(markError||!marked)throw markError||new Error("publication_claim_lost");
- const {createPost}=await bufferGraph("mutation Send($input: CreatePostInput!) { createPost(input:$input) { __typename ... on PostActionSuccess { post { "+BUFFER_POST_FIELDS+" } } } }",{input},true,key);
+ const {createPost}=await bufferGraph("mutation Send($input: CreatePostInput!) { createPost(input:$input) { __typename ... on PostActionSuccess { post { "+BUFFER_POST_FIELDS+" } } ... on MutationError { message } } }",{input},true,key);
  if(!createPost?.post?.id){
   if(createPost?.__typename==="PostLimitReachedError")throw new HttpError("A fila grátis do Buffer está ocupada. O Cloudent vai tentar novamente.",429);
-  if(createPost?.__typename&&createPost.__typename!=="PostActionSuccess")throw new HttpError("O Buffer recusou esta publicação. Confira a conta e o vídeo.",409);
+  if(createPost?.__typename&&createPost.__typename!=="PostActionSuccess"){
+   const detail=String(createPost.message||createPost.__typename)
+    .replace(/https?:\/\/[^\s<>"']+/gi,"[URL]")
+    .replace(/[\u0000-\u001f\u007f]+/g," ").trim().slice(0,240);
+   throw new HttpError("O Buffer recusou esta publicação: "+detail,409);
+  }
   throw new HttpError("O Buffer não devolveu o identificador do envio.",502,null,true);
  }
  meta.buffer_post_id=String(createPost.post.id);
