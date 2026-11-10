@@ -5,7 +5,8 @@ import { join } from 'node:path';
 
 const { PGlite } = await import(process.env.CLOUDENT_PGLITE_MODULE || '@electric-sql/pglite');
 const migrations = new URL('../supabase/migrations/', import.meta.url);
-const migration = readFileSync(new URL(readdirSync(migrations).find(name => name.endsWith('_instagram_scale_pilot.sql')), migrations), 'utf8');
+const migration = readdirSync(migrations).filter(name => /_instagram_scale_(pilot|triplet_order)\.sql$/.test(name)).sort()
+  .map(name => readFileSync(new URL(name, migrations), 'utf8')).join('\n');
 const dir = mkdtempSync(join(tmpdir(), 'cloudent-instagram-scale-'));
 const owner = '10000000-0000-4000-8000-000000000001';
 const other = '10000000-0000-4000-8000-000000000002';
@@ -116,15 +117,15 @@ try {
     where s.platform_account_id=$1 and s.status<>'cancelled' order by s.scheduled_at
   `, [id])).map(r=>r.file_name);
   assert.deepEqual(await order(mother), ['antigo','antes da segunda filha',...names]);
-  assert.deepEqual(await order(child1), [...names.slice(1),names[0]]);
-  assert.deepEqual(await order(child2), [...names.slice(2),...names.slice(0,2)]);
+  assert.deepEqual(await order(child1), [...'BCAEFDHIJG']);
+  assert.deepEqual(await order(child2), [...'CABFDEIJGH']);
   assert.equal((await one('select count(*)::int n from videos')).n,12);
   assert.equal((await one('select count(*)::int n from instagram_scale_deliveries where schedule_id is not null')).n,20);
   assert.equal((await one('select instagram_scale_media_pending(video_id) as pending from schedules where id=$1',[first])).pending,false);
 
   await db.close();
   db = new PGlite(dir);
-  assert.deepEqual(await order(child1), [...names.slice(1),names[0]]);
+  assert.deepEqual(await order(child1), [...'BCAEFDHIJG']);
   await exec(`update instagram_scale_links set sync_enabled=false where child_id='${child1}'`);
   for(const [i,name] of [...'KLM'].entries())await add(name,i+12);
   assert.equal((await distribute()).placed,3);
@@ -132,6 +133,12 @@ try {
   await exec(`update instagram_scale_links set sync_enabled=true where child_id='${child1}'`);
   assert.equal((await distribute()).placed,3);
   assert.deepEqual((await order(child1)).slice(-3), [...'LMK']);
+
+  for(const [i,name] of [...'NOPQRS'].entries())await add(name,i+15);
+  assert.equal((await distribute()).placed,12);
+  assert.deepEqual((await order(mother)).slice(-6), [...'NOPQRS']);
+  assert.deepEqual((await order(child1)).slice(-6), [...'OPNRSQ']);
+  assert.deepEqual((await order(child2)).slice(-6), [...'PNOSQR']);
 
   const target = await one('select id,video_id from schedules where platform_account_id=$1 order by scheduled_at limit 1',[child1]);
   const sibling = await one('select id from schedules where platform_account_id=$1 and video_id=$2',[child2,target.video_id]);
