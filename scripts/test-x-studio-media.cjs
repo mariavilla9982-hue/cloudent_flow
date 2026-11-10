@@ -8,7 +8,7 @@ class Query{
  async result(){const rows=this.db[this.table]||[];const selected=rows.filter(r=>this.filters.every(f=>f(r)));if(this.op==='insert'){rows.push(...(Array.isArray(this.patch)?this.patch:[this.patch]));this.db[this.table]=rows;return {data:[this.patch],error:null};}if(this.op==='update')for(const r of selected)Object.assign(r,this.patch);return {data:selected.map(r=>({...r})),error:null};}
  async maybeSingle(){const r=await this.result();return {...r,data:r.data[0]||null};}single(){return this.maybeSingle();}then(a,b){return this.result().then(a,b);}
 }
-function context(path,admin){const c={crypto,TextEncoder,TextDecoder,URL,URLSearchParams,Request,Response,Headers,AbortSignal,fetch:async()=>{throw Error('External request forbidden in tests');},console,setTimeout,clearTimeout,Uint8Array,Buffer,btoa,atob,createClient:()=>admin,twitterText:{parseTweet:t=>({valid:t.length>0&&t.length<=280})},Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://test':''},serve:f=>{c.handler=f;}}};vm.createContext(c);const js=stripTypeScriptTypes(fs.readFileSync(path,'utf8')).replace(/^import .*;\n/gm,'');vm.runInContext(js,c);vm.runInContext('globalThis.HttpError=typeof HttpError!=="undefined"?HttpError:Error',c);return c;}
+function context(path,admin){const c={crypto,TextEncoder,TextDecoder,URL,URLSearchParams,Request,Response,Headers,AbortSignal,FormData,fetch:async()=>{throw Error('External request forbidden in tests');},console,setTimeout,clearTimeout,Uint8Array,Buffer,btoa,atob,createClient:()=>admin,twitterText:{parseTweet:t=>({valid:t.length>0&&t.length<=280})},Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://test':''},serve:f=>{c.handler=f;}}};vm.createContext(c);const js=stripTypeScriptTypes(fs.readFileSync(path,'utf8')).replace(/^import .*;\n/gm,'');vm.runInContext(js,c);vm.runInContext('globalThis.HttpError=typeof HttpError!=="undefined"?HttpError:Error',c);return c;}
 (async()=>{
  const db={x_account_configs:[{platform_account_id:A,last_metrics_at:null}],x_drive_posts:[{id:'p',platform_account_id:A,x_post_id:'post'}]};
  const admin={from:t=>new Query(db,t)};const x=context('supabase/functions/cloudent-x-publish-worker/index.ts',admin);
@@ -31,8 +31,50 @@ function context(path,admin){const c={crypto,TextEncoder,TextDecoder,URL,URLSear
  let response=await call('upload-complete',{object_path:path,provider:'r2',thumbnail_path:path+'.jpg',size_bytes:100,mime_type:'video/mp4',file_name:'neutral.mp4',caption:'Neutral caption',scheduled_at:'2030-10-20T18:00:00.000Z'});assert.equal(response.status,200);assert.equal(apiDb.x_drive_posts[0].scheduled_at,'2030-10-20T18:00:00.000Z');assert.equal(apiDb.x_drive_posts[0].meta.thumbnail_path,path+'.jpg');
  api.uploadedThumbnailMatches=async()=>false;response=await call('upload-complete',{object_path:path,provider:'r2',thumbnail_path:path+'.jpg',size_bytes:100,mime_type:'video/mp4',file_name:'neutral.mp4',caption:'',gallery:true});assert.equal(response.status,200);assert.equal((await response.json()).thumbnail_warning,true);assert.equal(apiDb.x_drive_posts[1].scheduled_at,null);assert.equal(apiDb.x_drive_posts[1].post_text,'');
  response=await call('upload-complete',{object_path:path,provider:'r2',thumbnail_path:'other/path.jpg'});assert.equal(response.status,403);
+ const photoPath=U+'/x-uploads/'+Uuid+'.png';
+ const png=[137,80,78,71,13,10,26,10];
+ const photo={object_path:photoPath,provider:'r2',size_bytes:100,mime_type:'image/png',file_name:'neutral.png',caption:'',scheduled_at:'2030-10-21T18:00:00.000Z'};
+ api.getCloudentR2Config=async()=>({});
+ api.r2PresignedUrl=async(_cfg,method,objectPath,ttl,mime)=>{
+   assert.equal(method,'PUT');assert.match(objectPath,/\.png$/);assert.equal(ttl,900);assert.equal(mime,'image/png');return 'https://storage.test/photo';
+ };
+ response=await call('upload-ticket',{mime_type:'image/png',size_bytes:100});
+ assert.equal(response.status,200);const ticket=await response.json();
+ assert.equal(ticket.content_type,'image/png');assert.equal(ticket.provider,'r2');assert.equal(ticket.thumbnail,undefined);
+ response=await call('upload-ticket',{mime_type:'image/png',size_bytes:5*1024*1024+1});assert.equal(response.status,400);
+ api.getCloudentR2Config=async()=>null;
+ response=await call('upload-ticket',{mime_type:'image/jpeg',size_bytes:100});assert.equal(response.status,503);
+ api.fetch=async(_url,opts)=>{
+   assert.equal(opts.headers.Range,'bytes=0-7');
+   return new Response(Uint8Array.from(png),{status:206,headers:{'Content-Range':'bytes 0-7/100'}});
+ };
+ response=await call('upload-complete',photo);assert.equal(response.status,200);
+ assert.equal(apiDb.x_drive_posts[2].drive_mime_type,'image/png');
+ assert.equal(apiDb.x_drive_posts[2].post_text,'');
+ assert.equal(apiDb.x_drive_posts[2].scheduled_at,photo.scheduled_at);
+ assert.equal(apiDb.x_drive_posts[2].meta.thumbnail_path,null);
+ response=await call('upload-complete',{...photo,mime_type:'image/jpeg'});assert.equal(response.status,403);
+ response=await call('upload-complete',{...photo,provider:'supabase'});assert.equal(response.status,403);
+ response=await call('upload-complete',{...photo,object_path:V+'/x-uploads/'+Uuid+'.png'});assert.equal(response.status,403);
+ response=await call('upload-complete',{...photo,size_bytes:101});assert.equal(response.status,409);
+ api.fetch=async()=>new Response(new Uint8Array(8),{status:206,headers:{'Content-Range':'bytes 0-7/100'}});
+ response=await call('upload-complete',photo);assert.equal(response.status,409);
+ assert.equal(apiDb.x_drive_posts.length,3);
+
+ let mediaInit;
+ api.xJson=async(path,_token,_method,body)=>{
+   if(path.endsWith('/initialize')){mediaInit=body;return {data:{id:'media'}};}
+   assert.ok(path.endsWith('/finalize'));return {};
+ };
+ api.uploadRange=async()=>new Blob([Uint8Array.from(png)],{type:'image/png'});
+ api.fetch=async(url,opts)=>{
+   assert.equal(url,'https://api.x.com/2/media/upload/media/append');
+   assert.equal(opts.body.get('media').type,'image/png');return new Response(null,{status:204});
+ };
+ assert.equal(await api.uploadVideoX('',apiDb.x_drive_posts[2],'test-token','signed-get'),'media');
+ assert.equal(mediaInit.media_type,'image/png');assert.equal(mediaInit.media_category,'tweet_image');
  response=await call('caption-add',{caption:'Neutral queue caption'});assert.equal(response.status,200);assert.equal(apiDb.x_caption_queue[0].platform_account_id,A);
  response=await call('caption-add',{platform_account_id:B,caption:'Not authorized'});assert.equal(response.status,403);
  response=await call('save-config',{enabled:false,daily_slots:['21:00','06:00','15:00'],queue_mode:'daily_slots',interval_minutes:360});assert.equal(response.status,200);const saved=(await response.json()).config;assert.deepEqual(saved.daily_slots,['06:00','15:00','21:00']);assert.equal(saved.timezone,'America/Sao_Paulo');assert.equal(saved.enabled,false);
- console.log('PASS GET/range/JPEG thumbnail validation; real-account metrics, account isolation, cooldown, failure preservation');
+ console.log('PASS video thumbnails, photo tickets and upload validation, native X image payload, account isolation and metrics');
 })().catch(e=>{console.error(e);process.exitCode=1;});
