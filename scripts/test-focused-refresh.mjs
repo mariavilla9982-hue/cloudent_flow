@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const html=fs.readFileSync('index.html','utf8');
 const between=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
 let calls=[],renders=0,release;
-const names=['loadAutomationStatus','loadNotifications','loadFollowerStats','refreshCalendarLiveData','syncFromBackend','loadDashboardScheduleRows','syncDashboardLiveMetrics','loadInstagramMetricsStored','loadServerLogs','loadProductionData','loadTrialReels','loadSystemHealth','loadInstagramWebSessionStatus'];
+const names=['loadAutomationStatus','loadNotifications','loadFollowerStats','refreshCalendarLiveData','syncFromBackend','loadDashboardScheduleRows','syncDashboardLiveMetrics','loadInstagramMetricsStored','loadInstagramScaleSummary','loadServerLogs','loadProductionData','loadTrialReels','loadSystemHealth','loadInstagramWebSessionStatus'];
 const c=vm.createContext({console,currentPage:'production',cloudSession:{user:{id:'owner'}},cloudAccess:{role:'admin'},settingsTab:'',window:{CloudentMotionControl:{mode:'genjutsu'}},document:{activeElement:null,hidden:false},$:()=>null,updateLiveChrome(){},renderAll(){renders++},toast(){},toggleActivityPanel(){},refreshXPosting(){}});
 for(const name of names)c[name]=async()=>{calls.push(name)};
 vm.runInContext(between('async function refreshLiveData(','function keyFor('),c);
@@ -17,12 +17,12 @@ for(const page of ['production','faceSwap','faceSwapPhoto','upscale']){
 c.currentPage='calendar';calls=[];await c.refreshLiveData();
 assert.deepEqual(calls,['loadAutomationStatus','loadNotifications','refreshCalendarLiveData']);
 c.currentPage='metrics';calls=[];await c.refreshLiveData();
-assert(calls.includes('loadFollowerStats')&&calls.includes('loadInstagramMetricsStored'));
+assert.deepEqual(calls,['loadAutomationStatus','loadNotifications','loadInstagramScaleSummary']);
 assert(!calls.includes('syncFromBackend')&&!calls.includes('loadDashboardScheduleRows'));
 c.currentPage='overview';calls=[];await c.refreshLiveData();
 for(const name of ['loadFollowerStats','syncFromBackend','loadDashboardScheduleRows','syncDashboardLiveMetrics'])assert(calls.includes(name));
 c.currentPage='metrics';renders=0;
-c.loadInstagramMetricsStored=()=>new Promise(resolve=>{release=resolve});
+c.loadInstagramScaleSummary=()=>new Promise(resolve=>{release=resolve});
 const pending=c.refreshLiveData();c.currentPage='faceSwap';release();await pending;
 assert.equal(renders,0,'late global update cannot reconstruct a newly opened page');
 
@@ -46,4 +46,4 @@ const followers=f.loadFollowerStats();f.metricsAccountId='default-account';resol
 assert.equal(f.followerStats.current.followers_count,5,'default account resolved concurrently keeps its followers');
 const oldFollowers=f.loadFollowerStats();f.cloudSession={user:{id:'another'}};resolveFollowers({current:{followers_count:99}});await oldFollowers;
 assert.equal(f.followerStats.current.followers_count,5,'old session followers are ignored');
-console.log('PASS focused refresh: production global reads 6→2, metrics 6→4, calendar 5→3; independent queue controllers, legacy timer isolation, navigation and session races');
+console.log('PASS focused refresh: production global reads 6→2, metrics 6→3, calendar 5→3; independent queue controllers, legacy timer isolation, navigation and session races');

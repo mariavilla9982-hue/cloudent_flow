@@ -4278,6 +4278,20 @@ body.trial-modal-open{overflow:hidden!important}
 
 </style>
 <style>.x-only .top-search-trigger,.x-only .top-actions,.x-only .mobile-appbar-actions,.x-only .sidebar-foot{display:none!important}.x-account-select{background:#111;color:#fff;border:1px solid #444;border-radius:8px;padding:9px;max-width:220px;font-size:12px}.x-batch-row{padding:12px 0;border-bottom:1px solid #333;display:grid;gap:7px}.x-targets{display:flex;gap:10px;flex-wrap:wrap;font-size:12px}.x-targets label{display:flex;align-items:center;gap:5px}.x-targets input{width:auto}.x-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.x-metric-grid div{padding:14px;border:1px solid #333;border-radius:8px}@media(max-width:700px){.x-header-actions{flex-wrap:wrap}.x-account-select{max-width:100%}}.x-selected-media-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}.x-selected-media-actions label{display:inline-flex;align-items:center;cursor:pointer}.x-selected-media-actions input[type=file]{display:none}.x-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.x-gallery-grid .x-batch-row{min-width:0;overflow-wrap:anywhere}</style><link rel="stylesheet" href="/production-studio.css?v=10">
+<style>
+.scale-accounts-list{display:grid;gap:10px;margin-top:16px}
+.scale-account-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.scale-account-main h3{margin:0 0 5px}
+.scale-account-main p{margin:0 0 5px}
+.scale-account-main small,.scale-upcoming small{display:block;margin-top:4px}
+.scale-account.scale-child{margin-inline-start:min(22px,4vw)}
+.scale-actions,.scale-policy{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.scale-policy,.scale-upcoming{margin-top:14px}
+.scale-policy label{display:grid;gap:4px}
+.scale-upcoming li{padding:5px 0}
+.calendar-scale-group{display:grid;gap:6px;align-items:start}
+.calendar-scale-daughters{display:flex;gap:6px;flex-wrap:wrap}
+</style>
 </head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
@@ -4428,6 +4442,7 @@ body.trial-modal-open{overflow:hidden!important}
   <section id="frameExtractor" class="page hidden"></section>
   <section id="xStudio" class="page hidden"></section>
   <section id="tiktokStudio" class="page hidden"></section>
+  <section id="accounts" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
   <section id="reelDetail" class="page hidden"></section>
   <section id="smartTimes" class="page hidden"></section>
@@ -4450,6 +4465,7 @@ body.trial-modal-open{overflow:hidden!important}
 <script>
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const navItems=[
+  ["accounts",'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a4 4 0 0 1 3 4v2"></path></svg>',"Central de Contas"],
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
@@ -4477,6 +4493,7 @@ const IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-st
 const IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
 const X_OAUTH_URL=SUPABASE_URL+"/functions/v1/cloudent-x-oauth";
 const pageSubtitles={
+  accounts:"Gerencie conexões e calendários do Instagram.",
   overview:"Acompanhe conteúdo, desempenho e próximos passos.",
   calendar:"Planeje e distribua sua operação de conteúdo.",
   trialReels:"Teste novos horários sem misturar o aprendizado principal.",
@@ -5227,13 +5244,13 @@ function focusCloudLogin(){
     if(email)email.focus();
   },80);
 }
-async function connectInstagram(platformAccountId=null){
+async function connectInstagram(platformAccountId=null,motherId=null,returnPage="settings"){
   if(!cloudSession){focusCloudLogin();return}
   const btn=$("#connectInstagramBtn");
   if(btn){btn.disabled=true;btn.textContent="Abrindo Instagram…"}
   try{
     const r=await edgeFetch(SUPABASE_URL+"/functions/v1/instagram-oauth",{
-      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:platformAccountId})
+      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:platformAccountId,mother_id:motherId,return_page:returnPage})
     });
     const authUrl=new URL(r?.url||"");
     if(authUrl.origin!=="https://www.instagram.com"||authUrl.pathname!=="/oauth/authorize")throw new Error("O servidor retornou um endereço de login inválido.");
@@ -5250,17 +5267,33 @@ async function handleInstagramOAuthReturn(){
   if(status==="success"&&!cloudSession)return;
   try{
     settingsTab="integrations";
+    const requested=url.searchParams.get("destination");
+    const destination=["accounts","calendar"].includes(requested)?requested:"settings";
     if(status==="success"){
       await Promise.allSettled([loadInstagramStatus(false),loadPlatformAccounts()]);
-      showPage("settings");
+      showPage(destination);
       toast("Instagram conectado pelo login oficial.","ok");
     }else{
-      showPage("settings");
-      const messages={invalid_state:"O login expirou. Clique em Conectar Instagram novamente.",missing_code:"O Instagram não retornou a autorização.",oauth_not_configured:"O login do Instagram ainda não está configurado.",forbidden:"Somente o administrador pode conectar contas.",account_limit:"O limite é de 3 contas do Instagram.",connect_failed:"Não foi possível concluir a conexão. Tente novamente."};
+      showPage(destination);
+      const messages={
+        invalid_state:"O login expirou. Abra a conexão novamente.",
+        missing_code:"O Instagram não devolveu a autorização.",
+        oauth_not_configured:"O aplicativo do Instagram ainda precisa ser configurado.",
+        forbidden:"Entre novamente no CloudentFlow com uma conta administradora.",
+        meta_authorization_required:"A Meta não confirmou acesso ao perfil e à publicação. Autorize as permissões e confira o acesso do aplicativo ou o convite de testador.",
+        meta_long_token_required:"A Meta não devolveu uma autorização de longa duração. Tente conectar novamente.",
+        instagram_professional_required:"Escolha uma conta profissional Business ou Creator.",
+        instagram_already_connected:"Esta conta já está cadastrada. Use Reconectar na Central de Contas.",
+        instagram_already_linked:"Escolha outra conta profissional para a filha.",
+        instagram_daughter_limit:"As duas contas filhas já estão vinculadas.",
+        instagram_mother_unavailable:"A conta mãe precisa estar conectada.",
+        reconnect_account_mismatch:"No Instagram, selecione o mesmo perfil que você quer reconectar.",
+        connect_failed:"Não foi possível concluir a conexão. Tente novamente."
+      };
       toast(status==="cancelled"?"Autorização do Instagram cancelada.":(messages[url.searchParams.get("reason")]||"Não foi possível conectar o Instagram."),status==="cancelled"?"warn":"err");
     }
   }finally{
-    ["instagram_oauth","reason","username","account_id"].forEach(key=>url.searchParams.delete(key));
+    ["instagram_oauth","reason","username","account_id","destination"].forEach(key=>url.searchParams.delete(key));
     history.replaceState(null,"",url.pathname+url.search+url.hash);
   }
 }
@@ -5490,14 +5523,24 @@ function calendarAccountSwitcher(context="calendar"){
   const accounts=calendarInstagramAccounts();
   if(!accounts.length)return "";
   const active=calendarEnsureAccount();
-  return '<div class="calendar-account-switcher"><span>Contas</span>'+accounts.map(a=>{
+  const chip=a=>{
     const id=calendarAccountId(a),label=String(a.account_label||a.username||"Instagram"),photo=String(a?.config?.profile_picture_url||a?.profile_picture_url||"").trim();
     const avatar=photo?'<img src="'+esc(photo)+'" alt="" referrerpolicy="no-referrer">':'<span class="calendar-account-avatar">'+esc(label.slice(0,1).toUpperCase())+'</span>';
     const rows=calendarAllQueueRows?calendarAccountCapacity(id):null;
     const free=rows?rows.reduce((n,x)=>n+x.free,0):null;
     const action="selectCalendarAccount("+JSON.stringify(id)+","+JSON.stringify(context)+")";
-    return '<button type="button" aria-pressed="'+(id===active)+'" '+(calendarAccountSwitching?'disabled ':'')+'class="calendar-account-chip '+(id===active?'active':'')+'" onclick="'+esc(action)+'">'+avatar+'<div><b>@'+esc(label.replace(/^@/,''))+'</b><small>'+(free===null?'Carregando vagas…':free+' vagas · 7 dias')+'</small></div></button>';
-  }).join('')+calendarReconnectButton()+'</div>';
+    return '<button type="button" aria-pressed="'+(id===active)+'" '+(calendarAccountSwitching?'disabled ':'')+'class="calendar-account-chip '+(id===active?'active':'')+'" onclick="'+esc(action)+'">'+avatar+'<div><b>@'+esc(label.replace(/^@/,''))+(a.config?.scale_role==='mother'?' · Mãe':a.config?.scale_role==='child'?' · Filha '+Number(a.config?.scale_link?.position||0):'')+'</b><small>'+(free===null?'Carregando vagas…':free+' vagas · 7 dias')+'</small></div></button>';
+  };
+  const items=accounts.filter(a=>a.config?.scale_role!=="child"||!accounts.some(parent=>parent.id===a.config?.scale_link?.mother_id)).map(a=>{
+    if(a.config?.scale_role!=="mother")return chip(a);
+    const daughters=accounts.filter(child=>child.config?.scale_link?.mother_id===a.id)
+      .sort((x,y)=>x.config.scale_link.position-y.config.scale_link.position);
+    const linked=(platformAccounts||[]).filter(child=>child.config?.scale_link?.mother_id===a.id).length;
+    const action='connectInstagram(null,'+JSON.stringify(a.id)+',"calendar")';
+    return '<div class="calendar-scale-group">'+chip(a)+'<div class="calendar-scale-daughters">'+daughters.map(chip).join("")+
+      (linked<2?scaleAction(action,"+ Conectar conta filha"):"")+'</div></div>';
+  });
+  return '<div class="calendar-account-switcher"><span>Contas</span>'+items.join("")+calendarReconnectButton()+'</div>';
 }
 async function selectCalendarAccount(id,context="calendar"){
   id=String(id||"");
@@ -5800,10 +5843,10 @@ async function refreshLiveData(showFeedback=false){
     const page=currentPage,uid=cloudSession.user?.id;
     const ownsQueue=["production","faceSwap","faceSwapPhoto","upscale"].includes(page);
     const tasks=[loadAutomationStatus(fullAutomation),loadNotifications(currentPage==="settings"&&settingsTab==="notifications")];
-    if(["overview","metrics","automation","smartTimes"].includes(page))tasks.push(loadFollowerStats(30));
+    if(["overview","automation","smartTimes"].includes(page))tasks.push(loadFollowerStats(30));
     if(calendarVisible)tasks.push(refreshCalendarLiveData());
     if(page==="overview")tasks.push(syncFromBackend(),loadDashboardScheduleRows(),syncDashboardLiveMetrics(false));
-    if(currentPage==="metrics")tasks.push(loadInstagramMetricsStored());
+    if(["accounts","metrics"].includes(page))tasks.push(loadInstagramScaleSummary());
     if(showFeedback&&ownsQueue){
       if(page!=="production")tasks.push(window.ImagePipeline?.refresh());
       else if(window.CloudentMotionControl?.mode==="genjutsu")tasks.push(window.CloudentGenjutsu?.refresh());
@@ -5921,7 +5964,7 @@ function renderMobileNav(){
       '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
 }
 function mobileMoreItems(){
-  return ["trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+  return ["accounts","trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
 }
 function toggleMobileMore(force){
   const host=$("#mobileMoreHost");if(!host)return;
@@ -5966,7 +6009,7 @@ function nav(){
   const groups=[
     {label:"Planejamento",pages:["overview","calendar","trialReels","bulkPublish"]},
     {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
-    {label:"Canais",pages:["xStudio","tiktokStudio"]},
+    {label:"Canais",pages:["accounts","xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
     {label:"Sistema",pages:["settings"]}
   ];
@@ -6014,7 +6057,7 @@ function showPage(id){
   renderAll();
   if(["faceSwap","upscale","faceSwapPhoto"].includes(id)&&cloudSession){window.ImagePipeline?.render(id)}
   if(id==="production"&&cloudSession&&window.CloudentMotionControl?.mode!=="genjutsu"){loadProductionData().then(()=>{if(currentPage==="production")productionPage()}).catch(e=>toast(e.message,"err"))}
-  if(id==="metrics"&&cloudSession){Promise.allSettled([loadInstagramMetricsStored(),loadFollowerStats(metricsPeriod)]).then(()=>{if(currentPage==="metrics")metrics()})}
+  if(["accounts","metrics"].includes(id)&&cloudSession){loadInstagramScaleSummary()}
   if(id==="calendar"&&cloudSession){refreshCalendarLiveData().catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>{if(currentPage==="trialReels")trialReelsPage()}).catch(e=>toast(e.message,"err"))}
   if((id==="automation"||id==="smartTimes")&&cloudSession){
@@ -7462,6 +7505,7 @@ function renderSlot(date,i){
     ? `<button class="badge smart-strategy-btn ${badgeMeta.cls}" onclick="event.stopPropagation();openSmartStrategyMenu('${date}',${i})" title="Alterar tipo de horário">${badgeMeta.label}</button>`
     : i>=base?'<span class="badge extra-post-badge">Extra manual</span>':"";
   const displayName="Vídeo "+(i+1);
+  const trialAvailable=platformAccounts.find(a=>a.id===x.platformAccountId)?.config?.scale_role!=="child";
   const next=calendarNextSchedule();
   const performance=calendarMetricSummary(x,date);
   const perfClass=performance?"perf-"+performance.badge.cls:"";
@@ -7477,7 +7521,7 @@ function renderSlot(date,i){
         <summary title="Ações do vídeo" aria-label="Ações do vídeo">•••</summary>
         <div class="slot-menu-pop">
           <button onclick="previewScheduled('${date}',${i})"><span>▶</span> Ver preview</button>
-          <button onclick="openCalendarTrialModal('${x.scheduleId}')"><span>◈</span> Reels Teste</button>
+          ${trialAvailable?`<button onclick="openCalendarTrialModal('${x.scheduleId}')"><span>◈</span> Reels Teste</button>`:""}
           <button onclick="openEditScheduleModal('${date}',${i})"><span>✎</span> Editar</button>
           <button class="danger-link" onclick="removeSlot('${date}',${i},this)"><span>×</span> Excluir</button>
         </div>
@@ -7487,10 +7531,10 @@ function renderSlot(date,i){
     <div class="ui31-slot-bottom">
       <span class="badge calendar-status-badge ${statusClass(st)} status-${st}">${statusLabel(st)}</span>
       ${smartBadge}
-      ${calendarPretrialBadge(x)}
+      ${trialAvailable?calendarPretrialBadge(x):""}
     </div>
     <div class="slot-caption-preview"><span>REELS PRINCIPAL · ${esc(x.time)}</span><b>${esc(x.name)}</b></div>
-    <button class="btn" onclick="event.stopPropagation();openCalendarTrialModal('${x.scheduleId}')">◈ Reels Teste ${x.trialVideoId?'separado':'automático'} · ${esc(x.trialVideoId?x.pretrial?.file_name||'Vídeo separado':'Mesmo vídeo')} · ${x.pretrial?.scheduled_at?new Date(x.pretrial.scheduled_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'-20m'}</button>
+    ${trialAvailable?`<button class="btn" onclick="event.stopPropagation();openCalendarTrialModal('${x.scheduleId}')">◈ Reels Teste ${x.trialVideoId?'separado':'automático'} · ${esc(x.trialVideoId?x.pretrial?.file_name||'Vídeo separado':'Mesmo vídeo')} · ${x.pretrial?.scheduled_at?new Date(x.pretrial.scheduled_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'-20m'}</button>`:""}
     ${x.caption?'<div class="slot-caption-preview" title="Mesma frase usada na legenda e no primeiro comentário"><span>LEGENDA + COMENTÁRIO</span><b>'+esc(x.caption)+'</b></div>':""}
     <div class="calendar-schedule-live-host">${calendarScheduleLive(x)}</div>
     <div class="calendar-performance-host" data-views="${Number(performance?.views||0)}">${calendarSlotPerformance(x,date)}</div>
@@ -8148,7 +8192,7 @@ async function switchMetricsAccount(id){
  metricsAccountId=id;metricsDataError="";metricsLastCollectedAt=null;liveInstagramMetrics=[];followerStats=null;metricsLoading=true;metrics();
  try{await Promise.all([loadInstagramMetricsStored(),loadFollowerStats(metricsPeriod)])}finally{metricsLoading=false;if(currentPage==="metrics")metrics()}
 }
-function setMetricsPeriod(days){metricsPeriod=[7,30,60].includes(Number(days))?Number(days):30;metrics();loadFollowerStats(metricsPeriod).then(()=>{if(currentPage==="metrics")metrics()})}
+function setMetricsPeriod(days){metricsPeriod=[7,30,60].includes(Number(days))?Number(days):30;loadInstagramScaleSummary();metrics()}
 function setMetricSeries(metric){metricSeries=metric;metrics()}
 
 function aggregateMetricsByDay(rows){
@@ -8369,91 +8413,199 @@ function metricsComparisonPanel(rows,ranking){
     reelCompare+'</div>';
 }
 
+let instagramScaleData={session:null,days:0,accounts:[],error:"",loading:false};
+let instagramScaleAccountFilter="";
+let instagramScaleUpcoming=null;
+let instagramScalePolicyAccount="";
+let instagramScaleRequest=0;
+function scaleNum(n){return Number(n||0).toLocaleString("pt-BR")}
+function scaleHandle(name){return "@"+String(name||"Instagram").replace(/^@/,"")}
+function scaleApiAction(name,body){
+  return cloudFetch("?resource=instagram-scale&action="+name,{
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)
+  });
+}
+async function loadInstagramScaleSummary(days=metricsPeriod){
+  if(!cloudSession)return;
+  const session=cloudSession;
+  if(instagramScaleData.session===session&&instagramScaleData.days===days&&instagramScaleData.loading)return;
+  const version=++instagramScaleRequest;
+  const same=instagramScaleData.session===session&&instagramScaleData.days===days;
+  instagramScaleData={session,days,accounts:same?instagramScaleData.accounts:[],error:"",loading:true};
+  const range=metricsPeriodRange(days);
+  try{
+    const result=await cloudFetch("?resource=instagram-scale&from="+encodeURIComponent(new Date(range.start).toISOString())+
+      "&until="+encodeURIComponent(new Date(range.end).toISOString()));
+    if(cloudSession===session&&version===instagramScaleRequest)instagramScaleData.accounts=result.accounts||[];
+  }catch(e){
+    if(cloudSession===session&&version===instagramScaleRequest)instagramScaleData.error=friendlyCloudentError(e.message);
+  }finally{
+    if(cloudSession===session&&version===instagramScaleRequest){
+      instagramScaleData.loading=false;
+      if(currentPage==="accounts"&&!document.activeElement?.closest(".scale-policy"))instagramAccountsPage();
+      if(currentPage==="metrics")metrics();
+    }
+  }
+}
+function scaleSummaryAccounts(){
+  return instagramScaleData.session===cloudSession?instagramScaleData.accounts:[];
+}
+function scaleSummaryMessage(){
+  if(instagramScaleData.session!==cloudSession||instagramScaleData.loading&&!instagramScaleData.accounts.length)return "Carregando contas…";
+  return instagramScaleData.error||"";
+}
+function scaleKpi(label,value,sub=""){
+  return '<div class="ui3-kpi"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>';
+}
+function scaleAction(action,label,css="btn"){
+  return '<button type="button" class="'+css+'" onclick="'+esc(action)+'">'+esc(label)+'</button>';
+}
+async function openInstagramAccountCalendar(id){
+  if(!calendarInstagramAccounts().some(a=>a.id===id))await loadPlatformAccounts();
+  if(!calendarInstagramAccounts().some(a=>a.id===id)){toast("A conta precisa estar conectada para abrir a agenda.","warn");return}
+  await selectCalendarAccount(id);
+  showPage("calendar");
+}
+async function instagramScaleShowUpcoming(id,refresh=false){
+  if(!refresh&&instagramScaleUpcoming?.id===id){instagramScaleUpcoming=null;instagramAccountsPage();return}
+  const session=cloudSession;
+  const state={id,session,loading:true,data:null,error:""};
+  instagramScaleUpcoming=state;
+  instagramAccountsPage();
+  try{state.data=await cloudFetch("?resource=instagram-scale&action=upcoming&account_id="+encodeURIComponent(id))}
+  catch(e){state.error=friendlyCloudentError(e.message)}
+  finally{
+    state.loading=false;
+    if(cloudSession===session&&instagramScaleUpcoming===state&&currentPage==="accounts")instagramAccountsPage();
+  }
+}
+function instagramScaleUpcomingMarkup(account){
+  const state=instagramScaleUpcoming;
+  if(state?.id!==account.id||state.session!==cloudSession)return "";
+  if(state.loading||state.error)return '<p class="muted" role="status">'+esc(state.error||"Carregando publicações…")+'</p>';
+  const rows=state.data?.upcoming||[],failed=state.data?.failed||[];
+  const item=row=>{
+    const caption=row.instagram_scale_caption??row.videos?.caption;
+    return '<li><b>'+esc(row.videos?.file_name||"Vídeo")+'</b> <span>'+esc(new Date(row.scheduled_at).toLocaleString("pt-BR",{timeZone:account.calendar_policy?.timezone||"America/Sao_Paulo"}))+
+      ' · '+esc(statusLabel(row.status))+'</span>'+(caption?'<small>'+esc(caption)+'</small>':'')+
+      (row.last_error?'<small>'+esc(row.last_error)+'</small>':'')+
+      (row.status==="failed"&&account.child_position>0&&account.connection_status==="connected"&&!/confirmação da meta/i.test(row.last_error||"")
+        ?scaleAction("instagramScaleRetry("+JSON.stringify(account.id)+","+JSON.stringify(row.id)+")","Tentar novamente"):"")+'</li>';
+  };
+  return '<div class="scale-upcoming"><b>Próximas publicações</b><ul>'+(rows.map(item).join("")||'<li class="muted">Agenda vazia.</li>')+'</ul>'+
+    (failed.length?'<b>Falhas recentes</b><ul>'+failed.map(item).join("")+'</ul>':'')+'</div>';
+}
+async function instagramScaleRetry(id,scheduleId){
+  try{
+    await scaleApiAction("retry",{account_id:id,schedule_id:scheduleId});
+    toast("Publicação reenfileirada.","ok");
+    await Promise.all([instagramScaleShowUpcoming(id,true),loadInstagramScaleSummary()]);
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
+}
+async function instagramScaleDisconnect(id){
+  const account=scaleSummaryAccounts().find(a=>a.id===id);
+  if(!account||!confirm("Desconectar "+scaleHandle(account.account_label)+" e pausar suas publicações?"))return;
+  try{
+    await cloudFetch("?resource=platform-accounts&action=disconnect",{
+      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:id})
+    });
+    await Promise.all([loadPlatformAccounts(),loadInstagramScaleSummary()]);
+    toast("Instagram desconectado.","ok");
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
+}
+async function instagramScaleSetSync(id,enabled){
+  try{
+    await scaleApiAction("sync",{account_id:id,enabled});
+    await Promise.all([loadPlatformAccounts(),loadInstagramScaleSummary()]);
+    toast(enabled?"Sincronização retomada.":"Distribuição pausada para esta filha.","ok");
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
+}
+function instagramScaleTogglePolicy(id){
+  instagramScalePolicyAccount=instagramScalePolicyAccount===id?"":id;
+  instagramAccountsPage();
+}
+async function instagramScaleSavePolicy(event,id){
+  event.preventDefault();
+  const fields=new FormData(event.currentTarget);
+  try{
+    await scaleApiAction("policy",{account_id:id,timezone:fields.get("timezone"),times:String(fields.get("times")||"").split(/[\s,]+/).filter(Boolean)});
+    instagramScalePolicyAccount="";
+    await Promise.all([loadPlatformAccounts(),loadInstagramScaleSummary()]);
+    toast("Horários atualizados para novos agendamentos.","ok");
+  }catch(e){toast(friendlyCloudentError(e.message),"err")}
+}
+function instagramScaleAccountRow(a,accounts){
+  const id=JSON.stringify(a.id);
+  const isMother=a.child_position===0;
+  const isChild=Number(a.child_position)>0;
+  const mother=accounts.find(m=>m.id===a.mother_id);
+  const status={connected:"Conectada",reconnect_required:"Reconexão necessária",disconnected:"Desconectada"}[a.connection_status]||"A verificar";
+  const role=isMother?"Mãe":isChild?"Filha "+a.child_position+(mother?" de "+scaleHandle(mother.account_label):""):"Independente";
+  const times=a.calendar_policy?.times||[];
+  const errors={media_unavailable:"Arquivo indisponível",no_available_slot:"Sem vaga nos próximos 30 dias",calendar_reservation_failed:"O calendário não aceitou a reserva"};
+  const notes=[];
+  if(isMother){
+    const daughters=accounts.filter(c=>c.mother_id===a.id).length;
+    notes.push(daughters+"/2 filhas vinculadas");
+    if(daughters<2)notes.push("A sincronização começa após vincular as duas contas");
+    if(a.waiting_for_batch)notes.push(a.waiting_for_batch+" na fila de organização · mínimo de 3 vídeos distintos");
+  }
+  if(isChild){
+    notes.push(a.sync_enabled?"Sincronização ativa":"Sincronização pausada");
+    notes.push("Reels Teste indisponível no piloto");
+    if(a.pending)notes.push(a.pending+" aguardando distribuição");
+    if(a.sync_error)notes.push(errors[a.sync_error]||"Distribuição pendente");
+  }
+  return '<article class="card scale-account '+(isChild?"scale-child":"")+'"><div class="scale-account-main"><div><h3>'+esc(scaleHandle(a.account_label))+'</h3><p class="muted">'+esc(role)+
+    ' · '+esc(status)+' · '+scaleNum(a.scheduled)+' agendados</p>'+(notes.length?'<small>'+esc(notes.join(" · "))+'</small>':'')+
+    (isChild&&times.length?'<small>'+esc(times.join(" · ")+" · "+a.calendar_policy.timezone)+'</small>':'')+'</div><div class="toolbar scale-actions">'+
+    (isMother&&a.enabled&&accounts.filter(c=>c.mother_id===a.id).length<2?scaleAction('connectInstagram(null,'+id+',"accounts")',"Conectar conta filha","btn primary"):"")+
+    (a.enabled?scaleAction("openInstagramAccountCalendar("+id+")","Abrir calendário"):"")+
+    scaleAction("instagramScaleShowUpcoming("+id+")",instagramScaleUpcoming?.id===a.id?"Fechar publicações":"Ver publicações")+
+    scaleAction('connectInstagram('+id+',null,"accounts")',"Reconectar")+
+    (a.enabled?scaleAction("instagramScaleDisconnect("+id+")","Desconectar"):"")+
+    (isChild?scaleAction("instagramScaleTogglePolicy("+id+")","Editar horários")+
+      scaleAction("instagramScaleSetSync("+id+","+!a.sync_enabled+")",a.sync_enabled?"Pausar sincronização":"Retomar sincronização"):"")+
+    '</div></div>'+
+    (isChild&&instagramScalePolicyAccount===a.id?'<form class="scale-policy" onsubmit="'+esc("instagramScaleSavePolicy(event,"+id+")")+'">'+
+      '<label>Horários por dia<input name="times" required value="'+esc(times.join(", "))+'" placeholder="07:30, 13:00, 18:30"></label>'+
+      '<label>Fuso horário<input name="timezone" required value="'+esc(a.calendar_policy?.timezone||"America/Sao_Paulo")+'"></label>'+
+      '<button class="btn primary" type="submit">Salvar horários</button></form>':"")+
+    instagramScaleUpcomingMarkup(a)+'</article>';
+}
+function instagramAccountsPage(){
+  const accounts=scaleSummaryAccounts(),message=scaleSummaryMessage();
+  const ordered=accounts.filter(a=>!a.mother_id).flatMap(a=>[a,...accounts.filter(child=>child.mother_id===a.id).sort((x,y)=>x.child_position-y.child_position)]);
+  $("#accounts").innerHTML='<div class="ui3-page-head"><div><h2>Central de Contas</h2><p>Conexões, calendários e vínculos do Instagram.</p></div><div class="toolbar">'+
+    scaleAction('connectInstagram(null,null,"accounts")',"Conectar Instagram","btn primary")+scaleAction("loadInstagramScaleSummary()","Atualizar")+'</div></div>'+
+    (message?'<p role="status" class="card">'+esc(message)+'</p>':'')+
+    '<div class="ui3-kpis">'+scaleKpi("Conectadas",scaleNum(accounts.filter(a=>a.connection_status==="connected").length))+
+    scaleKpi("Com agendamentos",scaleNum(accounts.filter(a=>a.scheduled>0).length))+
+    scaleKpi("Precisam de atenção",scaleNum(accounts.filter(a=>a.connection_status!=="connected"||a.failed>0||a.sync_error).length))+'</div>'+
+    '<div class="scale-accounts-list">'+(ordered.map(a=>instagramScaleAccountRow(a,accounts)).join("")||(!message?'<div class="card muted">Nenhuma conta cadastrada.</div>':""))+'</div>';
+}
+async function syncScaleMetrics(){
+  if(!instagramScaleAccountFilter)return;
+  metricsAccountId=instagramScaleAccountFilter;
+  await syncInstagramToday();
+  await loadInstagramScaleSummary();
+}
 function metrics(){
-  if(cloudLoading){$("#metrics").innerHTML=loadingShell("Carregando métricas");return}
-  const range=metricsPeriodRange(metricsPeriod);
-  const eligible=liveInstagramMetrics.filter(m=>m.media_product_type==="REELS"&&(!metricsAccountId||!m.platform_account_id||m.platform_account_id===metricsAccountId));
-  const rows=eligible.filter(m=>{const t=new Date(m.timestamp).getTime();return t>=range.start&&t<range.end});
-  const previous=eligible.filter(m=>{const t=new Date(m.timestamp).getTime();return t>=range.previousStart&&t<range.start});
-  const total=rows.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0),saves:a.saves+(+m.saves||0)}),{views:0,reach:0,likes:0,saves:0});
-  const prevTotal=previous.reduce((a,m)=>({views:a.views+(+m.views||0),reach:a.reach+(+m.reach||0),likes:a.likes+(+m.likes||0)}),{views:0,reach:0,likes:0});
-  const avg=rows.length?Math.round(total.views/rows.length):0;
-  const ranking=[...rows].sort((a,b)=>(+b.views||0)-(+a.views||0));
-  const daily=aggregateMetricsByDay(rows);
-  const bestDay=[...daily].sort((a,b)=>(+b[metricSeries]||0)-(+a[metricSeries]||0))[0]||null;
-  const currentMetric=Number(total[metricSeries]||0),previousMetric=Number(prevTotal[metricSeries]||0);
-  const delta=previousMetric?((currentMetric-previousMetric)/previousMetric*100):null;
-  const metricLabel={views:"Visualizações",reach:"Alcance",likes:"Curtidas"}[metricSeries]||metricSeries;
-
-  $("#metrics").innerHTML=`
-    <div class="ui3-page-head">
-      <div><span class="ui3-eyebrow">ANALYTICS</span><h2>Performance do Instagram</h2><p>Por data de publicação · métricas acumuladas dos Reels · horário de Brasília.</p></div>
-      <div class="toolbar metric-filter">
-        <button class="btn ${metricsPeriod===7?"active-filter":""}" onclick="setMetricsPeriod(7)">7d</button>
-        <button class="btn ${metricsPeriod===30?"active-filter":""}" onclick="setMetricsPeriod(30)">30d</button>
-        <button class="btn ${metricsPeriod===60?"active-filter":""}" onclick="setMetricsPeriod(60)">60d</button>
-        <button class="btn primary" onclick="syncInstagramToday()" ${metricsSyncInFlight?"disabled":""}>${metricsSyncInFlight?"Sincronizando…":"↻ Sincronizar"}</button>
-      </div>
-    </div>
-    <div class="card toolbar" style="margin-bottom:16px;flex-wrap:wrap">
-      <label>Conta <select onchange="switchMetricsAccount(this.value)" ${metricsSyncInFlight?"disabled":""}>${calendarInstagramAccounts().map(a=>`<option value="${esc(a.id)}" ${a.id===metricsAccountId?"selected":""}>@${esc(a.account_label||"Instagram")}</option>`).join("")}</select></label>
-      <span class="muted">${metricsLoading?"Carregando conta…":metricsLastCollectedAt?"Última coleta: "+new Date(metricsLastCollectedAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"}):"Aguardando coleta de métricas"}</span>
-    </div>
-    ${metricsDataError?`<div class="card"><b>Falha ao atualizar métricas</b><p>${esc(friendlyCloudentError(metricsDataError))}</p><small>Os dados exibidos são a última leitura salva.</small></div>`:""}
-    <div class="ui3-kpis">
-      <div class="ui3-kpi"><span>Visualizações</span><strong>${total.views.toLocaleString("pt-BR")}</strong><small>Reels publicados em ${metricsPeriod} dias</small></div>
-      <div class="ui3-kpi"><span>Alcance</span><strong>${total.reach.toLocaleString("pt-BR")}</strong><small>soma do alcance por Reel</small></div>
-      <div class="ui3-kpi"><span>Média por Reel</span><strong>${avg.toLocaleString("pt-BR")}</strong><small>${rows.length} Reels</small></div>
-      <div class="ui3-kpi"><span>Curtidas</span><strong>${total.likes.toLocaleString("pt-BR")}</strong><small>engajamento</small></div>
-    </div>
-
-    <div class="card analytics-useful-card">
-      <div class="analytics-useful-head">
-        <div><span>DESEMPENHO</span><h3>${metricLabel} por data de publicação</h3></div>
-        <div class="metric-series-tabs">
-          <button class="${metricSeries==="views"?"active":""}" onclick="setMetricSeries('views')">Views</button>
-          <button class="${metricSeries==="reach"?"active":""}" onclick="setMetricSeries('reach')">Alcance</button>
-          <button class="${metricSeries==="likes"?"active":""}" onclick="setMetricSeries('likes')">Curtidas</button>
-        </div>
-      </div>
-      <div class="analytics-useful-summary">
-        <div><span>Total</span><b>${currentMetric.toLocaleString("pt-BR")}</b></div>
-        <div><span>Média/dia com Reels</span><b>${daily.length?Math.round(currentMetric/daily.length).toLocaleString("pt-BR"):"0"}</b></div>
-        <div><span>Melhor dia</span><b>${bestDay?new Date(bestDay.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—"}</b></div>
-        <div><span>vs. período anterior</span><b class="${delta===null?"neutral":delta>=0?"positive":"negative"}">${delta===null?"—":(delta>=0?"+":"")+delta.toFixed(1).replace(".",",")+"%"}</b></div>
-      </div>
-      ${analyticsChart(rows,metricSeries)}
-    </div>
-
-    ${metricsComparisonPanel(rows,ranking)}
-
-    <div class="card follower-analytics-card">
-      <div class="follower-card-head">
-        <div><span>CRESCIMENTO</span><h3>Seguidores por dia</h3></div>
-        <span class="source-pill follower-source"><i></i> Instagram · atualização automática</span>
-      </div>
-      ${followerLiveSummary()}
-      ${followerChart(followerStats)}
-    </div>
-    <div class="ui3-analytics-grid">
-      <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>Ranking</span><h3>Melhores conteúdos</h3></div></div>
-        <div class="ui3-ranking">${ranking.slice(0,8).map((m,i)=>`
-          <button class="ui3-rank-row" onclick="openReelAnalytics('${esc(String(m.id||m.record_id))}')"><b>#${i+1}</b><div><strong>${esc((m.caption||"Sem legenda").slice(0,64))}</strong><span>${new Date(m.timestamp).toLocaleDateString("pt-BR")} · ${(+m.likes||0).toLocaleString("pt-BR")} curtidas</span></div><em>${(+m.views||0).toLocaleString("pt-BR")}</em></button>`).join("")||'<div class="ui3-empty">Sem dados.</div>'}</div>
-      </div>
-      <div class="card ui3-panel">
-        <div class="ui3-panel-head"><div><span>Reels</span><h3>Previews recentes</h3></div><small class="muted">Clique para abrir como Reel</small></div>
-        <div class="reels-instagram-grid">${ranking.slice(0,6).map(m=>`
-          <button class="reel-instagram-card" onclick="openReelAnalytics('${esc(String(m.id||m.record_id))}')">
-            <div class="reel-media-layer">
-              ${m.media_url?`<video src="${esc(m.media_url)}" poster="${esc(m.thumbnail_url||"")}" muted loop playsinline preload="none"></video>`:m.thumbnail_url?`<img src="${esc(m.thumbnail_url)}">`:'<div class="reel-no-media">▶</div>'}
-              <div class="reel-card-top"><span>REEL</span><b>⋮</b></div>
-              <div class="reel-card-bottom"><b>@${esc(metricsAccount()?.account_label||instagramIntegration?.account_label||"Instagram")}</b><span>▶ ${(+m.views||0).toLocaleString("pt-BR")} views</span></div>
-            </div>
-          </button>`).join("")||'<div class="ui3-empty">Sincronize para carregar os previews.</div>'}</div>
-      </div>
-    </div>`;
-  followerChanged=false;
+  const accounts=scaleSummaryAccounts();
+  const selected=accounts.filter(a=>!instagramScaleAccountFilter||a.id===instagramScaleAccountFilter);
+  const sum=key=>selected.reduce((total,a)=>total+Number(a[key]||0),0);
+  const views=selected.some(a=>a.views!==null)?scaleNum(sum("views")):"—";
+  const options='<option value="">Todas as contas</option>'+accounts.map(a=>'<option value="'+esc(a.id)+'" '+(a.id===instagramScaleAccountFilter?"selected":"")+'>'+esc(scaleHandle(a.account_label))+'</option>').join("");
+  const message=scaleSummaryMessage();
+  $("#metrics").innerHTML='<div class="ui3-page-head"><div><h2>Métricas do Instagram</h2><p>Reels e agenda por conta.</p></div><div class="toolbar">'+
+    '<label>Conta <select onchange="instagramScaleAccountFilter=this.value;metrics()">'+options+'</select></label>'+
+    '<label>Período <select onchange="setMetricsPeriod(this.value)">'+[7,30,60].map(days=>'<option value="'+days+'" '+(days===metricsPeriod?"selected":"")+'>'+days+' dias</option>').join("")+'</select></label>'+
+    (instagramScaleAccountFilter?scaleAction("syncScaleMetrics()",metricsSyncInFlight?"Sincronizando…":"Sincronizar métricas"):"")+'</div></div>'+
+    (message?'<p role="status" class="card">'+esc(message)+'</p>':'')+
+    '<div class="ui3-kpis">'+scaleKpi("Visualizações",views,"Reels publicados no período")+
+    scaleKpi("Publicações realizadas",message&&!accounts.length?"—":scaleNum(sum("published")),"Agendamentos concluídos no período")+
+    scaleKpi("Vídeos agendados",message&&!accounts.length?"—":scaleNum(sum("scheduled")),"Agenda ativa")+
+    scaleKpi("Publicações com falhas",message&&!accounts.length?"—":scaleNum(sum("failed")),"No período selecionado")+'</div>';
 }
 
 async function loadServerLogs(){
@@ -11989,6 +12141,7 @@ function renderAll(){
     frameExtractor:frameExtractorPage,
     xStudio:xStudioPage,
     tiktokStudio:tiktokStudioPage,
+    accounts:instagramAccountsPage,
     metrics,
     reelDetail:reelDetailPage,
     smartTimes:smartTimesPage,

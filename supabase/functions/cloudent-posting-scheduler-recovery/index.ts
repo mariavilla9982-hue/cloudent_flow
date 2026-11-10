@@ -79,7 +79,7 @@ Deno.serve(async(req:Request)=>{
     const now=new Date().toISOString(),results:any[]=[];
     const body=await req.json().catch(()=>({}));
     if(body.operation==='recover_overdue_trials')return out({ok:true,recovery:await queueAuthorizedLateTrials(admin,body,now)});
-    for(const worker of ["automation","instagram_publish","trial_reels"]){await admin.from("worker_runtime").upsert({worker_name:worker,last_heartbeat:now,updated_at:now},{onConflict:"worker_name"})}
+    for(const worker of ["posting_scheduler","instagram_publish","trial_reels"]){await admin.from("worker_runtime").upsert({worker_name:worker,last_heartbeat:now,updated_at:now},{onConflict:"worker_name"})}
 
     // Reconcile an uncertain publish against the SAME container before any retry.
     const {data:uncertain}=await admin.from("reel_test_publications").select("*").eq("status","publishing").is("locked_at",null).lte("updated_at",new Date(Date.now()-120000).toISOString()).limit(5);
@@ -149,12 +149,47 @@ Deno.serve(async(req:Request)=>{
 
     // Normal Reels. The dedicated recovery publisher is idempotent and resumes container processing on later ticks.
     if(body.trials_only!==true){
-    const {data:due,error:dueErr}=await admin.from("schedules").select("id").eq("platform","instagram").in("status",["scheduled","processing","failed"]).lte("scheduled_at",now).is("instagram_media_id",null).order("scheduled_at").limit(5);if(dueErr)throw dueErr;
-    for(const s of due||[]){
-      try{const rr=await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-instagram-publish-recovery",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:JSON.stringify({schedule_id:s.id}),signal:AbortSignal.timeout(20000)});let j:any={};try{j=await rr.json()}catch{};results.push({type:"normal",id:s.id,http:rr.status,...j});}catch(e:any){results.push({type:"normal",id:s.id,state:"retry",error:e instanceof Error?e.message:String(e)})}
+    // Independent account batches prevent a disconnected account from starving
+    // working accounts. Rotate attempted failures behind untouched schedules.
+    const {data:accounts,error:accountsError}=await admin.from("platform_accounts").select("id,config->scale_pilot_child").eq("platform","instagram").eq("enabled",true);if(accountsError)throw accountsError;
+    const children=(accounts||[]).filter((account:any)=>account.scale_pilot_child===true);
+    if(children.length){
+      const {error:distributionError}=await admin.rpc("instagram_scale_distribute");
+      if(distributionError)results.push({type:"account",state:"retry",error:"instagram_scale_distribution_failed"});
     }
+    for(const account of (accounts||[]).filter((account:any)=>account.scale_pilot_child!==true)){
+      const {data:due,error:dueErr}=await admin.from("schedules").select("id").eq("platform","instagram").eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).lte("scheduled_at",now).is("instagram_media_id",null).order("updated_at",{ascending:true,nullsFirst:true}).order("scheduled_at").limit(5);if(dueErr)throw dueErr;
+      if(!due?.length)continue;
+      const {data:token,error:tokenError}=await admin.rpc("get_instagram_page_token_for_account",{p_account_id:account.id});
+      if(tokenError||!token){results.push({type:"account",id:account.id,state:"blocked",ok:false,error:tokenError?"instagram_token_lookup_failed":"instagram_reconnect_required"});continue;}
+      for(const s of due){
+        try{const rr=await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-instagram-publish-recovery",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:JSON.stringify({schedule_id:s.id}),signal:AbortSignal.timeout(20000)});let j:any={};try{j=await rr.json()}catch{};results.push({type:"normal",id:s.id,http:rr.status,...j});}catch(e:any){results.push({type:"normal",id:s.id,state:"retry",error:e instanceof Error?e.message:String(e)})}
+        finally{const {error:rotationError}=await admin.from("schedules").update({updated_at:new Date().toISOString()}).eq("id",s.id).eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).is("instagram_media_id",null);if(rotationError)results.push({type:"normal",id:s.id,state:"retry",error:"scheduler_rotation_failed"});}
+      }
     }
-    const failed=results.filter(x=>x.state==="failed"||x.state==="retry"||x.ok===false);for(const worker of ["automation","instagram_publish","trial_reels"]){await admin.from("worker_runtime").upsert({worker_name:worker,last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:failed.length?failed.map(x=>x.error||x.state).join(" | ").slice(0,2000):null,last_jobs:results.length,updated_at:new Date().toISOString()},{onConflict:"worker_name"})}
+    await Promise.all(children.map(async(account:any)=>{
+      try{
+        const {data:due,error}=await admin.rpc("instagram_scale_due",{p_child:account.id});
+        if(error)throw error;
+        if(!due?.length)return;
+        const id=due[0].id;
+        const response=await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-instagram-publish-recovery",{
+          method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},
+          body:JSON.stringify({schedule_id:id}),signal:AbortSignal.timeout(30000)
+        });
+        const result=await response.json();
+        results.push({type:"normal",id,http:response.status,...result});
+      }catch{
+        results.push({type:"account",id:account.id,state:"retry",error:"instagram_scale_worker_unavailable"});
+      }
+    }));
+    }
+    for(const worker of ["posting_scheduler","instagram_publish","trial_reels"]){
+      const own=worker==="trial_reels"?results.filter(x=>x.type==="trial"):worker==="instagram_publish"?results.filter(x=>x.type==="normal"||x.type==="account"):results;
+      const failed=own.filter(x=>x.state==="failed"||x.state==="retry"||x.ok===false);
+      const ts=new Date().toISOString();
+      await admin.from("worker_runtime").upsert({worker_name:worker,last_heartbeat:ts,...(!failed.length?{last_success_at:ts}:{}),last_error:failed.length?failed.map(x=>x.error||x.state).join(" | ").slice(0,2000):null,last_jobs:own.length,updated_at:ts},{onConflict:"worker_name"}).throwOnError();
+    }
     return out({ok:true,results});
   }catch(e:any){return out({ok:false,error:e instanceof Error?e.message:String(e)},500)}
 });

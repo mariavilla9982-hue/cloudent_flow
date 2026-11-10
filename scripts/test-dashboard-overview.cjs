@@ -67,7 +67,7 @@ function fixture(){
  assert(empty.elements.overview.innerHTML.includes('Nenhuma das duas contas'));assert(empty.elements.overview.innerHTML.includes('<strong>—</strong>'));
  new vm.Script(fs.readFileSync('sw.js','utf8'));
  const sw=fs.readFileSync('sw.js','utf8');
- assert(sw.includes('cloudentflow-pwa-v67'));assert(sw.includes('url.pathname==="/dashboard-multi-account-patch.js"'));
+ assert(Number(sw.match(/cloudentflow-pwa-v(\d+)/)?.[1])>=67);assert(sw.includes('url.pathname==="/dashboard-multi-account-patch.js"'));
  const swContext=vm.createContext({self:{addEventListener:()=>{}},Response,Headers});vm.runInContext(sw,swContext);
  const legacy='<head></head><body><script>const example=1;</script><script src="/dashboard-multi-account-patch.js?v=1"></script><script src="/dashboard-multi-account-patch.js?v=4"></script></body>';
  const patched=await (await swContext.injectCalendarPatch(new Response(legacy,{headers:{'content-type':'text/html'}}))).text();
