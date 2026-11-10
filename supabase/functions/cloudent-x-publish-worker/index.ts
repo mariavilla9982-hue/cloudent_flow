@@ -15,6 +15,28 @@ const APP_URL="https://cloudent-flow.vercel.app/";
 const DRIVE_SCOPE="openid email profile https://www.googleapis.com/auth/drive.readonly";
 const X_MEDIA_CHUNK=4*1024*1024;
 const MAX_VIDEO_BYTES=512*1024*1024;
+const MAX_PHOTO_BYTES=5*1024*1024;
+const UPLOAD_EXTENSIONS=new Map([
+ ["video/mp4","mp4"],["video/quicktime","mov"],["image/jpeg","jpg"],["image/png","png"],
+]);
+const PHOTO_SIGNATURES=new Map([
+ ["image/jpeg",[255,216,255]],["image/png",[137,80,78,71,13,10,26,10]],
+]);
+function uploadExtension(mime:string,size:number){
+ const extension=UPLOAD_EXTENSIONS.get(mime);
+ const photo=PHOTO_SIGNATURES.get(mime);
+ if(!extension||!Number.isSafeInteger(size)||size<(photo?.length||1)||size>(photo?MAX_PHOTO_BYTES:MAX_VIDEO_BYTES)){
+  throw new HttpError("Envie uma foto JPG ou PNG de até 5 MB, ou um vídeo MP4 ou MOV de até 512 MB.",400);
+ }
+ return extension;
+}
+function uploadPathMime(userId:string,path:string){
+ const prefix=userId+"/x-uploads/";
+ if(!path.startsWith(prefix))return "";
+ const extension=path.slice(prefix.length).match(/^[0-9a-f-]{36}[.](mp4|mov|jpg|png)$/)?.[1];
+ for(const [mime,suffix] of UPLOAD_EXTENSIONS)if(suffix===extension)return mime;
+ return "";
+}
 type CloudentR2Config={account_id:string;access_key_id:string;secret_access_key:string;bucket:string;endpoint:string};
 
 function normalizeR2Config(row:any):CloudentR2Config|null{
@@ -82,6 +104,16 @@ async function uploadedVideoMatches(source:string,size:number){
  return valid;
 }
 
+async function uploadedPhotoMatches(source:string,size:number,signature:number[]){
+ const end=signature.length-1;
+ const response=await fetch(source,{headers:{Range:"bytes=0-"+end},signal:AbortSignal.timeout(10000)});
+ if(response.status!==206||response.headers.get("content-range")!==`bytes 0-${end}/${size}`){
+  await response.body?.cancel();return false;
+ }
+ const bytes=new Uint8Array(await response.arrayBuffer());
+ return bytes.length===signature.length&&signature.every((byte,i)=>byte===bytes[i]);
+}
+
 async function uploadedThumbnailMatches(source:string){
  try{
   const r=await fetch(source,{method:"GET",headers:{Range:"bytes=0-2"},signal:AbortSignal.timeout(10000)});
@@ -93,8 +125,8 @@ async function uploadedThumbnailMatches(source:string){
 
 async function uploadRange(source:string,start:number,end:number){
  const r=await fetch(source,{headers:{Range:`bytes=${start}-${end}`}});
- if(r.status!==206) {await r.body?.cancel();throw new HttpError("Armazenamento não retornou o trecho solicitado do vídeo.",502);}
- const b=await r.blob();if(b.size!==end-start+1)throw new HttpError("Trecho do vídeo incompleto.",502);return b;
+ if(r.status!==206) {await r.body?.cancel();throw new HttpError("Armazenamento não retornou o trecho solicitado do arquivo.",502);}
+ const b=await r.blob();if(b.size!==end-start+1)throw new HttpError("Trecho do arquivo incompleto.",502);return b;
 }
 
 
@@ -335,17 +367,18 @@ async function driveRange(token:string,fileId:string,start:number,end:number){
 
 async function uploadVideoX(driveToken:string,file:any,xToken:string,sourceUrl=""){
   const size=Number(file.drive_size_bytes||0);
-  if(!size)throw new HttpError("O tamanho do vídeo não está disponível.",400);
-  if(size>MAX_VIDEO_BYTES)throw new HttpError("Vídeo maior que 512 MB; bloqueado para evitar execução longa.",400);
   const mime=String(file.drive_mime_type||"video/mp4");
-  const init=await xJson("/2/media/upload/initialize",xToken,"POST",{media_type:mime,total_bytes:size,media_category:"tweet_video"});
+  const photo=PHOTO_SIGNATURES.has(mime);
+  if(!size)throw new HttpError("O tamanho do arquivo não está disponível.",400);
+  if(size>(photo?MAX_PHOTO_BYTES:MAX_VIDEO_BYTES))throw new HttpError("O arquivo ultrapassa o limite de envio.",400);
+  const init=await xJson("/2/media/upload/initialize",xToken,"POST",{media_type:mime,total_bytes:size,media_category:photo?"tweet_image":"tweet_video"});
   const mediaId=String(init?.data?.id||init?.data?.media_id||init?.media_id_string||init?.media_id||"");
   if(!mediaId)throw new HttpError("X não retornou media_id ao iniciar upload.",502,init);
   let segment=0;
   for(let start=0;start<size;start+=X_MEDIA_CHUNK){
     const end=Math.min(size-1,start+X_MEDIA_CHUNK-1);
     const blob=sourceUrl?await uploadRange(sourceUrl,start,end):await driveRange(driveToken,String(file.drive_file_id),start,end);
-    const form=new FormData();form.append("segment_index",String(segment));form.append("media",blob,String(file.drive_file_name||"video.mp4"));
+    const form=new FormData();form.append("segment_index",String(segment));form.append("media",blob,String(file.drive_file_name||"media"));
     const r=await fetch(`https://api.x.com/2/media/upload/${encodeURIComponent(mediaId)}/append`,{method:"POST",headers:{Authorization:"Bearer "+xToken},body:form});
     if(!r.ok){let d:any={};try{d=await r.json()}catch{};throw new HttpError(String(d?.detail||d?.title||`X media append ${r.status}`),r.status,d);}
     segment++;
@@ -355,12 +388,12 @@ async function uploadVideoX(driveToken:string,file:any,xToken:string,sourceUrl="
   for(let i=0;info&&i<20;i++){
     const state=String(info.state||"").toLowerCase();
     if(state==="succeeded")break;
-    if(state==="failed")throw new HttpError(String(info?.error?.message||"X falhou ao processar o vídeo."),422,info);
+    if(state==="failed")throw new HttpError(String(info?.error?.message||"X falhou ao processar o arquivo."),422,info);
     await sleep(Math.min(10,Math.max(1,Number(info.check_after_secs||2)))*1000);
     const st=await xJson(`/2/media/upload?media_id=${encodeURIComponent(mediaId)}&command=STATUS`,xToken,"GET");
     info=st?.data?.processing_info||st?.processing_info||null;
   }
-  if(info&&String(info.state||"").toLowerCase()!=="succeeded")throw new HttpError("Tempo limite aguardando o X processar o vídeo.",504,info);
+  if(info&&String(info.state||"").toLowerCase()!=="succeeded")throw new HttpError("Tempo limite aguardando o X processar o arquivo.",504,info);
   return mediaId;
 }
 
@@ -488,7 +521,7 @@ async function bufferVideoUrl(id:string,path:string,master:string){
  const expires=Math.floor(Date.now()/1000)+BUFFER_VIDEO_TTL_SECONDS;
  const signature=await crypto.subtle.sign("HMAC",await bufferVideoKey(master),bufferVideoClaim(id,expires));
  const token=Array.from(new Uint8Array(signature),b=>b.toString(16).padStart(2,"0")).join("");
- const suffix=path.endsWith(".mov")?"mov":"mp4";
+ const suffix=path.split(".").pop();
  const url=new URL(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-x-publish-worker/buffer-video."+suffix);
  url.search=new URLSearchParams({action:"buffer-video",id,expires:String(expires),token}).toString();
  return url.href;
@@ -506,7 +539,8 @@ async function serveBufferVideo(admin:any,req:Request,url:URL,master:string){
  const {data:post,error}=await admin.from("x_drive_posts").select("user_id,meta").eq("id",id).maybeSingle();
  if(error)return new Response(null,{status:502});
  const path=String(post?.meta?.storage_path||"");
- if(post?.meta?.source!=="upload"||post.meta.storage_provider!=="r2"||!path.startsWith(post.user_id+"/x-uploads/")||!/[.](mp4|mov)$/.test(path))return new Response(null,{status:404});
+ const mime=post?uploadPathMime(post.user_id,path):"";
+ if(post?.meta?.source!=="upload"||post.meta.storage_provider!=="r2"||!mime)return new Response(null,{status:404});
  const cfg=await getCloudentR2Config(admin);
  if(!cfg)return new Response(null,{status:502});
  const range=req.headers.get("range");
@@ -519,7 +553,8 @@ async function serveBufferVideo(admin:any,req:Request,url:URL,master:string){
   return new Response(null,{status:source.status===404?404:502});
  }
  const headers=new Headers({
-  "Content-Type":path.endsWith(".mov")?"video/quicktime":"video/mp4",
+  "Content-Type":mime,
+  "X-Content-Type-Options":"nosniff",
   "Accept-Ranges":"bytes",
   "Cache-Control":"private, no-store"
  });
@@ -536,10 +571,11 @@ async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,w
  const channel=await verifiedBufferChannel(channelId,String(xAccount.config?.username||xAccount.account_label||""),key);
  if(xAccount.external_account_id&&String(channel.serviceId)!==String(xAccount.external_account_id))throw new HttpError("O ID do canal do Buffer difere da conta cadastrada no X Studio.",409);
  const path=String(meta.storage_path||"");
- if(meta.source!=="upload"||meta.storage_provider!=="r2"||!path.startsWith(file.user_id+"/x-uploads/"))throw new HttpError("Para publicar via Buffer, envie o vídeo pelo X Studio para o armazenamento principal.",409);
+ const mime=uploadPathMime(file.user_id,path);
+ if(meta.source!=="upload"||meta.storage_provider!=="r2"||!mime)throw new HttpError("Para publicar via Buffer, envie o arquivo pelo X Studio para o armazenamento principal.",409);
  const text=captionValue(file.post_text,true);
- const videoUrl=await bufferVideoUrl(file.id,path,master);
- const assets=[{video:{url:videoUrl}}];
+ const url=await bufferVideoUrl(file.id,path,master);
+ const assets=[PHOTO_SIGNATURES.has(mime)?{image:{url}}:{video:{url}}];
  const workerUrl=Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-x-publish-worker";
  const reply=file.reply_text?bufferReplyLink(captionValue(file.reply_text),file.id,workerUrl):null;
  const thread=reply?[{text,assets},{text:captionValue(reply.text),assets:[]}]:null;
@@ -624,7 +660,7 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
     let sourceUrl="",driveToken="";
     if(file.meta?.source==="upload"){
       const path=String(file.meta.storage_path||"");
-      if(!path.startsWith(userId+"/x-uploads/"))throw new HttpError("Caminho do vídeo inválido.",403);
+      if(!path.startsWith(userId+"/x-uploads/"))throw new HttpError("Caminho do arquivo inválido.",403);
       sourceUrl=await uploadReadUrl(admin,String(file.meta.storage_provider||"supabase"),path);
     }else{driveToken=(await usableGoogleToken(admin,userId,master)).token;}
     const mediaId=await uploadVideoX(driveToken,file,xToken,sourceUrl);
@@ -705,7 +741,7 @@ async function statusPayload(admin:any,userId:string,master:string,url:URL){
  if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to<=from||to.getTime()-from.getTime()>43*86400000)throw new HttpError("invalid_period",400);
  let captions:any[]=[];let posts:any[]=[],cfg:any={enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
  if(ids.length){
- const {data:rows,error:pe}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(500);if(pe)throw pe;posts=rows||[];
+ const {data:rows,error:pe}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(500);if(pe)throw pe;posts=rows||[];
  if(active){const {data:c,error:ce}=await admin.from("x_account_configs").select("*").eq("platform_account_id",active.id).maybeSingle();if(ce)throw ce;if(c)cfg=c;}
  }
  if(active){const {data:captionRows,error:captionError}=await admin.from("x_caption_queue").select("id,caption,status,created_at").eq("platform_account_id",active.id).eq("user_id",userId).eq("workspace_id",member.workspace_id).in("status",["pending","reserved"]).order("created_at").limit(100);if(captionError)throw captionError;captions=captionRows||[];}
@@ -963,7 +999,7 @@ Deno.serve(async(req:Request)=>{
       const {data:p,error}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
       if(error)throw error;if(!p)return json({error:"not_found"},404);
       const path=String(p.meta?.storage_path||"");
-      if(p.meta?.source!=="upload"||!path.startsWith(userId+"/x-uploads/"))return json({error:"preview_unavailable",user_message:"Preview indisponível para este vídeo."},409);
+      if(p.meta?.source!=="upload"||!path.startsWith(userId+"/x-uploads/"))return json({error:"preview_unavailable",user_message:"Prévia indisponível para este arquivo."},409);
       return json({ok:true,url:await uploadReadUrl(admin,String(p.meta.storage_provider||"supabase"),path)});
     }
     if(action==="schedule"){
@@ -973,7 +1009,7 @@ Deno.serve(async(req:Request)=>{
       if(pe)throw pe;if(!p)return json({error:"not_found"},404);
       if(p.meta?.publish_uncertain)return json({error:"publish_uncertain",user_message:"Confira a publicação na conta X antes de reagendar."},409);
       const {data,error}=await admin.from("x_drive_posts").update({scheduled_at:scheduled,...(caption===undefined?{}:{post_text:caption,meta:{...p.meta,allow_empty_caption:!caption}}),...(body.reply_text===undefined?{}:{reply_text:String(body.reply_text||"").trim()||null}),next_attempt_at:scheduled,updated_at:new Date().toISOString()}).eq("id",String(body.id||"")).eq("user_id",userId).in("status",["queued","failed"]).select("id").maybeSingle();
-      if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Já existe um vídeo nesse horário. Escolha outra vaga."},409);throw error;}
+      if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Já existe uma publicação nesse horário. Escolha outra vaga."},409);throw error;}
       if(!data)return json({error:"post_locked",user_message:"Essa postagem já está sendo enviada ou foi finalizada."},409);
       return json({ok:true});
     }
@@ -981,32 +1017,42 @@ Deno.serve(async(req:Request)=>{
       const account=await resolveXAccount(admin,userId,body);if(!account.enabled)return json({error:"x_disconnected"},409);
       if(req.method!=="POST")return json({error:"method_not_allowed"},405);
       const size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
-      if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video",user_message:"Envie um vídeo MP4 ou MOV de até 512 MB."},400);
-      const path=userId+"/x-uploads/"+crypto.randomUUID()+(mime==="video/quicktime"?".mov":".mp4");
+      const extension=uploadExtension(mime,size),photo=PHOTO_SIGNATURES.has(mime);
+      const path=userId+"/x-uploads/"+crypto.randomUUID()+"."+extension;
       const cfg=await getCloudentR2Config(admin);
-      if(cfg){const thumbnail_path=path+".jpg";return json({ok:true,provider:"r2",object_path:path,upload_url:await r2PresignedUrl(cfg,"PUT",path,900,mime),content_type:mime,thumbnail:{object_path:thumbnail_path,upload_url:await r2PresignedUrl(cfg,"PUT",thumbnail_path,900,"image/jpeg"),content_type:"image/jpeg"}});}
+      if(cfg){
+        const ticket={ok:true,provider:"r2",object_path:path,upload_url:await r2PresignedUrl(cfg,"PUT",path,900,mime),content_type:mime};
+        if(photo)return json(ticket);
+        const thumbnail_path=path+".jpg";
+        return json({...ticket,thumbnail:{object_path:thumbnail_path,upload_url:await r2PresignedUrl(cfg,"PUT",thumbnail_path,900,"image/jpeg"),content_type:"image/jpeg"}});
+      }
+      if(photo)throw new HttpError("O armazenamento de fotos está indisponível. Tente novamente mais tarde.",503);
       const {data,error}=await admin.storage.from("videos").createSignedUploadUrl(path);if(error)throw error;
       return json({ok:true,provider:"supabase",object_path:path,upload_url:data.signedUrl,content_type:mime});
     }
     if(action==="upload-complete"){
       const path=String(body.object_path||""),provider=String(body.provider||"");
-      if(!new RegExp("^"+userId+"/x-uploads/[0-9a-f-]{36}\\.(mp4|mov)$").test(path)||!["r2","supabase"].includes(provider))return json({error:"invalid_upload_path"},403);
+      const size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
+      if(uploadPathMime(userId,path)!==mime||!["r2","supabase"].includes(provider))return json({error:"invalid_upload_path"},403);
+      const signature=PHOTO_SIGNATURES.get(mime);
+      if(signature&&provider!=="r2")return json({error:"invalid_upload_path"},403);
       let thumbnail_path=null;
       if(body.thumbnail_path){
-        if(String(body.thumbnail_path)!==path+".jpg"||provider!=="r2")return json({error:"invalid_thumbnail_path"},403);
+        if(signature||String(body.thumbnail_path)!==path+".jpg"||provider!=="r2")return json({error:"invalid_thumbnail_path"},403);
         if(await uploadedThumbnailMatches(await uploadReadUrl(admin,provider,String(body.thumbnail_path))))thumbnail_path=String(body.thumbnail_path);
       }
+      const extension=uploadExtension(mime,size);
       const scheduled=body.gallery===true?null:scheduleValue(body.scheduled_at);
       const gallery=body.gallery===true;
-      const text=captionValue(body.caption,true),size=Number(body.size_bytes),mime=String(body.mime_type||"video/mp4");
-      if(!Number.isSafeInteger(size)||size<=0||size>MAX_VIDEO_BYTES||!["video/mp4","video/quicktime"].includes(mime))return json({error:"invalid_video"},400);
+      const text=captionValue(body.caption,true);
       const source=await uploadReadUrl(admin,provider,path);
-      if(!await uploadedVideoMatches(source,size))return json({error:"upload_incomplete",user_message:"O upload do vídeo não foi concluído. Tente novamente."},409);
+      const complete=signature?await uploadedPhotoMatches(source,size,signature):await uploadedVideoMatches(source,size);
+      if(!complete)return json({error:"upload_incomplete",user_message:signature?"A foto enviada não corresponde ao formato ou tamanho informado.":"O upload do vídeo não foi concluído. Tente novamente."},409);
       const ids=Array.isArray(body.platform_account_ids)?[...new Set(body.platform_account_ids.map(String))]:[String(body.platform_account_id||"")];
       if(!ids.length||ids.length>100)return json({error:"invalid_accounts"},400);
       const accounts=[];for(const id of ids){const a=await resolveXAccount(admin,userId,{platform_account_id:id});if(!a.enabled)throw new HttpError("x_disconnected",409);accounts.push(a);}
       const reply=String(body.reply_text||"").trim();if(reply)captionValue(reply);
-      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"video.mp4").slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path,gallery,allow_empty_caption:!gallery&&!text}}));
+      const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"arquivo."+extension).slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path,gallery,allow_empty_caption:!gallery&&!text}}));
       const {data,error}=await admin.from("x_drive_posts").upsert(rows,{onConflict:"user_id,drive_file_id,platform_account_id",ignoreDuplicates:true}).select("id,platform_account_id");
       if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Horário já ocupado nesta conta."},409);throw error;}
       for(const a of accounts)await auditX(admin,member,userId,a.id,"post_created",{count:1});

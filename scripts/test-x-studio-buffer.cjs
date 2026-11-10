@@ -14,7 +14,7 @@ const env = {
   CLOUDENT_X_BUFFER_API_KEY: 'test-key',
 };
 const context = vm.createContext({
-  URL, Request, Response, Headers, AbortSignal, TextEncoder, TextDecoder,
+  URL, URLSearchParams, Request, Response, Headers, AbortSignal, TextEncoder, TextDecoder,
   crypto: webcrypto, btoa, atob,
   Deno: { env: { get: key => env[key] }, serve() {} },
   twitterText: {
@@ -31,7 +31,7 @@ const account = { id: accountId, enabled: true, config: { status: 'connected', u
 const file = {
   id: postId, user_id: 'test-user', platform_account_id: accountId,
   status: 'queued', post_text: 'Caption', reply_text: 'Link https://example.test/dest',
-  meta: { source: 'upload', storage_provider: 'r2', storage_path: 'test-user/x-uploads/file.mp4' },
+  meta: { source: 'upload', storage_provider: 'r2', storage_path: 'test-user/x-uploads/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.mp4' },
 };
 const files = [file];
 const remotePosts = new Map();
@@ -117,10 +117,18 @@ context.fetch = async (url, options) => {
     creates++;
     assert.equal(variables.input.mode, 'shareNow');
     const [root, reply] = variables.input.metadata.twitter.thread;
-    assert.equal(root.assets[0].video.url, 'https://storage.test/video.mp4?signature=abc');
     const prefix = 'Link https://cloudent.test/functions/v1/cloudent-x-publish-worker?action=link&id=';
     assert.ok(reply.text.startsWith(prefix));
     const row = files.find(row => row.id === reply.text.slice(prefix.length));
+    const photo = row.meta.storage_path.endsWith('.png');
+    const asset = root.assets[0];
+    assert.deepEqual(Object.keys(asset), [photo ? 'image' : 'video']);
+    assert.deepEqual(variables.input.assets, root.assets);
+    const url = new URL(photo ? asset.image.url : asset.video.url);
+    assert.equal(url.origin, 'https://cloudent.test');
+    assert.ok(url.pathname.endsWith(photo ? '/buffer-video.png' : '/buffer-video.mp4'));
+    assert.equal(url.searchParams.get('id'), row.id);
+    assert.match(url.searchParams.get('token'), /^[0-9a-f]{64}$/);
     assert.equal(variables.input.channelId, row.platform_account_id === accountId ? 'buffer-channel' : 'second-channel');
     assert.equal(root.text, row.post_text);
     assert.equal([...remotePosts.values()].some(remote => remote.rowId === row.id), false, 'one Buffer send per post');
@@ -150,8 +158,8 @@ context.fetch = async (url, options) => {
   assert.equal(ownConnection.p_x_user_id, '42');
   assert.equal(JSON.stringify(ownConnection).includes('personal-key'), false);
   assert.equal(await context.decryptSecret(ownConnection.p_cipher, ownConnection.p_iv, 'master'), 'personal-key');
-  const run = () => context.publishOne(admin, file.user_id, config, '', 'worker');
-  assert.equal((await run()).state, 'buffer_processing');
+  const run = () => context.publishOne(admin, file.user_id, config, 'test-master', 'worker');
+  assert.equal((await run()).state, 'buffer_processing', file.last_error);
   assert.equal(file.meta.buffer_post_id, 'buffer-post-1');
   assert.equal((await run()).state, 'buffer_processing');
   assert.equal(creates, 1);
@@ -172,7 +180,7 @@ context.fetch = async (url, options) => {
   assert.equal(creates, 1);
   connection = 'reistest';
   env.CLOUDENT_X_BUFFER_CHANNELS = JSON.stringify({ [accountId]: 'buffer-channel', [otherAccountId]: 'second-channel' });
-  const runSecond = () => context.publishOne(admin, file.user_id, { platform_account_id: otherAccountId }, '', 'worker');
+  const runSecond = () => context.publishOne(admin, file.user_id, { platform_account_id: otherAccountId }, 'test-master', 'worker');
   const batch = [accountId, otherAccountId].flatMap((platform_account_id, accountIndex) =>
     Array.from({ length: 6 }, (_, slot) => ({
       ...structuredClone(file),
@@ -180,8 +188,8 @@ context.fetch = async (url, options) => {
       platform_account_id,
       status: 'queued',
       x_post_id: null,
-      post_text: `Account ${accountIndex + 1}, slot ${slot + 1}`,
-      meta: { source: 'upload', storage_provider: 'r2', storage_path: 'test-user/x-uploads/file.mp4' },
+      post_text: slot === 0 ? '' : `Account ${accountIndex + 1}, slot ${slot + 1}`,
+      meta: { source: 'upload', storage_provider: 'r2', storage_path: 'test-user/x-uploads/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.' + (slot === 0 ? 'png' : 'mp4') },
     }))
   );
   files.push(...batch);
@@ -199,6 +207,33 @@ context.fetch = async (url, options) => {
   assert.equal(creates, 13);
   assert.equal(await run(), null);
   assert.equal(await runSecond(), null);
+  const photo = batch[0];
+  const url = new URL(await context.bufferVideoUrl(photo.id, photo.meta.storage_path, 'proxy-key'));
+  context.getCloudentR2Config = async () => ({});
+  context.r2PresignedUrl = async (_cfg, method, path) => {
+    assert.equal(path, photo.meta.storage_path);
+    return 'https://storage.test/' + method;
+  };
+  const bufferFetch = context.fetch;
+  context.fetch = async (source, opts) => {
+    if (opts.method === 'HEAD') {
+      assert.equal(source, 'https://storage.test/HEAD');
+      return new Response(null, { headers: { 'Content-Length': '100' } });
+    }
+    assert.equal(opts.headers.Range, 'bytes=0-7');
+    return new Response(Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]), {
+      status: 206, headers: { 'Content-Range': 'bytes 0-7/100' },
+    });
+  };
+  const head = await context.serveBufferVideo(admin, new Request(url, { method: 'HEAD' }), url, 'proxy-key');
+  assert.equal(head.headers.get('Content-Type'), 'image/png');
+  assert.equal(head.headers.get('Content-Length'), '100');
+  const partial = await context.serveBufferVideo(admin, new Request(url, { headers: { Range: 'bytes=0-7' } }), url, 'proxy-key');
+  assert.equal(partial.status, 206);
+  assert.equal(partial.headers.get('Content-Range'), 'bytes 0-7/100');
+  assert.equal((await partial.arrayBuffer()).byteLength, 8);
+  assert.equal((await context.serveBufferVideo(admin, new Request(url), url, 'other-key')).status, 404);
+  context.fetch = bufferFetch;
   delete env.CLOUDENT_X_BUFFER_API_KEY;
   await assert.rejects(run, /Conecte o Buffer/);
   delete env.CLOUDENT_X_BUFFER_CHANNELS;
@@ -206,5 +241,5 @@ context.fetch = async (url, options) => {
   await assert.rejects(originalXToken(admin, bufferOnly, ''), /exclusivamente pelo Buffer/);
   assert.equal((await context.syncAccountMetrics(admin, bufferOnly, '')).ok, true);
   assert.equal(paidCalls, 0);
-  console.log('PASS six videos and six replies on each of two accounts, isolated queues, no duplicate or paid X fallback, and tracked redirects');
+  console.log('PASS mixed media and replies on two accounts, signed photo proxy, isolated queues, no duplicate or paid X fallback, and tracked redirects');
 })().catch(error => { console.error(error); process.exitCode = 1; });
