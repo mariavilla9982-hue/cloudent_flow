@@ -9,6 +9,20 @@ const H={
 };
 const out=(x:any,s=200)=>new Response(JSON.stringify(x),{status:s,headers:H});
 const te=new TextEncoder();
+const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const requiredScopes=["instagram_business_basic","instagram_business_content_publish"];
+const returnPages=new Set(["calendar","accounts","settings"]);
+const oauthFailureCodes=[
+  "instagram_scope_denied","instagram_already_connected","instagram_already_linked",
+  "instagram_daughter_limit","instagram_mother_unavailable","reconnect_account_mismatch"
+];
+
+async function activeSession(admin:any,userId:string,sessionId:string){
+  if(!uuid.test(sessionId))return false;
+  const {data,error}=await admin.rpc("cloudent_auth_session_active",{p_session_id:sessionId,p_user_id:userId});
+  if(error)throw error;
+  return data===true;
+}
 
 function envFirst(...names:string[]){
   for(const name of names){const value=String(Deno.env.get(name)||"").trim();if(value)return {name,value}}
@@ -53,7 +67,7 @@ function redirect(status:string,extra:Record<string,string>={}){
   return Response.redirect(u.toString(),302);
 }
 async function getJson(url:string,token:string){
-  const r=await fetch(url,{headers:{Authorization:"Bearer "+token}});let j:any={};try{j=await r.json()}catch{}
+  const r=await fetch(url,{headers:{Authorization:"Bearer "+token},signal:AbortSignal.timeout(12000)});let j:any={};try{j=await r.json()}catch{}
   if(!r.ok||j?.error)throw new Error(j?.error?.message||("Instagram API "+r.status));return j;
 }
 
@@ -75,21 +89,37 @@ Deno.serve(async(req:Request)=>{
     if(!member?.enabled||member.role!=="admin")return out({error:"forbidden",user_message:"Somente o administrador pode conectar contas do Instagram."},403);
     let body:any={};try{body=await req.json()}catch{}
     const reconnectId=String(body.platform_account_id||"").trim();
-    if(reconnectId){
-      const {data:target,error:targetErr}=await admin.from("platform_accounts").select("id").eq("id",reconnectId).eq("platform","instagram").eq("enabled",true).maybeSingle();
-      if(targetErr||!target)return out({error:"reconnect_account_not_found"},400);
+    const motherId=String(body.mother_id||"").trim();
+    const destination=returnPages.has(body.return_page)?body.return_page:"settings";
+    if((reconnectId&&!uuid.test(reconnectId))||(motherId&&!uuid.test(motherId))||(reconnectId&&motherId)){
+      return out({error:"invalid_account_id"},400);
     }
-    const {count,error:countErr}=await admin.from("platform_accounts").select("id",{count:"exact",head:true}).eq("platform","instagram").eq("enabled",true);
-    if(countErr)return out({error:"account_count_failed"},500);
-    if((count||0)>=3&&!reconnectId)return out({error:"instagram_account_limit",user_message:"O limite atual do CloudentFlow é 3 contas do Instagram."},409);
-    if(!cfg.id.value||!cfg.secret.value)return out({error:"instagram_oauth_not_configured",user_message:"O login oficial do Instagram ainda precisa do Instagram App ID e App Secret no servidor."},503);
+    let sessionId="";
+    try{sessionId=JSON.parse(new TextDecoder().decode(unb64url(bearer.split(".")[1]))).session_id||""}catch{}
+    if(!await activeSession(admin,a.user.id,sessionId))return out({error:"invalid_user_session"},401);
+    if(reconnectId||motherId){
+      const {data:accounts,error:scopeError}=await admin.rpc("instagram_scale_accounts",{p_actor:a.user.id});
+      if(scopeError)return out({error:"account_check_failed"},503);
+      const target=accounts?.find((account:any)=>account.id===(reconnectId||motherId));
+      if(!target)return out({error:"account_not_found"},404);
+      if(motherId){
+        const [{data:pilot,error:pilotError},{count,error:countError}]=await Promise.all([
+          admin.from("app_settings").select("value").eq("key","instagram_scale_pilot").maybeSingle(),
+          admin.from("instagram_scale_links").select("child_id",{count:"exact",head:true}).eq("mother_id",motherId)
+        ]);
+        if(pilotError||countError)return out({error:"account_check_failed"},503);
+        if(!target.enabled||pilot?.value?.mother_id!==motherId)return out({error:"instagram_mother_unavailable"},409);
+        if((count||0)>=2)return out({error:"instagram_daughter_limit",user_message:"As duas vagas de contas filhas já estão vinculadas."},409);
+      }
+    }
+    if(!cfg.id.value||!cfg.secret.value)return out({error:"instagram_oauth_not_configured",user_message:"Configure o Instagram App ID e App Secret no servidor."},503);
 
-    const state=await makeState({uid:a.user.id,exp:Date.now()+10*60*1000,nonce:crypto.randomUUID(),reconnect_account_id:reconnectId||null});
+    const state=await makeState({uid:a.user.id,sid:sessionId,exp:Date.now()+10*60*1000,nonce:crypto.randomUUID(),reconnect_account_id:reconnectId||null,mother_id:motherId||null,destination});
     const auth=new URL("https://www.instagram.com/oauth/authorize");
     auth.searchParams.set("client_id",cfg.id.value);
     auth.searchParams.set("redirect_uri",redirectUri());
     auth.searchParams.set("response_type","code");
-    auth.searchParams.set("scope","instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_insights");
+    auth.searchParams.set("scope",[...requiredScopes,"instagram_business_manage_comments","instagram_business_manage_insights"].join(","));
     auth.searchParams.set("state",state);
     auth.searchParams.set("enable_fb_login","0");
     auth.searchParams.set("force_authentication","1");
@@ -97,71 +127,88 @@ Deno.serve(async(req:Request)=>{
   }
 
   if(req.method!=="GET")return out({error:"method_not_allowed"},405);
-  const oauthError=url.searchParams.get("error")||url.searchParams.get("error_reason")||"";
-  if(oauthError)return redirect("cancelled",{reason:oauthError});
   const code=String(url.searchParams.get("code")||"").replace(/#_$/g,"");
   const state=await readState(String(url.searchParams.get("state")||""));
   if(!state)return redirect("error",{reason:"invalid_state"});
-  if(!code)return redirect("error",{reason:"missing_code"});
-  if(!cfg.id.value||!cfg.secret.value)return redirect("error",{reason:"oauth_not_configured"});
+  const complete=(status:string,extra:Record<string,string>={})=>redirect(status,{...extra,destination:returnPages.has(state.destination)?state.destination:"settings"});
+  if(url.searchParams.has("error")||url.searchParams.has("error_reason"))return complete("cancelled");
+  if(!code)return complete("error",{reason:"missing_code"});
+  if(!cfg.id.value||!cfg.secret.value)return complete("error",{reason:"oauth_not_configured"});
 
   try{
     const {data:member}=await admin.from("app_members").select("role,enabled").eq("user_id",state.uid).maybeSingle();
-    if(!member?.enabled||member.role!=="admin")return redirect("error",{reason:"forbidden"});
+    if(!member?.enabled||member.role!=="admin"||!await activeSession(admin,state.uid,state.sid||""))return complete("error",{reason:"forbidden"});
 
     const form=new URLSearchParams({client_id:cfg.id.value,client_secret:cfg.secret.value,grant_type:"authorization_code",redirect_uri:redirectUri(),code});
-    const tokenRes=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:form});
+    const tokenRes=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:form,signal:AbortSignal.timeout(12000)});
     let short:any={};try{short=await tokenRes.json()}catch{}
-    if(!tokenRes.ok)throw new Error(short?.error_message||short?.error?.message||"Falha ao trocar o código do Instagram.");
-    let shortToken=String(short?.access_token||"");
-    if(!shortToken&&Array.isArray(short?.data)&&short.data.length===1)shortToken=String(short.data[0]?.access_token||"");
-    if(!shortToken)throw new Error("O Instagram não retornou um access token.");
+    if(!tokenRes.ok)return complete("error",{reason:"meta_authorization_required"});
+    const shortData=Array.isArray(short?.data)?short.data[0]:short;
+    const shortToken=String(shortData?.access_token||"");
+    if(!shortToken)return complete("error",{reason:"meta_authorization_required"});
+    const scopes=shortData?.permissions;
+    const granted=Array.isArray(scopes)?scopes:typeof scopes==="string"?scopes.split(/[ ,]+/):null;
+    if(granted&&!requiredScopes.every(scope=>granted.includes(scope)))return complete("error",{reason:"meta_authorization_required"});
 
     const longUrl=new URL("https://graph.instagram.com/access_token");
-    longUrl.searchParams.set("grant_type","ig_exchange_token");longUrl.searchParams.set("client_secret",cfg.secret.value);longUrl.searchParams.set("access_token",shortToken);
-    const longRes=await fetch(longUrl.toString());let longData:any={};try{longData=await longRes.json()}catch{}
-    const token=String(longData?.access_token||shortToken);
-    if(!longRes.ok&&!shortToken)throw new Error(longData?.error?.message||"Falha ao gerar token de longa duração.");
+    longUrl.searchParams.set("grant_type","ig_exchange_token");
+    longUrl.searchParams.set("client_secret",cfg.secret.value);
+    longUrl.searchParams.set("access_token",shortToken);
+    const longRes=await fetch(longUrl,{signal:AbortSignal.timeout(12000)});
+    const longData=await longRes.json().catch(()=>({}));
+    const token=String(longData?.access_token||"");
+    const expiresIn=Number(longData?.expires_in);
+    if(!longRes.ok||!token||!Number.isFinite(expiresIn)||expiresIn<86400)return complete("error",{reason:"meta_long_token_required"});
 
-    const profileRaw=await getJson("https://graph.instagram.com/me?fields=id,user_id,username,name,account_type,profile_picture_url",token);
+    let profileRaw:any;
+    try{profileRaw=await getJson("https://graph.instagram.com/me?fields=id,user_id,username,name,account_type,profile_picture_url",token)}
+    catch{return complete("error",{reason:"meta_authorization_required"})}
     const externalId=String(profileRaw.user_id||profileRaw.id||"");
-    if(!externalId)throw new Error("Não consegui identificar a conta do Instagram.");
-    const profile={id:externalId,username:profileRaw.username||null,name:profileRaw.name||null,account_type:profileRaw.account_type||null,profile_picture_url:profileRaw.profile_picture_url||null};
-
-    const {data:existing,error:existingErr}=await admin.from("platform_accounts").select("id,config").eq("platform","instagram").eq("external_account_id",externalId).maybeSingle();
-    if(existingErr)throw existingErr;
-    if(state.reconnect_account_id&&String(existing?.id||"")!==String(state.reconnect_account_id))return redirect("error",{reason:"reconnect_account_mismatch"});
-    if(!existing?.id){
-      const {count,error:countErr}=await admin.from("platform_accounts").select("id",{count:"exact",head:true}).eq("platform","instagram").eq("enabled",true);
-      if(countErr)throw countErr;if((count||0)>=3)return redirect("error",{reason:"account_limit"});
+    const username=String(profileRaw.username||"");
+    if(!/^\d+$/.test(externalId)||!username||!["BUSINESS","CREATOR","MEDIA_CREATOR"].includes(String(profileRaw.account_type||"").toUpperCase())){
+      return complete("error",{reason:"instagram_professional_required"});
     }
+    // Verify publication access with a read-only official endpoint, without creating a container.
+    try{
+      const quota=await getJson("https://graph.instagram.com/v26.0/"+externalId+"/content_publishing_limit?fields=quota_usage,config",token);
+      if(!Array.isArray(quota?.data)||!quota.data.length)return complete("error",{reason:"meta_authorization_required"});
+    }catch{return complete("error",{reason:"meta_authorization_required"})}
 
-    const config={...(existing?.config||{}),status:"connected",api_mode:"instagram_login",source:"instagram-oauth",connection:"oauth_login",username:profile.username,instagram_user_id:externalId,account_type:profile.account_type,profile_picture_url:profile.profile_picture_url,profile_picture_updated_at:new Date().toISOString(),token_expires_in:Number(longData?.expires_in||0)||null};
-    const {data:platformAccount,error:accountErr}=await admin.from("platform_accounts").upsert({platform:"instagram",external_account_id:externalId,account_label:profile.username||profile.name||"Instagram",enabled:true,config,updated_at:new Date().toISOString()},{onConflict:"platform,external_account_id"}).select("id,platform,external_account_id,account_label,enabled,config").single();
-    if(accountErr)throw accountErr;
-    const {error:vaultErr}=await admin.rpc("set_instagram_page_token_for_account",{p_account_id:platformAccount.id,p_token:token});if(vaultErr)throw vaultErr;
-    if(state.reconnect_account_id){
+    const config={status:"connected",api_mode:"instagram_login",source:"instagram-oauth",connection:"oauth_login",username,instagram_user_id:externalId,account_type:profileRaw.account_type,profile_picture_url:profileRaw.profile_picture_url||null,profile_picture_updated_at:new Date().toISOString(),token_expires_in:expiresIn,token_expires_at:new Date(Date.now()+expiresIn*1000).toISOString()};
+    const {data:accountId,error:accountErr}=await admin.rpc("instagram_scale_connect",{
+      p_actor:state.uid,p_external_id:externalId,p_username:username,p_config:config,p_token:token,
+      p_reconnect_id:state.reconnect_account_id||null,p_mother_id:state.mother_id||null
+    });
+    if(accountErr){
+      const reason=oauthFailureCodes.find(code=>accountErr.message===code)||"connect_failed";
+      return complete("error",{reason});
+    }
+    if(state.reconnect_account_id)try{
       const {data:blocked,error:blockedErr}=await admin.from("reel_test_publications").select("id,meta,linked_schedule_id")
         .eq("status","failed").is("instagram_media_id",null)
-        .contains("meta",{failure_reason:"instagram_reconnect_required",platform_account_id:platformAccount.id});
+        .contains("meta",{failure_reason:"instagram_reconnect_required",platform_account_id:accountId});
       if(blockedErr)throw blockedErr;
       for(const trial of blocked||[]){
         if(trial.linked_schedule_id){
           const {data:schedule,error:se}=await admin.from("schedules").select("status,instagram_media_id,platform_account_id").eq("id",trial.linked_schedule_id).single();
           if(se)throw se;
-          if(!schedule||schedule.instagram_media_id||!['scheduled','queued','failed'].includes(schedule.status)||schedule.platform_account_id!==platformAccount.id)continue;
+          if(!schedule||schedule.instagram_media_id||!['scheduled','queued','failed'].includes(schedule.status)||schedule.platform_account_id!==accountId)continue;
         }
         const {error:retryErr}=await admin.from("reel_test_publications").update({status:"scheduled",attempt_count:0,last_error:null,next_attempt_at:new Date().toISOString(),locked_at:null,locked_by:null,
           meta:{...(trial.meta||{}),failure_reason:null,retry_blocked:false},updated_at:new Date().toISOString()}).eq("id",trial.id).eq("status","failed");
         if(retryErr)throw retryErr;
       }
+    }catch{console.error("instagram-oauth: calendar trial recovery pending")}
+    if(!state.mother_id){
+      const {data:integration}=await admin.from("integrations").select("external_account_id,enabled").eq("provider","instagram").maybeSingle();
+      if(!integration?.enabled||integration.external_account_id===externalId){
+        await admin.from("integrations").upsert({provider:"instagram",enabled:true,account_label:username,external_account_id:externalId,config:{...config,platform_account_id:accountId},last_verified_at:new Date().toISOString()},{onConflict:"provider"});
+      }
     }
-    await admin.from("integrations").upsert({provider:"instagram",enabled:true,account_label:profile.username||profile.name||"Instagram",external_account_id:externalId,config:{...config,platform_account_id:platformAccount.id},last_verified_at:new Date().toISOString()},{onConflict:"provider"});
-    await admin.from("activity_logs").insert({level:"info",event_type:"instagram_connected",message:"Instagram conectado via login oficial",meta:{platform_account_id:platformAccount.id,instagram_user_id:externalId,username:profile.username||null,api_mode:"instagram_login",connected_by:state.uid}});
-    return redirect("success",{username:String(profile.username||profile.name||"Instagram"),account_id:String(platformAccount.id)});
-  }catch(e){
-    console.error("instagram-oauth callback",e);
-    return redirect("error",{reason:"connect_failed"});
+    await admin.from("activity_logs").insert({level:"info",event_type:"instagram_connected",message:"Instagram conectado via login oficial",meta:{platform_account_id:accountId,username,mother_id:state.mother_id||null,connected_by:state.uid}});
+    return complete("success",{username,account_id:String(accountId)});
+  }catch{
+    console.error("instagram-oauth: callback failed");
+    return complete("error",{reason:"connect_failed"});
   }
 });
-

@@ -249,6 +249,17 @@ Deno.serve(async(req:Request)=>{
     }
 
 
+    // Recovery mode processes only the existing metric queue. It never changes
+    // calendar times, Trials, recommendations or physical media retention.
+    if(requestUrl.searchParams.get("queue_only")==="1"){
+      const errors=metricResults.filter((r:any)=>r.error);
+      const now=new Date().toISOString();
+      await admin.from("worker_runtime").upsert({worker_name:"automation",last_heartbeat:now,
+        ...(errors.length?{}:{last_success_at:now}),last_error:errors.map((r:any)=>r.error).join("; ").slice(0,2000)||null,
+        last_jobs:metricResults.filter((r:any)=>r.state==="collected").length,updated_at:now},{onConflict:"worker_name"}).throwOnError();
+      return out({ok:errors.length===0,mode:"queue_only",metrics:metricResults});
+    }
+
     // published_media_retention_cleanup
     // Delete only physical media that has already been successfully published for the
     // configured retention period. Database rows, Instagram metadata, metric snapshots
@@ -272,17 +283,22 @@ Deno.serve(async(req:Request)=>{
       publishedAt:string|null,
       source:string
     ){
-      if(!token||!integration?.enabled||!mediaId)return {captured:false,reason:"instagram_unavailable"};
+      if(!mediaId)return {captured:false,reason:"instagram_unavailable"};
       try{
-        const media=await graph(base,String(mediaId)+"?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count",token);
+        const context=schedule?.instagram_scale_caption!=null?await metricContext(admin,schedule.platform_account_id):null;
+        const retentionToken=context?.token||token;
+        const retentionBase=context?.base||base;
+        if(!retentionToken||(!context&&!integration?.enabled))return {captured:false,reason:"instagram_unavailable"};
+        const media=await graph(retentionBase,String(mediaId)+"?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count",retentionToken);
         let raw:any={data:[]},insightError:string|null=null;
-        try{raw=await fetchInsights(base,String(mediaId),token)}
+        try{raw=await fetchInsights(retentionBase,String(mediaId),retentionToken)}
         catch(e){insightError=e instanceof Error?e.message:String(e)}
         if(insightError)throw new Error(insightError);
         const mm=metricMap(raw);
 
         const {data:mediaRow,error:me}=await admin.from("instagram_media").upsert({
           ig_media_id:String(media.id),
+          ...(context?{platform_account_id:context.account.id}:{}),
           media_type:media.media_type||null,
           media_product_type:media.media_product_type||null,
           caption:media.caption||null,
@@ -372,10 +388,13 @@ Deno.serve(async(req:Request)=>{
             .eq("id",videoId).maybeSingle();
           if(videoError)throw videoError;
           if(!video)continue;
+          const {data:scalePending,error:scaleError}=await admin.rpc("instagram_scale_media_pending",{p_video_id:videoId});
+          if(scaleError)throw scaleError;
+          if(scalePending)continue;
           const storageWasAlreadyDeleted=!!video.storage_deleted_at;
 
           const {data:videoSchedules,error:videoSchedulesError}=await admin.from("schedules")
-            .select("id,status,published_at,scheduled_at,instagram_media_id")
+            .select("id,status,published_at,scheduled_at,instagram_media_id,platform_account_id,instagram_scale_caption")
             .eq("video_id",videoId)
             .order("published_at",{ascending:false,nullsFirst:false});
           if(videoSchedulesError)throw videoSchedulesError;
@@ -484,6 +503,9 @@ Deno.serve(async(req:Request)=>{
                   .in("status",["scheduled","queued","processing","failed"]);
                 if(activeRefError)throw activeRefError;
                 if(!(activeRefs||[]).length){
+                  const {data:scalePending,error:scaleError}=await admin.rpc("instagram_scale_media_pending",{p_video_id:result.id});
+                  if(scaleError)throw scaleError;
+                  if(scalePending)continue;
                   const resultPaths=[result.storage_path,result.original_storage_path]
                     .filter(Boolean).map(String).filter((x:string,i:number,a:string[])=>a.indexOf(x)===i);
                   if(resultPaths.length)await deleteVideoStorage(admin,result.storage_provider,resultPaths);

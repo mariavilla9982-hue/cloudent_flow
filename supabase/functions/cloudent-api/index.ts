@@ -1,3 +1,4 @@
+import {instagramScaleAccounts,instagramScaleApi} from "./instagram-scale.ts";
 import {handleInstagramDisconnect} from "./instagram-disconnect.ts";
 import {healthWorkers,healthFailures} from "./system-health.ts";
 import {panelViewApi} from './panel-view.ts';
@@ -217,13 +218,10 @@ async function wakeNotificationWorker(admin:any,supabaseUrl:string){
   }catch{return false}
 }
 
-async function resolveCalendarInstagramAccount(admin:any,requestedId:any){
+async function resolveCalendarInstagramAccount(admin:any,requestedId:any,actor:string){
   const requested=String(requestedId||"").trim();
   if(!requested)throw Object.assign(new Error("Selecione explicitamente a conta do Instagram para agendar."),{status:400});
-  let query=admin.from("platform_accounts").select("id").eq("platform","instagram").eq("enabled",true);
-  query=query.eq("id",requested);
-  const {data:account,error}=await query.maybeSingle();
-  if(error)throw error;
+  const account=(await instagramScaleAccounts(admin,actor)).find((a:any)=>a.id===requested&&a.enabled);
   if(!account)throw Object.assign(new Error("A conta selecionada do Instagram não está disponível."),{status:400});
   return account.id;
 }
@@ -260,6 +258,7 @@ Deno.serve(async (req: Request) => {
     if(!accessMember?.enabled||!["admin","x_user"].includes(accessMember.role))return json({error:"forbidden"},403);
     if(resource==="session"&&req.method==="GET")return json({user_id:userData.user.id,role:accessMember.role,workspace_id:accessMember.workspace_id});
     if(accessMember.role!=="admin")return json({error:"forbidden",user_message:"Seu acesso está limitado ao X Studio."},403);
+    if(resource==="instagram-scale")return await instagramScaleApi(req,url,admin,userData.user.id,json);
     const disconnectResponse=await handleInstagramDisconnect(req,url,admin,userData.user.id,accessMember,json);
     if(disconnectResponse)return disconnectResponse;
     const panelViewResponse=await panelViewApi(req,url,admin,userData.user.id,json);
@@ -371,7 +370,7 @@ Deno.serve(async (req: Request) => {
       const compactQueue=url.searchParams.get("compact")==="1";
       const queueSelect=compactQueue
         ?"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
-        :"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
+        :"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,instagram_scale_caption,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
       let queueQuery=admin
         .from("schedules")
         .select(queueSelect)
@@ -383,7 +382,8 @@ Deno.serve(async (req: Request) => {
       const {data,error}=await queueQuery;
       if (error) throw error;
 
-      const schedules=data||[];
+      const accountIds=new Set((await instagramScaleAccounts(admin,userData.user.id)).map((a:any)=>a.id));
+      const schedules=(data||[]).filter((s:any)=>s.platform!=="instagram"||accountIds.has(s.platform_account_id));
       if(compactQueue)return json(schedules);
 
       const ids=schedules.map((x:any)=>x.id);
@@ -418,6 +418,7 @@ Deno.serve(async (req: Request) => {
         const snaps=bySchedule[String(row.id)]||[];
         return {
           ...row,
+          videos:row.instagram_scale_caption!=null&&row.videos?{...row.videos,caption:row.instagram_scale_caption}:row.videos,
           pretrial:pretrialBySchedule[String(row.id)]||null,
           calendar_metrics:{
             latest:snaps[0]||null,
@@ -1560,11 +1561,16 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === "GET" && resource === "platform-accounts") {
-      const {data,error}=await admin.from("platform_accounts")
-        .select("id,platform,external_account_id,account_label,enabled,config,created_at,updated_at")
-        .order("created_at",{ascending:true});
-      if(error)throw error;
-      return json((data||[]).map((x:any)=>({
+      const [instagram,{data:others,error},{data:links,error:linkError},{data:pilot,error:pilotError}]=await Promise.all([
+        instagramScaleAccounts(admin,userData.user.id),
+        admin.from("platform_accounts").select("id,platform,external_account_id,account_label,enabled,config,created_at,updated_at").neq("platform","instagram"),
+        admin.from("instagram_scale_links").select("mother_id,child_id,position,sync_enabled"),
+        admin.from("app_settings").select("value").eq("key","instagram_scale_pilot").maybeSingle()
+      ]);
+      if(error||linkError||pilotError)throw error||linkError||pilotError;
+      const childLinks=new Map((links||[]).map((link:any)=>[link.child_id,link]));
+      const accounts=[...instagram,...others||[]].sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at)));
+      return json(accounts.map((x:any)=>({
         id:x.id,
         platform:x.platform,
         external_account_id:x.external_account_id,
@@ -1574,6 +1580,8 @@ Deno.serve(async (req: Request) => {
           status:x.config?.status||null,
           api_mode:x.config?.api_mode||null,
           account_type:x.config?.account_type||null,
+          scale_role:pilot?.value?.mother_id===x.id?"mother":childLinks.has(x.id)?"child":null,
+          scale_link:childLinks.get(x.id)||null,
           calendar_policy:x.config?.calendar_policy?.enabled===true&&x.config?.calendar_policy?.locked===true?{
             enabled:true,locked:true,
             timezone:x.config.calendar_policy.timezone||"America/Sao_Paulo",
@@ -2049,7 +2057,7 @@ Deno.serve(async (req: Request) => {
       if(!scheduledAt||Number.isNaN(Date.parse(scheduledAt)))return json({error:"scheduled_at_invalid"},400);
 
       const [platformAccountId,{data:job,error:jobError}]=await Promise.all([
-        resolveCalendarInstagramAccount(admin,body.platform_account_id),
+        resolveCalendarInstagramAccount(admin,body.platform_account_id,userData.user.id),
         admin.from("production_jobs").select("id,user_id,status,result_video_id,meta")
           .eq("id",id).eq("user_id",userData.user.id).maybeSingle()
       ]);
@@ -2059,7 +2067,7 @@ Deno.serve(async (req: Request) => {
 
       const {data:existing,error:existingError}=await admin.from("schedules")
         .select("id,scheduled_at,status").eq("video_id",job.result_video_id)
-        .neq("status","cancelled").maybeSingle();
+        .neq("status","cancelled").limit(1).maybeSingle();
       if(existingError)throw existingError;
       if(existing)return json({error:"production_already_scheduled",schedule:existing},409);
 
@@ -3948,7 +3956,7 @@ Deno.serve(async (req: Request) => {
 
       let platformAccountId:string|null=null;
       if(platform==="instagram"){
-        platformAccountId=await resolveCalendarInstagramAccount(admin,body.platform_account_id);
+        platformAccountId=await resolveCalendarInstagramAccount(admin,body.platform_account_id,userData.user.id);
       }
 
       const {data:video,error:videoError}=await admin.from("videos").insert({
@@ -3994,7 +4002,7 @@ Deno.serve(async (req: Request) => {
       const platform=platformRaw==="x"?"x":"instagram";
       let platformAccountId:string|null=null;
       if(platform==="instagram"){
-        platformAccountId=await resolveCalendarInstagramAccount(admin,form.get("platform_account_id"));
+        platformAccountId=await resolveCalendarInstagramAccount(admin,form.get("platform_account_id"),userData.user.id);
       }
 
       if (!(file instanceof File)) return json({ error: "file_required" }, 400);
@@ -4366,10 +4374,18 @@ Deno.serve(async (req: Request) => {
 
       const { data: sched, error: readError } = await admin
         .from("schedules")
-        .select("video_id,videos(storage_path,original_storage_path,storage_provider)")
+        .select("video_id,platform,platform_account_id,videos(storage_path,original_storage_path,storage_provider)")
         .eq("id", id)
         .single();
       if (readError) throw readError;
+      if(sched.platform==="instagram"){
+        const allowed=(await instagramScaleAccounts(admin,userData.user.id)).some((a:any)=>a.id===sched.platform_account_id);
+        if(!allowed)return json({error:"schedule_not_found"},404);
+        const {data:cancelled,error}=await admin.rpc("instagram_scale_cancel",{p_schedule_id:id,p_actor:userData.user.id});
+        if(error?.message==="instagram_publication_started")return json({error:"instagram_publication_started",user_message:"A publicação já começou ou está aguardando confirmação da Meta."},409);
+        if(error)throw error;
+        if(cancelled)return json({ok:true});
+      }
 
       const {count:trialReferences,error:trialReferenceError}=await admin.from("schedules").select("id",{count:"exact",head:true}).eq("trial_video_id",sched.video_id);
       if(trialReferenceError)throw trialReferenceError;
