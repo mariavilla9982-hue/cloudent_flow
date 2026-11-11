@@ -10,13 +10,13 @@ Object.defineProperty(container,'innerHTML',{set(value){this.html=value;section=
 for(const kind of ['video','frame']){const box=node(),parts=new Map(['.production-upload-preview','input','[data-clear]','.production-upload-meta'].map(s=>[s,node()]));box.querySelector=s=>parts.get(s);nodes.set('[data-gen-drop="'+kind+'"]',box);}
 const mediaBoxes={};
 for(const kind of ['original','frame']){const placeholder=node();placeholder.replaceWith=media=>mediaBoxes[kind].media=media;mediaBoxes[kind]={querySelector:()=>placeholder};}
-const target={dataset:{jobMedia:'existing'},isConnected:true,querySelector:s=>s==='.genjutsu-preview-placeholder'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
+const target={dataset:{jobMedia:'existing'},isConnected:true,querySelector:s=>s==='.genjutsu-preview-placeholder, img'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
 nodes.get('[data-gen-jobs]').querySelectorAll=()=>[target];
 let recoveryJob=null,failedJobs=[],resolveBulk=null;
 let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],modal=null,resolveResult=null,deferResult=false,previewFailure=false;
 const modalHost=node();Object.defineProperty(modalHost,'innerHTML',{set(value){if(modal){modal.isConnected=false;modal.mediaController?.abort();}this.html=value;if(!value){modal=null;return;}modal=node();modal.isConnected=true;modal.canvas=node();modal.close=node();modal.close.focus=()=>{};modal.querySelector=s=>s==='[data-gen-close]'?modal.close:modal.canvas;modal.querySelectorAll=()=>[modal.close];},get(){return this.html;}});modalHost.querySelector=()=>modal;
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
-const document={hidden:false,querySelector:s=>s.includes('modalHost')?modal:section,getElementById:id=>id==='production'?container:id==='modalHost'?modalHost:node(),createElement(tag){const el=node();el.addEventListener=()=>{};el.play=async()=>{};el.replaceChildren=child=>el.child=child;el.appendChild=child=>el.child=child;if(tag==='video'){el.duration=10;Object.defineProperty(el,'src',{get(){return el.savedSrc;},set(value){el.savedSrc=value;queueMicrotask(()=>el.onloadedmetadata?.());}});}return el;}};
+const document={hidden:false,querySelector:s=>s.includes('modalHost')?modal:section,getElementById:id=>id==='production'?container:id==='modalHost'?modalHost:node(),createElement(tag){const el=node();el.addEventListener=(type,handler)=>{el['on'+type]=handler;};el.play=async()=>{};el.replaceChildren=child=>el.child=child;el.appendChild=child=>el.child=child;if(tag==='video'){el.duration=10;Object.defineProperty(el,'src',{get(){return el.savedSrc;},set(value){el.savedSrc=value;queueMicrotask(()=>el.onloadedmetadata?.());}});}return el;}};
 const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.supabase.co'},CloudentMotionControl:{mode:'genjutsu'}},document,currentPage:'production',cloudSession:{user:{id:'owner'},access_token:'session'},SUPABASE_KEY:'publishable',crypto,File,Blob,AbortSignal,AbortController,URL:{createObjectURL:()=> 'blob:source',revokeObjectURL(){}},Date,Number,String,Error,Promise,setTimeout:(fn,ms)=>{const id=setTimeout(fn,ms);if(ms>=60000)id.unref();return id;},clearTimeout,setInterval:(fn,ms)=>{if(ms===10000)timer=fn;},queueMicrotask,
   extractFirstFrameBlob:async()=>{frameReads++;return new Blob(['frame'],{type:'image/jpeg'});},
   uploadFaceSwapPart:async(part,file)=>{uploadedFiles.push(file);uploads.push(part.path);if(part.path==='reference'&&failUpload){failUpload=false;throw Error('upload interrupted');}},
@@ -55,6 +55,12 @@ assert.equal(mediaBoxes.frame.media.style.cssText,'display:block;width:100%;heig
 const oldMedia=mediaBoxes.frame.media;await c.window.CloudentGenjutsu.refresh();
 assert.equal(mediaBoxes.frame.media,oldMedia,'polling preserves the media player');
 assert.equal(calls.filter(x=>x.path.includes('resource=image-pipeline-preview')).length,1,'signed previews are reused');
+oldMedia.onerror();
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(oldMedia.hidden,true,'hide a broken frame before loading a replacement');
+assert.equal(mediaBoxes.frame.media.src,'https://b2.test/signed','retry with a verified saved frame');
+assert.equal(calls.filter(x=>x.path.includes('resource=image-pipeline-preview')&&x.path.includes('verified=1')).length,1,'one verified fallback');
+
 
 
 const input=nodes.get('input[type=file]');input.type='file';input.files=[video];section.onchange({target:input});

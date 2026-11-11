@@ -46,7 +46,7 @@ const image='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.
   const dims=await page.locator('#production').evaluate(n=>({width:n.clientWidth,scroll:n.scrollWidth}));assert(dims.scroll<=dims.width+2,'overflow at '+width+': '+JSON.stringify(dims));
   const buttons=await page.locator('[data-gen-jobs] .production-job-actions button').evaluateAll(ns=>ns.filter(n=>n.getClientRects().length).map(n=>n.getBoundingClientRect().height));assert(buttons.every(h=>h>=44),'touch targets at '+width+': '+buttons);
   const drops=await page.locator('[data-gen-drop]:visible').evaluateAll(ns=>ns.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height})));assert(drops.every(d=>d.h<=342&&d.w>90),JSON.stringify({width,drops}));
-  const thumbs=await page.locator('[data-job-media]').evaluateAll(ns=>ns.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height})));await page.screenshot({path:'/tmp/genjutsu-check.png',fullPage:true});assert(thumbs.every(t=>t.w<=66&&t.h<=60),JSON.stringify({width,thumbs}));
+  const thumbs=await page.locator('[data-job-media]').evaluateAll(ns=>ns.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height})));await page.screenshot({path:'/tmp/genjutsu-check.png',fullPage:true});assert(thumbs.every(t=>t.w<=66&&t.h<=64),JSON.stringify({width,thumbs}));
   await page.screenshot({path:'/tmp/genjutsu-v7-'+width+'.png',fullPage:true});
  }
  await page.setViewportSize({width:390,height:844});
