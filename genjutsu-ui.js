@@ -134,6 +134,9 @@
       const value=d?.progress,validProgress=live&&value&&Number.isFinite(value.value)&&Number.isFinite(value.max)&&value.max>0;
       const progress=validProgress?Math.round(value.value/value.max*100):null;
       const bar=live?'<div class="production-progress genjutsu-track '+(activity&&!validProgress?'indeterminate animated':'')+' '+(!activity?'is-waiting':'')+'" role="progressbar" aria-label="'+e(label)+'"'+(validProgress?' aria-valuemin="0" aria-valuemax="'+value.max+'" aria-valuenow="'+value.value+'"':'')+' aria-valuetext="'+e(label)+'"><i'+(validProgress?' style="width:'+progress+'%"':'')+'></i></div>':'';
+      const execution=Boolean(d?.executionConfirmed??child?.execution_confirmed);
+      const steps=activity&&execution&&child?.status==='running'
+        ?'<small class="studio-active-steps">Prompt ✓ <span aria-hidden="true">→</span> <b>Gerando vídeo</b> <span aria-hidden="true">→</span> Resultado</small>':'';
       const detail=validProgress?'<small class="genjutsu-node-progress">Etapa atual · node '+e(value.node)+' · '+value.value+'/'+value.max+'</small>':'';
       const id=e(job.id),n=jobs.length-i,model=job.meta?.character_name||(job.meta?.input_mode==='manual_frame'?'Frame enviado':'Modelo');
       const media=job.media,hasFrame=media?.frame!==false,hasOriginal=media?.original!==false;
@@ -143,19 +146,20 @@
         (failed&&media?.reuseOriginal?'<button type="button" class="btn" hidden data-verified-original data-use-video="'+id+'">Usar vídeo</button>':'')+
         (failed&&media?.reuseFrame?'<button type="button" class="btn" hidden data-verified-frame data-use-frame="'+id+'">Usar frame</button>':'')+
         '<button type="button" class="btn" data-prompt="'+id+'">Visualizar prompt</button>'+
-        (child?.status==='ready'?'<button type="button" class="btn" data-calendar="'+id+'">Adicionar ao calendário</button><button type="button" class="btn" data-trial="'+id+'">Reels Teste</button><button type="button" class="btn" data-bulk="'+id+'">Mandar para lote</button>':'')+
+        (child?.status==='ready'?'<button type="button" class="btn" data-trial="'+id+'">Reels Teste</button><button type="button" class="btn" data-bulk="'+id+'">Mandar para lote</button>':'')+
         (canStop?'<button type="button" class="btn danger" data-stop="'+id+'">Parar</button>':'')+
-        (retry?'<button type="button" class="btn" data-retry="'+id+'"'+(retrying?' disabled aria-busy="true"':'')+'>'+(retrying?'Retomando…':'Tentar novamente')+'</button>':'')+
         (finished||failed?'<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button>':'');
-      return '<article class="production-job genjutsu-card '+(finished?'is-complete':'')+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
+      return '<article class="production-job genjutsu-card '+(finished?'is-complete':'')+'" data-studio-state="'+(activity?'active':state==='cancelled'?'failed':state)+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
         '<div class="production-job-num">'+String(n).padStart(2,'0')+'</div>'+
         '<button type="button" class="production-media-cell" '+(hasResult?'data-preview':'data-original')+'="'+id+'" aria-label="'+(hasResult?'Ver resultado':'Ver vídeo original')+' · Vídeo '+n+'" title="'+e(job.meta?.source_file_name||job.original_file_name)+'">'+
         '<span class="production-media-preview-shell" data-job-media="'+id+'" style="width:42px;height:58px;overflow:hidden"><span class="genjutsu-preview-placeholder">▶</span></span><div><b>Vídeo '+n+'</b><small>'+e(model)+'</small></div></button>'+
         '<div class="production-job-state">'+(job.meta?.character_name?'<span class="studio-identity studio-model-tag" data-character="'+e(window.CloudentStudio?.modelOf?.(job)||job.meta?.character_id||job.meta?.character?.id||'')+'">'+e(job.meta.character_name)+'</span>':'')+bar+
-        '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+detail+retryMarkup(job)+
+        '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+steps+detail+retryMarkup(job)+
         (!finished?'<div class="genjutsu-times">'+elapsedMarkup(job,failed||cancelled)+'</div>':'')+
         (error?'<em role="alert" title="'+e(error)+'">'+e(error)+'</em>':'')+'</div>'+
         '<div class="production-job-actions">'+(hasResult?'<button type="button" class="btn studio-select-result" data-preview="'+id+'">Ver resultado</button>':'')+
+                (child?.status==='ready'?'<button type="button" class="btn" data-calendar="'+id+'">Calendário</button>':'')+
+        (retry?'<button type="button" class="btn" data-retry="'+id+'"'+(retrying?' disabled aria-busy="true"':'')+'>'+(retrying?'Retomando…':'Tentar novamente')+'</button>':'')+
         '<details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></article>';
     }).join('')||'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
     if(markup===jobsMarkup&&node.innerHTML)return;
@@ -245,6 +249,29 @@
       },{once:true});
       media.src=result.url;canvas.removeAttribute('role');canvas.replaceChildren(media);if(kind!=='frame')media.play()?.catch(()=>{});
     }catch(error){if(uid===cloudSession?.user?.id&&rev===revision&&seq===mediaRevision&&modal.isConnected)canvas.textContent=error.message||'Não foi possível abrir a prévia.';}
+  }
+  async function showStudioResult(id){
+    const dock=root()?.querySelector('.studio-gen-result');
+    if(!dock||!window.matchMedia?.('(min-width: 1100px)').matches)return showMedia(id,'result');
+    const job=jobs.find(item=>item.id===id);
+    if(!job?.production?.result_video_id)return;
+    const seq=++mediaRevision,uid=owner,rev=revision;
+    const current=()=>dock.isConnected&&seq===mediaRevision&&uid===cloudSession?.user?.id&&rev===revision&&active();
+    dock.hidden=false;
+    dock.innerHTML='<div class="studio-result-head"><h3>Vídeo '+(jobs.length-jobs.indexOf(job))+'</h3></div>'+
+      '<div class="studio-result-canvas" data-gen-dock-media role="status">Carregando prévia…</div>'+
+      '<div class="studio-result-actions"><button class="btn" data-download="'+e(id)+'">Baixar</button>'+
+      (job.production.status==='ready'?'<button class="btn primary" data-calendar="'+e(id)+'">Adicionar ao calendário</button>':'')+'</div>';
+    const canvas=dock.querySelector('[data-gen-dock-media]');
+    try{
+      const result=await previewURL(id,'result');
+      if(!current())return;
+      const video=document.createElement('video');
+      video.controls=true;video.playsInline=true;video.preload='metadata';
+      video.setAttribute('aria-label','Vídeo final');
+      video.addEventListener('error',()=>{if(current())canvas.textContent='Prévia indisponível. Tente abrir o resultado novamente.';},{once:true});
+      canvas.removeAttribute('role');canvas.replaceChildren(video);video.src=result.url;
+    }catch(error){if(current())canvas.textContent=error.message||'Não foi possível abrir a prévia.';}
   }
   async function refresh(afterMutation=false){
     reset();if(!owner||!active())return;
@@ -364,11 +391,13 @@
         if(!result.reusable)throw new Error('Este arquivo está disponível para download.');
         setDraftMedia(video?'video':'frame',{name:result.name,type:result.mime,size:result.size},result.url,{id,asset:result.asset});
         if(video&&Number.isFinite(result.duration)&&result.duration>0)draft.duration=result.duration;
+        const form=root()?.querySelector('.studio-v2-upload');if(form)form.open=true;
         root()?.querySelector('.genjutsu-upload-workspace')?.scrollIntoView?.({block:'nearest'});
         message(video?'Vídeo original preenchido no formulário.':'Frame preenchido no formulário.');
         return;
       }
-      if(button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt){await showMedia(id,button.dataset.prompt?'prompt':button.dataset.original?'original':button.dataset.frame?'frame':'result');return;}
+      if(button.dataset.preview){await showStudioResult(id);return;}
+      if(button.dataset.original||button.dataset.frame||button.dataset.prompt){await showMedia(id,button.dataset.prompt?'prompt':button.dataset.original?'original':'frame');return;}
       if(button.dataset.stop){
         if(!confirm('Parar esta produção do GENJUTSU? A geração em andamento pode ser perdida. Seus arquivos não serão excluídos.'))return;
         const result=await request('image-pipeline-stop',{id},'PATCH');
@@ -409,7 +438,7 @@
     const tabs=[['standard','Vídeo 7 minutos'],['motion_control','Motion Control v7'],['genjutsu','GENJUTSU']].map(([key,name])=>'<button class="production-workflow-tab '+(key==='genjutsu'?'active':'')+'" type="button" role="tab" aria-selected="'+(key==='genjutsu')+'" onclick="CloudentMotionControl.setMode(\''+key+'\')">'+name+'</button>').join('');
     const inputs=[['video','Vídeo de referência','video/mp4,video/webm,video/quicktime','▶'],['frame','Frame / personagem','image/jpeg,image/png,image/webp','▧']].map(([kind,label,accept,icon])=>'<div class="production-drop production-drop-live" data-gen-drop="'+kind+'" tabindex="0" role="button" aria-label="Escolher '+label+'"><input id="genjutsu-'+kind+'" type="file" data-gen-file="'+kind+'" accept="'+accept+'" hidden><div class="production-upload-preview"><span class="production-drop-icon">'+icon+'</span></div><button type="button" class="production-draft-clear" data-clear="'+kind+'" aria-label="Remover '+label+'">×</button><label class="production-upload-overlay" for="genjutsu-'+kind+'"><b class="production-upload-title">'+label+'</b><small class="production-upload-meta">Clique para escolher o arquivo</small></label></div>').join('');
     container.innerHTML='<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU</h2><p>Prepare seus arquivos, acompanhe a fila e confira o resultado.</p></div></div><div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+tabs+'</div>'+
-      '<section data-genjutsu-root data-owner="'+e(owner)+'"><div class="genjutsu-upload-workspace"><div class="production-main-grid production-only-upload"><div class="card production-upload-card"><div class="ui3-panel-head"><div><span>Novo job</span><h3>Preparar geração</h3></div></div><div class="production-input-grid">'+inputs+'</div><label class="genjutsu-manual-prompt"><b>Prompt manual (opcional)</b><textarea data-manual-prompt rows="4" maxlength="64000" placeholder="Deixe em branco para gerar o prompt automaticamente."></textarea></label><button type="button" class="btn primary production-add-btn" data-send-manual disabled>Adicionar à fila</button><div class="production-note">O processamento continua no servidor. Acompanhe as etapas na fila abaixo.</div><p data-draft-error role="alert"></p></div></div></div>'+
+      '<section data-genjutsu-root data-owner="'+e(owner)+'"><div class="genjutsu-upload-workspace"><div class="production-main-grid production-only-upload"><div class="card production-upload-card"><div class="ui3-panel-head"><div><span>Novo job</span><h3>Preparar geração</h3></div></div><div class="production-input-grid">'+inputs+'</div><details class="studio-prompt"><summary>Prompt manual (opcional)</summary><label class="genjutsu-manual-prompt"><textarea aria-label="Prompt manual" data-manual-prompt rows="4" maxlength="64000" placeholder="Deixe em branco para gerar o prompt automaticamente."></textarea></label></details><button type="button" class="btn primary production-add-btn" data-send-manual disabled>Adicionar à fila</button><div class="production-note">O processamento continua no servidor. Acompanhe as etapas na fila abaixo.</div><p data-draft-error role="alert"></p></div></div></div>'+
       '<details class="studio-diagnostics"><summary>Controles da fila e informações de uso</summary><div><p class="muted" data-gen-config role="status">Conferindo configuração…</p><p class="muted">Vídeo até 30 MiB · frame JPG, PNG ou WebP até 10 MiB.</p><label class="genjutsu-limit">Prompts em preparação <select data-gen-prompt-limit aria-label="Limite de prompts simultâneos"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label><button type="button" class="btn" data-refresh>↻ Atualizar</button><details class="genjutsu-auto"><summary>Preparar com uma modelo salva</summary><label>Vídeos de referência<input data-auto-videos type="file" accept="video/mp4,video/webm,video/quicktime" multiple></label><div data-gen-entries></div><button type="button" class="btn primary" data-send disabled>Adicionar à fila</button></details></div></details>'+
       '<p data-gen-status role="status" aria-live="polite"></p><p data-gen-error role="alert"></p><div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3 data-gen-count>0 vídeo(s)</h3></div><button type="button" class="btn" data-retry-all hidden>Tentar todos novamente</button></div><div class="production-queue" data-gen-jobs></div></div></section>';
     const section=root();

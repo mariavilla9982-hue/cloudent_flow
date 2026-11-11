@@ -3,7 +3,7 @@ let genjutsu=true,motion=false;
 const title={textContent:'GENJUTSU'},subtitle={textContent:'Prepare a modelo e gere o vídeo automaticamente.'};
 const labels=['Vídeo 7 minutos','Motion Control v7','GENJUTSU'];
 const tabs=labels.map((textContent,i)=>({textContent,classList:{contains:()=>i===2},setAttribute(k,v){this[k]=v;}}));
-const root={dataset:{},classList:{contains:()=>motion,add(){}},querySelector(s){return s==='[data-genjutsu-root]'?(genjutsu?{}:null):s==='.production-head'?{querySelector:s=>s==='h2'?title:subtitle}:null;},querySelectorAll(s){return s==='.production-workflow-tab'?tabs:[];}};
+const root={dataset:{},classList:{contains:()=>motion,add(){}},querySelector(s){return s==='[data-genjutsu-root]'?(genjutsu?{querySelector:()=>null}:null):s==='.production-head'?{querySelector:s=>s==='h2'?title:subtitle}:null;},querySelectorAll(s){return s==='.production-workflow-tab'?tabs:[];}};
 const c=vm.createContext({window:{},document:{getElementById:()=>root,addEventListener(){}},cloudSession:{user:{id:'owner'}},currentPage:'production',productionData:{jobs:[]},MutationObserver:class{observe(){} disconnect(){}},requestAnimationFrame(){},setInterval(){},console});
 vm.runInContext(fs.readFileSync('production-studio.js','utf8'),c);
 for(let i=0;i<4;i++)c.window.CloudentStudio.enhanceProduction();

@@ -4,6 +4,8 @@
   const user=()=>typeof cloudSession==='undefined'?'':cloudSession?.user?.id||'';
   let owner=user(),selected='',mode='',revision=0,mediaURL='',dockNode=null;
   let modelFilter='all';
+  const queueViews=new Map(),openForms=new Set();
+  const queueTabs=[['all','Todos'],['waiting','Na fila'],['ready','Prontos'],['failed','Falhas']];
   const models=[{id:'jujuh',name:'Jujuh'},{id:'sahry_japah',name:'Sahry Japah'},{id:'sahry_gravida',name:'Sahry Grávida'}];
   const normalizeModel=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
   function modelOf(job){
@@ -51,7 +53,7 @@
     const root=document.getElementById('production'),dock=root?.querySelector('.studio-production-result');
     if(!dock)return;
     const job=currentJobs().find(j=>j.id===id&&j.status==='ready');
-    selected=job?.id||'';revision++;releaseMedia();dock.innerHTML=resultMarkup(job);
+    selected=job?.id||'';revision++;releaseMedia();dock.hidden=!job;dock.innerHTML=resultMarkup(job);
     root.querySelectorAll('[data-studio-select]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.studioSelect===selected)));
   }
   async function playProduction(button){
@@ -68,14 +70,90 @@
     }catch(err){if(uid===user()&&button.isConnected)toast(err.message,'err');}
     finally{busyButtons.delete(button);busy(button,false);}
   }
+  function queueState(row){
+    if(row.dataset.studioState)return row.dataset.studioState;
+    const badge=row.querySelector('.production-status');
+    if(badge?.classList.contains('failed')||badge?.classList.contains('cancelled'))return 'failed';
+    if(badge?.classList.contains('ready'))return 'ready';
+    if(badge?.classList.contains('running')||badge?.classList.contains('uploading'))return 'active';
+    return 'waiting';
+  }
+  function applyQueueView(root,view){
+    const filter=queueViews.get(view)||'all';
+    const queue=root.querySelector('.production-queue');
+    if(!queue)return;
+    let visible=0;
+    for(const row of queue.querySelectorAll('.production-job')){
+      const state=queueState(row);
+      row.dataset.studioState=state;
+      const matches=filter==='all'||state===filter;
+      row.classList.toggle('studio-filtered-out',!matches);
+      if(matches&&!row.hidden)visible++;
+    }
+    root.querySelectorAll('[data-studio-queue-filter]').forEach(button=>
+      button.setAttribute('aria-pressed',String(button.dataset.studioQueueFilter===filter)));
+    const empty=root.querySelector('.studio-queue-no-match');
+    if(empty)empty.hidden=visible>0||filter==='all';
+  }
+  function layoutStudio(root,view){
+    const gen=root.querySelector('[data-genjutsu-root]');
+    const region=gen||root;
+    const queueCard=region.querySelector('.production-queue-card');
+    const upload=region.querySelector(gen?'.genjutsu-upload-workspace':'.production-main-grid');
+    if(!queueCard||!upload)return;
+    if(!region.querySelector('.studio-v2-upload')){
+      const form=document.createElement('details');
+      form.className='studio-v2-upload';
+      form.open=openForms.has(view)||(!gen&&typeof productionDraft!=='undefined'&&!!(productionDraft?.video||productionDraft?.frame));
+      form.innerHTML='<summary>＋ Nova geração</summary>';
+      upload.before(form);form.append(upload);
+      form.addEventListener('toggle',()=>{if(!form.isConnected)return;if(form.open)openForms.add(view);else openForms.delete(view);});
+      // Place the form before the queue, keeping its inputs and event handlers intact.
+      const workspace=region.querySelector('.studio-workspace')||document.createElement('div');
+      workspace.classList.add('studio-workspace','studio-v2-workspace');
+      if(!workspace.isConnected)queueCard.before(workspace);
+      if(workspace.contains(form))workspace.before(form);
+      workspace.prepend(queueCard);
+      const toolbar=document.createElement('div');
+      toolbar.className='studio-queue-filters';
+      toolbar.setAttribute('role','group');
+      toolbar.setAttribute('aria-label','Filtrar fila por status');
+      toolbar.innerHTML=queueTabs.map(([key,label])=>
+        '<button type="button" class="btn" data-studio-queue-filter="'+key+'">'+label+'</button>').join('');
+      const queue=queueCard.querySelector('.production-queue');
+      queue?.before(toolbar);
+      const empty=document.createElement('p');empty.className='studio-queue-no-match';
+      empty.hidden=true;empty.textContent='Nenhum vídeo neste filtro.';queue?.after(empty);
+      const title=queueCard.querySelector('.ui3-panel-head h3');
+      if(title){
+        const heading=document.createElement('b');heading.className='studio-queue-title';
+        heading.textContent='Fila de produção';title.before(heading);
+      }
+      if(gen){
+        const result=document.createElement('aside');
+        result.className='card studio-production-result studio-gen-result';
+        result.setAttribute('aria-label','Resultado selecionado');
+        result.hidden=true;workspace.append(result);
+      }
+    }
+    const title=root.querySelector('.production-head h2');
+    if(title&&title.textContent!=='Produção IA')title.textContent='Produção IA';
+    applyQueueView(root,view);
+  }
   function enhanceProduction(){
-    const root=document.getElementById('production');if(!root||typeof currentPage==='undefined'||currentPage!=='production')return;
-    if(owner!==user()){owner=user();modelFilter='all';selected='';dockNode=null;revision++;releaseMedia();}
+    const root=document.getElementById('production');
+    if(!root||typeof currentPage==='undefined')return;
+    if(currentPage!=='production'){
+      root.querySelectorAll('.studio-production-result video').forEach(video=>video.pause());
+      return;
+    }
+    if(owner!==user()){owner=user();modelFilter='all';queueViews.clear();openForms.clear();selected='';dockNode=null;revision++;releaseMedia();}
     // GENJUTSU owns its data/actions and uses the same studio markup and styles.
     // Do not decorate its rows using the standard/Motion job collection.
     if(root.querySelector('[data-genjutsu-root]')){
       root.querySelectorAll('.production-workflow-tab').forEach(b=>{b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});
       if(mode!=='genjutsu'){mode='genjutsu';selected='';dockNode=null;revision++;releaseMedia();}
+      layoutStudio(root,'genjutsu');
       return;
     }
     const nextMode=root.classList.contains('motion-control-mode')?'motion':'standard';
@@ -135,13 +213,16 @@
       if(frame&&actions){frame.className='btn studio-frame-action';frame.textContent='Ver frame';actions.append(frame);}
       if(job?.meta?.character_name&&!row.querySelector('.studio-identity')){const tag=document.createElement('span');tag.className='studio-identity studio-model-tag';tag.dataset.character=modelOf(job);tag.textContent=job.meta.character_name;row.querySelector('.production-job-state')?.prepend(tag);}
       if(job?.status==='ready'&&!row.querySelector('[data-studio-select]')){
-        const b=document.createElement('button');b.type='button';b.className='btn studio-select-result';b.dataset.studioSelect=id;b.textContent='Ver no painel';b.setAttribute('aria-pressed',String(selected===id));row.querySelector('.production-job-actions')?.prepend(b);
+        const b=document.createElement('button');b.type='button';b.className='btn studio-select-result';b.dataset.studioSelect=id;b.textContent='Ver resultado';b.setAttribute('aria-pressed',String(selected===id));row.querySelector('.production-job-actions')?.prepend(b);
       }
       if(actions&&!actions.querySelector('.studio-more-actions')){
-        const advanced=[...actions.querySelectorAll('button,label')].filter(el=>el.matches('label')||/teste|lote|excluir/i.test(el.textContent));
-        if(advanced.length){const more=document.createElement('details');more.className='studio-more-actions';more.innerHTML='<summary>Mais ações</summary><div></div>';advanced.forEach(el=>more.lastChild.append(el));actions.append(more);}
+        const advanced=[...actions.querySelectorAll('button,label')].filter(el=>el.matches('label')||/teste|lote|excluir|baixar|cancelar|ver frame/i.test(el.textContent));
+        if(advanced.length){const more=document.createElement('details');more.className='studio-more-actions';more.innerHTML='<summary aria-label="Mais ações">⋯</summary><div></div>';advanced.forEach(el=>more.lastChild.append(el));actions.append(more);}
       }
+      const retry=actions?.querySelector('[data-op=retry]');
+      if(retry&&retry.textContent.trim()==='↻ Retry')retry.textContent='Tentar novamente';
     });
+    layoutStudio(root,mode);
   }
   // Wrap only explicit async entry points; no document-wide delayed disabling.
   function installFeedback(){
@@ -159,15 +240,23 @@
   }
   document.addEventListener('click',evt=>{
     const button=evt.target.closest('button');if(!button)return;
-    if(button.dataset.studioSelect)showProduction(button.dataset.studioSelect);
+    if(button.dataset.studioSelect){
+      showProduction(button.dataset.studioSelect);
+      const player=document.querySelector('#production [data-studio-play]');
+      if(player)playProduction(player);
+    }
     if(button.dataset.studioPlay)playProduction(button);
     if(button.dataset.studioModel)setModelFilter(button.dataset.studioModel);
+    if(button.dataset.studioQueueFilter){
+      queueViews.set(mode,button.dataset.studioQueueFilter);
+      applyQueueView(document.getElementById('production'),mode);
+    }
   });
   let scheduled=false;
   const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;observer.disconnect();enhanceProduction();observe();});});
-  function observe(){const root=document.getElementById('production');if(root)observer.observe(root,{childList:true,subtree:true});}
+  function observe(){const root=document.getElementById('production');if(root)observer.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});}
   observe();installFeedback();enhanceProduction();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)enhanceProduction();});
-  setInterval(()=>{if(owner!==user()){owner=user();modelFilter='all';selected='';dockNode=null;revision++;releaseMedia();document.querySelector('.studio-production-result')?.replaceChildren();}},2000);
+  setInterval(()=>{if(owner!==user()){owner=user();modelFilter='all';queueViews.clear();openForms.clear();selected='';dockNode=null;revision++;releaseMedia();document.querySelector('.studio-production-result')?.replaceChildren();}},2000);
   window.CloudentStudio={comparison,busy,enhanceProduction,filterRows,currentJobs,setModelFilter,modelOf};
 })();
