@@ -35,3 +35,24 @@ Dashboard v4/SWv67 mostra intervalo exato, origem Meta, cache de5min e data mais
 antiga das contas no agregado. Dado de intervalo anterior é descartado ao virar
 o dia, inclusive durante falha de rede; nunca reapresentado como Hoje. Não muda
 valores Meta, seguidores, layout aprovado ou frequência de coleta.
+
+## 10/11/2026 — contas dinâmicas e administração
+
+A dashboard passa a usar todas as contas Instagram habilitadas retornadas pela API
+administrativa, sem lista fixa de IDs no frontend ou no resumo do backend. Os nomes
+Jujuh/Sahry são apenas apelidos visuais. Seguidores já eram coletados pelo worker
+para todas as contas habilitadas. Falhas preservam snapshots, totais parciais são
+identificados com cobertura, e contas desconectadas deixam de compor o total.
+Há no máximo três contas sendo consultadas em paralelo; permanecem cache de 5 min
+no backend, cache de 60 s no cliente e quatro registros pequenos por conta.
+Não há novos crons, tabelas, leitura/upload de mídia ou varredura de posts.
+
+Sistema → Painel de admin (celular: Mais) reúne contas Instagram e X, filtro de
+plataforma, status, reconexão Instagram, calendário e desconexão individual. Usa os
+endpoints existentes com autorização backend e IDs explícitos, sem alterar os
+agendamentos/histórico. Usuários secundários continuam restritos ao X Studio.
+Atalhos levam às permissões do X, saúde/limites e logs existentes.
+
+Validação: fixtures de integração para conta adicionada, desconectada, falha
+parcial, sessões/troca de usuário, clique repetido e cancelamento; testes de resumo
+Meta, Scale/OAuth e sintaxe da SPA. Não desconectar contas reais como teste.
