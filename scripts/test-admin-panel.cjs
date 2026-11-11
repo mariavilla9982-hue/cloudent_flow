@@ -9,6 +9,12 @@ const ctx=vm.createContext({Set,JSON,Promise,cloudSession:{user:{id:'owner'}},cl
  cloudFetch:async(url,options)=>{requests.push({url,options});if(release)await release},edgeFetch:async(url,options)=>requests.push({url,options})});
 vm.runInContext(source,ctx);
 (async()=>{
+ const rows=[{dataset:{adminAccount:'ig'}},{dataset:{adminAccount:'x'}}],tabs=['','instagram','x'].map(value=>({dataset:{adminFilter:value},setAttribute(k,v){this[k]=v}})),empty={hidden:true};
+ root.querySelectorAll=selector=>selector==='[data-admin-account]'?rows:tabs;root.querySelector=()=>empty;
+ ctx.adminApplyFilters('instagram');assert.equal(rows[0].hidden,false);assert.equal(rows[1].hidden,true);assert.equal(tabs[1]['aria-pressed'],'true');
+ vm.runInContext('adminSearch="reis"',ctx);ctx.adminApplyFilters('');assert.equal(rows[0].hidden,true);assert.equal(rows[1].hidden,false);
+ vm.runInContext('adminSearch="not found"',ctx);ctx.adminApplyFilters();assert.equal(empty.hidden,false);
+ vm.runInContext('adminSearch=""',ctx);ctx.adminApplyFilters('');
  ctx.adminPage();assert(root.innerHTML.includes('nova')&&root.innerHTML.includes('reis'));assert(root.innerHTML.includes('Painel de admin'));
  confirmValue=false;await ctx.adminDisconnectAccount('ig');assert.equal(requests.length,0);
  confirmValue=true;await ctx.adminDisconnectAccount('ig');assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].options.body).platform_account_id,'ig');assert.equal(ctx.platformAccounts[0].enabled,false);assert.equal(ctx.platformAccounts[1].enabled,true);assert(!root.innerHTML.includes('@nova'),'disconnected IG hidden');ctx.platformAccounts[0].enabled=true;ctx.adminPage();assert(root.innerHTML.includes('@nova'),'reconnected account returns');ctx.platformAccounts[0].enabled=false;
