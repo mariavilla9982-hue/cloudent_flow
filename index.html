@@ -8579,8 +8579,8 @@ function instagramScaleAccountRow(a,accounts){
     instagramScaleUpcomingMarkup(a)+'</article>';
 }
 function instagramAccountsPage(){
-  const accounts=scaleSummaryAccounts(),message=scaleSummaryMessage();
-  const ordered=accounts.filter(a=>!a.mother_id).flatMap(a=>[a,...accounts.filter(child=>child.mother_id===a.id).sort((x,y)=>x.child_position-y.child_position)]);
+  const accounts=scaleSummaryAccounts().filter(a=>a.enabled===true),message=scaleSummaryMessage();
+  const ordered=accounts.filter(a=>!a.mother_id||!accounts.some(m=>m.id===a.mother_id)).flatMap(a=>[a,...accounts.filter(child=>child.mother_id===a.id).sort((x,y)=>x.child_position-y.child_position)]);
   $("#accounts").innerHTML='<div class="ui3-page-head"><div><h2>Central de Contas</h2><p>Conexões, calendários e vínculos do Instagram.</p></div><div class="toolbar">'+
     scaleAction('connectInstagram(null,null,"accounts")',"Conectar Instagram","btn primary")+scaleAction("loadInstagramScaleSummary()","Atualizar")+'</div></div>'+
     (message?'<p role="status" class="card">'+esc(message)+'</p>':'')+
@@ -8592,7 +8592,7 @@ function instagramAccountsPage(){
 let adminPanelState={session:null,loading:false,error:""};
 let adminAccountFilter="";
 const adminDisconnecting=new Set();
-function adminAccounts(){return cloudSession&&cloudAccess?.role==="admin"?platformAccounts.filter(a=>["instagram","x"].includes(a.platform)):[]}
+function adminAccounts(){return cloudSession&&cloudAccess?.role==="admin"?platformAccounts.filter(a=>a.enabled===true&&["instagram","x"].includes(a.platform)):[]}
 async function refreshAdminPanel(){
   if(!cloudSession||cloudAccess?.role!=="admin"||adminPanelState.loading&&adminPanelState.session===cloudSession)return;
   const session=cloudSession;
@@ -8631,7 +8631,7 @@ function adminPage(){
     scaleAction('connectInstagram(null,null,"accounts")',"Conectar Instagram","btn primary")+
     '<button class="btn" onclick="refreshAdminPanel()" '+(status?.loading?'disabled':'')+'>'+(status?.loading?'Atualizando…':'Atualizar contas')+'</button></div></div>'+
     '<div class="ui3-kpis">'+scaleKpi("Instagram conectados",accounts.filter(a=>a.platform==="instagram"&&a.enabled).length)+
-    scaleKpi("X conectados",accounts.filter(a=>a.platform==="x"&&a.enabled).length)+scaleKpi("Desconectadas",accounts.filter(a=>!a.enabled).length)+'</div>'+
+    scaleKpi("X conectados",accounts.filter(a=>a.platform==="x"&&a.enabled).length)+scaleKpi("Total de contas",accounts.length)+'</div>'+
     '<div class="card"><h3>Controles do sistema</h3><div class="toolbar">'+scaleAction('showPage("accounts")',"Central de Contas")+scaleAction('showPage("overview")',"Dashboard e métricas")+
     scaleAction('adminOpenXUsers()',"Usuários e permissões do X")+scaleAction('adminOpenSettings("health")',"Saúde e limites")+scaleAction('adminOpenSettings("logs")',"Logs")+'</div></div>'+
     '<div class="toolbar"><label>Plataforma <select onchange="adminAccountFilter=this.value;adminPage()"><option value="">Todas</option><option value="instagram" '+(adminAccountFilter==='instagram'?'selected':'')+'>Instagram</option><option value="x" '+(adminAccountFilter==='x'?'selected':'')+'>X</option></select></label></div>'+
@@ -8642,8 +8642,8 @@ function adminPage(){
       return '<article class="card scale-account"><div class="scale-account-main"><div><h3>'+esc(scaleHandle(a.account_label))+'</h3><p class="muted">'+(a.platform==='x'?'X':'Instagram')+' · '+state+'</p></div><div class="toolbar">'+
         (a.platform==='instagram'?scaleAction('connectInstagram('+id+',null,"accounts")',"Reconectar")+(a.enabled?scaleAction('openInstagramAccountCalendar('+id+')',"Abrir calendário"):''):scaleAction('showPage("xStudio")',"Abrir X Studio"))+
         (a.enabled?'<button class="btn" onclick="'+esc('adminDisconnectAccount('+id+')')+'" '+(busy?'disabled':'')+'>'+(busy?'Desconectando…':'Desconectar')+'</button>':'')+'</div></div></article>';
-    }).join('')||'<p class="card muted">'+(status?.loading?'Carregando contas…':'Nenhuma conta encontrada.')+'</p>')+'</div>'+
-    '<p class="muted">Novas contas Instagram conectadas entram automaticamente na dashboard. Ao desconectar, os dados históricos continuam salvos.</p>';
+    }).join('')||'<p class="card muted">'+(status?.loading?'Carregando contas…':'Nenhuma conta conectada.')+'</p>')+'</div>'+
+    '<p class="muted">Contas desconectadas somem desta lista e voltam ao conectar novamente. O histórico continua salvo.</p>';
 }
 
 async function syncScaleMetrics(){
