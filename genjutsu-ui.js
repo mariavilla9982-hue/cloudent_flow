@@ -125,9 +125,10 @@
       const stopping=!!child?.genjutsu?.stopRequested;
       const finished=child?.status==='ready'||job.status==='ready'||cancelled;
       const old503=(child?.last_error||job.last_error)==='Gemini recusou a operação (HTTP 503).';
-      const error=old503?'Gemini temporariamente indisponível (503). Seus arquivos foram preservados.':child?.last_error||job.last_error;
+      const uncertain=job.meta?.dispatch_uncertain===true;
+      const error=uncertain?'A RunningHub não devolveu o ID da tarefa. Confira o histórico de tarefas antes de reenviar.':old503?'Gemini temporariamente indisponível (503). Seus arquivos foram preservados.':child?.last_error||job.last_error;
       const state=cancelled?'cancelled':failed?'failed':finished?'ready':child?.status==='running'?'running':'waiting';
-      const label=retrying?'Retomando…':cancelled?'Cancelado':phase(job);
+      const label=retrying?'Retomando…':cancelled?'Cancelado':uncertain?'Envio sem confirmação':phase(job);
       const canStop=!finished&&!failed&&!stopping&&job.meta?.stage==='control_motion';
       const live=!finished&&!failed,d=child?.genjutsu?.display;
       const activity=live&&(d?d.activity:['generating','processing','preparing'].includes(child?.genjutsu?.phase)||['uploading','running'].includes(child?.status));
@@ -152,7 +153,7 @@
       return '<article class="production-job genjutsu-card '+(finished?'is-complete':'')+'" data-studio-state="'+(activity?'active':state==='cancelled'?'failed':state)+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
         '<div class="production-job-num">'+String(n).padStart(2,'0')+'</div>'+
         '<button type="button" class="production-media-cell" '+(hasResult?'data-preview':'data-original')+'="'+id+'" aria-label="'+(hasResult?'Ver resultado':'Ver vídeo original')+' · Vídeo '+n+'" title="'+e(job.meta?.source_file_name||job.original_file_name)+'">'+
-        '<span class="production-media-preview-shell" data-job-media="'+id+'" style="width:42px;height:58px;overflow:hidden"><span class="genjutsu-preview-placeholder">▶</span></span><div><b>Vídeo '+n+'</b><small>'+e(model)+'</small></div></button>'+
+        '<span class="production-media-preview-shell" '+(hasFrame?'data-job-media="'+id+'"':'data-thumb-unavailable')+'><span class="genjutsu-preview-placeholder">'+(hasFrame?'▶':'Sem prévia')+'</span></span><div><b>Vídeo '+n+'</b><small>'+e(model)+'</small></div></button>'+
         '<div class="production-job-state">'+(job.meta?.character_name?'<span class="studio-identity studio-model-tag" data-character="'+e(window.CloudentStudio?.modelOf?.(job)||job.meta?.character_id||job.meta?.character?.id||'')+'">'+e(job.meta.character_name)+'</span>':'')+bar+
         '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+steps+detail+retryMarkup(job)+
         (!finished?'<div class="genjutsu-times">'+elapsedMarkup(job,failed||cancelled)+'</div>':'')+
@@ -200,7 +201,7 @@
     const key=id+':'+kind+':'+(kind==='result'?job?.production?.result_video_id:stamp);let cached=previewCache.get(key);
     if(!cached||cached.expires<Date.now()){
       const path=kind==='result'?'?resource=image-pipeline-result&workflow=genjutsu&id='+encodeURIComponent(job?.production?.id||id)
-        :'?resource=image-pipeline-preview&id='+encodeURIComponent(id)+(kind==='original'?'&kind=original':'');
+        :'?resource=image-pipeline-preview&id='+encodeURIComponent(id)+(kind==='original'?'&kind=original':kind==='verified-frame'?'&verified=1':'');
       cached={expires:Date.now()+15*60*1000,promise:cloudFetch(path,{signal:AbortSignal.timeout(15000)})};
       previewCache.set(key,cached);const entry=cached;
       cached.promise.catch(()=>{if(previewCache.get(key)===entry)previewCache.delete(key);});
@@ -208,14 +209,41 @@
   }
   async function loadPreviews(target){
     const uid=owner,rev=revision,id=target.dataset.jobMedia;
-    try{
-      const result=await previewURL(id);
-      if(uid!==cloudSession?.user?.id||rev!==revision||!target.isConnected)return;
-      const img=document.createElement('img');img.src=result.url;img.alt='Frame do vídeo';img.loading='lazy';
-      img.style.cssText='display:block;width:100%;height:100%;object-fit:contain';
-      target.querySelector('.genjutsu-preview-placeholder')?.replaceWith(img);
-    }catch{if(target.isConnected)target.title='Prévia indisponível. Use Ver frame para tentar novamente.';}
+    if(!id)return;
+    const current=()=>uid===cloudSession?.user?.id&&rev===revision&&target.isConnected;
+    const unavailable=()=>{
+      if(!current())return;
+      target.setAttribute('data-thumb-unavailable','');
+      const fallback=document.createElement('span');
+      fallback.className='genjutsu-preview-placeholder';
+      fallback.textContent='Sem prévia';
+      target.replaceChildren(fallback);
+      target.title='Nenhum frame pôde ser carregado. Toque no vídeo para abrir a mídia disponível.';
+    };
+    async function render(kind){
+      if(!current())return;
+      try{
+        const result=await previewURL(id,kind);
+        if(!current())return;
+        const img=document.createElement('img');
+        img.alt='';img.loading='lazy';
+        img.style.cssText='display:block;width:100%;height:100%;object-fit:contain';
+        img.addEventListener('error',()=>{
+          if(!current())return;
+          img.hidden=true;
+          if(kind==='verified-frame')unavailable();
+          else void render('verified-frame');
+        },{once:true});
+        img.src=result.url;
+        target.querySelector('.genjutsu-preview-placeholder, img')?.replaceWith(img);
+      }catch{
+        if(kind==='verified-frame')unavailable();
+        else await render('verified-frame');
+      }
+    }
+    await render('frame');
   }
+
   async function showMedia(id,kind){
     const uid=owner,rev=revision,seq=++mediaRevision,host=document.getElementById('modalHost');if(!host)return;
     closeModal();
