@@ -1,8 +1,8 @@
 (()=>{
-  if(window.__cfDashboardOverviewV4)return;
-  window.__cfDashboardOverviewV4=true;
+  if(window.__cfDashboardOverviewV5)return;
+  window.__cfDashboardOverviewV5=true;
 
-  // Presentation only: these are the two existing account identities, not new accounts.
+  // Optional display names only; membership always comes from the authorized API.
   const identities=[
     {id:'c5f2fdd6-00e8-4ca7-adb8-281aa922ad0a',name:'Jujuh',username:'jujuhmartinss'},
     {id:'7160f95b-a23c-4f28-a5b8-9502a856e091',name:'Sahry Japah',username:'sahryjapah'}
@@ -22,10 +22,9 @@
   }
   function accounts(){
     if(!permitted()||!Array.isArray(platformAccounts))return [];
-    return identities.flatMap(identity=>{
-      const account=platformAccounts.find(a=>String(a.id)===identity.id&&a.platform==='instagram'&&a.enabled!==false);
-      return account?[{...account,displayName:identity.name}]:[];
-    });
+    return platformAccounts.filter(a=>a.platform==='instagram'&&a.enabled===true).map(account=>({
+      ...account,displayName:identities.find(identity=>identity.id===account.id)?.name||account.account_label||'Instagram'
+    }));
   }
   function dateLabel(value){
     const date=new Date(value);
@@ -73,9 +72,15 @@
     resetViewer();
     if(!permitted())return;
     const key=viewer,epoch=generation,days=period;
-    await Promise.allSettled(accounts().flatMap(account=>[
-      read(account,'media',days,force,key,epoch),read(account,'followers',days,force,key,epoch)
-    ]));
+    const queue=accounts();
+    // At most three accounts in flight, independent failures and no extra polling.
+    await Promise.allSettled(Array.from({length:Math.min(3,queue.length)},async()=>{
+      while(queue.length&&permitted()&&sessionKey()===key&&generation===epoch){
+        const account=queue.shift();
+        await Promise.allSettled([read(account,'media',days,force,key,epoch),read(account,'followers',days,force,key,epoch)]);
+        if(refreshing&&currentPage==='overview'&&currentRequest(key,epoch,account.id))render();
+      }
+    }));
     if(permitted()&&sessionKey()===key&&generation===epoch&&currentPage==='overview')overview();
   }
   function accountStats(account){
@@ -90,7 +95,7 @@
       mediaError:!!stored?.error||!!summary?.error,followersError:!!followers?.error,
       waiting:!stored||!followers};
   }
-  const total=(rows,key)=>rows.length&&rows.every(row=>row[key]!==null)?rows.reduce((sum,row)=>sum+row[key],0):null;
+  const total=(rows,key)=>rows.some(row=>row[key]!==null)?rows.reduce((sum,row)=>sum+(row[key]??0),0):null;
   function render(){
     resetViewer();
     const host=document.getElementById('overview');
@@ -106,15 +111,16 @@
     const issue=rows.some(row=>row.mediaError||row.followersError);
     const updated=waiting?'Carregando métricas…':issue?'Algumas métricas não puderam ser atualizadas':available+'/'+rows.length+' contas com métricas do Instagram'+(oldest?' · Coleta mais antiga '+dateLabel(oldest):'');
     host.innerHTML=`<div class="cf-dash">
-      <header class="cf-dash-heading"><h2>Visão geral</h2><button type="button" class="cf-dash-refresh" onclick="refreshDashboardMultiAccount(true)" ${refreshing?'disabled':''}>${refreshing?'Atualizando…':'Atualizar'}</button></header>
+      <header class="cf-dash-heading"><h2>Visão geral</h2><div><button type="button" class="cf-dash-refresh" onclick="showPage('admin')">Painel de admin</button> <button type="button" class="cf-dash-refresh" onclick="refreshDashboardMultiAccount(true)" ${refreshing?'disabled':''}>${refreshing?'Atualizando…':'Atualizar'}</button></div></header>
       <section class="cf-dash-panel" aria-label="Resumo do Instagram" aria-busy="${waiting||refreshing}">
         <div class="cf-dash-panel-head"><h3><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg>Instagram</h3><label class="cf-dash-period"><span class="cf-dash-sr">Período das visualizações</span><select aria-label="Período das visualizações" onchange="setDashboardAnalyticsPeriod(this.value)">${Object.entries(periods).map(([value,label])=>`<option value="${value}" ${value===period?'selected':''}>${label}</option>`).join('')}</select></label></div>
         <div class="cf-dash-primary"><span>Visualizações</span><strong>${format(views)}</strong><small>Visualizações recebidas no período selecionado</small></div>
         <div class="cf-dash-breakdown"><div><span>Reels</span><b>${format(reels)}</b></div><div><span>Stories</span><b>${format(stories)}</b>${stories===null?'<small>Não foi possível consultar</small>':''}</div><div><span>Seguidores totais</span><b>${format(followers)}</b><small>Total atual das contas</small></div></div>
-        <p class="cf-dash-updated" role="status">${rows.length?safe(updated):'Conecte Jujuh ou Sahry Japah em Contas para ver as métricas.'}</p>
+        <p class="cf-dash-updated" role="status">${rows.length?safe(updated):'Conecte uma conta Instagram na Central de Contas para ver as métricas.'}</p>
+        ${rows.some(row=>['views','reels','stories','followers'].some(key=>row[key]===null))?'<p class="cf-dash-warning">Totais parciais: somam somente os dados disponíveis. Visualizações: '+available+'/'+rows.length+' contas · Seguidores: '+rows.filter(row=>row.followers!==null).length+'/'+rows.length+' contas.</p>':''}
       </section>
       <p class="cf-dash-updated">Fonte: Instagram (Meta) · Cache de até 5 minutos · O total inclui Reels, Stories e outras publicações.</p>
-      <section class="cf-dash-panel cf-dash-accounts" aria-label="Métricas por conta"><h3>Visualizações por conta</h3><div class="cf-dash-account-grid">${rows.map(row=>`<article class="cf-dash-account"><h4><i aria-hidden="true"></i>${safe(row.account.displayName)}</h4><span class="cf-dash-username">@${safe(row.account.config?.username||row.account.account_label||'Instagram')}</span><strong>${format(row.views)}</strong><span class="cf-dash-caption">visualizações no período</span><p>${row.followers===null?'Seguidores indisponíveis':format(row.followers)+' seguidores'}</p><small>${safe(row.range)}</small><small>Visualizações: ${safe(dateLabel(row.collected))}</small><small>Seguidores: ${safe(dateLabel(row.followersAt))}</small>${row.mediaError||row.followersError?'<small class="cf-dash-warning">Atualização indisponível · último dado preservado</small>':''}</article>`).join('')||'<p class="cf-dash-empty">Nenhuma das duas contas está conectada. <button type="button" onclick="showPage(\'settings\')">Gerenciar contas</button></p>'}</div></section>
+      <section class="cf-dash-panel cf-dash-accounts" aria-label="Métricas por conta"><h3>Visualizações por conta</h3><div class="cf-dash-account-grid">${rows.map(row=>`<article class="cf-dash-account"><h4><i aria-hidden="true"></i>${safe(row.account.displayName)}</h4><span class="cf-dash-username">@${safe(row.account.config?.username||row.account.account_label||'Instagram')}</span><strong>${format(row.views)}</strong><span class="cf-dash-caption">visualizações no período</span><p>${row.followers===null?'Seguidores indisponíveis':format(row.followers)+' seguidores'}</p><small>${safe(row.range)}</small><small>Visualizações: ${safe(dateLabel(row.collected))}</small><small>Seguidores: ${safe(dateLabel(row.followersAt))}</small>${row.mediaError||row.followersError?'<small class="cf-dash-warning">Atualização indisponível · último dado preservado</small>':''}</article>`).join('')||'<p class="cf-dash-empty">Nenhuma conta Instagram está conectada. <button type="button" onclick="showPage(\'accounts\')">Gerenciar contas</button></p>'}</div></section>
     </div>`;
     if(rows.some(row=>row.waiting)&&!refreshing)void load(false);
   }

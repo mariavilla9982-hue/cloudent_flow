@@ -18,6 +18,7 @@ cache.attempted_at='2020-01-01';const fixedSince=cache.since;
 // Real cutoff rounds to a stable calendar day; keep a fixed cutoff for this stale test.
 ctx.metricCutoff=()=>fixedSince;fail=true;const prior=cache.stories;const stale=await ctx.accountViewSummary(admin,account,90);assert.equal(stale.stories,prior);assert.equal(stale.error,'account_insights_unavailable');
 cache=null;const unavailable=await ctx.accountViewSummary(admin,account,30);assert(!unavailable.available);assert.equal(unavailable.stories,undefined);
-await assert.rejects(ctx.accountViewSummary(admin,{...account,id:'other'},30),/forbidden/);
+cache=null;fail=false;const added=await ctx.accountViewSummary(admin,{...account,id:'new-authorized-account'},30);assert(added.available,'new account resolved by metricAccount is accepted');
+await assert.rejects(ctx.accountViewSummary(admin,{id:'missing-external-id'},30),/account_not_found/);
 await assert.rejects(ctx.accountViewSummary(admin,account,120),/invalid_summary_period/);
 console.log('PASS account summary: actual Meta response parser, all-content total, Story/Reel breakdown, strict missing data, explicit zero, 90-day disjoint windows, bounded cache, error preservation, allowed account and period');

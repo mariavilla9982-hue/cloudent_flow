@@ -1,5 +1,4 @@
 import {metricContext,metricCutoff,metricGraph} from './metrics-core.ts';
-const allowed=new Set(['c5f2fdd6-00e8-4ca7-adb8-281aa922ad0a','7160f95b-a23c-4f28-a5b8-9502a856e091']);
 const inflight=new Map<string,Promise<any>>();
 export function parseAccountViews(response:any){
  const metric=response?.data?.find((m:any)=>m.name==='views');
@@ -18,7 +17,8 @@ export function parseAccountViews(response:any){
  return {views:total.value,reels,stories};
 }
 export async function accountViewSummary(admin:any,account:any,days:number){
- if(!allowed.has(String(account.id)))throw Error('forbidden');
+ // account was resolved by metricAccount after server-side admin authorization.
+ if(!account?.id||!account?.external_account_id)throw Error('account_not_found');
  if(![1,7,30,90].includes(days))throw Error('invalid_summary_period');
  const since=metricCutoff(days),key='dashboard_account_views_v1_'+account.id+'_'+days;
  if(inflight.has(key))return inflight.get(key);
@@ -44,7 +44,7 @@ export async function accountViewSummary(admin:any,account:any,days:number){
   }catch{
    result={...(previous||{}),since,attempted_at:new Date(now).toISOString(),available:!!previous?.available,error:'account_insights_unavailable'};
   }
-  // Eight bounded small metadata rows at most. Never cache credentials or raw Meta payloads.
+  // At most four small metadata rows per authorized account. Never cache credentials or raw Meta payloads.
   const {error}=await admin.from('app_settings').upsert({key,value:result,updated_at:new Date(now).toISOString()},{onConflict:'key'});
   if(error)throw error;
   return result;

@@ -4443,6 +4443,7 @@ body.trial-modal-open{overflow:hidden!important}
   <section id="xStudio" class="page hidden"></section>
   <section id="tiktokStudio" class="page hidden"></section>
   <section id="accounts" class="page hidden"></section>
+  <section id="admin" class="page hidden"></section>
   <section id="metrics" class="page hidden"></section>
   <section id="reelDetail" class="page hidden"></section>
   <section id="smartTimes" class="page hidden"></section>
@@ -4465,6 +4466,7 @@ body.trial-modal-open{overflow:hidden!important}
 <script>
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const navItems=[
+  ["admin",'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 7v6c0 5 9 8 9 8s9-3 9-8V7Z"></path><path d="m8 12 3 3 5-6"></path></svg>',"Painel de admin"],
   ["accounts",'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a4 4 0 0 1 3 4v2"></path></svg>',"Central de Contas"],
   ["overview","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.4\"></rect></svg>","Visão geral"],
   ["calendar","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2\"></rect><path d=\"M8 3v4M16 3v4M3 10h18\"></path></svg>","Calendário"],
@@ -5964,7 +5966,7 @@ function renderMobileNav(){
       '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
 }
 function mobileMoreItems(){
-  return ["accounts","trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+  return ["admin","accounts","trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
 }
 function toggleMobileMore(force){
   const host=$("#mobileMoreHost");if(!host)return;
@@ -6011,7 +6013,7 @@ function nav(){
     {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
     {label:"Canais",pages:["accounts","xStudio","tiktokStudio"]},
     {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
-    {label:"Sistema",pages:["settings"]}
+    {label:"Sistema",pages:["admin","settings"]}
   ];
   const byId=Object.fromEntries(navItems.map(x=>[x[0],x]));
   $("#nav").innerHTML=groups.map(g=>`
@@ -6057,6 +6059,8 @@ function showPage(id){
   renderAll();
   if(["faceSwap","upscale","faceSwapPhoto"].includes(id)&&cloudSession){window.ImagePipeline?.render(id)}
   if(id==="production"&&cloudSession&&window.CloudentMotionControl?.mode!=="genjutsu"){loadProductionData().then(()=>{if(currentPage==="production")productionPage()}).catch(e=>toast(e.message,"err"))}
+  if(id==="admin"&&cloudSession)void refreshAdminPanel();
+  if(id==="overview"&&cloudSession&&window.refreshDashboardMultiAccount)void refreshDashboardMultiAccount(true);
   if(["accounts","metrics"].includes(id)&&cloudSession){loadInstagramScaleSummary()}
   if(id==="calendar"&&cloudSession){refreshCalendarLiveData().catch(e=>toast(e.message,"err"))}
   if(id==="trialReels"&&cloudSession){loadTrialReels().then(()=>{if(currentPage==="trialReels")trialReelsPage()}).catch(e=>toast(e.message,"err"))}
@@ -8503,13 +8507,14 @@ async function instagramScaleRetry(id,scheduleId){
   }catch(e){toast(friendlyCloudentError(e.message),"err")}
 }
 async function instagramScaleDisconnect(id){
-  const account=scaleSummaryAccounts().find(a=>a.id===id);
+  const account=platformAccounts.find(a=>a.platform==="instagram"&&a.id===id)||scaleSummaryAccounts().find(a=>a.id===id);
   if(!account||!confirm("Desconectar "+scaleHandle(account.account_label)+" e pausar suas publicações?"))return;
   try{
     await cloudFetch("?resource=platform-accounts&action=disconnect",{
       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform_account_id:id})
     });
     await Promise.all([loadPlatformAccounts(),loadInstagramScaleSummary()]);
+    if(currentPage==="admin")adminPage();
     toast("Instagram desconectado.","ok");
   }catch(e){toast(friendlyCloudentError(e.message),"err")}
 }
@@ -8584,6 +8589,63 @@ function instagramAccountsPage(){
     scaleKpi("Precisam de atenção",scaleNum(accounts.filter(a=>a.connection_status!=="connected"||a.failed>0||a.sync_error).length))+'</div>'+
     '<div class="scale-accounts-list">'+(ordered.map(a=>instagramScaleAccountRow(a,accounts)).join("")||(!message?'<div class="card muted">Nenhuma conta cadastrada.</div>':""))+'</div>';
 }
+let adminPanelState={session:null,loading:false,error:""};
+let adminAccountFilter="";
+const adminDisconnecting=new Set();
+function adminAccounts(){return cloudSession&&cloudAccess?.role==="admin"?platformAccounts.filter(a=>["instagram","x"].includes(a.platform)):[]}
+async function refreshAdminPanel(){
+  if(!cloudSession||cloudAccess?.role!=="admin"||adminPanelState.loading&&adminPanelState.session===cloudSession)return;
+  const session=cloudSession;
+  const state={session,loading:true,error:""};adminPanelState=state;adminPage();
+  const ok=await loadPlatformAccounts();
+  if(cloudSession!==session||adminPanelState!==state)return;
+  state.loading=false;state.error=ok?"":"Não foi possível atualizar as contas. A lista anterior foi preservada.";
+  if(currentPage==="admin")adminPage();
+}
+function adminOpenSettings(tab){setSettingsTab(tab);showPage("settings")}
+function adminOpenXUsers(){xStudioTab="settings";showPage("xStudio");void xLoadMembers()}
+async function adminDisconnectAccount(id){
+  if(!cloudSession||cloudAccess?.role!=="admin"||adminDisconnecting.has(id))return;
+  const account=adminAccounts().find(a=>a.id===id);if(!account?.enabled)return;
+  if(!confirm("Desconectar @"+account.account_label+" do "+(account.platform==="x"?"X":"Instagram")+"? Novas publicações desta conta serão interrompidas. Histórico e agenda serão preservados."))return;
+  const session=cloudSession;adminDisconnecting.add(id);adminPage();
+  try{
+    const body=JSON.stringify({platform_account_id:id});
+    const options={method:"POST",headers:{"Content-Type":"application/json"},body};
+    if(account.platform==="instagram")await cloudFetch("?resource=platform-accounts&action=disconnect",options);
+    else await edgeFetch(X_POSTING_URL+"?action=account-status",options);
+    if(cloudSession!==session)return;
+    // Remove from live totals immediately, even if refreshing the list fails.
+    platformAccounts=platformAccounts.map(a=>a.id===id?{...a,enabled:false,config:{...a.config,status:"disconnected"}}:a);
+    await Promise.allSettled([loadPlatformAccounts(),loadInstagramScaleSummary()]);
+    if(cloudSession===session)toast("Conta desconectada.","ok");
+  }catch(e){if(cloudSession===session)toast(friendlyCloudentError(e.message),"err")}
+  finally{adminDisconnecting.delete(id);if(cloudSession===session&&currentPage==="admin")adminPage()}
+}
+function adminPage(){
+  const root=document.getElementById("admin");if(!root)return;
+  if(!cloudSession||cloudAccess?.role!=="admin"){root.innerHTML="";return}
+  const accounts=adminAccounts(),status=adminPanelState.session===cloudSession?adminPanelState:null;
+  const filtered=accounts.filter(a=>!adminAccountFilter||a.platform===adminAccountFilter);
+  root.innerHTML='<div class="ui3-page-head"><div><h2>Painel de admin</h2><p>Gerencie todas as suas contas e os acessos ao CloudentFlow.</p></div><div class="toolbar">'+
+    scaleAction('connectInstagram(null,null,"accounts")',"Conectar Instagram","btn primary")+
+    '<button class="btn" onclick="refreshAdminPanel()" '+(status?.loading?'disabled':'')+'>'+(status?.loading?'Atualizando…':'Atualizar contas')+'</button></div></div>'+
+    '<div class="ui3-kpis">'+scaleKpi("Instagram conectados",accounts.filter(a=>a.platform==="instagram"&&a.enabled).length)+
+    scaleKpi("X conectados",accounts.filter(a=>a.platform==="x"&&a.enabled).length)+scaleKpi("Desconectadas",accounts.filter(a=>!a.enabled).length)+'</div>'+
+    '<div class="card"><h3>Controles do sistema</h3><div class="toolbar">'+scaleAction('showPage("accounts")',"Central de Contas")+scaleAction('showPage("overview")',"Dashboard e métricas")+
+    scaleAction('adminOpenXUsers()',"Usuários e permissões do X")+scaleAction('adminOpenSettings("health")',"Saúde e limites")+scaleAction('adminOpenSettings("logs")',"Logs")+'</div></div>'+
+    '<div class="toolbar"><label>Plataforma <select onchange="adminAccountFilter=this.value;adminPage()"><option value="">Todas</option><option value="instagram" '+(adminAccountFilter==='instagram'?'selected':'')+'>Instagram</option><option value="x" '+(adminAccountFilter==='x'?'selected':'')+'>X</option></select></label></div>'+
+    (status?.error?'<p role="alert">'+esc(status.error)+'</p>':'')+
+    '<div class="scale-accounts-list">'+(filtered.map(a=>{
+      const id=JSON.stringify(a.id),busy=adminDisconnecting.has(a.id);
+      const state=!a.enabled?"Desconectada":a.config?.status==="reconnect_required"?"Reconexão necessária":"Conectada";
+      return '<article class="card scale-account"><div class="scale-account-main"><div><h3>'+esc(scaleHandle(a.account_label))+'</h3><p class="muted">'+(a.platform==='x'?'X':'Instagram')+' · '+state+'</p></div><div class="toolbar">'+
+        (a.platform==='instagram'?scaleAction('connectInstagram('+id+',null,"accounts")',"Reconectar")+(a.enabled?scaleAction('openInstagramAccountCalendar('+id+')',"Abrir calendário"):''):scaleAction('showPage("xStudio")',"Abrir X Studio"))+
+        (a.enabled?'<button class="btn" onclick="'+esc('adminDisconnectAccount('+id+')')+'" '+(busy?'disabled':'')+'>'+(busy?'Desconectando…':'Desconectar')+'</button>':'')+'</div></div></article>';
+    }).join('')||'<p class="card muted">'+(status?.loading?'Carregando contas…':'Nenhuma conta encontrada.')+'</p>')+'</div>'+
+    '<p class="muted">Novas contas Instagram conectadas entram automaticamente na dashboard. Ao desconectar, os dados históricos continuam salvos.</p>';
+}
+
 async function syncScaleMetrics(){
   if(!instagramScaleAccountFilter)return;
   metricsAccountId=instagramScaleAccountFilter;
@@ -12189,6 +12251,7 @@ function renderAll(){
     xStudio:xStudioPage,
     tiktokStudio:tiktokStudioPage,
     accounts:instagramAccountsPage,
+    admin:adminPage,
     metrics,
     reelDetail:reelDetailPage,
     smartTimes:smartTimesPage,
@@ -12388,7 +12451,7 @@ async function saveProductionTrial(button){
 
 init();
 </script>
-<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=4"></script>
+<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=5"></script>
 <script src="/genjutsu-ui.js?v=15"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>
 <script src="/production-studio.js?v=6"></script>
