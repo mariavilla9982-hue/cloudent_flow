@@ -110,17 +110,31 @@
     const waiting=rows.some(row=>row.waiting);
     const issue=rows.some(row=>row.mediaError||row.followersError);
     const updated=waiting?'Carregando métricas…':issue?'Algumas métricas não puderam ser atualizadas':available+'/'+rows.length+' contas com métricas do Instagram'+(oldest?' · Coleta mais antiga '+dateLabel(oldest):'');
+    const ranked=[...rows].sort((a,b)=>(b.views??-1)-(a.views??-1));
     host.innerHTML=`<div class="cf-dash">
-      <header class="cf-dash-heading"><h2>Visão geral</h2><div><button type="button" class="cf-dash-refresh" onclick="showPage('admin')">Painel de admin</button> <button type="button" class="cf-dash-refresh" onclick="refreshDashboardMultiAccount(true)" ${refreshing?'disabled':''}>${refreshing?'Atualizando…':'Atualizar'}</button></div></header>
+      <header class="cf-dash-heading"><h2>Visão geral</h2><div class="cf-dash-tools"><label class="cf-dash-period"><span class="cf-dash-sr">Período das visualizações</span><select aria-label="Período das visualizações" onchange="setDashboardAnalyticsPeriod(this.value)">${Object.entries(periods).map(([value,label])=>`<option value="${value}" ${value===period?'selected':''}>${label}</option>`).join('')}</select></label><button type="button" class="cf-dash-refresh" aria-label="Atualizar métricas" title="Atualizar métricas" onclick="refreshDashboardMultiAccount(true)" ${refreshing?'disabled':''}>↻</button></div></header>
       <section class="cf-dash-panel" aria-label="Resumo do Instagram" aria-busy="${waiting||refreshing}">
-        <div class="cf-dash-panel-head"><h3><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg>Instagram</h3><label class="cf-dash-period"><span class="cf-dash-sr">Período das visualizações</span><select aria-label="Período das visualizações" onchange="setDashboardAnalyticsPeriod(this.value)">${Object.entries(periods).map(([value,label])=>`<option value="${value}" ${value===period?'selected':''}>${label}</option>`).join('')}</select></label></div>
-        <div class="cf-dash-primary"><span>Visualizações</span><strong>${format(views)}</strong><small>Visualizações recebidas no período selecionado</small></div>
-        <div class="cf-dash-breakdown"><div><span>Reels</span><b>${format(reels)}</b></div><div><span>Stories</span><b>${format(stories)}</b>${stories===null?'<small>Não foi possível consultar</small>':''}</div><div><span>Seguidores totais</span><b>${format(followers)}</b><small>Total atual das contas</small></div></div>
+        <div class="cf-dash-summary">
+          <div class="cf-dash-primary"><strong>${format(views)}</strong><span>Visualizações</span></div>
+          <div class="cf-dash-breakdown"><div><span>Reels</span><b>${format(reels)}</b></div><div><span>Stories</span><b>${format(stories)}</b></div><div><span>Seguidores</span><b>${format(followers)}</b></div></div>
+        </div>
         <p class="cf-dash-updated" role="status">${rows.length?safe(updated):'Conecte uma conta Instagram na Central de Contas para ver as métricas.'}</p>
         ${rows.some(row=>['views','reels','stories','followers'].some(key=>row[key]===null))?'<p class="cf-dash-warning">Totais parciais: somam somente os dados disponíveis. Visualizações: '+available+'/'+rows.length+' contas · Seguidores: '+rows.filter(row=>row.followers!==null).length+'/'+rows.length+' contas.</p>':''}
       </section>
-      <p class="cf-dash-updated">Fonte: Instagram (Meta) · Cache de até 5 minutos · O total inclui Reels, Stories e outras publicações.</p>
-      <section class="cf-dash-panel cf-dash-accounts" aria-label="Métricas por conta"><h3>Visualizações por conta</h3><div class="cf-dash-account-grid">${rows.map(row=>`<article class="cf-dash-account"><h4><i aria-hidden="true"></i>${safe(row.account.displayName)}</h4><span class="cf-dash-username">@${safe(row.account.config?.username||row.account.account_label||'Instagram')}</span><strong>${format(row.views)}</strong><span class="cf-dash-caption">visualizações no período</span><p>${row.followers===null?'Seguidores indisponíveis':format(row.followers)+' seguidores'}</p><small>${safe(row.range)}</small><small>Visualizações: ${safe(dateLabel(row.collected))}</small><small>Seguidores: ${safe(dateLabel(row.followersAt))}</small>${row.mediaError||row.followersError?'<small class="cf-dash-warning">Atualização indisponível · último dado preservado</small>':''}</article>`).join('')||'<p class="cf-dash-empty">Nenhuma conta Instagram está conectada. <button type="button" onclick="showPage(\'accounts\')">Gerenciar contas</button></p>'}</div></section>
+      <section class="cf-dash-accounts" aria-label="Métricas por conta"><h3>Por conta</h3><div class="cf-dash-account-grid">${ranked.map((row,index)=>`
+        <article class="cf-dash-account">
+          <span class="cf-dash-rank" aria-hidden="true">${index+1}</span>
+          <span class="cf-dash-avatar" aria-hidden="true">${safe(Array.from(row.account.displayName)[0]?.toUpperCase()||'?')}</span>
+          <div class="cf-dash-account-info"><h4>${safe(row.account.displayName)}</h4>
+            <span class="cf-dash-username">@${safe(row.account.config?.username||row.account.account_label||'Instagram')}</span>
+            <p>${row.views===null?'Visualizações indisponíveis':format(row.views)+' visualizações'}</p>
+            <p>${row.followers===null?'Seguidores indisponíveis':format(row.followers)+' seguidores'}</p>
+            <small>${safe(row.range)}</small>
+            ${row.mediaError||row.followersError?'<small class="cf-dash-warning">'+(row.views!==null||row.followers!==null?'Atualização indisponível · último dado preservado':'Atualização indisponível')+'</small>':''}
+          </div>
+          ${views>0&&row.views!==null?`<div class="cf-dash-bar" aria-label="${Math.round(row.views/views*100)}% das visualizações disponíveis" role="img"><span style="width:${row.views/views*100}%"></span></div>`:''}
+        </article>`).join('')||'<p class="cf-dash-empty">Nenhuma conta Instagram está conectada. <button type="button" onclick="showPage(\'accounts\')">Gerenciar contas</button></p>'}</div></section>
+      <footer class="cf-dash-footer"><div><button type="button" onclick="showPage('metrics')">Ver métricas →</button><button type="button" onclick="showPage('admin')">Painel de admin</button></div><small>Fonte: Instagram (Meta) · Cache de até 5 min</small></footer>
     </div>`;
     if(rows.some(row=>row.waiting)&&!refreshing)void load(false);
   }
@@ -149,44 +163,57 @@
 
   const style=document.createElement('style');style.id='cf-dashboard-overview-style';
   style.textContent=`
-    #overview .cf-dash{max-width:1280px;margin:28px auto 0;color:#f3f3f3;font-family:inherit}
-    #overview .cf-dash-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
-    #overview .cf-dash-heading h2{font-size:28px!important;line-height:1.2!important;font-weight:600;letter-spacing:-.04em;margin:0!important;color:#f5f5f5}
-    #overview .cf-dash-refresh{background:transparent;border:1px solid #292929;color:#aaa;border-radius:8px;padding:9px 13px;font:inherit;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s}
-    #overview .cf-dash-refresh:hover{background:#171717;border-color:#555;color:#fff}
-    #overview .cf-dash-refresh:disabled{cursor:wait;opacity:.6}
-    #overview .cf-dash-panel{padding:28px 32px;background:#0b0c0d;border:1px solid #202225;border-radius:14px;margin:0 0 18px}
-    #overview .cf-dash-panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
-    #overview .cf-dash h3{display:flex;align-items:center;gap:12px;font-size:16px!important;line-height:1.4!important;font-weight:600;margin:0!important;color:#f3f3f3;letter-spacing:-.02em}
-    #overview .cf-dash h3 svg{width:24px;height:24px;fill:none;stroke:#a6a6ad;stroke-width:1.6;flex-shrink:0}
-    #overview .cf-dash-period select{font:inherit;font-size:12px!important;color:#ddd!important;background:#101112!important;border:1px solid #2c2e31!important;border-radius:8px!important;min-height:38px;padding:7px 30px 7px 12px!important;width:auto!important;cursor:pointer}
-    #overview .cf-dash-primary{margin:30px 0 27px}
-    #overview .cf-dash-primary>span,#overview .cf-dash-breakdown span{color:#a0a1a6;font-size:13px;display:block}
-    #overview .cf-dash-primary strong{display:block;font-size:clamp(38px,5.4vw,68px);font-weight:600;letter-spacing:-.055em;line-height:1.15;margin:9px 0 7px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-    #overview .cf-dash small{display:block;font-size:11px;color:#777d85;line-height:1.6}
-    #overview .cf-dash-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #25272a;padding-top:24px;gap:24px}
-    #overview .cf-dash-breakdown>div+div{border-left:1px solid #242629;padding-left:26px}
-    #overview .cf-dash-breakdown b{display:block;color:#f3f3f3;font-size:clamp(20px,2.5vw,31px);font-weight:600;line-height:1.25;letter-spacing:-.03em;margin:9px 0 3px;overflow-wrap:anywhere}
-    #overview .cf-dash-updated{margin:23px 0 0;color:#81858c;font-size:11px;line-height:1.6}
-    #overview .cf-dash-account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;margin-top:26px}
-    #overview .cf-dash-account{min-width:0}
-    #overview .cf-dash-account+article{padding-left:32px;border-left:1px solid #25272a}
-    #overview .cf-dash-account h4{display:flex;gap:10px;align-items:center;font-size:14px!important;font-weight:500;margin:0!important;color:#d5d5d8}
-    #overview .cf-dash-account h4 i{height:8px;width:8px;flex-shrink:0;border-radius:50%;background:#65c7b4}
-    #overview .cf-dash-username{display:block;color:#7e838b;font-size:11px;margin:5px 0 15px;overflow-wrap:anywhere}
-    #overview .cf-dash-account strong{display:block;font-size:clamp(26px,3.3vw,42px);font-weight:600;letter-spacing:-.045em;line-height:1.2;overflow-wrap:anywhere}
-    #overview .cf-dash-caption{display:block;font-size:12px;color:#999fa8;margin-top:4px}
-    #overview .cf-dash-account p{font-size:12px;color:#aaaeb6;margin:12px 0 14px}
-    #overview .cf-dash-warning{color:#c4b59b!important}
-    #overview .cf-dash-empty{font-size:13px;line-height:1.6;color:#999;grid-column:1/-1;margin:0}
-    #overview .cf-dash-empty button{font:inherit;color:#eee;background:none;border:0;text-decoration:underline;cursor:pointer}
-    #overview .cf-dash-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-    #overview .cf-dash button:focus-visible,#overview .cf-dash select:focus-visible{outline:2px solid #e5e5e5;outline-offset:3px}
+    :is(#overview,#xStudio) .cf-dash{max-width:1160px;margin:26px auto 0;padding:24px 30px;color:#f4f4f4;background:#101010;border:1px solid #262626;border-radius:14px;font-family:inherit;min-width:0}
+    .cf-dash-heading,.cf-dash-tools,.cf-dash-footer,.cf-dash-footer>div{display:flex;align-items:center;gap:12px}
+    .cf-dash-heading,.cf-dash-footer{justify-content:space-between;flex-wrap:wrap}
+    .cf-dash-heading{padding-bottom:22px;border-bottom:1px solid #343434}
+    .cf-dash-heading h2{font-size:clamp(25px,4vw,40px)!important;line-height:1.1;font-weight:700;letter-spacing:-.045em;margin:0!important;color:#f5f5f5}
+    .cf-dash-refresh,.cf-dash-period select,.cf-dash-period-label{border:1px solid #404040;border-radius:8px;background:#151515;color:#eee;min-height:42px;padding:8px 12px;font:inherit;font-size:13px}
+    .cf-dash-refresh{cursor:pointer;font-size:20px;width:44px}
+    .cf-dash-refresh:hover{background:#262626}
+    .cf-dash-refresh:disabled{cursor:wait;opacity:.55}
+    .cf-dash-period-label{display:inline-flex;align-items:center}
+    .cf-dash-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:22px;padding:28px 0 16px}
+    .cf-dash-primary strong{display:block;font-size:clamp(34px,6.2vw,78px);line-height:1;letter-spacing:-.055em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+    .cf-dash-primary>span{display:block;color:#c2c2c2;margin-top:8px;font-size:15px}
+    .cf-dash-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+    .cf-dash-x .cf-dash-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .cf-dash-breakdown>div{padding:8px 14px;border-left:1px solid #353535}
+    .cf-dash-breakdown span{display:block;font-size:12px;color:#bababa}
+    .cf-dash-breakdown b{display:block;margin-top:6px;font-size:clamp(14px,2vw,25px);overflow-wrap:anywhere;letter-spacing:-.025em}
+    .cf-dash small,.cf-dash-updated,.cf-dash-warning{color:#a6a6a6;font-size:11px;line-height:1.5}
+    .cf-dash-updated,.cf-dash-warning{margin:0 0 10px}
+    .cf-dash-accounts{margin-top:18px;padding-top:18px;border-top:1px solid #343434}
+    .cf-dash-accounts h3{margin:0 0 8px!important;font-size:21px!important;color:#eee}
+    .cf-dash-account{display:grid;grid-template-columns:20px 42px minmax(0,1fr) minmax(80px,.9fr);align-items:center;gap:12px;padding:16px 0;border-bottom:1px solid #2d2d2d}
+    .cf-dash-rank{font-size:13px;color:#aaa}
+    .cf-dash-avatar{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#282828;font-weight:650;font-size:19px}
+    .cf-dash-account-info{min-width:0}
+    .cf-dash-account h4{margin:0 0 4px!important;font-size:15px!important;color:#eee;overflow-wrap:anywhere}
+    .cf-dash-account p{margin:2px 0;color:#c4c4c4;font-size:12px;line-height:1.45}
+    .cf-dash-username{font-size:11px;color:#aaa;overflow-wrap:anywhere}
+    .cf-dash-bar{height:8px;border-radius:4px;background:#353535;overflow:hidden}
+    .cf-dash-bar>span{display:block;height:100%;background:#ddd;border-radius:inherit}
+    .cf-dash-footer{padding-top:16px}
+    .cf-dash-footer button,.cf-dash-empty button{border:0;background:transparent;color:#eee;padding:8px 0;text-decoration:underline;cursor:pointer;font:inherit;font-size:12px}
+    .cf-dash-empty{font-size:13px;color:#bbb}
+    .cf-dash-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .cf-dash button:focus-visible,.cf-dash select:focus-visible{outline:2px solid #eee;outline-offset:3px}
+    #xStudio .x-studio-dashboard .x-summary{display:none}
     body:has(#overview:not(.hidden)) .saas-topbar .top-search-trigger,body:has(#overview:not(.hidden)) .saas-topbar .live-worker-pill,body:has(#overview:not(.hidden)) .saas-topbar #newVideoBtn,body:has(#overview:not(.hidden)) #pageSubtitle{display:none!important}
     body:has(#overview:not(.hidden)) .saas-topbar{grid-template-columns:1fr auto!important}
-    @media(max-width:760px){#overview .cf-dash{margin-top:18px}#overview .cf-dash-heading h2{font-size:24px!important}#overview .cf-dash-panel{padding:22px 20px}#overview .cf-dash-breakdown{gap:12px}#overview .cf-dash-breakdown>div+div{padding-left:12px}#overview .cf-dash-breakdown span{font-size:11px}#overview .cf-dash h3{font-size:15px!important}#overview .cf-dash-account-grid{gap:22px}#overview .cf-dash-account+article{padding-left:22px}#overview .cf-dash-period select{max-width:170px}}
-    @media(max-width:480px){#overview .cf-dash-panel{padding:20px 16px}#overview .cf-dash-breakdown{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:20px}#overview .cf-dash-breakdown>div:last-child{grid-column:1/-1;border-left:0;padding:18px 0 0;border-top:1px solid #25272a}#overview .cf-dash-account-grid{grid-template-columns:1fr;gap:24px}#overview .cf-dash-account+article{padding:24px 0 0;border-left:0;border-top:1px solid #25272a}#overview .cf-dash-account strong{font-size:34px}}
-    @media(prefers-reduced-motion:reduce){#overview .cf-dash-refresh{transition:none}}
+    @media(max-width:760px){
+      :is(#overview,#xStudio) .cf-dash{margin-top:12px;padding:16px}
+      .cf-dash-heading{padding-bottom:14px}
+      .cf-dash-summary{grid-template-columns:minmax(0,1fr);gap:18px;padding:18px 0 12px}
+      .cf-dash-breakdown{border-top:1px solid #343434;padding-top:10px}
+      .cf-dash-breakdown>div{padding:4px 8px}
+      .cf-dash-breakdown>div:first-child{border:0;padding-left:0}
+      .cf-dash-breakdown span{font-size:10px}
+      .cf-dash-account{grid-template-columns:14px 36px minmax(0,1fr);gap:8px}
+      .cf-dash-avatar{width:36px;height:36px;font-size:16px}
+      .cf-dash-bar{grid-column:3}
+    }
   `;
   document.head.appendChild(style);
   if(currentPage==='overview')render();

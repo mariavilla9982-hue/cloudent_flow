@@ -11711,10 +11711,29 @@ async function loadXDashboard(){
  finally{state.loading=false;if(xDashboardState===state&&currentPage==="xStudio"&&xStudioTab==="dashboard")xStudioPage(true);}
 }
 function xDashboardMarkup(){
- const state=xDashboardState||{},number=n=>typeof n==="number"?n.toLocaleString("pt-BR"):"—";
- const accounts=state.accounts||[];
- const rows=accounts.map(a=>`<div class="x-batch-row"><h3>@${esc(a.username)}</h3><div class="x-metric-grid"><div><small>Views de vídeo</small><h3>${number(a.views)}</h3></div><div><small>Impressões dos posts</small><h3>${number(a.impressions)}</h3></div></div>${a.message?`<p class="x-muted">${esc(a.message)}</p>`:""}${a.updated_at?`<small>Dados atualizados pelo Buffer em ${esc(new Date(a.updated_at).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ}))}</small>`:""}</div>`).join("");
- return `<section class="x-settings-panel"><h3>Dashboard do X</h3><p class="x-muted">Últimos 30 dias por conta. Os dados do Buffer podem levar até um dia para atualizar.</p><button class="x-subtle-btn" onclick="loadXDashboard()" ${state.loading?"disabled":""}>${state.loading?"Carregando…":"Atualizar métricas"}</button>${state.error?`<p class="x-error">${esc(state.error)}</p>`:""}${rows||(!state.loading&&!state.error&&state.accounts?"<p>Nenhuma conta conectada neste login.</p>":"")}</section>`;
+ if(!cloudSession||!xPostingData?.dashboard_access)return "";
+ const state=xDashboardState||{};
+ const valid=n=>typeof n==="number"&&Number.isFinite(n)&&n>=0;
+ const number=n=>valid(n)?n.toLocaleString("pt-BR"):"—";
+ const accounts=[...(state.accounts||[])].sort((a,b)=>(valid(b.views)?b.views:-1)-(valid(a.views)?a.views:-1));
+ const total=key=>accounts.some(a=>valid(a[key]))?accounts.reduce((sum,a)=>sum+(valid(a[key])?a[key]:0),0):null;
+ const views=total("views"),impressions=total("impressions");
+ const partial=accounts.some(a=>!valid(a.views)||!valid(a.impressions));
+ return `<section class="cf-dash cf-dash-x" aria-label="Dashboard do X" aria-busy="${!!state.loading}">
+  <header class="cf-dash-heading"><h2>Dashboard do X</h2><div class="cf-dash-tools"><span class="cf-dash-period-label">Últimos 30 dias</span><button type="button" class="cf-dash-refresh" aria-label="Atualizar métricas" title="Atualizar métricas" onclick="loadXDashboard()" ${state.loading?"disabled":""}>↻</button></div></header>
+  <div class="cf-dash-summary"><div class="cf-dash-primary"><strong>${number(views)}</strong><span>Visualizações de vídeo</span></div>
+   <div class="cf-dash-breakdown"><div><span>Impressões dos posts</span><b>${number(impressions)}</b></div><div><span>Contas</span><b>${state.accounts?accounts.length:"—"}</b></div></div></div>
+  ${state.loading?'<p class="cf-dash-updated" role="status">Carregando métricas…</p>':""}
+  ${state.error?`<p class="cf-dash-warning" role="alert">${esc(state.error)}</p>`:""}
+  ${partial?'<p class="cf-dash-warning">Totais parciais com os dados disponíveis.</p>':""}
+  <section class="cf-dash-accounts"><h3>Por conta</h3>${accounts.map((a,i)=>`
+    <article class="cf-dash-account"><span class="cf-dash-rank" aria-hidden="true">${i+1}</span>
+    <span class="cf-dash-avatar" aria-hidden="true">${esc(Array.from(a.username||"X")[0].toUpperCase())}</span>
+    <div class="cf-dash-account-info"><h4>@${esc(a.username)}</h4><p>${number(a.views)} visualizações de vídeo</p><p>${number(a.impressions)} impressões</p>
+    ${a.message?`<small>${esc(a.message)}</small>`:""}${a.updated_at?`<small>Atualizado em ${esc(new Date(a.updated_at).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ}))}</small>`:""}</div>
+    ${views>0&&valid(a.views)?`<div class="cf-dash-bar" aria-label="${Math.round(a.views/views*100)}% das visualizações disponíveis" role="img"><span style="width:${a.views/views*100}%"></span></div>`:""}</article>`).join("")||(!state.loading&&!state.error&&state.accounts?'<p class="cf-dash-empty">Nenhuma conta X conectada neste login.</p>':"")}</section>
+  <footer class="cf-dash-footer"><button type="button" onclick="xSetTab('metrics')">Ver métricas →</button><small>Fonte: Buffer · Dados podem levar até um dia para atualizar</small></footer>
+ </section>`;
 }
 
 function xStudioPage(force=false){
@@ -11726,7 +11745,7 @@ function xStudioPage(force=false){
  const dashboard=xStudioTab==="dashboard";
  const next=[data?.next_scheduled_at,...(data?.counts?.interval_queued&&cfg.next_publish_at?[cfg.next_publish_at]:[])].filter(Boolean).sort((a,b)=>new Date(a)-new Date(b))[0];
  const nextLabel=next?new Date(next).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Sem agendamento";
- root.innerHTML=`<div class="x-studio"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Fotos e vídeos no seu calendário do X.</p></div><div class="x-header-actions">${xAccountSelectorMarkup()}<span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${esc(account?.status||"Selecione uma conta")}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button>${account||['admin','x_user'].includes(cloudAccess?.role)?`<button class="x-primary-btn" onclick="${account?"xOpenComposer()":cloudAccess?.role==="x_user"?"xOpenBufferConnection()":"connectXOfficial()"}">${account?"＋ Agendar publicação":"Conectar conta X"}</button>`:'<span class="x-muted">Selecione uma conta autorizada</span>'}</div></header>
+ root.innerHTML=`<div class="x-studio ${dashboard?"x-studio-dashboard":""}"><header class="x-studio-header"><div class="x-brand">𝕏</div><div class="x-heading"><h2>X Studio</h2><p>Fotos e vídeos no seu calendário do X.</p></div><div class="x-header-actions">${xAccountSelectorMarkup()}<span class="x-account-chip"><b>${esc(account?.username?"@"+account.username:account?.label||"Conta não conectada")}</b><small>${esc(account?.status||"Selecione uma conta")}</small></span><button class="x-subtle-btn" onclick="refreshXPosting()" aria-label="Atualizar">↻</button>${account||['admin','x_user'].includes(cloudAccess?.role)?`<button class="x-primary-btn" onclick="${account?"xOpenComposer()":cloudAccess?.role==="x_user"?"xOpenBufferConnection()":"connectXOfficial()"}">${account?"＋ Agendar publicação":"Conectar conta X"}</button>`:'<span class="x-muted">Selecione uma conta autorizada</span>'}</div></header>
  <nav class="x-studio-tabs" aria-label="Abas do X Studio">${[...(data?.dashboard_access?[["dashboard","Dashboard"]]:[]),["overview","Visão geral"],["calendar","Calendário"],["queue","Galeria de mídia"],["captions","Fila de legendas"],["metrics","Métricas"],["settings","Configurações"]].map(([id,label])=>`<button class="${xStudioTab===id?"active":""}" aria-selected="${xStudioTab===id}" onclick="xSetTab('${id}')">${label}</button>`).join("")}</nav>
  ${cloudSession&&xAccountList.length?'<div class="x-notice"><button class="x-subtle-btn" onclick="xOpenBufferConnection()">Adicionar conta pelo Buffer</button></div>':''}
  ${!cloudSession?'<div class="x-notice">Entre no CloudentFlow para organizar suas publicações. <button class="x-subtle-btn" onclick="focusCloudLogin()">Entrar</button></div>':""}
@@ -12474,7 +12493,7 @@ async function saveProductionTrial(button){
 
 init();
 </script>
-<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=5"></script>
+<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=6"></script>
 <script src="/genjutsu-ui.js?v=17"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>
 <script src="/production-studio.js?v=7"></script>
