@@ -313,6 +313,59 @@ Deno.serve(async req => {
       if (writeError) throw writeError;
       return reply({ id, status: "queued" });
     }
+    if (action === "input" && req.method === "GET") {
+      const kind = url.searchParams.get("kind");
+      if (job.status === "draft" || (kind !== "video" && kind !== "image")) return reply({ error: "Arquivo indisponível." }, 404);
+      if (!await storageRPC(admin, "motion_storage_record_read", { p_count: 1 })) return reply({ error: "Limite de leitura do armazenamento atingido." }, 503);
+      return reply({ url: await motionObjectURL(await storage(), "GET", inputPath(job, kind)), type: kind === "video" ? job.video_type : job.image_type });
+    }
+    if (["retry", "stop", "delete"].includes(action) && req.method === "POST") {
+      const terminal = job.status === "ready" || job.status === "failed";
+      const match = (query: any) => query.eq("id", id).eq("user_id", owner).eq("status", job.status).eq("updated_at", job.updated_at);
+      const changed = (data: any) => data ? reply({ ok: true }) : reply({ error: "A tarefa mudou. Atualize e tente novamente." }, 409);
+      if (action === "delete" && terminal) {
+        const { data, error } = await match(admin.from(table).delete()).select("id").maybeSingle();
+        if (error) throw error;
+        return changed(data);
+      }
+      if (action === "retry" && terminal) {
+        const { data, error } = await match(admin.from(table).update({
+          status: "queued", task_id: null, started_at: null, provider_finished_at: null,
+          outputs: {}, error: null, ...release, updated_at: new Date().toISOString(),
+        })).select("id").maybeSingle();
+        if (error) throw error;
+        return changed(data);
+      }
+      if (action === "stop" && job.status === "queued") {
+        const { data, error } = await match(admin.from(table).update({
+          status: "failed", error: "Produção parada.", updated_at: new Date().toISOString(), ...release,
+        })).select("id").maybeSingle();
+        if (error) throw error;
+        return changed(data);
+      }
+      if (action === "stop" && job.status === "running") {
+        const now = new Date();
+        const lease = crypto.randomUUID();
+        const { data: locked, error } = await match(admin.from(table).update({
+          lease_id: lease, lease_until: new Date(now.getTime() + 60000).toISOString(),
+        })).or("lease_id.is.null,lease_until.lt." + now.toISOString()).select("*").maybeSingle();
+        if (error) throw error;
+        if (!locked) return changed(null);
+        try {
+          if (locked.task_id) {
+            const { request } = await runningHub(await storageRPC(admin, "get_cloudent_worker_secret"));
+            const result = await request("/task/openapi/cancel", { taskId: locked.task_id });
+            if (Number(result.code) !== 0) return reply({ error: "O RunningHub ainda não confirmou a parada." }, 409);
+          }
+          await patch(locked, { status: "failed", error: "Produção parada.", ...release });
+          return reply({ ok: true });
+        } finally {
+          const { error: unlockError } = await admin.from(table).update(release).eq("id", id).eq("lease_id", lease);
+          if (unlockError) throw unlockError;
+        }
+      }
+      return reply({ error: "Esta ação não está disponível para o estado atual." }, 409);
+    }
     if (action === "download" && req.method === "GET") {
       const node = url.searchParams.get("node") || "";
       if (!NODES.some(n => n === node) || !job.outputs?.[node]) return reply({ error: "Vídeo ainda indisponível." }, 404);
