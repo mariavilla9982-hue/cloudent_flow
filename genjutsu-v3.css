@@ -64,3 +64,24 @@
   .gv3-media { min-height: 122px; }
   .gv3-actions .primary { width: 100%; }
 }
+
+.gv3-compare { min-width: 0; }
+.gv3-compare > summary { cursor: pointer; padding: 10px 0; color: var(--gv3-text); }
+.gv3-compare > summary:focus-visible { outline: 2px solid #f5f5f5; outline-offset: 3px; }
+.gv3-variant { min-width: 0; display: grid; align-content: start; gap: 8px; }
+.gv3-variant-heading { align-items: center; }
+.gv3-variant-heading h4 { margin: 0; font-size: 14px; }
+.gv3-variant video {
+  display: block;
+  width: 100%;
+  height: clamp(150px, 35vw, 380px);
+  object-fit: contain;
+  background: #080808;
+  border-radius: 9px;
+}
+#production [data-genjutsu-v3] .gv3-cover[hidden], .gv3-preview-status:empty { display: none; }
+.gv3-cover { justify-self: start; }
+@media (max-width: 540px) {
+  .gv3-compare .gv3-outputs { gap: 7px; }
+  .gv3-variant-heading h4 { font-size: 13px; }
+}
