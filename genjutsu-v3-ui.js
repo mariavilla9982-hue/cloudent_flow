@@ -174,7 +174,16 @@
       const date = document.createElement("time");
       date.dateTime = job.created_at;
       date.textContent = new Date(job.created_at).toLocaleString("pt-BR");
-      header.append(title, date);
+      const identity = document.createElement("div");
+      identity.className = "gv3-job-identity";
+      identity.append(title);
+      if (job.mode === "manual" || job.mode === "automatic") {
+        const tag = document.createElement("span");
+        tag.className = "gv3-mode-tag";
+        tag.textContent = job.mode === "manual" ? "Manual" : "Automático";
+        identity.append(tag);
+      }
+      header.append(identity, date);
       card.append(header);
       if (job.error) {
         const details = document.createElement("p");
@@ -226,15 +235,17 @@
     const form = event.currentTarget, button = form.querySelector("button[type=submit]");
     const video = form.elements.video.files[0], image = form.elements.image.files[0];
     if (!video || !image) return;
+    const prompt = form.elements.manual_prompt.value.trim();
+    if (!prompt) { notify("Digite o prompt manual."); return; }
     busy = true;
     button.disabled = true;
     button.textContent = "Enviando…";
     try {
-      if (pending?.video !== video || pending?.image !== image ||
+      if (pending?.video !== video || pending?.image !== image || pending?.prompt !== prompt ||
           ((!pending.uploaded.video || !pending.uploaded.image) && Date.now() - pending.created > 240000)) {
-        pending = { video, image, created: Date.now(), uploaded: {} };
+        pending = { video, image, prompt, created: Date.now(), uploaded: {} };
         pending.ticket = await call("ticket", {}, {
-          video_bytes: video.size, image_bytes: image.size,
+          video_bytes: video.size, image_bytes: image.size, manual_prompt: prompt,
           video_type: video.type || "video/mp4", image_type: image.type || "image/jpeg",
         });
       }
@@ -278,6 +289,7 @@
           ${mediaField({ name: "video", title: "Vídeo de referência", kind: "vídeo", accept: "video/mp4,video/webm,video/quicktime", formats: "MP4, MOV ou WebM · até 30 MiB", icon: "▷" })}
           ${mediaField({ name: "image", title: "Foto do personagem", kind: "foto", accept: "image/jpeg,image/png,image/webp", formats: "JPG, PNG ou WebP · até 10 MiB", icon: "▧" })}
         </div>
+        <label class="gv3-prompt"><b>Prompt manual</b><textarea name="manual_prompt" rows="4" required maxlength="8000" placeholder="Descreva o personagem em inglês…"></textarea></label>
         <div class="gv3-actions"><button class="btn primary" type="submit">Gerar vídeos</button><p class="gv3-status" data-status role="status"></p></div>
       </form>
       <section class="gv3-panel" aria-label="Resultados">
