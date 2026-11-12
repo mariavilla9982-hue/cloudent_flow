@@ -28,7 +28,8 @@ async function route(admin:any,accountId:string){
   if(!a||a.platform!=="instagram"||!a.enabled)throw new Error("instagram_account_unavailable");
   const {data:token,error:te}=await admin.rpc("get_instagram_page_token_for_account",{p_account_id:a.id});if(te)throw te;if(!token)throw new Error("instagram_token_missing");
   const base=String(a.config?.api_mode||"instagram_login")==="facebook_login"?"https://graph.facebook.com/v26.0":"https://graph.instagram.com/v26.0";
-  return {token:String(token),base,igId:String(a.external_account_id||""),label:String(a.account_label||"")};
+  const {data:captionsPaused,error:captionPolicyError}=await admin.rpc("instagram_calendar_captions_paused",{p_account_id:a.id});if(captionPolicyError)throw captionPolicyError;
+  return {token:String(token),base,igId:String(a.external_account_id||""),label:String(a.account_label||""),captionsPaused};
 }
 
 
@@ -130,10 +131,14 @@ Deno.serve(async(req:Request)=>{
         if(!container){
           const mediaUrl=String(job.storage_provider||"supabase")==="r2"?await r2Url(admin,String(job.storage_path),7200):(await admin.storage.from("videos").createSignedUrl(String(job.storage_path),7200)).data?.signedUrl;
           if(!mediaUrl)throw new Error("trial_media_url_missing");const cover=Math.max(3000,Math.min(60000,Number(job.cover_offset_ms||3500)));
-          const created=await graph(r.base,r.igId+"/media",r.token,"POST",{media_type:"REELS",video_url:mediaUrl,caption:String(job.caption||"").slice(0,2200),share_to_feed:"false",thumb_offset:String(cover),trial_params:JSON.stringify({graduation_strategy:String(job.graduation_strategy||"manual").toUpperCase()==="SS_PERFORMANCE"?"SS_PERFORMANCE":"MANUAL"})});
-          container=String(created.id);await admin.from("reel_test_publications").update({container_id:container,status:"processing",next_attempt_at:new Date(Date.now()+60000).toISOString(),last_error:null,locked_at:null,locked_by:null,updated_at:now}).eq("id",job.id);results.push({type:"trial",id:job.id,state:"container_created"});continue;
+          const created=await graph(r.base,r.igId+"/media",r.token,"POST",{media_type:"REELS",video_url:mediaUrl,caption:r.captionsPaused?"":String(job.caption||"").slice(0,2200),share_to_feed:"false",thumb_offset:String(cover),trial_params:JSON.stringify({graduation_strategy:String(job.graduation_strategy||"manual").toUpperCase()==="SS_PERFORMANCE"?"SS_PERFORMANCE":"MANUAL"})});
+          container=String(created.id);await admin.from("reel_test_publications").update({container_id:container,meta:{...(job.meta||{}),caption_suppressed:r.captionsPaused},status:"processing",next_attempt_at:new Date(Date.now()+60000).toISOString(),last_error:null,locked_at:null,locked_by:null,updated_at:now}).eq("id",job.id);results.push({type:"trial",id:job.id,state:"container_created"});continue;
         }
         const st=await graph(r.base,container+"?fields=status_code,status",r.token);const code=String(st.status_code||"");
+        if(r.captionsPaused&&!job.meta?.caption_suppressed&&!job.meta?.publish_started_at&&["FINISHED","IN_PROGRESS","ERROR","EXPIRED"].includes(code)){
+          await admin.from("reel_test_publications").update({status:"scheduled",container_id:null,next_attempt_at:new Date().toISOString(),locked_at:null,locked_by:null,updated_at:now}).eq("id",job.id).eq("locked_by",worker).throwOnError();
+          continue;
+        }
         if(code!=="FINISHED"){
           if(code==="ERROR"||code==="EXPIRED"){await admin.from("reel_test_publications").update({status:"scheduled",container_id:null,next_attempt_at:new Date(Date.now()+120000).toISOString(),last_error:"Container Trial falhou: "+String(st.status||code),updated_at:now}).eq("id",job.id);results.push({type:"trial",id:job.id,state:"retry"});}
           else{await admin.from("reel_test_publications").update({status:"processing",next_attempt_at:new Date(Date.now()+60000).toISOString(),last_error:null,updated_at:now}).eq("id",job.id);results.push({type:"trial",id:job.id,state:"processing"});}continue;

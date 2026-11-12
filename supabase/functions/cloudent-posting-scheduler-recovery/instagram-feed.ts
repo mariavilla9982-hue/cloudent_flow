@@ -57,12 +57,16 @@ export async function publishDueFeedPosts(admin: any, deps: any) {
           }
         }
         container = await create(carousel
-          ? {media_type:"CAROUSEL",children:post.child_ids.join(","),caption:post.caption}
-          : {image_url:await r2Url(admin,paths[0],7200),caption:post.caption});
-        await save({status:"processing",container_id:container,next_attempt_at:later(),last_error:null});
+          ? {media_type:"CAROUSEL",children:post.child_ids.join(","),caption:r.captionsPaused?"":post.caption}
+          : {image_url:await r2Url(admin,paths[0],7200),caption:r.captionsPaused?"":post.caption});
+        await save({status:"processing",container_id:container,caption_suppressed:r.captionsPaused,next_attempt_at:later(),last_error:null});
         return;
       }
       const result = await readStatus(container);
+      if (r.captionsPaused && !post.caption_suppressed && ["FINISHED","IN_PROGRESS","ERROR","EXPIRED"].includes(result.status_code)) {
+        await save({status:"scheduled",container_id:null,next_attempt_at:later(),last_error:null});
+        return;
+      }
       if (["ERROR","EXPIRED"].includes(result.status_code)) throw new Error("O Instagram recusou a mídia deste post.");
       if (result.status_code !== "FINISHED") {
         await save({next_attempt_at:later()});

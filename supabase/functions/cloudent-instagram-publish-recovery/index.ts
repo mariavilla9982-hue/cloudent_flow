@@ -93,7 +93,9 @@ Deno.serve(async(req:Request)=>{
 
     let payload:any={...(j.payload||{})};
     let containerId=String(payload.container_id||"");
-    const caption=String(s.instagram_scale_caption??v.caption??"").slice(0,2200);
+    const {data:captionsPaused,error:captionPolicyError}=await admin.rpc("instagram_calendar_captions_paused",{p_account_id:pa.id});
+    if(captionPolicyError)throw captionPolicyError;
+    const caption=captionsPaused?"":String(s.instagram_scale_caption??v.caption??"").slice(0,2200);
     const now=new Date().toISOString();
 
     if(!containerId){
@@ -101,12 +103,12 @@ Deno.serve(async(req:Request)=>{
       await verifyMediaReadable(mediaUrl);
       await admin.from("app_settings").delete().eq("key","calendar_media_block_"+scheduleId);
       const coverOffsetMs=3500;
-      const firstCommentMessage=await firstCommentsEnabled(admin)?await pickFirstComment(admin,caption,scheduleId):null;
+      const firstCommentMessage=!captionsPaused&&await firstCommentsEnabled(admin)?await pickFirstComment(admin,caption,scheduleId):null;
       // Normal Reels must appear only in the Reels tab, never in the main profile/feed grid.
       const created=await graph(base,igId+"/media",String(token),"POST",{media_type:"REELS",video_url:mediaUrl,caption,share_to_feed:"false",thumb_offset:String(coverOffsetMs)});
       containerId=String(created.id||"");
       if(!containerId)throw new Error("instagram_container_receipt_missing");
-      payload={...payload,container_id:containerId,container_created_at:now,cover_offset_ms:coverOffsetMs,platform_account_id:String(pa.id),first_comment_message:firstCommentMessage,share_to_feed:false};
+      payload={...payload,container_id:containerId,container_created_at:now,cover_offset_ms:coverOffsetMs,platform_account_id:String(pa.id),first_comment_message:firstCommentMessage,caption_suppressed:captionsPaused,share_to_feed:false};
       await admin.from("job_queue").update({status:"running",attempts:Math.max(1,Number(j.attempts||0)+1),locked_at:now,locked_by:worker,last_error:null,payload,updated_at:now}).eq("id",j.id).eq("locked_by",worker).throwOnError();
       await admin.from("schedules").update({status:"processing",attempt_count:Math.max(1,Number(s.attempt_count||0)+1),last_error:null}).eq("id",scheduleId);
       return out({ok:true,state:"container_created",container_id:containerId,first_comment_message:firstCommentMessage,share_to_feed:false});
@@ -119,6 +121,13 @@ Deno.serve(async(req:Request)=>{
     }
     const st=payload.instagram_media_id?{status_code:"FINISHED"}:await graph(base,containerId+"?fields=status_code,status",String(token),"GET");
     const code=String(st.status_code||"");
+    if(captionsPaused&&!payload.caption_suppressed&&!payload.publish_started_at&&!payload.instagram_media_id&&["FINISHED","IN_PROGRESS","ERROR","EXPIRED"].includes(code)){
+      delete payload.container_id;
+      delete payload.container_created_at;
+      delete payload.first_comment_message;
+      await admin.from("job_queue").update({payload,updated_at:now}).eq("id",j.id).eq("locked_by",worker).throwOnError();
+      return out({ok:true,state:"captionless_container_pending"});
+    }
     if(code!=="FINISHED"){
       if(code==="ERROR"||code==="EXPIRED"){
         if(pilotChild){
@@ -170,7 +179,7 @@ Deno.serve(async(req:Request)=>{
     const publishedAt=String(payload.published_at||new Date().toISOString());
     let firstCommentId=String(payload.first_comment_id||"")||null;
     let firstCommentError:string|null=null;
-    const skipFirstComment=!await firstCommentsEnabled(admin);
+    const skipFirstComment=captionsPaused||!await firstCommentsEnabled(admin);
     let comment=skipFirstComment?"":String(payload.first_comment_message||"").trim();
     if(!skipFirstComment&&(!comment||comment===caption.trim()))comment=String(await pickFirstComment(admin,caption,scheduleId)||"").trim();
     if(comment&&!firstCommentId){
