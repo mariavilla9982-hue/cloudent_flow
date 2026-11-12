@@ -185,7 +185,7 @@ async function worker(master: string) {
       await requireMotionStorage(admin);
       const cfg = await storage();
       if (!await storageRPC(admin, "motion_storage_record_read", { p_count: 2 })) throw new MotionStorageSafetyError("Orçamento de leituras atingido.");
-      const [video, image] = await Promise.all([motionObjectURL(cfg, "GET", inputPath(job, "video")), motionObjectURL(cfg, "GET", inputPath(job, "image"))]);
+      const [video, image] = await Promise.all([motionObjectURL(cfg, "GET", inputPath(job, "video"), 3600), motionObjectURL(cfg, "GET", inputPath(job, "image"), 3600)]);
       dispatchSent = true;
       const created = await request("/task/openapi/create", { workflowId: WORKFLOW, addMetadata: true, nodeInfoList: [
         { nodeId: "1", fieldName: "video", fieldValue: video },
