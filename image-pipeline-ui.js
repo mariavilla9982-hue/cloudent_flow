@@ -28,8 +28,8 @@
     root.querySelector('[data-character-count]').textContent=custom?'Envie a foto da modelo que você quer usar.':d?.character?'Folha selecionada: '+photoCharacters.find(c=>c.id===d.character).name:'Escolha uma modelo.';
   }
   let characterRequest=null;
-  const defaultVideoWorkflow='genjutsu';
-  const videoWorkflows=[{key:'genjutsu',label:'GENJUTSU'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
+  const defaultVideoWorkflow='genjutsu_v3';
+  const videoWorkflows=[{key:'genjutsu_v3',label:'GENJUTSU V3'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
   const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
   function workflowSelector(d){
     return '<label class="pipeline-workflow"><b>Workflow após Face Swap e Upscale</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||defaultVideoWorkflow)===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>O vídeo original e a imagem pronta seguem para o workflow escolhido.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
@@ -126,7 +126,7 @@
           status.textContent='Vídeo '+(index+1)+' de '+entries.length+' · '+entry.original.name;
           if(row)row.textContent='Preparando envio…';
           const genjutsu=(entry.workflow||defaultVideoWorkflow)==='genjutsu';
-          if(genjutsu&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU: use MP4, WebM ou MOV de até 30 MiB.');
+          if((genjutsu||(entry.workflow||defaultVideoWorkflow)==='genjutsu_v3')&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU V3: use MP4, WebM ou MOV de até 30 MiB.');
           const seconds=genjutsu?await videoDuration(entry):null;
           entry.workflowLocked=true;lockWorkflows(root);
           entry.reference=entry.reference||new File([await extractFirstFrameBlob(entry.urls.original)],'primeiro-frame.jpg',{type:'image/jpeg'});
@@ -203,12 +203,14 @@
   }
   function label(j){
     const m=j.meta||{};
+    if(m.video_workflow?.key==='genjutsu_v3'&&m.pipeline_status==='CONTROL_MOTION_RUNNING')return 'Face Swap ✓ · Upscale ✓ · GENJUTSU V3 processando…';
     if(j.production?.status==='ready')return 'Vídeo pronto';
     if(j.status==='ready')return m.source==='face_swap_natural'?'Vídeo pronto':'Imagem pronta';
     if(j.status==='failed'||j.production?.status==='failed')return 'Falha em '+({face_swap:'Face Swap',upscale:'Upscale',control_motion:'Control Motion'}[m.error_stage||m.stage]||'processamento');
     return {UPLOADING:'Aguardando upload',UPLOADED:'Arquivos enviados',FACE_SWAP_RUNNING:'Face Swap processando…',FACE_SWAP_COMPLETED:'Face Swap ✓ · Upscale aguardando',UPSCALE_RUNNING:'Face Swap ✓ · Upscale processando…',CONTROL_MOTION_RUNNING:'Face Swap ✓ · Upscale ✓ · Control Motion processando…',COMPLETED:'Concluído'}[m.pipeline_status]||'Aguardando';
   }
   function queueState(j){
+    if(j.meta?.video_workflow?.key==='genjutsu_v3'&&j.meta?.pipeline_status==='CONTROL_MOTION_RUNNING')return false;
     const p=j.meta?.stage==='control_motion'?j.production:null;
     const status=p?.status||j.status;
     return !['failed','ready','cancelled'].includes(status)&&(
@@ -289,7 +291,7 @@
         '<div class="pipeline-stage-track" role="progressbar" aria-label="Etapas concluídas" aria-valuemin="0" aria-valuemax="'+steps.length+'" aria-valuenow="'+state.done+'" aria-valuetext="'+e(title)+'">'+steps.map(step=>'<span class="pipeline-stage-segment '+step.state+'"></span>').join('')+'</div>'+
         '<ol class="pipeline-step-list">'+steps.map((step,i)=>'<li class="pipeline-step '+step.state+'" '+(step.state==='active'?'aria-current="step"':'')+'><span class="pipeline-step-icon">'+(step.done?'✓':step.state==='failed'?'!':i+1)+'</span><span>'+step.name+'</span></li>').join('')+'</ol>'+
         (j.last_error?'<p class="'+(failed?'pipeline-job-error':'pipeline-job-notice')+'">'+e(j.last_error)+'</p>':'')+
-        '<div class="pipeline-job-actions">'+(j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-original="'+j.id+'">▷ Vídeo original</button>':'')+(j.meta.source==='face_swap_natural'&&(j.meta.upscale_result||j.meta.face_swap_result)?'<button type="button" class="btn" data-compare="'+j.id+'">Comparar imagem</button>':'')+(ready?'<button type="button" class="btn primary" data-open="'+j.id+'">Ver resultado</button><button type="button" class="btn" data-download="'+j.id+'">↓ Baixar</button>':'')+(ready&&j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(stage==='control_motion'&&j.status==='waiting'&&j.production?.status==='motion_waiting'?'<button type="button" class="btn" data-cancel="'+j.id+'">Cancelar espera</button>':'')+(retry?'<button type="button" class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button type="button" class="btn pipeline-delete" data-delete="'+j.id+'" '+(deletable?'':'disabled title="Disponível após o processamento"')+'>Excluir</button></div></div><div data-result="'+j.id+'"></div></article>';
+        '<div class="pipeline-job-actions">'+(j.meta.genjutsu_v3_job_id?'<button type="button" class="btn" data-open-v3>Abrir GENJUTSU V3</button>':'')+(j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-original="'+j.id+'">▷ Vídeo original</button>':'')+(j.meta.source==='face_swap_natural'&&(j.meta.upscale_result||j.meta.face_swap_result)?'<button type="button" class="btn" data-compare="'+j.id+'">Comparar imagem</button>':'')+(ready&&!j.meta.genjutsu_v3_job_id?'<button type="button" class="btn primary" data-open="'+j.id+'">Ver resultado</button><button type="button" class="btn" data-download="'+j.id+'">↓ Baixar</button>':'')+(ready&&!j.meta.genjutsu_v3_job_id&&j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(stage==='control_motion'&&j.status==='waiting'&&j.production?.status==='motion_waiting'?'<button type="button" class="btn" data-cancel="'+j.id+'">Cancelar espera</button>':'')+(retry&&!(stage==='control_motion'&&j.meta.genjutsu_v3_job_id)?'<button type="button" class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button type="button" class="btn pipeline-delete" data-delete="'+j.id+'" '+(deletable?'':'disabled title="Disponível após o processamento"')+'>Excluir</button></div></div><div data-result="'+j.id+'"></div></article>';
     }).join(''):'<div class="card"><p class="muted">Envie um arquivo para acompanhar as etapas e a prévia aqui.</p></div>');
     fillJobPreviews(node,rows);
   }
@@ -334,6 +336,7 @@
         if(b.dataset.mode){if(busy.has(page))return;showPage(b.dataset.mode);return;}
         if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();d.variantIds={};}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();if(photo)photoSelection(root,d);return;}
         if(b.hasAttribute('data-refresh'))return await refresh();
+        if(b.hasAttribute('data-open-v3')){showPage('production');await window.CloudentMotionControl?.setMode('genjutsu');return;}
         if(b.dataset.original){
           b.disabled=true;const id=b.dataset.original;
           const r=await cloudFetch('?resource=image-pipeline-preview&kind=original&id='+encodeURIComponent(id));
