@@ -352,3 +352,14 @@
     grid-row:3!important;
   }
 }
+
+/* Keep the action disclosure inside its card when the action row starts at the left edge. */
+@media(max-width:760px){
+  #production.studio-page.studio-page [data-genjutsu-root] .genjutsu-card .production-job-actions{
+    flex-wrap:wrap;justify-content:flex-start;
+  }
+  #production [data-genjutsu-root] .genjutsu-more[open]{flex:1 0 100%;min-width:0}
+  #production [data-genjutsu-root] .genjutsu-more[open] .genjutsu-menu{
+    position:static;width:100%;max-width:none;margin-top:8px;box-shadow:none;box-sizing:border-box;
+  }
+}
