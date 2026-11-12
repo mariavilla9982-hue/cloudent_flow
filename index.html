@@ -4428,7 +4428,7 @@ body.trial-modal-open{overflow:hidden!important}
       <span>Buscar conteúdos, ideias, métricas…</span><kbd>⌘ K</kbd>
     </button>
     <div class="top-actions">
-      <button class="live-worker-pill" id="liveWorkerPill" onclick="showPage('automation')" title="Status da automação"><span class="live-pulse"></span><span id="liveWorkerText">Sincronizando…</span></button>
+      <button class="live-worker-pill" id="liveWorkerPill" onclick="setSettingsTab('automation');showPage('settings')" title="Status da automação"><span class="live-pulse"></span><span id="liveWorkerText">Sincronizando…</span></button>
       <button class="top-icon-btn notification-trigger" onclick="toggleActivityPanel()" title="Atividade"><span>◔</span><i id="notificationCount" class="hidden">0</i></button>
       <button class="btn primary" id="newVideoBtn">＋ Agendar vídeo</button>
     </div>
@@ -4479,13 +4479,10 @@ const navItems=[
   ["upscale","↑","Upscale"],
   ["faceSwapPhoto","◈","Face Swap Foto"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
-  ["frameExtractor","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3\"></path><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1.5\"></rect><path d=\"m9 14 2.2-2.2 1.8 1.8 1.6-1.6L17 14.5\"></path></svg>","Extrator de frames"],
   ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X Studio"],
   ["tiktokStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14 4v10.4a4.6 4.6 0 1 1-3.3-4.4\"></path><path d=\"M14 4c1.2 2.6 3 4 5.5 4.4\"></path></svg>","TikTok"],
   ["metrics","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20V7\"></path></svg>","Métricas"],
   ["smartTimes","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"8\"></circle><path d=\"M12 7v5l3 2\"></path><path d=\"M4 4l2 2M20 4l-2 2\"></path></svg>","Smart Scheduler"],
-  ["automation","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 2 5 14h7l-1 8 8-12h-7l1-8Z\"></path></svg>","Central de automação"],
-  ["cloudentAI","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 3 14.1 8.9 20 11l-5.9 2.1L12 19l-2.1-5.9L4 11l5.9-2.1L12 3Z\"></path><path d=\"m18 3 .8 2.2L21 6l-2.2.8L18 9l-.8-2.2L15 6l2.2-.8L18 3Z\"></path></svg>","Cloudent AI"],
   ["settings","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.08A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.08A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.08A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.39.28.7.63.88 1.08.17.44.21.92.12 1.39-.08.47-.29.9-.6 1.26-.11.13-.24.24-.4.34Z\"></path></svg>","Configurações"]
 ];
 const SUPABASE_URL=window.CloudentConfig?.supabaseUrl||"";
@@ -5787,9 +5784,7 @@ function commandItems(){
     {icon:"◫",title:"Abrir calendário",hint:"Workspace",run:()=>{closeCommandPalette();showPage("calendar")}},
     {icon:"⌁",title:"Abrir métricas",hint:"Analytics",run:()=>{closeCommandPalette();showPage("metrics")}},
     {icon:"↻",title:"Sincronizar Instagram",hint:"Métricas",run:()=>{closeCommandPalette();syncInstagramToday()}},
-    {icon:"✦",title:"Abrir automação",hint:"Workers 24/7",run:()=>{closeCommandPalette();showPage("automation")}},
     {icon:"◷",title:"Abrir horários",hint:"Smart Scheduler",run:()=>{closeCommandPalette();showPage("smartTimes")}},
-    {icon:"✧",title:"Abrir Cloudent AI",hint:"Análise inteligente",run:()=>{closeCommandPalette();showPage("cloudentAI")}},
     {icon:"⚙",title:"Configurações",hint:"Sistema",run:()=>{closeCommandPalette();showPage("settings")}}
   ];
 }
@@ -5969,7 +5964,7 @@ function renderMobileNav(){
       '<span class="mobile-nav-more">•••</span><b>Mais</b></button>';
 }
 function mobileMoreItems(){
-  return ["admin","accounts","trialReels","faceSwap","frameExtractor","xStudio","tiktokStudio","smartTimes","automation","cloudentAI","settings"];
+  return ["admin","accounts","trialReels","faceSwap","xStudio","tiktokStudio","smartTimes","settings"];
 }
 function toggleMobileMore(force){
   const host=$("#mobileMoreHost");if(!host)return;
@@ -5988,7 +5983,7 @@ function toggleMobileMore(force){
         const x=mobileNavItem(id);
         const beta=["xStudio","tiktokStudio"].includes(id);
         return '<button onclick="toggleMobileMore(false);showPage(\''+id+'\')">'+
-          '<span>'+x[1]+'</span><div><b>'+x[2]+'</b><small>'+(beta?"Beta":id==="cloudentAI"?"IA":"Abrir")+'</small></div><em>›</em></button>';
+          '<span>'+x[1]+'</span><div><b>'+x[2]+'</b><small>'+(beta?"Beta":"Abrir")+'</small></div><em>›</em></button>';
       }).join("")+'</div>'+
       '<div class="mobile-more-account">'+(instagramIntegration?.config?.profile_picture_url?'<img class="mobile-instagram-avatar" src="'+esc(instagramIntegration.config.profile_picture_url)+'" alt="" referrerpolicy="no-referrer">':'<span class="connection-dot"></span>')+'<div><b id="mobileAccountLabel">'+esc(instagramIntegration?.account_label||"Instagram")+'</b><small>'+(instagramIntegration?.enabled?"Conectado":"Verificando conexão…")+'</small></div></div>'+
     '</section>';
@@ -6013,9 +6008,9 @@ function nav(){
 
   const groups=[
     {label:"Planejamento",pages:["overview","calendar","trialReels","bulkPublish"]},
-    {label:"Produção",pages:["faceSwap","production","frameExtractor"]},
+    {label:"Produção",pages:["faceSwap","production"]},
     {label:"Canais",pages:["accounts","xStudio","tiktokStudio"]},
-    {label:"Inteligência",pages:["metrics","smartTimes","automation","cloudentAI"]},
+    {label:"Inteligência",pages:["metrics","smartTimes"]},
     {label:"Sistema",pages:["admin","settings"]}
   ];
   const byId=Object.fromEntries(navItems.map(x=>[x[0],x]));
@@ -12290,7 +12285,7 @@ function settings(){
       </div>
     </div>`;
   }else if(settingsTab==="automation"){
-    body=`<div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Automação</span><h3>Resumo</h3></div><button class="btn" onclick="showPage('automation')">Abrir painel completo</button></div>
+    body=`<div class="card ui3-panel"><div class="ui3-panel-head"><div><span>Automação</span><h3>Resumo</h3></div></div>
       <div class="ui3-info-rows"><div><span>Publicação 24/7</span><b>Ativa</b></div><div><span>Coleta automática</span><b>30m · 2h · 6h · 24h · 48h</b></div><div><span>Calendário automático</span><b>${cfg.autoOptimizeCalendar!==false?"Ativo":"Pausado"}</b></div><div><span>Smart Scheduler</span><b>${smart.enabled!==false?"Ativo":"Pausado"}</b></div></div>
     </div>`;
   }else{
@@ -12533,8 +12528,7 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=6"></script>
-<script src="/genjutsu-ui.js?v=17"></script>
-<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=22"></script>
+<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=23"></script>
 <script src="/production-studio.js?v=7"></script>
 <script src="/image-pipeline-ui.js?v=18"></script>
 </body>

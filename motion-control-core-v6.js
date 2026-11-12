@@ -94,21 +94,29 @@
     return '<div class="motion-workflow-state '+cls+'"><i></i><span>'+text+'</span></div>';
   }
 
+  function productionWorkflowTabs(){
+    const workflows=[[STANDARD,"Vídeo 7 minutos"],[MOTION,"Motion Control v7"],[GENJUTSU,"GENJUTSU V3"]];
+    return '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
+      workflows.map(([key,label])=>'<button type="button" role="tab" aria-selected="'+(activeMode===key)+
+        '" class="production-workflow-tab'+(activeMode===key?' active':'')+
+        '" onclick="CloudentMotionControl.setMode(&quot;'+key+'&quot;)">'+label+'</button>').join("")+
+      '</div>';
+  }
+
+  function renderGenjutsuV3(root){
+    if(!root)return;
+    root.classList.remove("motion-control-mode");
+    root.innerHTML='<div class="ui3-page-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU V3</h2></div></div>'+
+      productionWorkflowTabs();
+  }
+
   function decorateProduction(){
     const root=document.getElementById("production");
     if(!root)return;
     root.classList.toggle("motion-control-mode",activeMode===MOTION);
 
     const head=root.querySelector(".production-head");
-    if(head&&!root.querySelector(".production-workflow-tabs")){
-      head.insertAdjacentHTML("afterend",
-        '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
-          '<button type="button" class="production-workflow-tab '+(activeMode===STANDARD?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;standard&quot;)">Vídeo 7 minutos</button>'+
-          '<button type="button" class="production-workflow-tab '+(activeMode===MOTION?"active":"")+'" onclick="CloudentMotionControl.setMode(&quot;motion_control&quot;)">Motion Control v7</button>'+
-          '<button type="button" class="production-workflow-tab" onclick="CloudentMotionControl.setMode(&quot;genjutsu&quot;)">GENJUTSU</button>'+
-        '</div>'
-      );
-    }
+    if(head&&!root.querySelector(".production-workflow-tabs"))head.insertAdjacentHTML("afterend",productionWorkflowTabs());
 
     if(activeMode!==MOTION)return;
 
@@ -227,7 +235,7 @@
 
   const nativeProductionPage=productionPage;
   productionPage=function(...args){
-    if(activeMode===GENJUTSU&&window.CloudentGenjutsu){window.CloudentGenjutsu.render(document.getElementById("production"));return;}
+    if(activeMode===GENJUTSU){renderGenjutsuV3(document.getElementById("production"));return;}
     const data=typeof productionData!=="undefined"?productionData:null;
     const all=data?.jobs;
     if(data&&Array.isArray(all))data.jobs=all.filter(belongsToMode);
