@@ -59,14 +59,17 @@
   }
 
   function resultVariant(job, node, fps, output) {
-    const label = output.fps === null ? "Saída #" + node : (output.fps ?? fps) + " fps";
-    const suffix = output.fps === null ? "node-" + node : (output.fps ?? fps) + "fps";
+    const measured = output.fps;
+    const displayFps = typeof measured === "number" && Math.abs(measured - fps) > 0.15 ? measured : fps;
+    const label = measured === null ? "Saída #" + node : displayFps + " fps";
+    const suffix = measured === null ? "node-" + node : displayFps + "fps";
     const tile = document.createElement("section");
     tile.className = "gv3-variant";
     const heading = document.createElement("header");
     heading.className = "gv3-variant-heading";
     const title = document.createElement("h4");
     title.textContent = label;
+    if (typeof measured === "number") title.title = "FPS medido: " + measured.toLocaleString("pt-BR");
     const download = document.createElement("button");
     download.type = "button";
     download.className = "btn";
