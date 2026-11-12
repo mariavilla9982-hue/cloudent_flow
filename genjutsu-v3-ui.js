@@ -49,14 +49,121 @@
     }
   }
 
+  function saveFile(blob, name) {
+    const object = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = object;
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(object), 30000);
+  }
+
+  function resultVariant(job, node, fps, output) {
+    const label = output.fps === null ? "Saída #" + node : (output.fps ?? fps) + " fps";
+    const suffix = output.fps === null ? "node-" + node : (output.fps ?? fps) + "fps";
+    const tile = document.createElement("section");
+    tile.className = "gv3-variant";
+    const heading = document.createElement("header");
+    heading.className = "gv3-variant-heading";
+    const title = document.createElement("h4");
+    title.textContent = label;
+    const download = document.createElement("button");
+    download.type = "button";
+    download.className = "btn";
+    download.textContent = "↓ Baixar";
+    download.setAttribute("aria-label", "Baixar vídeo " + label);
+    heading.append(title, download);
+
+    const video = document.createElement("video");
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.crossOrigin = "anonymous";
+    video.setAttribute("aria-label", "Prévia do vídeo " + label);
+    const status = document.createElement("p");
+    status.className = "gv3-note gv3-preview-status";
+    status.setAttribute("role", "status");
+    const cover = document.createElement("button");
+    cover.type = "button";
+    cover.className = "btn gv3-cover";
+    cover.textContent = "↓ Baixar capa";
+    cover.setAttribute("aria-label", "Baixar capa de " + label);
+    cover.hidden = true;
+    let link, expires = 0, pendingLink, coverImage, fallbackUsed = false;
+    const getLink = async () => {
+      if (link && Date.now() < expires) return link;
+      pendingLink ||= call("download", { id: job.id, node }).then(({ url }) => {
+        link = url;
+        expires = Date.now() + 240000;
+        return url;
+      }).finally(() => { pendingLink = null; });
+      return await pendingLink;
+    };
+    download.onclick = async () => {
+      download.disabled = true;
+      status.textContent = "";
+      try {
+        const response = await fetch(await getLink());
+        if (!response.ok) throw new Error("Não foi possível baixar o vídeo.");
+        saveFile(await response.blob(), "genjutsu-v3-" + suffix + ".mp4");
+      } catch (e) { status.textContent = e.message; }
+      finally { download.disabled = false; }
+    };
+
+    video.addEventListener("loadeddata", () => {
+      status.textContent = "";
+      if (coverImage || fallbackUsed || !video.videoWidth) return;
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      try {
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        video.poster = canvas.toDataURL("image/jpeg", 0.9);
+        canvas.toBlob(blob => {
+          if (blob) { coverImage = blob; cover.hidden = false; }
+        }, "image/jpeg", 0.9);
+      } catch { /* The player still displays its first frame when canvas reads are unavailable. */ }
+    });
+    cover.onclick = () => {
+      if (coverImage) saveFile(coverImage, "genjutsu-v3-capa-" + suffix + ".jpg");
+    };
+    video.addEventListener("error", () => {
+      if (!fallbackUsed && link) {
+        fallbackUsed = true;
+        video.removeAttribute("crossorigin");
+        video.src = link + "#t=0.1";
+        return;
+      }
+      status.textContent = "Prévia indisponível. Você ainda pode baixar o vídeo.";
+    });
+    async function open() {
+      if (video.getAttribute("src")) return;
+      status.textContent = "Carregando prévia…";
+      try { video.src = (await getLink()) + "#t=0.1"; }
+      catch (e) { status.textContent = e.message; }
+    }
+    tile.append(heading, video, cover, status);
+    return { tile, video, open };
+  }
+
   function draw(jobs) {
     const list = panel.querySelector("[data-jobs]");
     const signature = JSON.stringify(jobs);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature;
-    list.replaceChildren();
+    const cards = new Map([...list.children].filter(item => item.dataset.jobId).map(item => [item.dataset.jobId, item]));
+    const nextCards = new Set();
     for (const job of jobs) {
+      const existing = cards.get(job.id);
+      const signature = JSON.stringify(job);
+      if (existing?.dataset.signature === signature) {
+        nextCards.add(existing);
+        continue;
+      }
       const card = document.createElement("article");
+      card.dataset.jobId = job.id;
+      card.dataset.signature = signature;
       card.className = "gv3-job";
       const header = document.createElement("header");
       const title = document.createElement("strong");
@@ -72,36 +179,31 @@
         details.textContent = job.error;
         card.append(details);
       }
-      const outputs = document.createElement("div");
-      outputs.className = "gv3-outputs";
-      for (const [node, fps] of variants) {
-        const output = job.outputs?.[node];
-        if (!output) continue;
-        const label = output.fps ?? fps;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "btn";
-        button.textContent = output.fps === null ? "Baixar saída #" + node : "Baixar " + label + " fps";
-        button.onclick = async () => {
-          button.disabled = true;
-          try {
-            const { url } = await call("download", { id: job.id, node });
-            const response = await fetch(url);
-            if (!response.ok) throw new Error("Não foi possível baixar o vídeo.");
-            const object = URL.createObjectURL(await response.blob());
-            const link = document.createElement("a");
-            link.href = object;
-            link.download = "genjutsu-v3-" + (output.fps === null ? "node-" + node : label + "fps") + ".mp4";
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(object), 30000);
-          } catch (e) { notify(e.message); }
-          finally { button.disabled = false; }
-        };
-        outputs.append(button);
+      const results = variants.filter(([node]) => job.outputs?.[node]);
+      if (results.length) {
+        const details = document.createElement("details");
+        details.className = "gv3-compare";
+        const summary = document.createElement("summary");
+        summary.textContent = results.length === 2 ? "Abrir prévias de 24 e 30 fps" : "Abrir prévia do vídeo disponível";
+        const outputs = document.createElement("div");
+        outputs.className = "gv3-outputs";
+        const players = results.map(([node, fps]) => resultVariant(job, node, fps, job.outputs[node]));
+        outputs.append(...players.map(player => player.tile));
+        details.append(summary, outputs);
+        details.addEventListener("toggle", () => {
+          for (const player of players) {
+            if (details.open) void player.open();
+            else player.video.pause();
+          }
+        });
+        card.append(details);
+        if (existing?.querySelector("details")?.open) details.open = true;
       }
-      if (outputs.childElementCount) card.append(outputs);
-      list.append(card);
+      if (existing) existing.replaceWith(card);
+      else list.append(card);
+      nextCards.add(card);
     }
+    for (const item of [...list.children]) if (!nextCards.has(item)) item.remove();
     if (!jobs.length) list.innerHTML = '<div class="gv3-empty">Nenhuma geração enviada.</div>';
   }
   async function refresh() {
@@ -176,7 +278,7 @@
         <div class="gv3-actions"><button class="btn primary" type="submit">Gerar vídeos</button><p class="gv3-status" data-status role="status"></p></div>
       </form>
       <section class="gv3-panel" aria-label="Resultados">
-        <header class="gv3-heading"><div><h3>Resultados</h3><p class="gv3-note">Versões de 24 e 30 fps com downloads separados.</p></div></header>
+        <header class="gv3-heading"><div><h3>Resultados</h3><p class="gv3-note">Compare as versões e baixe a que preferir.</p></div></header>
         <div class="gv3-jobs" data-jobs><div class="gv3-empty">Carregando resultados…</div></div>
       </section>`;
     const form = panel.querySelector("form");
