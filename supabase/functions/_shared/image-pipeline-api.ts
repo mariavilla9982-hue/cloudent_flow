@@ -191,6 +191,8 @@ export async function imagePipelineApi(d:any){
     const descriptor=(asset:any)=>({name:asset.name,type:asset.mime,size:asset.size});
     const first=reuse.original?descriptor(reuse.original):photo&&selected?{name:selected.file_name,type:selected.mime_type,size:selected.size_bytes}:b.original;
     const ref=reuse.reference?descriptor(reuse.reference):b.reference;
+    if(natural&&workflowKey==='genjutsu_v3'&&(!['video/mp4','video/webm','video/quicktime'].includes(first?.type)||!Number.isSafeInteger(first?.size)||first.size<1||first.size>30*1024*1024))
+      return json({error:'GENJUTSU V3: use MP4, WebM ou MOV de até 30 MiB.'},400);
     if(natural&&workflowKey==='genjutsu'){
       const readiness=check(await admin.from('app_settings').select('value').eq('key','genjutsu_readiness').maybeSingle());
       if(!(manualPrompt?(readiness?.value?.runninghub?.available??readiness?.value?.ready):readiness?.value?.ready)||readiness.value.workflowId!=='2117411301344411649')return json({error:'Genjutsu ainda não está validado no servidor.'},409);
