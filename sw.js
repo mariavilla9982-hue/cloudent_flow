@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v96";
+const CACHE="cloudentflow-pwa-v97";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -168,7 +168,7 @@ self.addEventListener("fetch",event=>{
   if(url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;
 
   // Fresh studio assets first; retain the last good copy for offline reopens.
-  if(url.pathname==="/production-studio.css"||url.pathname==="/production-studio.js"){
+  if(["/production-studio.css","/production-studio.js","/calendar-feed.css","/calendar-feed.js"].includes(url.pathname)){
     event.respondWith((async()=>{
       const cache=await caches.open(CACHE);
       try{
