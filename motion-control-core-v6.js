@@ -106,8 +106,11 @@
   function renderGenjutsuV3(root){
     if(!root)return;
     root.classList.remove("motion-control-mode");
-    root.innerHTML='<div class="ui3-page-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU V3</h2></div></div>'+
-      productionWorkflowTabs();
+    if(!root.querySelector("[data-genjutsu-v3]")){
+      root.innerHTML='<div class="ui3-page-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU V3</h2></div></div>'+
+        productionWorkflowTabs();
+    }
+    window.CloudentGenjutsuV3?.render(root);
   }
 
   function decorateProduction(){
@@ -345,7 +348,7 @@
   async function setMode(mode){
     const next=[STANDARD,MOTION,GENJUTSU].includes(mode)?mode:STANDARD;
     if(next===activeMode)return;
-    if(productionUploading||window.CloudentGenjutsu?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
+    if(productionUploading||window.CloudentGenjutsuV3?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
     activeMode=next;
     localStorage.setItem(MODE_KEY,activeMode);
     try{releaseProductionDraft()}catch{}
