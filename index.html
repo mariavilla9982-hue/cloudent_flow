@@ -4293,6 +4293,8 @@ body.trial-modal-open{overflow:hidden!important}
 .calendar-scale-group{display:grid;gap:6px;align-items:start}
 .calendar-scale-daughters{display:flex;gap:6px;flex-wrap:wrap}
 </style>
+<link rel="stylesheet" href="/calendar-feed.css?v=1">
+<script src="/calendar-feed.js?v=1" defer></script>
 </head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
@@ -7069,6 +7071,7 @@ async function previewTrialReel(id){
 }
 
 function calendarPage(){
+  if(window.CloudentFeed?.isOpen($("#calendar")))return;
   calendarEnsureAccount();
   if(cloudSession&&!calendarAllQueueRows&&!window.__cfCalendarAccountHydrating){
     window.__cfCalendarAccountHydrating=true;
@@ -7096,6 +7099,7 @@ function calendarPage(){
       <button class="btn primary" onclick="openScheduleModal()"><span>＋</span> Agendar vídeo</button>
     </div>
 
+    <div data-feed-nav></div>
     ${calendarAccountSwitcher()}
     <div class="calendar-control-card">
       <div class="calendar-control-main">
@@ -7136,7 +7140,9 @@ function calendarPage(){
         : '<small>Nenhum vídeo nesta janela.</small>'}
     </div>
     <div class="ui3-calendar-scroll"><div class="week-grid ui3-seven-days">${dates.map(d=>dayColumn(d,weekdays[d.getDay()])).join("")}</div></div>
+    <section class="feed-panel feed-list"><h3>Posts do Feed</h3><div data-feed-list></div></section>
   `;
+  window.CloudentFeed?.calendar($("#calendar"),calendarEnsureAccount());
   $("#weekStart").onchange=e=>{state.weekStart=clampCalendarWindowStart(e.target.value);save();calendarPage()}
   ensureCalendarMetricsTicker();
   requestAnimationFrame(()=>{updateCalendarLiveDom();setupCalendarVideoThumbs()});

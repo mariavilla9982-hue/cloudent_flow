@@ -1,3 +1,4 @@
+import { instagramFeedApi } from "./instagram-feed.ts";
 import {instagramScaleAccounts,instagramScaleApi} from "./instagram-scale.ts";
 import {handleInstagramDisconnect} from "./instagram-disconnect.ts";
 import {healthWorkers,healthFailures} from "./system-health.ts";
@@ -258,6 +259,9 @@ Deno.serve(async (req: Request) => {
     if(!accessMember?.enabled||!["admin","x_user"].includes(accessMember.role))return json({error:"forbidden"},403);
     if(resource==="session"&&req.method==="GET")return json({user_id:userData.user.id,role:accessMember.role,workspace_id:accessMember.workspace_id});
     if(accessMember.role!=="admin")return json({error:"forbidden",user_message:"Seu acesso está limitado ao X Studio."},403);
+    if(resource==="instagram-feed")return await instagramFeedApi(req,url,admin,userData.user.id,{
+      json,resolveAccount:resolveCalendarInstagramAccount,storageConfig:getCloudentR2Config,sign:r2PresignedUrl
+    });
     if(resource==="instagram-scale")return await instagramScaleApi(req,url,admin,userData.user.id,json);
     const disconnectResponse=await handleInstagramDisconnect(req,url,admin,userData.user.id,accessMember,json);
     if(disconnectResponse)return disconnectResponse;

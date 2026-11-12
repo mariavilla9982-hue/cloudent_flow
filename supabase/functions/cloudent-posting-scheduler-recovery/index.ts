@@ -1,3 +1,4 @@
+import { publishDueFeedPosts } from "./instagram-feed.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
@@ -183,6 +184,10 @@ Deno.serve(async(req:Request)=>{
         results.push({type:"account",id:account.id,state:"retry",error:"instagram_scale_worker_unavailable"});
       }
     }));
+    }
+    if(body.trials_only!==true){
+      try{await publishDueFeedPosts(admin,{route,graph,r2Url});}
+      catch{results.push({type:"feed",state:"retry",error:"instagram_feed_worker_unavailable"});}
     }
     for(const worker of ["posting_scheduler","instagram_publish","trial_reels"]){
       const own=worker==="trial_reels"?results.filter(x=>x.type==="trial"):worker==="instagram_publish"?results.filter(x=>x.type==="normal"||x.type==="account"):results;
