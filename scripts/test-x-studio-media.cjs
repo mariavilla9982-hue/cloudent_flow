@@ -74,6 +74,20 @@ function context(path,admin){const c={crypto,TextEncoder,TextDecoder,URL,URLSear
  assert.equal(await api.uploadVideoX('',apiDb.x_drive_posts[2],'test-token','signed-get'),'media');
  assert.equal(mediaInit.media_type,'image/png');assert.equal(mediaInit.media_category,'tweet_image');
  response=await call('caption-add',{caption:'Neutral queue caption'});assert.equal(response.status,200);assert.equal(apiDb.x_caption_queue[0].platform_account_id,A);
+ assert.equal((await response.json()).caption.caption,'Neutral queue caption');
+
+ apiDb.platform_accounts[0].workspace_id='w';
+ apiDb.x_account_access=[{user_id:U,workspace_id:'w',platform_account_id:A}];
+ apiDb.x_drive_posts.forEach((post,i)=>{post.id='preview-'+i;});
+ apiDb.x_drive_posts.push({...apiDb.x_drive_posts[2],id:'foreign-path',meta:{...apiDb.x_drive_posts[2].meta,storage_path:V+'/x-uploads/'+Uuid+'.png'}});
+ api.getCloudentR2Config=async()=>({});
+ api.r2PresignedUrl=async(_cfg,method,objectPath)=>{assert.equal(method,'GET');return 'https://storage.test/'+objectPath;};
+ response=await api.handler(new Request('https://test/?action=status&platform_account_id='+A,{headers:{Authorization:'Bearer '+jwt}}));
+ assert.equal(response.status,200);
+ const previews=(await response.json()).posts;
+ assert.equal(previews.find(p=>p.id==='preview-0').thumbnail_url,'https://storage.test/'+path+'.jpg');
+ assert.equal(previews.find(p=>p.id==='preview-2').thumbnail_url,'https://storage.test/'+photoPath);
+ assert.equal(previews.find(p=>p.id==='foreign-path').thumbnail_url,undefined);
  response=await call('caption-add',{platform_account_id:B,caption:'Not authorized'});assert.equal(response.status,403);
  response=await call('save-config',{enabled:false,daily_slots:['21:00','06:00','15:00'],queue_mode:'daily_slots',interval_minutes:360});assert.equal(response.status,200);const saved=(await response.json()).config;assert.deepEqual(saved.daily_slots,['06:00','15:00','21:00']);assert.equal(saved.timezone,'America/Sao_Paulo');assert.equal(saved.enabled,false);
  console.log('PASS video thumbnails, photo tickets and upload validation, native X image payload, account isolation and metrics');

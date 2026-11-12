@@ -11425,9 +11425,38 @@ function xUploadMime(file){
 function xIsPhoto(post){return post.drive_mime_type==="image/jpeg"||post.drive_mime_type==="image/png";}
 function xMediaControls(i){return `<div class="x-selected-media-actions"><button type="button" class="x-subtle-btn" onclick="xRemoveSelected(${i})" ${xPostingBusy?'disabled':''}>Remover arquivo</button><label class="x-subtle-btn">Trocar arquivo<input type="file" accept="${X_MEDIA_ACCEPT}" onchange="xReplaceSelected(${i},this)" ${xPostingBusy?'disabled':''}></label></div>`;}
 function xCaptionQueueMarkup(){const rows=xPostingData?.captions||[];return `<section class="x-settings-panel"><h3>Fila de legendas</h3><button class="x-subtle-btn" onclick="xSetTab('calendar')">Ir para a agenda</button><p class="x-muted">Publicações da galeria sem legenda própria usam a próxima legenda disponível desta conta. Cada legenda fica reservada para uma publicação no momento do envio.</p><label for="xNewCaption">Nova legenda</label><textarea id="xNewCaption" rows="3" placeholder="Escreva uma legenda" oninput="xCaptionDraft=this.value">${esc(xCaptionDraft)}</textarea><button class="x-primary-btn" onclick="xAddCaption()" ${xCaptionBusy||!xSelectedAccountId||xSelectedAccountId==='all'?'disabled':''}>Adicionar legenda à fila</button>${rows.map(c=>`<div class="x-batch-row"><p>${esc(c.caption)}</p><small>${c.status==='reserved'?'Reservada para um vídeo':'Aguardando vídeo'}</small>${c.status==='pending'?`<button class="x-primary-btn" onclick="xScheduleCaption('${c.id}')">Usar ao agendar</button><button class="x-subtle-btn" onclick="xRemoveCaption('${c.id}')">Remover legenda</button>`:''}</div>`).join('')||'<p>Nenhuma legenda na fila desta conta.</p>'}</section>`;}
-async function xAddCaption(){if(xCaptionBusy)return;const caption=$('#xNewCaption')?.value?.trim();if(!caption){toast('Escreva uma legenda.','warn');return;}xCaptionBusy=true;try{await xPostingRequest('caption-add',{caption});xCaptionDraft='';await loadXPostingStatus();}catch(e){toast(e.message,'err');}finally{xCaptionBusy=false;xStudioPage(true);}}
-async function xRemoveCaption(id){if(xCaptionBusy)return;xCaptionBusy=true;try{await xPostingRequest('caption-remove',{id});await loadXPostingStatus();xStudioPage(true);}catch(e){toast(e.message,'err');}finally{xCaptionBusy=false;xStudioPage(true);}}
-function xGalleryMarkup(){const rows=xAvailableGallery();return `<section class="x-list-panel"><div class="x-panel-title"><h3>Galeria de mídia</h3><button class="x-primary-btn" onclick="xOpenGallery()">Adicionar à galeria</button></div><p class="x-muted">Fotos e vídeos seguem os horários da automação. Itens sem legenda aguardam a fila de legendas.</p><div class="x-gallery-grid">${rows.map(p=>`<div class="x-batch-row">${p.thumbnail_url?`<img src="${esc(p.thumbnail_url)}" alt="Miniatura" loading="lazy" style="width:96px;height:128px;object-fit:cover">`:''}<strong>${esc(p.drive_file_name)}</strong><small>${esc(p.post_text||'Usar próxima legenda da fila')} · ${esc(p.status)}</small><button class="x-subtle-btn" onclick="xSelectGallery('${p.id}')">Ver prévia</button>${xEditable(p)?`<button class="x-primary-btn" onclick="xScheduleGallery('${p.id}')">Agendar</button><button class="x-subtle-btn" onclick="xPostingAction('skip','${p.id}')">Remover da galeria</button>`:''}</div>`).join('')||'<p>Sua galeria ainda está vazia.</p>'}</div></section>`;}
+async function xAddCaption(){
+ if(xCaptionBusy)return;
+ const caption=$('#xNewCaption')?.value?.trim();
+ if(!caption){toast('Escreva uma legenda.','warn');return;}
+ const generation=xAccountGeneration,submitted=xCaptionDraft;
+ xCaptionBusy=true;xStudioPage(true);
+ try{
+  const result=await xPostingRequest('caption-add',{caption});
+  if(generation!==xAccountGeneration)return;
+  if(xCaptionDraft===submitted)xCaptionDraft='';
+  if(xPostingData&&result.caption){
+   xStatusRevision++;
+   xPostingData.captions=[...(xPostingData.captions||[]),result.caption];
+  }else await loadXPostingStatus();
+ }catch(e){toast(e.message,'err');}
+ finally{xCaptionBusy=false;if(currentPage==='xStudio')xStudioPage(true);}
+}
+async function xRemoveCaption(id){
+ if(xCaptionBusy)return;
+ const generation=xAccountGeneration;
+ xCaptionBusy=true;xStudioPage(true);
+ try{
+  await xPostingRequest('caption-remove',{id});
+  if(generation!==xAccountGeneration)return;
+  if(xPostingData){
+   xStatusRevision++;
+   xPostingData.captions=(xPostingData.captions||[]).filter(c=>c.id!==id);
+  }
+ }catch(e){toast(e.message,'err');}
+ finally{xCaptionBusy=false;if(currentPage==='xStudio')xStudioPage(true);}
+}
+function xGalleryMarkup(){const rows=xAvailableGallery();return `<section class="x-list-panel"><div class="x-panel-title"><h3>Galeria de mídia</h3><button class="x-primary-btn" onclick="xOpenGallery()">Adicionar à galeria</button></div><p class="x-muted">Escolha uma foto ou vídeo para agendar.</p><div class="x-gallery-grid">${rows.map(p=>`<div class="x-batch-row">${p.thumbnail_url?`<img src="${esc(p.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="240" height="160" style="width:100%;height:160px;object-fit:contain;background:#0b0b0b;border-radius:8px">`:''}<strong>${esc(p.drive_file_name)}</strong><small>${esc(p.post_text||'Usar próxima legenda da fila')} · ${esc(p.status)}</small><button class="x-subtle-btn" onclick="xSelectGallery('${p.id}')">Ver prévia</button>${xEditable(p)?`<button class="x-primary-btn" onclick="xScheduleGallery('${p.id}')">Agendar</button><button class="x-subtle-btn" onclick="xPostingAction('skip','${p.id}')">Remover da galeria</button>`:''}</div>`).join('')||'<p>Sua galeria ainda está vazia.</p>'}</div></section>`;}
 function xAvailableGallery(){return xAllPosts().filter(p=>p.platform_account_id===xSelectedAccountId&&!p.scheduled_at&&xEditable(p));}
 function xScheduleGallery(id){
  if(xPostingBusy)return;
@@ -11505,18 +11534,20 @@ async function addXPostingVideo(){
  const button=$("#xAddPost");if(button){button.disabled=true;button.textContent="Enviando…";}
  try{
   const ticket=xUploadTicket?.file===file?xUploadTicket.ticket:await xPostingRequest("upload-ticket",{file_name:file.name,mime_type:mime,size_bytes:file.size});
+  const thumbnail=ticket.thumbnail_path?Promise.resolve(ticket.thumbnail_path):xUploadThumbnail(ticket,file);
   if(!xUploadTicket||xUploadTicket.file!==file)await new Promise((resolve,reject)=>{
    const xhr=new XMLHttpRequest();xhr.open("PUT",ticket.upload_url);xhr.setRequestHeader("Content-Type",mime);
    xhr.upload.onprogress=e=>{if(e.lengthComputable&&button)button.textContent="Enviando "+Math.round(e.loaded/e.total*100)+"%";};
    xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error("Falha ao enviar arquivo ("+xhr.status+")."));
    xhr.onerror=()=>reject(new Error("O envio falhou. Confira sua conexão e tente novamente."));xhr.send(file);
   });
-  if(!ticket.thumbnail_path)ticket.thumbnail_path=await xUploadThumbnail(ticket,file);
+  ticket.thumbnail_path=await thumbnail;
   xUploadTicket={file,ticket};
   if(!gallery&&xComposeDate)scheduled=xScheduleIso(xComposeDate);
   if(capturedGeneration!==xAccountGeneration)throw new Error("A conta foi alterada. Reabra o envio.");
   await xPostingRequest("upload-complete",{platform_account_id:capturedAccount,platform_account_ids:xTargetAccounts.length?xTargetAccounts:[capturedAccount],gallery,reply_text:xDraftReply,scheduled_at:scheduled,provider:ticket.provider,object_path:ticket.object_path,thumbnail_path:ticket.thumbnail_path,file_name:file.name,mime_type:mime,size_bytes:file.size,caption});
-  xPostingFiles=[];xBatchDrafts=[];xPostingFile=null;xUploadTicket=null;xPostingDraft.caption="";xDraftReply="";xComposeOpen=false;await loadXPostingStatus();toast(scheduled?"Publicação agendada no X.":gallery?"Arquivo adicionado à galeria.":"Publicação adicionada à fila do X.","ok");
+  if(capturedGeneration!==xAccountGeneration)return;
+  xPostingFiles=[];xBatchDrafts=[];xPostingFile=null;xUploadTicket=null;xPostingDraft.caption="";xDraftReply="";xComposeOpen=false;xStatusRevision++;void refreshXPosting();toast(scheduled?"Publicação agendada no X.":gallery?"Arquivo adicionado à galeria.":"Publicação adicionada à fila do X.","ok");
  }catch(e){toast(e.message,"err")}
  finally{xPostingBusy=false;if(currentPage==="xStudio")xStudioPage(true);}
 }
@@ -11676,7 +11707,7 @@ function xComposerMarkup(){
  ${xSavedCaptionMarkup("compose")}<label for="xPostCaption">Legenda opcional</label><textarea id="xPostCaption" rows="5" placeholder="Escreva a legenda, hashtags ou link…" oninput="xPostingCaptionCount(this)" ${xPostingBusy?"disabled":""}>${esc(xPostingDraft.caption)}</textarea><small id="xPostCaptionCount" class="x-char-count">${Array.from(xPostingDraft.caption.trim()).length} / 280</small>
  <label>Publicar nas contas</label>${xTargetsMarkup()}<label>Comentar após publicar</label><textarea id="xPostReply" rows="2" maxlength="560" placeholder="Comentário opcional" oninput="xDraftReply=this.value">${esc(xDraftReply)}</textarea>
  <small>JPG ou PNG até 5 MB · MP4 ou MOV até 512 MB</small>
- ${xGalleryCompose?'<p class="x-muted">A galeria segue os horários configurados. Se deixar a legenda em branco, o arquivo aguarda a fila de legendas.</p>':`<label for="xComposeDate">Data e horário</label><input id="xComposeDate" type="datetime-local" value="${esc(xComposeDate)}" min="${xDateKey()}T00:00" oninput="xComposeDate=this.value" ${xPostingBusy?"disabled":""}><small>Horário de Brasília</small>`}
+ ${xGalleryCompose?'<p class="x-muted">As mídias ficam na galeria até você agendar.</p>':`<label for="xComposeDate">Data e horário</label><input id="xComposeDate" type="datetime-local" value="${esc(xComposeDate)}" min="${xDateKey()}T00:00" oninput="xComposeDate=this.value" ${xPostingBusy?"disabled":""}><small>Horário de Brasília</small>`}
  <button id="xAddPost" class="x-primary-btn" onclick="addXPostingVideo()" ${!cloudSession||!xPostingData?.x?.account||xPostingBusy?"disabled":""}>${xPostingBusy?"Enviando…":xGalleryCompose?"Adicionar à galeria":"Agendar publicação"}</button>
  </aside>`;
 }
@@ -12390,7 +12421,7 @@ async function switchXAccount(id){
 }
 function xTargetsMarkup(){return `<div class="x-targets">${xAccountList.filter(a=>a.enabled).map(a=>`<label><input type="checkbox" ${xTargetAccounts.includes(a.id)?'checked':''} onchange="xTargetAccounts=this.checked?[...new Set([...xTargetAccounts,'${a.id}'])]:xTargetAccounts.filter(id=>id!=='${a.id}')">@${esc(a.username)}</label>`).join('')}</div>`;}
 function xBatchTargetsMarkup(i){const d=xBatchDrafts[i];return `<div class="x-targets">${xAccountList.filter(a=>a.enabled).map(a=>`<label><input type="checkbox" ${d.account_ids.includes(a.id)?'checked':''} ${d.done?'disabled':''} onchange="xBatchDrafts[${i}].account_ids=this.checked?[...new Set([...xBatchDrafts[${i}].account_ids,'${a.id}'])]:xBatchDrafts[${i}].account_ids.filter(id=>id!=='${a.id}')">@${esc(a.username)}</label>`).join('')}</div>`;}
-function xBatchMarkup(){return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>${xPostingFiles.length} arquivos</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div>${xPostingFiles.map((file,i)=>`<div class="x-batch-row"><strong>${esc(file.name)}</strong>${xMediaControls(i)}<label>Contas de destino</label>${xBatchTargetsMarkup(i)}<label>Legenda opcional<textarea rows="2" oninput="xBatchDrafts[${i}].caption=this.value">${esc(xBatchDrafts[i].caption)}</textarea></label><label>Comentário opcional<textarea rows="2" oninput="xBatchDrafts[${i}].reply=this.value">${esc(xBatchDrafts[i].reply)}</textarea></label>${xGalleryCompose?'<p>Usar horários da automação</p>':`<label>Horário individual (vazio = automação)<input type="datetime-local" value="${esc(xBatchDrafts[i].date)}" oninput="xBatchDrafts[${i}].date=this.value"></label>`}<small>${esc(xBatchDrafts[i].error||xBatchDrafts[i].status||'Aguardando')}</small></div>`).join('')}<button id="xAddPost" class="x-primary-btn" onclick="addXPostingBatch()" ${xPostingBusy?'disabled':''}>${xPostingBusy?'Enviando…':'Adicionar lote'}</button><p class="x-muted">Uma publicação por arquivo e conta. Cada horário deve estar livre na conta escolhida.</p></aside>`;}
+function xBatchMarkup(){return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>${xPostingFiles.length} arquivos</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div>${xPostingFiles.map((file,i)=>`<div class="x-batch-row"><strong>${esc(file.name)}</strong>${xMediaControls(i)}<label>Contas de destino</label>${xBatchTargetsMarkup(i)}<label>Legenda opcional<textarea rows="2" oninput="xBatchDrafts[${i}].caption=this.value">${esc(xBatchDrafts[i].caption)}</textarea></label><label>Comentário opcional<textarea rows="2" oninput="xBatchDrafts[${i}].reply=this.value">${esc(xBatchDrafts[i].reply)}</textarea></label>${xGalleryCompose?'':`<label>Horário individual (vazio = automação)<input type="datetime-local" value="${esc(xBatchDrafts[i].date)}" oninput="xBatchDrafts[${i}].date=this.value"></label>`}<small>${esc(xBatchDrafts[i].error||xBatchDrafts[i].status||'Aguardando')}</small></div>`).join('')}<button id="xAddPost" class="x-primary-btn" onclick="addXPostingBatch()" ${xPostingBusy?'disabled':''}>${xPostingBusy?'Enviando…':'Adicionar lote'}</button><p class="x-muted">Uma publicação por arquivo e conta. Cada horário deve estar livre na conta escolhida.</p></aside>`;}
 async function xUploadThumbnail(ticket,file){
  if(!ticket.thumbnail)return null;
  let src;try{const blob=await new Promise((resolve,reject)=>{const video=document.createElement('video');video.muted=true;video.preload='auto';src=URL.createObjectURL(file);const timeout=setTimeout(()=>{video.removeAttribute('src');reject(new Error('preview timeout'));},10000);video.onerror=()=>{clearTimeout(timeout);reject(new Error('preview unavailable'));};video.onloadeddata=()=>{const canvas=document.createElement('canvas'),scale=Math.min(1,480/video.videoWidth);canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);clearTimeout(timeout);canvas.toBlob(b=>b?resolve(b):reject(new Error('preview unavailable')),'image/jpeg',0.75);video.removeAttribute('src');};video.src=src;});await xPutVideo(ticket.thumbnail,blob);return ticket.thumbnail.object_path;}catch{return null;}finally{if(src)URL.revokeObjectURL(src);}
@@ -12407,13 +12438,15 @@ async function addXPostingBatch(){
    if(generation!==xAccountGeneration)throw new Error('A conta foi alterada. Reabra o lote.');
    const mime=xUploadMime(file);
    const scheduled=!xGalleryCompose&&d.date?xScheduleIso(d.date):null;
-   if(!d.ticket){d.ticket=await xPostingRequest('upload-ticket',{platform_account_id:ids[0],size_bytes:file.size,mime_type:mime,file_name:file.name});await xPutVideo(d.ticket,file);d.uploaded=true;}
-   else if(!d.uploaded){await xPutVideo(d.ticket,file);d.uploaded=true;}
-   if(!d.ticket.thumbnail_path)d.ticket.thumbnail_path=await xUploadThumbnail(d.ticket,file);
+   d.ticket||=await xPostingRequest('upload-ticket',{platform_account_id:ids[0],size_bytes:file.size,mime_type:mime,file_name:file.name});
+   const thumbnail=d.ticket.thumbnail_path?Promise.resolve(d.ticket.thumbnail_path):xUploadThumbnail(d.ticket,file);
+   if(!d.uploaded){await xPutVideo(d.ticket,file);d.uploaded=true;}
+   d.ticket.thumbnail_path=await thumbnail;
+   if(generation!==xAccountGeneration)throw new Error('A conta foi alterada. Reabra o lote.');
    await xPostingRequest('upload-complete',{platform_account_id:ids[0],platform_account_ids:ids,object_path:d.ticket.object_path,provider:d.ticket.provider,thumbnail_path:d.ticket.thumbnail_path,size_bytes:file.size,mime_type:mime,file_name:file.name,gallery:xGalleryCompose,caption:d.caption,reply_text:d.reply,scheduled_at:scheduled});
    d.done=true;d.status='Adicionado';d.error='';
   }catch(e){d.error=e.message;}
- }}finally{xPostingBusy=false;await loadXPostingStatus();if(drafts.every(d=>d.done)){xPostingFiles=[];xPostingFile=null;xBatchDrafts=[];xComposeOpen=false;toast('Lote adicionado.','ok');}xStudioPage(true);}
+ }}finally{xPostingBusy=false;if(generation!==xAccountGeneration)return;xStatusRevision++;void refreshXPosting();if(drafts.every(d=>d.done)){xPostingFiles=[];xPostingFile=null;xBatchDrafts=[];xComposeOpen=false;toast('Lote adicionado.','ok');}xStudioPage(true);}
 }
 async function xDisconnectAccount(remove){if(!xSelectedAccountId||xSelectedAccountId==='all')return;try{await xPostingRequest(remove?'account-remove':'account-status',{});await switchXAccount('');}catch(e){toast(e.message,'err');}}
 function xMetricsMarkup(){
