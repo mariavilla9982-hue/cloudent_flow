@@ -739,14 +739,29 @@ async function statusPayload(admin:any,userId:string,master:string,url:URL){
  const active=accounts.find((a:any)=>a.id===selected);
  const from=new Date(url.searchParams.get("from")||Date.now()-7*86400000),to=new Date(url.searchParams.get("to")||Date.now()+35*86400000);
  if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to<=from||to.getTime()-from.getTime()>43*86400000)throw new HttpError("invalid_period",400);
- let captions:any[]=[];let posts:any[]=[],cfg:any={enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
- if(ids.length){
- const {data:rows,error:pe}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(500);if(pe)throw pe;posts=rows||[];
- if(active){const {data:c,error:ce}=await admin.from("x_account_configs").select("*").eq("platform_account_id",active.id).maybeSingle();if(ce)throw ce;if(c)cfg=c;}
+ const [postResult,configResult,captionResult]=await Promise.all([
+  ids.length?admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(500):null,
+  active?admin.from("x_account_configs").select("*").eq("platform_account_id",active.id).maybeSingle():null,
+  active?admin.from("x_caption_queue").select("id,caption,status,created_at").eq("platform_account_id",active.id).eq("user_id",userId).eq("workspace_id",member.workspace_id).in("status",["pending","reserved"]).order("created_at").limit(100):null
+ ]);
+ for(const result of [postResult,configResult,captionResult])if(result?.error)throw result.error;
+ const posts:any[]=postResult?.data||[],captions:any[]=captionResult?.data||[];
+ const cfg=configResult?.data||{enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
+ const previewPaths=posts.map(p=>{
+  const path=String(p.meta?.storage_path||"");
+  if(p.meta?.source!=="upload"||p.meta?.storage_provider!=="r2"||!path.startsWith(p.user_id+"/x-uploads/"))return "";
+  if(PHOTO_SIGNATURES.has(p.drive_mime_type)&&p.status!=="skipped")return path;
+  return p.meta?.thumbnail_path===path+".jpg"?p.meta.thumbnail_path:"";
+ });
+ const thumbConfig=previewPaths.some(Boolean)?await getCloudentR2Config(admin):null;
+ if(thumbConfig){
+  const urls=new Map<string,Promise<string>>();
+  await Promise.all(posts.map(async(p,i)=>{
+   const path=previewPaths[i];if(!path)return;
+   if(!urls.has(path))urls.set(path,r2PresignedUrl(thumbConfig,"GET",path,3600));
+   p.thumbnail_url=await urls.get(path);
+  }));
  }
- if(active){const {data:captionRows,error:captionError}=await admin.from("x_caption_queue").select("id,caption,status,created_at").eq("platform_account_id",active.id).eq("user_id",userId).eq("workspace_id",member.workspace_id).in("status",["pending","reserved"]).order("created_at").limit(100);if(captionError)throw captionError;captions=captionRows||[];}
- const thumbConfig=posts.some(p=>p.meta?.thumbnail_path)?await getCloudentR2Config(admin):null;
- if(thumbConfig)await Promise.all(posts.slice(0,200).map(async p=>{const path=String(p.meta?.thumbnail_path||"");if(path&&path===String(p.meta?.storage_path)+".jpg"&&path.startsWith(p.user_id+"/x-uploads/"))p.thumbnail_url=await r2PresignedUrl(thumbConfig,"GET",path,3600);}));
  const calendar=posts.filter(p=>p.scheduled_at&&new Date(p.scheduled_at)>=from&&new Date(p.scheduled_at)<to&&p.status!=="skipped");
  const counts:any={total:posts.length};for(const st of ["queued","processing","published","failed"])counts[st]=posts.filter(p=>p.status===st).length;
  counts.interval_queued=posts.filter(p=>p.status==="queued"&&!p.scheduled_at).length;
@@ -936,7 +951,8 @@ Deno.serve(async(req:Request)=>{
         const caption=captionValue(body.caption);
         const {count,error:countError}=await admin.from("x_caption_queue").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("platform_account_id",account.id).in("status",["pending","reserved"]);if(countError)throw countError;
         if((count||0)>=500)return json({error:"Limite de 500 legendas pendentes por conta."},409);
-        const {error}=await admin.from("x_caption_queue").insert({user_id:userId,workspace_id:member.workspace_id,platform_account_id:account.id,caption});if(error)throw error;
+        const {data,error}=await admin.from("x_caption_queue").insert({user_id:userId,workspace_id:member.workspace_id,platform_account_id:account.id,caption}).select("id,caption,status,created_at").single();if(error)throw error;
+        return json({ok:true,caption:data});
       }else{
         const {data,error}=await admin.from("x_caption_queue").update({status:"removed"}).eq("id",body.id).eq("user_id",userId).eq("platform_account_id",account.id).eq("status","pending").select("id").maybeSingle();if(error)throw error;if(!data)return json({error:"Legenda já reservada ou indisponível."},409);
       }
@@ -1055,7 +1071,7 @@ Deno.serve(async(req:Request)=>{
       const rows=accounts.map(a=>({user_id:userId,workspace_id:member.workspace_id,platform_account_id:a.id,drive_file_id:"upload:"+path,drive_file_name:String(body.file_name||"arquivo."+extension).slice(0,255),drive_mime_type:mime,drive_size_bytes:size,status:"queued",post_text:text,reply_text:reply||null,scheduled_at:scheduled,next_attempt_at:scheduled||new Date().toISOString(),meta:{source:"upload",storage_provider:provider,storage_path:path,thumbnail_path,gallery,allow_empty_caption:!gallery&&!text}}));
       const {data,error}=await admin.from("x_drive_posts").upsert(rows,{onConflict:"user_id,drive_file_id,platform_account_id",ignoreDuplicates:true}).select("id,platform_account_id");
       if(error){if(error.code==="23505")return json({error:"slot_taken",user_message:"Horário já ocupado nesta conta."},409);throw error;}
-      for(const a of accounts)await auditX(admin,member,userId,a.id,"post_created",{count:1});
+      await Promise.all(accounts.map(a=>auditX(admin,member,userId,a.id,"post_created",{count:1})));
       return json({ok:true,jobs:data||[],thumbnail_warning:!!body.thumbnail_path&&!thumbnail_path});
     }
 
