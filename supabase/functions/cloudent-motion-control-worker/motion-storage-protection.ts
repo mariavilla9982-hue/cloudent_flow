@@ -15,10 +15,10 @@ export async function motionObjectConfig(admin:any){
   return {...r,endpoint:String(r.endpoint||("https://"+r.account_id+".r2.cloudflarestorage.com")).replace(/\/$/,"")};
 }
 function region(endpoint:string){try{return new URL(endpoint).hostname.match(/^s3\.([^.]+)\.backblazeb2\.com$/i)?.[1]||"auto"}catch{return "auto"}}
-export async function motionObjectURL(config:any,method:string,key:string){
+export async function motionObjectURL(config:any,method:string,key:string,expires=300){
   const aws=new AwsClient({service:"s3",region:region(config.endpoint),accessKeyId:config.access_key_id,secretAccessKey:config.secret_access_key});
   const path=key.split("/").map(encodeURIComponent).join("/");
-  const signed=await aws.sign(new Request(config.endpoint+"/"+encodeURIComponent(config.bucket)+"/"+path+"?X-Amz-Expires=300",{method}),{aws:{signQuery:true}});
+  const signed=await aws.sign(new Request(config.endpoint+"/"+encodeURIComponent(config.bucket)+"/"+path+"?X-Amz-Expires="+expires,{method}),{aws:{signQuery:true}});
   return signed.url.toString();
 }
 export async function motionStorageRead(admin:any,config:any,key:string,range:string|null=null){
