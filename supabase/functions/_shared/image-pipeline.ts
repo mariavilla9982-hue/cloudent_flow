@@ -20,6 +20,12 @@ export async function runImagePipeline(d:any){
   const patch=async(j:any,values:any)=>{check(await admin.from('face_swap_jobs').update({...values,updated_at:new Date().toISOString()}).eq('id',j.id).eq('locked_by',workerId));Object.assign(j,values);};
   const handoffVideo=async(j:any,m:any,saved:any)=>{
     const workflow=pipelineVideoWorkflow(m.video_workflow?.key||'motion_control');
+    if(workflow.key==='genjutsu_v3'){
+      check(await admin.rpc('handoff_genjutsu_v3',{p_job_id:j.id,p_worker:workerId,p_frame:saved,p_meta:m}));
+      const wake=await admin.rpc('wake_genjutsu_v3');
+      if(wake.error)console.error('GENJUTSU V3: fila será retomada pelo cron.');
+      return;
+    }
     const motion=workflow.key==='motion_control'||workflow.key==='genjutsu';
     // Route to the existing executor selected for this individual upload.
     const existing=check(await admin.from('production_jobs').select('id,user_id').eq('id',j.id).maybeSingle());
@@ -58,6 +64,17 @@ export async function runImagePipeline(d:any){
     try{
       let m={...j.meta};
       if(m.stage==='control_motion'){
+        if(m.video_workflow?.key==='genjutsu_v3'){
+          const result=check(await admin.from('genjutsu_v3_jobs').select('status,task_id,error').eq('id',j.id).eq('user_id',j.user_id).maybeSingle());
+          if(result?.status==='ready'){
+            await patch(j,{status:'ready',progress:100,completed_at:new Date().toISOString(),last_error:result.error,meta:{...m,pipeline_status:'COMPLETED',control_motion_task_id:result.task_id}});
+          }else if(result?.status==='failed'||result?.status==='review'){
+            await patch(j,{status:'failed',last_error:result.error,meta:{...m,error_stage:'control_motion',dispatch_uncertain:result.status==='review',pipeline_status:'CONTROL_MOTION_FAILED'}});
+          }else if(result?.status==='running'&&m.pipeline_status!=='CONTROL_MOTION_RUNNING'){
+            await patch(j,{status:'waiting',progress:80,meta:{...m,pipeline_status:'CONTROL_MOTION_RUNNING',control_motion_task_id:result.task_id}});
+          }
+          continue;
+        }
         const p=check(await admin.from('production_jobs').select('id,status,result_video_id,last_error,runninghub_task_id,meta').eq('id',j.id).eq('user_id',j.user_id).maybeSingle());
         if(p?.status==='ready'&&p.result_video_id)await patch(j,{status:'ready',progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED',control_motion_task_id:p.runninghub_task_id}});
         else if(p?.status==='failed')await patch(j,{status:'failed',last_error:p.last_error,meta:{...m,error_stage:'control_motion',provider_failed:p.meta?.provider_status==='FAILED',dispatch_uncertain:!!p.meta?.pipeline_dispatch_uncertain,pipeline_status:'CONTROL_MOTION_FAILED'}});

@@ -18,9 +18,15 @@ const admin = createClient(env, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { au
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const fromB64 = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 const root = (job: any) => `${job.user_id}/genjutsu-v3/${job.id}`;
-const inputPath = (job: any, kind: string) => kind === "video"
+const directInputPath = (job: any, kind: string) => kind === "video"
   ? `${root(job)}/video.${job.video_type === "video/quicktime" ? "mov" : job.video_type === "video/webm" ? "webm" : "mp4"}`
   : `${root(job)}/photo.${job.image_type === "image/png" ? "png" : job.image_type === "image/webp" ? "webp" : "jpg"}`;
+function inputPath(job: any, kind: string) {
+  const savedPath = kind === "video" ? job.input_video_path : job.input_image_path;
+  if (!savedPath) return directInputPath(job, kind);
+  if (!savedPath.startsWith(job.user_id + "/")) throw new Error("Entrada pertence a outra conta.");
+  return savedPath;
+}
 const outputPath = (job: any, node: string) => `${root(job)}/output-${node}.mp4`;
 const settings = async (key: string) => {
   const { data, error } = await admin.from("app_settings").select("value").eq("key", key).maybeSingle();
@@ -221,7 +227,7 @@ async function worker(master: string) {
       return { ok: true, ready: true };
     }
     const statusResult = await request("/task/openapi/status", { taskId: job.task_id });
-    const state = String(statusResult.data?.taskStatus ?? statusResult.data ?? "").toUpperCase();
+    const state = String(statusResult.data?.taskStatus ?? statusResult.data?.status ?? statusResult.data ?? "").toUpperCase();
     if (["FAILED", "CANCELED", "CANCELLED"].includes(state) ||
         (job.provider_finished_at && Date.now() - Date.parse(job.provider_finished_at) > 4 * 60 * 1000) ||
         Date.now() - Date.parse(job.started_at) > 4 * 60 * 60 * 1000) {
