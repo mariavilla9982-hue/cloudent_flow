@@ -85,3 +85,11 @@
   .gv3-compare .gv3-outputs { gap: 7px; }
   .gv3-variant-heading h4 { font-size: 13px; }
 }
+
+.gv3-prompt { display: grid; gap: 7px; }
+#production [data-genjutsu-v3] .gv3-prompt textarea {
+  width: 100%; min-width: 0; resize: vertical; padding: 11px 12px;
+  border: 1px solid var(--gv3-line); border-radius: 9px; background: #0e0e0e; color: var(--gv3-text);
+}
+.gv3-job-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gv3-mode-tag { border: 1px solid var(--gv3-line); border-radius: 999px; padding: 2px 8px; color: var(--gv3-muted); font-size: 11px; }

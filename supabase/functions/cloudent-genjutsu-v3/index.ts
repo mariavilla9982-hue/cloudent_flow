@@ -84,6 +84,7 @@ async function validateGraph(request: any) {
   if (Number(result.code) !== 0 || !has("1", "VHS_LoadVideo", "video") || !has("2", "LoadImage", "image")
       || !has("148", "SaveVideo", "video") || !has("170", "SaveVideo", "video")
       || !has("169", "RH_DLSS5FrameInterpolation", "output_fps")
+      || !has("159", "ComfySwitchNode", "switch") || !has("115", "PrimitiveStringMultiline", "value")
       || !has("147", "CreateVideo", "fps") || Number(graph["147"].inputs.fps) !== 24
       || String(graph["148"].inputs.video?.[0]) !== "147"
       || String(graph["170"].inputs.video?.[0]) !== "169")
@@ -172,6 +173,16 @@ async function videoFps(blob: Blob) {
   }
   return null;
 }
+function generationMode(job: any) {
+  return job.input_video_path ? "automatic" : "manual";
+}
+function promptInputs(job: any) {
+  const manual = generationMode(job) === "manual";
+  return [
+    { nodeId: "159", fieldName: "switch", fieldValue: manual },
+    ...(manual && job.manual_prompt ? [{ nodeId: "115", fieldName: "value", fieldValue: job.manual_prompt }] : []),
+  ];
+}
 async function worker(master: string) {
   const job = await storageRPC(admin, "claim_genjutsu_v3_job", { p_lease: crypto.randomUUID() });
   if (!job) return { ok: true, idle: true };
@@ -197,6 +208,7 @@ async function worker(master: string) {
         { nodeId: "1", fieldName: "video", fieldValue: video },
         { nodeId: "2", fieldName: "image", fieldValue: image },
         { nodeId: "169", fieldName: "output_fps", fieldValue: "30" },
+        ...promptInputs(job),
       ] });
       const taskId = String(created.data?.taskId || "");
       if (Number(created.code) !== 0) {
@@ -264,13 +276,15 @@ Deno.serve(async req => {
     const owner = await userId(req);
     if (!owner) return reply({ error: "Acesso restrito." }, 403);
     if (action === "list" && req.method === "GET") {
-      const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at")
+      const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at,input_video_path")
         .eq("user_id", owner).neq("status", "draft").order("created_at", { ascending: false }).limit(30);
       if (error) throw error;
-      return reply({ jobs: data });
+      return reply({ jobs: (data || []).map(({ input_video_path, ...job }) => ({ ...job, mode: generationMode({ input_video_path }) })) });
     }
     if (action === "ticket" && req.method === "POST") {
-      const { video_bytes, image_bytes, video_type, image_type } = await req.json();
+      const { video_bytes, image_bytes, video_type, image_type, manual_prompt } = await req.json();
+      const prompt = typeof manual_prompt === "string" ? manual_prompt.trim() : "";
+      if (!prompt || Array.from(prompt).length > 8000) return reply({ error: "Digite o prompt manual com até 8.000 caracteres." }, 400);
       if (!Number.isSafeInteger(video_bytes) || video_bytes < 1 || video_bytes > 30 * MIB ||
           !Number.isSafeInteger(image_bytes) || image_bytes < 1 || image_bytes > 10 * MIB ||
           !["video/mp4", "video/webm", "video/quicktime"].includes(video_type) ||
@@ -278,7 +292,7 @@ Deno.serve(async req => {
         return reply({ error: "Selecione um vídeo de até 30 MiB e uma foto de até 10 MiB." }, 400);
       await requireMotionStorage(admin);
       const cfg = await storage();
-      const { data: job, error } = await admin.from(table).insert({ user_id: owner, video_bytes, image_bytes, video_type, image_type }).select("*").single();
+      const { data: job, error } = await admin.from(table).insert({ user_id: owner, video_bytes, image_bytes, video_type, image_type, manual_prompt: prompt }).select("*").single();
       if (error) throw error;
       const [video, image] = await Promise.all([motionObjectURL(cfg, "PUT", inputPath(job, "video")), motionObjectURL(cfg, "PUT", inputPath(job, "image"))]);
       return reply({ id: job.id, video, image });
