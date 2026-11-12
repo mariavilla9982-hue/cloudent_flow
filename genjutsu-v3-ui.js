@@ -150,11 +150,116 @@
     return { tile, video, open };
   }
 
+  function jobButton(label, handler, message) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn";
+    button.textContent = label;
+    button.onclick = async () => {
+      button.disabled = true;
+      try { await handler(); }
+      catch (error) { message(error.message); }
+      finally { button.disabled = false; }
+    };
+    return button;
+  }
+  async function retryJob(job) {
+    await call("retry", { id: job.id }, {});
+  }
+  function addJobActions(card, job, result) {
+    const actions = document.createElement("div");
+    actions.className = "gv3-actions";
+    const status = document.createElement("p");
+    status.className = "gv3-note";
+    status.setAttribute("role", "status");
+    const message = value => { status.textContent = value; };
+    const add = (label, handler) => actions.append(jobButton(label, handler, message));
+    if (result) add("Ver resultado", () => { result.open = true; result.scrollIntoView({ block: "nearest" }); });
+    const preview = document.createElement("div");
+    preview.className = "gv3-outputs";
+    const input = kind => call("input", { id: job.id, kind });
+    const inputFile = async kind => {
+      const { url, type } = await input(kind);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Arquivo indisponível.");
+      const extension = { "video/quicktime": "mov", "video/webm": "webm", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[type] || "mp4";
+      return new File([await response.blob()], (kind === "video" ? "video-original." : "frame.") + extension, { type });
+    };
+    for (const [kind, show, download, reuse] of [
+      ["video", "Vídeo original", "Baixar vídeo original", "Usar vídeo"],
+      ["image", "Ver frame", "Baixar frame", "Usar frame"],
+    ]) {
+      add(show, async () => {
+        const existing = preview.querySelector('[data-kind="' + kind + '"]');
+        if (existing) { existing.remove(); return; }
+        const { url } = await input(kind);
+        if (!card.isConnected) return;
+        const media = document.createElement(kind === "video" ? "video" : "img");
+        media.dataset.kind = kind;
+        media.style.maxWidth = "100%";
+        media.style.maxHeight = "320px";
+        if (kind === "video") { media.controls = true; media.playsInline = true; }
+        else media.alt = "Frame do personagem";
+        media.onerror = () => message("Prévia indisponível.");
+        media.src = url;
+        preview.append(media);
+      });
+      add(download, async () => {
+        const file = await inputFile(kind);
+        if (active()) saveFile(file, file.name);
+      });
+      if (job.status === "failed") add(reuse, async () => {
+        const form = panel.querySelector("form");
+        const file = await inputFile(kind);
+        if (!active() || !form.isConnected || busy) return;
+        const field = form.elements[kind];
+        if (field.files.length && !confirm("Substituir o arquivo selecionado?")) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        field.files = transfer.files;
+        showSelectedFile(field);
+        form.scrollIntoView({ block: "nearest" });
+      });
+    }
+    if (["queued", "running"].includes(job.status)) add("Parar", async () => {
+      if (!confirm("Parar esta produção do GENJUTSU V3?")) return;
+      await call("stop", { id: job.id }, {});
+      await refresh();
+    });
+    if (["ready", "failed"].includes(job.status)) {
+      add("Tentar novamente", async () => {
+        if (job.status === "ready" && !confirm("Gerar este vídeo novamente?")) return;
+        await retryJob(job);
+        await refresh();
+      });
+      add("Excluir", async () => {
+        if (!confirm("Remover este vídeo da fila?")) return;
+        await call("delete", { id: job.id }, {});
+        await refresh();
+      });
+    }
+    card.append(actions, status, preview);
+  }
   function draw(jobs) {
     const list = panel.querySelector("[data-jobs]");
     const signature = JSON.stringify(jobs);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature;
+    const retryAll = panel.querySelector("[data-retry-all]");
+    const failed = jobs.filter(job => job.status === "failed");
+    retryAll.hidden = !failed.length;
+    retryAll.onclick = async () => {
+      retryAll.disabled = true;
+      try {
+        let confirmed = 0;
+        for (const job of failed) {
+          try { await retryJob(job); confirmed++; }
+          catch { /* Report the total confirmed by the server. */ }
+        }
+        notify(confirmed + " de " + failed.length + " vídeos voltaram à fila.");
+        await refresh();
+      } finally { retryAll.disabled = false; }
+    };
     const cards = new Map([...list.children].filter(item => item.dataset.jobId).map(item => [item.dataset.jobId, item]));
     const nextCards = new Set();
     for (const job of jobs) {
@@ -211,6 +316,7 @@
         card.append(details);
         if (existing?.querySelector("details")?.open) details.open = true;
       }
+      addJobActions(card, job, card.querySelector("details"));
       if (existing) existing.replaceWith(card);
       else list.append(card);
       nextCards.add(card);
@@ -293,9 +399,10 @@
         <div class="gv3-actions"><button class="btn primary" type="submit">Gerar vídeos</button><p class="gv3-status" data-status role="status"></p></div>
       </form>
       <section class="gv3-panel" aria-label="Resultados">
-        <header class="gv3-heading"><div><h3>Resultados</h3><p class="gv3-note">Compare as versões e baixe a que preferir.</p></div></header>
+        <header class="gv3-heading"><div><h3>Resultados</h3><p class="gv3-note">Compare as versões e baixe a que preferir.</p></div><div class="gv3-actions"><button class="btn" type="button" data-refresh>Atualizar</button><button class="btn" type="button" data-retry-all hidden>Tentar todos novamente</button></div></header>
         <div class="gv3-jobs" data-jobs><div class="gv3-empty">Carregando resultados…</div></div>
       </section>`;
+    panel.querySelector("[data-refresh]").onclick = refresh;
     const form = panel.querySelector("form");
     form.addEventListener("submit", submit);
     form.addEventListener("change", event => {
