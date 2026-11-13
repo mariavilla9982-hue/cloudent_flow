@@ -482,3 +482,24 @@
   #production [data-genjutsu-v3] .gv3-feature-spinner { animation: none; }
   #production [data-genjutsu-v3] .gv3-progress-runner { animation: none; width: 50%; }
 }
+
+/* Queue is genuinely serial: distinguish pending jobs from the active timer. */
+#production [data-genjutsu-v3] .gv3-queue-position,
+#production [data-genjutsu-v3] .gv3-elapsed {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid #444448;
+  border-radius: 7px;
+  background: #202022;
+  color: #e5e5e6;
+  font-size: 11px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+#production [data-genjutsu-v3] .gv3-elapsed {
+  border-color: #4e6356;
+  background: #15221b;
+  color: #c6f4d2;
+}
