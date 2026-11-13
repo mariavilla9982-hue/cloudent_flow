@@ -298,7 +298,7 @@
   function applyFilters(jobs) {
     if (!panel?.isConnected) return;
     const counts = { all: jobs.length, running: jobs.filter(j => ["queued", "dispatching", "running"].includes(j.status)).length, ready: jobs.filter(j => j.status === "ready").length };
-    const names = { all: "Todos", running: "Gerando", ready: "Prontos" };
+    const names = { all: "Todos", running: "Em andamento", ready: "Prontos" };
     for (const button of panel.querySelectorAll("[data-gv3-filter]")) {
       const filter = button.dataset.gv3Filter;
       button.textContent = names[filter] + " (" + counts[filter] + ")";
@@ -457,6 +457,7 @@
       fileInput.insertAdjacentElement("afterend", marker);
       const field = fileInput.closest(".field");
       field.hidden = true;
+      field.style.display = "none";
       const hint = document.createElement("p");
       hint.className = "note";
       hint.setAttribute("role", "status");
@@ -683,7 +684,7 @@
       </form>
       <section class="gv3-panel" aria-label="Resultados">
         <header class="gv3-heading"><div><h3>Produção</h3><p class="gv3-note">Vídeos gerados com IA · Prévia vertical 9:16</p></div><div class="gv3-heading-actions"><span class="gv3-queue-count" data-gv3-queue></span><button class="btn" type="button" data-refresh>Atualizar</button><button class="btn" type="button" data-retry-all hidden>Tentar todos novamente</button></div></header>
-        <nav class="gv3-filters" aria-label="Filtrar vídeos"><button type="button" data-gv3-filter="all" class="active">Todos</button><button type="button" data-gv3-filter="running">Gerando</button><button type="button" data-gv3-filter="ready">Prontos</button></nav>
+        <nav class="gv3-filters" aria-label="Filtrar vídeos"><button type="button" data-gv3-filter="all" class="active">Todos</button><button type="button" data-gv3-filter="running">Em andamento</button><button type="button" data-gv3-filter="ready">Prontos</button></nav>
         <div class="gv3-empty gv3-filter-empty" data-gv3-filter-empty hidden>Nenhum vídeo nesta categoria.</div>
         <div class="gv3-jobs" data-jobs><div class="gv3-empty">Carregando resultados…</div></div>
       </section>`;
