@@ -8097,7 +8097,8 @@ function openScheduleModal(presetDate=null,extraManual=false){
 
 async function confirmScheduleModal(button=null){
   const date=$("#modalDay").value,file=$("#modalFile").files[0],caption=$("#modalCaption").value;
-  if(!file){toast("Escolha um vídeo.","warn");return}
+  const genjutsu=document.getElementById("modalGenjutsuV3");
+  if(!file&&!genjutsu){toast("Escolha um vídeo.","warn");return}
   const free=firstFreeSlot(date);if(free<0){toast("Esse dia atingiu o limite manual de vídeos.","warn");return}
   const extra=$("#modalExtra")?.value==="1";
   const auto=!extra&&($("#modalSmart")?.checked??false);
@@ -8108,13 +8109,45 @@ async function confirmScheduleModal(button=null){
   const btn=button||document.querySelector('#modalHost .btn.primary');
   actionButtonBusy(btn,true,"Agendando…");
   try{
-    const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual",auto?choice.strategy:"manual");
-    if(ok){
-      await syncFromBackend();
+    if(genjutsu){
+      const accountId=calendarEnsureAccount();
+      if(!accountId)throw new Error("Selecione uma conta do Instagram.");
+      const res=await cloudFetch("?action=genjutsu-v3-schedule",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          id:genjutsu.dataset.jobId,node:genjutsu.dataset.node,
+          scheduled_at:new Date(date+"T"+time+":00").toISOString(),
+          caption,smart_mode:auto?"auto":"manual",
+          smart_strategy:auto?choice.strategy:"manual",platform_account_id:accountId
+        })
+      });
+      const video=res.video,schedule=res.schedule;
+      if(!video?.id||!schedule?.id)throw new Error("O servidor não confirmou o agendamento.");
+      state.slots[keyFor(date,free)]={
+        cloud:true,platform:"instagram",platformAccountId:accountId,scheduleId:schedule.id,videoId:video.id,
+        name:video.file_name,size:Number(video.size_bytes||0),type:video.mime_type||"video/mp4",
+        storagePath:video.storage_path||"",time,caption:video.caption||caption,
+        status:"scheduled",scheduledAt:schedule.scheduled_at,
+        smartMode:auto?"auto":"manual",smartStrategy:schedule.smart_strategy||choice.strategy,
+        smartStrategyLocked:!!schedule.smart_strategy_locked
+      };
+      save();
       closeModal();
       renderAll();
       setTimeout(()=>jumpToCalendarDay(date),40);
-      toast((extra?"Vídeo extra":"Vídeo")+" agendado para "+date+" às "+time+".","ok");
+      toast("GENJUTSU "+(genjutsu.dataset.node==="148"?"24":"30")+" fps agendado para "+date+" às "+time+".","ok");
+      // Server-confirmed: do not hold the UI on an additional queue refresh.
+      void syncFromBackend().then(()=>{if(currentPage==="calendar")renderAll();})
+        .catch(err=>console.warn("Atualização da agenda pendente:",err.message));
+    }else{
+      const ok=await addVideoToSlot(file,date,free,time,caption,auto?"auto":"manual",auto?choice.strategy:"manual");
+      if(ok){
+        await syncFromBackend();
+        closeModal();
+        renderAll();
+        setTimeout(()=>jumpToCalendarDay(date),40);
+        toast((extra?"Vídeo extra":"Vídeo")+" agendado para "+date+" às "+time+".","ok");
+      }
     }
   }catch(e){
     console.error("Schedule upload error:",e);
