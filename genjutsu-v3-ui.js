@@ -15,6 +15,19 @@
   const active = () => panel?.isConnected && currentPage === "production" &&
     window.CloudentMotionControl?.mode === "genjutsu" && owner === cloudSession?.user?.id;
 
+  function formatElapsed(started) {
+    const ms = Date.parse(started || "");
+    if (!Number.isFinite(ms)) return "Aguardando início";
+    const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    return "Gerando há " + [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+      .map(v => String(v).padStart(2, "0")).join(":");
+  }
+  function tickTimers() {
+    if (!active()) return;
+    for (const timer of panel.querySelectorAll("[data-gv3-started]"))
+      timer.textContent = formatElapsed(timer.dataset.gv3Started);
+  }
+
   function notify(message) {
     if (active()) panel.querySelector("[data-status]").textContent = message;
   }
@@ -293,7 +306,11 @@
       button.setAttribute("aria-pressed", String(filter === resultFilter));
     }
     const queue = panel.querySelector("[data-gv3-queue]");
-    if (queue) queue.textContent = counts.running + (counts.running === 1 ? " na fila / produção" : " na fila / produção");
+    if (queue) {
+      const running = jobs.filter(j => ["running", "dispatching"].includes(j.status)).length;
+      const waiting = jobs.filter(j => j.status === "queued").length;
+      queue.textContent = running + "/1 gerando · " + waiting + " na fila";
+    }
     const list = panel.querySelector("[data-jobs]");
     for (const card of list.querySelectorAll("[data-job-id]")) {
       const status = card.dataset.jobStatus;
@@ -423,56 +440,29 @@
       await loadPreview(true);
       video?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, !available);
-    const agenda = action("▦ Adicionar à agenda", "primary gv3-agenda-button", async button => {
+    const agenda = action("▦ Adicionar à agenda", "primary gv3-agenda-button", () => {
       if (typeof openScheduleModal !== "function") throw new Error("Agenda não disponível nesta tela.");
       const selected = playerFor();
       if (!selected) throw new Error("Selecione uma versão disponível.");
       const fps = selectedFps();
-      // Open immediately on the user's click. Never wait for an entire video download
-      // before displaying the scheduling modal, especially on mobile connections.
       openScheduleModal();
-      const modalHost = document.getElementById("modalHost");
-      const fileInput = modalHost?.querySelector("#modalFile");
-      const saveButton = modalHost?.querySelector(".calendar-modal-save");
-      if (!fileInput || !saveButton) throw new Error("O formulário de agendamento não abriu corretamente.");
+      const fileInput = document.getElementById("modalFile");
+      if (!fileInput) throw new Error("O agendador não abriu corretamente.");
+      // The server performs an S3 CopyObject when the user saves the date.
+      const marker = document.createElement("input");
+      marker.type = "hidden";
+      marker.id = "modalGenjutsuV3";
+      marker.dataset.jobId = job.id;
+      marker.dataset.node = selectedNode;
+      fileInput.insertAdjacentElement("afterend", marker);
+      const field = fileInput.closest(".field");
+      field.hidden = true;
       const hint = document.createElement("p");
-      hint.className = "gv3-note";
+      hint.className = "note";
       hint.setAttribute("role", "status");
-      hint.style.cssText = "margin:8px 0;color:inherit;font-size:12px";
-      hint.textContent = "Preparando vídeo de " + fps + " fps para a agenda…";
-      fileInput.insertAdjacentElement("afterend", hint);
-      fileInput.disabled = true;
-      saveButton.disabled = true;
-      button.textContent = "Preparando " + fps + " fps…";
-      try {
-        const response = await fetch(await selected.getLink());
-        if (!response.ok) throw new Error("Falha ao baixar vídeo: HTTP " + response.status);
-        const blob = await response.blob();
-        if (!blob.size) throw new Error("O arquivo retornou vazio.");
-        const file = new File([blob], "genjutsu-v3-" + fps + "fps.mp4", { type: "video/mp4" });
-        // A 12-second production refresh may replace the original card. The modal
-        // is independent: check only that THIS scheduling modal still exists.
-        if (!modalHost.contains(fileInput)) return;
-        const transfer = new DataTransfer();
-        transfer.items.add(file);
-        fileInput.disabled = false;
-        fileInput.files = transfer.files;
-        if (!fileInput.files.length) throw new Error("O navegador não aceitou o arquivo.");
-        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-        saveButton.disabled = false;
-        hint.textContent = "✓ Vídeo de " + fps + " fps preparado. Escolha a data e toque em Salvar no calendário.";
-        status.textContent = "Versão " + fps + " fps enviada ao formulário da agenda.";
-        if (typeof toast === "function") toast("Vídeo de " + fps + " fps pronto para agendar.", "ok");
-      } catch (error) {
-        if (modalHost.contains(fileInput)) {
-          fileInput.disabled = false;
-          // Keep Save disabled until the user manually supplies another valid file.
-          saveButton.disabled = !fileInput.files.length;
-          fileInput.addEventListener("change", () => { saveButton.disabled = !fileInput.files.length; }, { once: true });
-          hint.textContent = "Não consegui carregar automaticamente: " + (error?.message || "erro desconhecido") + ". Você pode escolher um arquivo manualmente.";
-        }
-        throw error;
-      }
+      hint.textContent = "✓ GENJUTSU V3 · " + fps + " fps selecionado. O vídeo será copiado direto do Backblaze ao salvar, sem novo upload.";
+      field.insertAdjacentElement("afterend", hint);
+      status.textContent = "Agenda aberta para a versão " + fps + " fps.";
     }, !available);
     const download = action("↓ Baixar", "gv3-download-button", async button => {
       const selected = playerFor();
@@ -497,7 +487,7 @@
       } else {
         Promise.resolve().then(() => { if (showcase.isConnected) void loadPreview(); });
       }
-    } else if (["queued", "dispatching", "running"].includes(job.status)) {
+    } else if (["dispatching", "running"].includes(job.status)) {
       const progress = element("div", "gv3-progress");
       progress.setAttribute("role", "progressbar");
       progress.setAttribute("aria-label", "Geração em andamento");
@@ -514,6 +504,9 @@
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature;
     const retryAll = panel.querySelector("[data-retry-all]");
+    const waitingJobs = jobs.filter(job => job.status === "queued")
+      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || String(a.id).localeCompare(String(b.id)));
+    const queuePositions = new Map(waitingJobs.map((job, i) => [job.id, i + 1]));
     const failed = jobs.filter(job => job.status === "failed");
     retryAll.hidden = !failed.length;
     retryAll.onclick = async () => {
@@ -547,6 +540,14 @@
       identity.append(element("strong", "gv3-job-title", "Vídeo " + (index + 1)));
       const statusTag = element("span", "gv3-state gv3-state-" + job.status, labels[job.status] || job.status);
       identity.append(statusTag);
+      if (job.status === "queued")
+        identity.append(element("span", "gv3-queue-position", "Fila · posição " + (queuePositions.get(job.id) || 1)));
+      if (job.status === "running" && job.started_at) {
+        const timer = element("span", "gv3-elapsed", formatElapsed(job.started_at));
+        timer.dataset.gv3Started = job.started_at;
+        timer.setAttribute("role", "timer");
+        identity.append(timer);
+      }
       if (job.mode === "manual" || job.mode === "automatic") {
         identity.append(element("span", "gv3-mode-tag", job.mode === "manual" ? "Manual" : "Automático"));
       }
@@ -604,6 +605,7 @@
     for (const item of [...list.children]) if (!nextCards.has(item)) item.remove();
     if (!jobs.length) list.innerHTML = '<div class="gv3-empty">Nenhuma geração enviada.</div>';
     applyFilters(jobs);
+    tickTimers();
   }
   async function refresh() {
     if (!active() || loading) return;
@@ -697,4 +699,5 @@
   }
   window.CloudentGenjutsuV3 = { render, refresh, get busy() { return busy; } };
   setInterval(refresh, 12000);
+  setInterval(tickTimers, 1000);
 })();
