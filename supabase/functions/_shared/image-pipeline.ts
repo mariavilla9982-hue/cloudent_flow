@@ -88,6 +88,20 @@ export async function runImagePipeline(d:any){
       }
       const stage=m.stage;
       if(!['face_swap','upscale'].includes(stage))throw new Error('Etapa inválida');
+      // A completed Face Swap is a valid frame for GENJUTSU V3. Only bypass
+      // Upscale before its RunningHub task has been dispatched. Existing
+      // in-flight Upscale tasks stay attached and must be reconciled normally.
+      if(stage==='upscale'&&m.source==='face_swap_natural'&&
+          m.video_workflow?.key==='genjutsu_v3'&&!j.runninghub_task_id&&
+          !m.dispatch_intent&&!m.upscale_result&&m.face_swap_result){
+        const frame=m.face_swap_result;
+        if(['image/jpeg','image/png','image/webp'].includes(frame.mime)&&
+            Number.isSafeInteger(frame.size)&&frame.size>0&&frame.size<=12*1024*1024){
+          await handoffVideo(j,{...m,upscale_skipped:true},frame);
+          continue;
+        }
+        // Unsupported or oversized frames retain the existing Upscale path.
+      }
       if(!j.runninghub_task_id){
         // Ambiguous network outcome MUST NOT cause another billable create.
         if(m.dispatch_intent){await patch(j,{status:'failed',last_error:'Envio sem confirmação. Reconcilie a tarefa no provedor antes de tentar novamente.',meta:{...m,dispatch_uncertain:true,error_stage:stage,pipeline_status:stage.toUpperCase()+'_FAILED'}});continue;}
@@ -140,11 +154,20 @@ export async function runImagePipeline(d:any){
       const saved=await saveBlob(j,stage,item);
       m={...m,[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
       if(stage==='face_swap'){
-        await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:{...m,stage:'upscale',pipeline_status:'UPSCALE_WAITING'},last_error:null});
-        // One bounded handoff after releasing this lease; the database still enforces
-        // stage FIFO, shared capacity and unique dispatch intent.
-        if(!handoffs.has(j.id)){handoffs.add(j.id);rows.push({...j,locked_by:null,locked_at:null});}
-
+        const directV3=m.source==='face_swap_natural'&&m.video_workflow?.key==='genjutsu_v3'&&
+          ['image/jpeg','image/png','image/webp'].includes(saved.mime)&&
+          Number.isSafeInteger(saved.size)&&saved.size>0&&saved.size<=12*1024*1024;
+        const nextMeta={...m,stage:'upscale',pipeline_status:directV3?'UPSCALE_SKIPPED':'UPSCALE_WAITING',
+          ...(directV3?{upscale_skipped:true}:{})};
+        await patch(j,{status:'waiting',started_at:null,runninghub_task_id:null,progress:45,meta:nextMeta,last_error:null});
+        if(directV3){
+          // The existing handoff RPC validates stage='upscale' and ownership,
+          // but receives the Face Swap frame directly. No Upscale task is created.
+          await handoffVideo(j,nextMeta,saved);
+        }else{
+          // Preserve the original pipeline for other workflows and large frames.
+          if(!handoffs.has(j.id)){handoffs.add(j.id);rows.push({...j,locked_by:null,locked_at:null});}
+        }
       }else if(m.source==='face_swap_natural'){
         await handoffVideo(j,m,saved);
       }else{
