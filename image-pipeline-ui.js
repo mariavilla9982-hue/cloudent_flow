@@ -32,7 +32,7 @@
   const videoWorkflows=[{key:'genjutsu_v3',label:'GENJUTSU V3'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
   const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
   function workflowSelector(d){
-    return '<label class="pipeline-workflow"><b>Workflow após Face Swap e Upscale</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||defaultVideoWorkflow)===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>O vídeo original e a imagem pronta seguem para o workflow escolhido.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
+    return '<label class="pipeline-workflow"><b>Workflow após Face Swap</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||defaultVideoWorkflow)===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>GENJUTSU V3 recebe a foto gerada pelo Face Swap diretamente, sem Upscale. Os outros workflows mantêm as etapas atuais.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
   }
   function lockWorkflows(root){for(const entry of drafts.faceSwap?.entries||[]){const select=root.querySelector('[data-entry="'+entry.id+'"] select');if(select&&entry.workflowLocked)select.disabled=true;}}
   function characterSelector(photo=false){
@@ -203,7 +203,9 @@
   }
   function label(j){
     const m=j.meta||{};
-    if(m.video_workflow?.key==='genjutsu_v3'&&m.pipeline_status==='CONTROL_MOTION_RUNNING')return 'Face Swap ✓ · Upscale ✓ · GENJUTSU V3 processando…';
+    if(m.video_workflow?.key==='genjutsu_v3'&&m.pipeline_status==='CONTROL_MOTION_RUNNING')return m.upscale_skipped?'Face Swap ✓ · GENJUTSU V3 processando…':'Face Swap ✓ · Upscale ✓ · GENJUTSU V3 processando…';
+    if(m.video_workflow?.key==='genjutsu_v3'&&m.pipeline_status==='CONTROL_MOTION_WAITING')return m.upscale_skipped?'Face Swap ✓ · GENJUTSU V3 aguardando…':'Face Swap ✓ · Upscale ✓ · GENJUTSU V3 aguardando…';
+    if(m.video_workflow?.key==='genjutsu_v3'&&m.pipeline_status==='UPSCALE_SKIPPED')return 'Face Swap ✓ · Encaminhando ao GENJUTSU V3…';
     if(j.production?.status==='ready')return 'Vídeo pronto';
     if(j.status==='ready')return m.source==='face_swap_natural'?'Vídeo pronto':'Imagem pronta';
     if(j.status==='failed'||j.production?.status==='failed')return 'Falha em '+({face_swap:'Face Swap',upscale:'Upscale',control_motion:'Control Motion'}[m.error_stage||m.stage]||'processamento');
@@ -221,7 +223,11 @@
     const natural=m.source==='face_swap_natural',manual=m.source==='upscale_manual';
     const steps=[{key:'upload',name:manual?'Imagem':natural?'Upload':'Imagens',done:m.stage!=='upload'}];
     if(!manual)steps.push({key:'face_swap',name:'Face Swap',done:!!m.face_swap_result});
-    steps.push({key:'upscale',name:'Upscale',done:!!m.upscale_result||ready&&!natural});
+    // Skip the Upscale step for V3 when no Upscale provider task was started.
+    // Previously-started Upscale jobs retain their visible progress and history.
+    const directV3=natural&&m.video_workflow?.key==='genjutsu_v3'&&!m.upscale_result&&
+      (m.upscale_skipped||m.stage!=='upscale'||!j.runninghub_task_id);
+    if(!directV3)steps.push({key:'upscale',name:'Upscale',done:!!m.upscale_result||ready&&!natural});
     if(natural)steps.push({key:'control_motion',name:workflowLabel(j),done:ready});
     if(ready)steps.forEach(step=>step.done=true);
     const cancelled=m.stage==='control_motion'&&(j.status==='cancelled'||j.production?.status==='cancelled');
@@ -280,9 +286,10 @@
       const retry=j.status==='failed'&&j.meta.provider_failed&&!j.meta.dispatch_uncertain;
       const current=state.current>=0?steps[state.current].name:'';
       if(queued)queuePositions[stage]=(queuePositions[stage]||0)+1;
+      const v3Bypass=stage==='upscale'&&j.meta?.video_workflow?.key==='genjutsu_v3'&&!j.runninghub_task_id&&!j.meta?.upscale_result;
       const preparing=queued&&stage==='upscale'&&!j.runninghub_task_id&&!j.meta.provider_queue_waiting&&j.meta.queue_reason!=='provider_capacity';
-      const title=cancelled?'Cancelado':ready?(j.meta.source==='face_swap_natural'?'Vídeo final pronto':'Imagem final pronta'):failed?'Falha em '+current:preparing?'Preparando Upscale':queued?'Na fila de '+current:current+' em processamento';
-      const subtitle=cancelled?'Espera cancelada · vídeo original e imagem final preservados':ready?'Concluído · resultado disponível para visualizar e baixar':failed?'As etapas concluídas foram preservadas':preparing?'Imagem salva · encaminhamento automático ao Upscale.':queued?(stage==='upscale'?(j.meta.source==='upscale_manual'?'Imagem enviada · aguardando sua vez no Upscale.':'Face Swap salvo · aguardando vaga confirmada no provedor.'):stage==='control_motion'?'Imagem final salva · aguardando na fila de '+workflowLabel(j)+'.':'Fila própria de Face Swap · inicia quando houver vaga na RunningHub.'):state.done+' de '+steps.length+' etapas concluídas · processamento automático';
+      const title=cancelled?'Cancelado':ready?(j.meta.source==='face_swap_natural'?'Vídeo final pronto':'Imagem final pronta'):failed?'Falha em '+current:preparing?(v3Bypass?'Encaminhando ao GENJUTSU V3':'Preparando Upscale'):queued?'Na fila de '+current:current+' em processamento';
+      const subtitle=cancelled?'Espera cancelada · vídeo original e imagem final preservados':ready?'Concluído · resultado disponível para visualizar e baixar':failed?'As etapas concluídas foram preservadas':preparing?(v3Bypass?'Foto do Face Swap pronta · Upscale dispensado.':'Imagem salva · encaminhamento automático ao Upscale.'):queued?(stage==='upscale'?(v3Bypass?'Face Swap salvo · aguardando envio direto ao GENJUTSU V3.':j.meta.source==='upscale_manual'?'Imagem enviada · aguardando sua vez no Upscale.':'Face Swap salvo · aguardando vaga confirmada no provedor.'):stage==='control_motion'?'Imagem final salva · aguardando na fila de '+workflowLabel(j)+'.':'Fila própria de Face Swap · inicia quando houver vaga na RunningHub.'):state.done+' de '+steps.length+' etapas concluídas · processamento automático';
       const deletable=['ready','failed','cancelled'].includes(j.status)&&!j.meta.dispatch_uncertain;
       return heading+'<article class="card pipeline-job" style="--stages:'+steps.length+'">'+
         '<figure class="pipeline-job-preview" data-pipeline-preview="'+j.id+'"><div class="pipeline-job-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m4 17 5-5 4 4 3-3 5 5"/><circle cx="15" cy="8" r="2"/></svg><span>Carregando prévia</span></div><figcaption class="pipeline-preview-tag">Prévia</figcaption></figure>'+
