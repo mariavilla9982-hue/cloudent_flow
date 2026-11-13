@@ -3,7 +3,7 @@
   const style=document.createElement('style');style.textContent='[data-pipeline-mounted] form{display:grid;gap:18px}[data-pipeline-mounted] form label{display:grid;gap:10px;min-width:0}[data-pipeline-mounted] input[type=file]{max-width:100%;width:100%;font-size:12px}[data-pipeline-mounted] article{min-width:0;overflow-wrap:anywhere}[data-pipeline-mounted] .toolbar{flex-wrap:wrap}';document.head.appendChild(style);
   style.textContent+=`.pipeline-job{display:grid;grid-template-columns:92px minmax(0,1fr);gap:18px;padding:18px!important;background:#0d0d0d;border:1px solid #292929;border-radius:16px;overflow:hidden}
 .pipeline-job-preview{position:relative;aspect-ratio:3/4;border-radius:11px;overflow:hidden;background:#171717;margin:0;align-self:start;border:1px solid #292929}
-.pipeline-job-preview a{display:block;width:100%;height:100%;cursor:zoom-in}.pipeline-job-preview a:focus-visible{outline:2px solid #fff;outline-offset:-3px}
+.pipeline-live-timer{font-size:11px;color:#e5e5e5;font-variant-numeric:tabular-nums;padding-bottom:7px}.pipeline-job-preview a{display:block;width:100%;height:100%;cursor:zoom-in}.pipeline-job-preview a:focus-visible{outline:2px solid #fff;outline-offset:-3px}
 .pipeline-job-preview img,.pipeline-job-preview video{width:100%;height:100%;object-fit:cover;display:block}
 .pipeline-job-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#777;font-size:10px;text-align:center;padding:8px}
 .pipeline-job-placeholder svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.4}
@@ -28,6 +28,18 @@
     root.querySelector('[data-character-count]').textContent=custom?'Envie a foto da modelo que você quer usar.':d?.character?'Folha selecionada: '+photoCharacters.find(c=>c.id===d.character).name:'Escolha uma modelo.';
   }
   let characterRequest=null;
+  const characterPreviewUrls=new Map();
+  const elapsedText=start=>{
+    const ms=Date.parse(start||"");if(!Number.isFinite(ms))return "Aguardando início";
+    const sec=Math.max(0,Math.floor((Date.now()-ms)/1000));
+    return "Processando há "+[Math.floor(sec/3600),Math.floor(sec/60)%60,sec%60]
+      .map(n=>String(n).padStart(2,"0")).join(":");
+  };
+  function tickPipelineTimers(){
+    if(!["faceSwap","upscale","faceSwapPhoto"].includes(currentPage)||document.hidden)return;
+    for(const el of document.querySelectorAll("#"+currentPage+" [data-pipeline-started]"))
+      el.textContent=elapsedText(el.dataset.pipelineStarted);
+  }
   const defaultVideoWorkflow='genjutsu_v3';
   const videoWorkflows=[{key:'genjutsu_v3',label:'GENJUTSU V3'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
   const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
@@ -44,10 +56,38 @@
   async function loadCharacters(root){
     const uid=owner;
     try{
-      if(!characterRequest)characterRequest=cloudFetch('?resource=image-pipeline-characters').catch(err=>{characterRequest=null;throw err;});
-      const r=await characterRequest;if(uid!==cloudSession?.user?.id||!root.isConnected)return;
-      for(const c of r.characters||[]){for(const img of root.querySelectorAll('[data-character-preview="'+c.id+'"]')){img.src=c.preview_url;img.hidden=false;const a=img.parentElement.querySelector('[data-character-open="'+c.id+'"]');a.href=c.preview_url;a.hidden=false;a.onclick=evt=>{evt.preventDefault();evt.stopPropagation();const win=window.open('','_blank');if(win){win.opener=null;const image=win.document.createElement('img');image.src=c.preview_url;image.style.maxWidth='100%';win.document.body.append(image);}};}}
-    }catch(err){if(uid===cloudSession?.user?.id)(root.closest('form')||root).querySelector('[data-pipeline-error]')?.replaceChildren(document.createTextNode('Não foi possível carregar as folhas: '+err.message));}
+      if(!characterRequest)characterRequest=cloudFetch('?resource=image-pipeline-characters')
+        .catch(err=>{characterRequest=null;throw err;});
+      const r=await characterRequest;
+      if(uid!==cloudSession?.user?.id||!root.isConnected)return;
+      for(const character of r.characters||[]){
+        let url=characterPreviewUrls.get(character.id);
+        if(!url){
+          const source=String(character.preview_url||"");
+          const match=/^data:([^;]+);base64,(.+)$/s.exec(source);
+          if(match){
+            const bytes=Uint8Array.from(atob(match[2]),ch=>ch.charCodeAt(0));
+            url=URL.createObjectURL(new Blob([bytes],{type:match[1]}));
+          }else url=source;
+          characterPreviewUrls.set(character.id,url);
+        }
+        for(const img of root.querySelectorAll('[data-character-preview="'+character.id+'"]')){
+          if(img.src!==url)img.src=url;
+          img.loading="lazy";img.decoding="async";img.hidden=false;
+          const link=img.parentElement.querySelector('[data-character-open="'+character.id+'"]');
+          link.href=url;link.hidden=false;
+          link.onclick=event=>{
+            event.preventDefault();event.stopPropagation();
+            const win=window.open("","_blank");
+            if(win){win.opener=null;const photo=win.document.createElement("img");photo.src=url;photo.style.maxWidth="100%";win.document.body.append(photo);}
+          };
+        }
+      }
+    }catch(err){
+      if(uid===cloudSession?.user?.id)
+        (root.closest("form")||root).querySelector("[data-pipeline-error]")?.replaceChildren(
+          document.createTextNode("Não foi possível carregar as folhas: "+err.message));
+    }
   }
   style.textContent+='[data-batch-list]{display:grid;gap:16px}.pipeline-upload-entry{border:1px solid #303030;background:#111;border-radius:12px;padding:14px;display:grid;gap:12px;min-width:0}.pipeline-upload-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.pipeline-upload-head strong{min-width:0;font-size:12px;overflow-wrap:anywhere}.pipeline-upload-head .btn{flex:none;font-size:11px}.pipeline-upload-entry [data-entry-status]{font-size:12px;color:#aaa;margin:0}@media(max-width:420px){.pipeline-upload-head{align-items:flex-start;flex-direction:column}.pipeline-upload-entry{padding:10px}}';
   const drafts={},busy=new Set(),previewCache=new Map(),viewFilters={},searchTerms={},resultCache=new Map();let jobs=[],loading=false,timer=null,generation=0,owner=cloudSession?.user?.id||'';
@@ -92,7 +132,7 @@
   function drawBatch(root){
     const list=root.querySelector('[data-batch-list]');if(!list)return;
     const entries=drafts.faceSwap?.entries||[];
-    list.innerHTML=entries.map((d,i)=>'<article class="pipeline-upload-entry" data-entry="'+d.id+'"><div class="pipeline-upload-head"><div><strong>'+String(i+1).padStart(2,'0')+' · '+e(d.original.name)+'</strong><div class="studio-entry-tags">'+characters.filter(c=>d.characters.includes(c.id)).map(c=>'<span class="studio-model-tag" data-character="'+c.id+'">'+e(c.name)+'</span>').join('')+'</div></div><button type="button" class="btn" data-remove-entry="'+d.id+'" aria-label="Remover '+e(d.original.name)+'">Remover</button></div><video class="studio-entry-media" controls playsinline preload="metadata" src="'+e(d.urls.original)+'"></video>'+characterSelector()+workflowSelector(d)+'<p role="status" data-entry-status>'+e(d.error||'Aguardando envio')+'</p></article>').join('')||'<p class="muted">Adicione os vídeos. Escolha uma ou mais modelos para cada arquivo.</p>';
+    list.innerHTML=entries.map((d,i)=>'<article class="pipeline-upload-entry" data-entry="'+d.id+'"><div class="pipeline-upload-head"><div><strong>'+String(i+1).padStart(2,'0')+' · '+e(d.original.name)+'</strong><div class="studio-entry-tags">'+characters.filter(c=>d.characters.includes(c.id)).map(c=>'<span class="studio-model-tag" data-character="'+c.id+'">'+e(c.name)+'</span>').join('')+'</div></div><button type="button" class="btn" data-remove-entry="'+d.id+'" aria-label="Remover '+e(d.original.name)+'">Remover</button></div><video class="studio-entry-media" controls playsinline preload="none" src="'+e(d.urls.original)+'"></video>'+characterSelector()+workflowSelector(d)+'<p role="status" data-entry-status>'+e(d.error||'Aguardando envio')+'</p></article>').join('')||'<p class="muted">Adicione os vídeos. Escolha uma ou mais modelos para cada arquivo.</p>';
     for(const d of entries){const row=list.querySelector('[data-entry="'+d.id+'"]');for(const c of row.querySelectorAll('input[name=character]'))c.checked=d.characters.includes(c.value);row.querySelector('[data-character-count]').textContent=d.characters.length?d.characters.length+' vídeo(s) serão gerados para este arquivo.':'Escolha pelo menos uma modelo.';}
     if(entries.length)loadCharacters(list);
     const count=root.querySelector('[data-batch-count]');if(count)count.textContent=entries.length+' vídeo(s) selecionado(s)';
@@ -124,7 +164,7 @@
         try{
           if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os vídeos novamente.');
           status.textContent='Vídeo '+(index+1)+' de '+entries.length+' · '+entry.original.name;
-          if(row)row.textContent='Preparando envio…';
+          if(row)row.textContent='Extraindo primeiro frame e preparando envio…';
           const genjutsu=(entry.workflow||defaultVideoWorkflow)==='genjutsu';
           if((genjutsu||(entry.workflow||defaultVideoWorkflow)==='genjutsu_v3')&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU V3: use MP4, WebM ou MOV de até 30 MiB.');
           const seconds=genjutsu?await videoDuration(entry):null;
@@ -133,9 +173,23 @@
           for(const c of characters.filter(c=>entry.characters.includes(c.id))){
             if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
             const variant=(entry.workflow||defaultVideoWorkflow)+':'+c.id;const id=entry.variantIds[variant]||(entry.variantIds[variant]=crypto.randomUUID());
-            if(row)row.textContent='Enviando para '+c.name+'…';
+            if(row)row.textContent='Preparando upload para '+c.name+'…';
             const ticket=await request('image-pipeline-ticket',{source:sources.faceSwap,job_id:id,character_id:c.id,workflow_key:entry.workflow||defaultVideoWorkflow,...(genjutsu?{duration_seconds:seconds}:{}),original:describe(entry.original),reference:describe(entry.reference)});
-            if(!ticket.registered){await uploadFaceSwapPart(ticket.original,entry.original,()=>{});if(!ticket.same_input)await uploadFaceSwapPart(ticket.reference,entry.reference,()=>{});if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');await request('image-pipeline-complete',{job_id:ticket.job_id});}
+            if(!ticket.registered){
+              const total=entry.original.size+(ticket.same_input?0:entry.reference.size);
+              let sentVideo=0,sentFrame=0,lastPaint=0;
+              const paint=()=>{
+                const now=Date.now();if(now-lastPaint<120)return;lastPaint=now;
+                const pct=Math.min(100,Math.floor(100*(sentVideo+sentFrame)/Math.max(1,total)));
+                if(row?.isConnected)row.textContent='Enviando '+c.name+' · '+pct+'%';
+              };
+              const uploads=[uploadFaceSwapPart(ticket.original,entry.original,bytes=>{sentVideo=bytes;paint();})];
+              if(!ticket.same_input)uploads.push(uploadFaceSwapPart(ticket.reference,entry.reference,bytes=>{sentFrame=bytes;paint();}));
+              await Promise.all(uploads);
+              if(row?.isConnected)row.textContent='Confirmando arquivos de '+c.name+'…';
+              if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
+              await request('image-pipeline-complete',{job_id:ticket.job_id});
+            }
           }
           entry.sent=true;entry.error='';completed++;if(row)row.textContent='Envio confirmado. Processamento automático na fila.';
         }catch(err){failures++;entry.error=err.message;if(row)row.textContent=err.message;if(uid!==cloudSession?.user?.id)break;}
@@ -152,6 +206,8 @@
   function resetOwner(){
     const id=cloudSession?.user?.id||'';if(id===owner)return;
     owner=id;generation++;jobs=[];previewCache.clear();resultCache.clear();characterRequest=null;
+    for(const url of characterPreviewUrls.values())if(url?.startsWith("blob:"))URL.revokeObjectURL(url);
+    characterPreviewUrls.clear();
     for(const key of Object.keys(viewFilters))delete viewFilters[key];for(const key of Object.keys(searchTerms))delete searchTerms[key];
     for(const [key,d] of Object.entries(drafts)){Object.values(d.urls||{}).forEach(url=>URL.revokeObjectURL(url));for(const entry of d.entries||[])Object.values(entry.urls||{}).forEach(url=>URL.revokeObjectURL(url));delete drafts[key];}
     for(const id of Object.keys(sources)){const root=document.getElementById(id);if(root){root.replaceChildren();delete root.dataset.pipelineMounted;}}
@@ -295,12 +351,14 @@
         '<figure class="pipeline-job-preview" data-pipeline-preview="'+j.id+'"><div class="pipeline-job-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m4 17 5-5 4 4 3-3 5 5"/><circle cx="15" cy="8" r="2"/></svg><span>Carregando prévia</span></div><figcaption class="pipeline-preview-tag">Prévia</figcaption></figure>'+
         '<div class="pipeline-job-info"><div class="pipeline-job-head"><span class="pipeline-job-number">'+(queued?'FILA '+String(queuePositions[stage]).padStart(2,'0'):'VÍDEO '+String(jobs.filter(x=>x.meta.source===sources[currentPage]).slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id)).findIndex(x=>x.id===j.id)+1).padStart(2,'0'))+'</span><strong class="pipeline-job-name" title="'+e(j.original_file_name)+'">'+e(j.original_file_name)+'</strong><span class="pipeline-job-badge '+(ready?'ready':failed?'failed':'')+'">'+(cancelled?'CANCELADO':ready?'CONCLUÍDO':failed?'ATENÇÃO':preparing?'PREPARANDO':queued?'NA FILA':'PROCESSANDO')+'</span></div>'+
         (j.meta.source==='face_swap_natural'?'<span class="pipeline-character-tag">'+e(workflowLabel(j))+'</span>':'')+(j.meta.character_name?'<span class="pipeline-character-tag studio-model-tag" data-character="'+e(window.CloudentStudio?.modelOf?.(j)||'')+'">'+e(j.meta.character_name)+'</span>':'')+'<p class="pipeline-job-current"><span class="pipeline-status-dot"></span>'+e(title)+'</p><p class="pipeline-job-subtitle">'+e(subtitle)+'</p>'+
+         ((j.status==='running'&&j.started_at&&['face_swap','upscale'].includes(stage))?'<p class="pipeline-live-timer" role="timer" data-pipeline-started="'+e(j.started_at)+'">'+e(elapsedText(j.started_at))+'</p>':'')+
         '<div class="pipeline-stage-track" role="progressbar" aria-label="Etapas concluídas" aria-valuemin="0" aria-valuemax="'+steps.length+'" aria-valuenow="'+state.done+'" aria-valuetext="'+e(title)+'">'+steps.map(step=>'<span class="pipeline-stage-segment '+step.state+'"></span>').join('')+'</div>'+
         '<ol class="pipeline-step-list">'+steps.map((step,i)=>'<li class="pipeline-step '+step.state+'" '+(step.state==='active'?'aria-current="step"':'')+'><span class="pipeline-step-icon">'+(step.done?'✓':step.state==='failed'?'!':i+1)+'</span><span>'+step.name+'</span></li>').join('')+'</ol>'+
         (j.last_error?'<p class="'+(failed?'pipeline-job-error':'pipeline-job-notice')+'">'+e(j.last_error)+'</p>':'')+
         '<div class="pipeline-job-actions">'+(j.meta.genjutsu_v3_job_id?'<button type="button" class="btn" data-open-v3>Abrir GENJUTSU V3</button>':'')+(j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-original="'+j.id+'">▷ Vídeo original</button>':'')+(j.meta.source==='face_swap_natural'&&(j.meta.upscale_result||j.meta.face_swap_result)?'<button type="button" class="btn" data-compare="'+j.id+'">Comparar imagem</button>':'')+(ready&&!j.meta.genjutsu_v3_job_id?'<button type="button" class="btn primary" data-open="'+j.id+'">Ver resultado</button><button type="button" class="btn" data-download="'+j.id+'">↓ Baixar</button>':'')+(ready&&!j.meta.genjutsu_v3_job_id&&j.meta.source==='face_swap_natural'?'<button type="button" class="btn" data-calendar="'+j.id+'">Adicionar ao calendário</button>':'')+(stage==='control_motion'&&j.status==='waiting'&&j.production?.status==='motion_waiting'?'<button type="button" class="btn" data-cancel="'+j.id+'">Cancelar espera</button>':'')+(retry&&!(stage==='control_motion'&&j.meta.genjutsu_v3_job_id)?'<button type="button" class="btn" data-retry="'+j.id+'">Tentar etapa novamente</button>':'')+'<button type="button" class="btn pipeline-delete" data-delete="'+j.id+'" '+(deletable?'':'disabled title="Disponível após o processamento"')+'>Excluir</button></div></div><div data-result="'+j.id+'"></div></article>';
     }).join(''):'<div class="card"><p class="muted">Envie um arquivo para acompanhar as etapas e a prévia aqui.</p></div>');
     fillJobPreviews(node,rows);
+    tickPipelineTimers();
   }
   function render(page){
     resetOwner();if(!sources[page])return;
@@ -415,6 +473,7 @@
   document.addEventListener?.('visibilitychange',()=>{if(!document.hidden&&cloudSession&&sources[currentPage]){resetOwner();refresh();}});
   window.ImagePipeline={render,refresh,draw:drawJobs,rowsForPage:page=>jobs.filter(j=>j.meta.source===sources[page])};
   if(sources[currentPage])render(currentPage);
+  setInterval(tickPipelineTimers,1000);
 })();
 
 
