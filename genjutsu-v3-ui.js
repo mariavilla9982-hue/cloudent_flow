@@ -6,10 +6,12 @@
   );
   const labels = {
     queued: "Na fila", dispatching: "Enviando ao RunningHub", running: "Gerando",
-    ready: "Dois vídeos prontos", failed: "Saída incompleta", review: "Envio a confirmar",
+    ready: "Pronto", failed: "Falha", review: "Revisão",
   };
   const variants = [["148", 24], ["170", 30]];
   let panel = null, owner = null, busy = false, pending = null, loading = false;
+  const selectedByJob = new Map();
+  let resultFilter = "all";
   const active = () => panel?.isConnected && currentPage === "production" &&
     window.CloudentMotionControl?.mode === "genjutsu" && owner === cloudSession?.user?.id;
 
@@ -147,7 +149,7 @@
       catch (e) { status.textContent = e.message; }
     }
     tile.append(heading, video, cover, status);
-    return { tile, video, open };
+    return { tile, video, open, getLink };
   }
 
   function jobButton(label, handler, message) {
@@ -240,6 +242,195 @@
     }
     card.append(actions, status, preview);
   }
+  function element(tag, className = "", label = "") {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (label) node.textContent = label;
+    return node;
+  }
+
+  function applyFilters(jobs) {
+    if (!panel?.isConnected) return;
+    const counts = { all: jobs.length, running: jobs.filter(j => ["queued", "dispatching", "running"].includes(j.status)).length, ready: jobs.filter(j => j.status === "ready").length };
+    const names = { all: "Todos", running: "Gerando", ready: "Prontos" };
+    for (const button of panel.querySelectorAll("[data-gv3-filter]")) {
+      const filter = button.dataset.gv3Filter;
+      button.textContent = names[filter] + " (" + counts[filter] + ")";
+      button.classList.toggle("active", filter === resultFilter);
+      button.setAttribute("aria-pressed", String(filter === resultFilter));
+    }
+    const queue = panel.querySelector("[data-gv3-queue]");
+    if (queue) queue.textContent = counts.running + (counts.running === 1 ? " na fila / produção" : " na fila / produção");
+    const list = panel.querySelector("[data-jobs]");
+    for (const card of list.querySelectorAll("[data-job-id]")) {
+      const status = card.dataset.jobStatus;
+      card.hidden = resultFilter === "running" ? !["queued", "dispatching", "running"].includes(status) :
+        resultFilter === "ready" ? status !== "ready" : false;
+    }
+    const emptyFilter = panel.querySelector("[data-gv3-filter-empty]");
+    if (emptyFilter) emptyFilter.hidden = !jobs.length || (resultFilter === "all" || counts[resultFilter] > 0);
+  }
+
+  function createShowcase(job, results, players) {
+    const showcase = element("div", "gv3-showcase");
+    const frame = element("div", "gv3-feature");
+    const controls = element("div", "gv3-showcase-controls");
+    const name = element("p", "gv3-feature-title", "PRÉVIA VERTICAL · 9:16");
+    const status = element("p", "gv3-note gv3-feedback");
+    status.setAttribute("role", "status");
+    let selectedNode = selectedByJob.get(job.id);
+    if (!results.some(([node]) => node === selectedNode)) selectedNode = results.at(-1)?.[0] || null;
+    if (selectedNode) selectedByJob.set(job.id, selectedNode);
+    const playerFor = () => players.find(p => p.node === selectedNode);
+    const available = results.length > 0;
+    const video = available ? document.createElement("video") : null;
+    let previewVersion = 0;
+    if (video) {
+      video.className = "gv3-featured-video";
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.setAttribute("aria-label", "Prévia vertical do vídeo gerado");
+      video.addEventListener("error", () => { status.textContent = "A prévia falhou. Tente baixar o arquivo."; });
+      video.addEventListener("loadeddata", () => {
+        if (video.readyState >= 2) status.textContent = "";
+      });
+      frame.append(video);
+    } else {
+      const placeholder = element("div", "gv3-feature-placeholder");
+      const spinner = element("span", "gv3-feature-spinner", job.status === "failed" ? "!" : "◌");
+      spinner.setAttribute("aria-hidden", "true");
+      placeholder.append(spinner, element("small", "", job.status === "failed" ? "Produção não concluída" : "Prévia disponível quando finalizar"));
+      frame.append(placeholder);
+    }
+    frame.append(element("span", "gv3-ratio", "9:16"));
+    const versionLabel = element("b", "gv3-option-heading", "Versão para agenda");
+    const versionOptions = element("div", "gv3-version-options");
+    const versionNote = element("div", "gv3-selected-note");
+    const variantButtons = [];
+    const selectedFps = () => variants.find(([node]) => node === selectedNode)?.[1] || 24;
+    const renderChoice = () => {
+      for (const { button, node } of variantButtons) {
+        const selected = node === selectedNode;
+        button.classList.toggle("selected", selected);
+        button.setAttribute("aria-pressed", String(selected));
+      }
+      versionNote.textContent = available ? "✓ Versão selecionada: " + selectedFps() + " fps" : "Aguardando vídeos de saída";
+    };
+    async function loadPreview(play = false) {
+      if (!video || !selectedNode) return;
+      const node = selectedNode, version = ++previewVersion;
+      const selected = playerFor();
+      if (!selected) return;
+      if (video.dataset.node !== node) {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+        delete video.dataset.node;
+      } else if (video.getAttribute("src")) {
+        if (play) await video.play().catch(() => {});
+        return;
+      }
+      status.textContent = "Carregando prévia " + selectedFps() + " fps…";
+      try {
+        const url = await selected.getLink();
+        if (version !== previewVersion || !showcase.isConnected) return;
+        video.dataset.node = node;
+        video.src = url + "#t=0.1";
+        if (play) await video.play().catch(() => {});
+      } catch (error) {
+        if (version === previewVersion) status.textContent = error.message || "Prévia indisponível.";
+      }
+    }
+    for (const [node, fps] of variants) {
+      const button = element("button", "gv3-option", fps + " fps");
+      button.type = "button";
+      button.disabled = !results.some(([resultNode]) => resultNode === node);
+      button.setAttribute("aria-label", "Selecionar versão de " + fps + " fps");
+      button.onclick = () => {
+        if (selectedNode === node) return;
+        selectedNode = node;
+        selectedByJob.set(job.id, node);
+        renderChoice();
+        void loadPreview();
+      };
+      variantButtons.push({ button, node });
+      versionOptions.append(button);
+    }
+    renderChoice();
+    function action(label, className, handler, disabled = false) {
+      const button = element("button", "btn " + className, label);
+      button.type = "button";
+      button.disabled = disabled;
+      button.onclick = async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        const previous = button.textContent;
+        try { await handler(button); }
+        catch (error) { status.textContent = error.message || "Não foi possível concluir esta ação."; }
+        finally {
+          if (button.isConnected) { button.textContent = previous; button.disabled = disabled; }
+        }
+      };
+      return button;
+    }
+    const preview = action("▷ Preview", "gv3-preview-button", async () => {
+      await loadPreview(true);
+      video?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, !available);
+    const agenda = action("▦ Adicionar à agenda", "primary gv3-agenda-button", async button => {
+      if (typeof openScheduleModal !== "function") throw new Error("Agenda não disponível nesta tela.");
+      const selected = playerFor();
+      if (!selected) throw new Error("Selecione uma versão disponível.");
+      button.textContent = "Preparando " + selectedFps() + " fps…";
+      const response = await fetch(await selected.getLink());
+      if (!response.ok) throw new Error("Não foi possível preparar esta versão.");
+      const file = new File([await response.blob()], "genjutsu-v3-" + selectedFps() + "fps.mp4", { type: "video/mp4" });
+      if (!active() || !showcase.isConnected) return;
+      openScheduleModal();
+      const fileInput = document.getElementById("modalFile");
+      if (!fileInput) throw new Error("A agenda não apresentou o campo do vídeo.");
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      status.textContent = "Versão " + selectedFps() + " fps selecionada para a agenda.";
+    }, !available);
+    const download = action("↓ Baixar", "gv3-download-button", async button => {
+      const selected = playerFor();
+      if (!selected) throw new Error("Vídeo ainda indisponível.");
+      button.textContent = "Baixando…";
+      const response = await fetch(await selected.getLink());
+      if (!response.ok) throw new Error("Não foi possível baixar o vídeo.");
+      saveFile(await response.blob(), "genjutsu-v3-" + selectedFps() + "fps.mp4");
+    }, !available);
+    const buttonGroup = element("div", "gv3-primary-actions");
+    buttonGroup.append(preview, agenda, download);
+    controls.append(name, versionLabel, versionOptions, versionNote, buttonGroup, status);
+    showcase.append(frame, controls);
+    if (video) {
+      if (typeof IntersectionObserver === "function") {
+        const observer = new IntersectionObserver(entries => {
+          if (entries.some(entry => entry.isIntersecting)) {
+            observer.disconnect();
+            void loadPreview();
+          }
+        }, { rootMargin: "160px" });
+        observer.observe(showcase);
+      } else {
+        Promise.resolve().then(() => { if (showcase.isConnected) void loadPreview(); });
+      }
+    } else if (["queued", "dispatching", "running"].includes(job.status)) {
+      const progress = element("div", "gv3-progress");
+      progress.setAttribute("role", "progressbar");
+      progress.setAttribute("aria-label", "Geração em andamento");
+      progress.removeAttribute("aria-valuenow");
+      progress.append(element("span", "gv3-progress-runner"));
+      controls.insertBefore(progress, buttonGroup);
+    }
+    return showcase;
+  }
+
   function draw(jobs) {
     const list = panel.querySelector("[data-jobs]");
     const signature = JSON.stringify(jobs);
@@ -254,7 +445,7 @@
         let confirmed = 0;
         for (const job of failed) {
           try { await retryJob(job); confirmed++; }
-          catch { /* Report the total confirmed by the server. */ }
+          catch { /* Report only confirmed retries. */ }
         }
         notify(confirmed + " de " + failed.length + " vídeos voltaram à fila.");
         await refresh();
@@ -262,67 +453,79 @@
     };
     const cards = new Map([...list.children].filter(item => item.dataset.jobId).map(item => [item.dataset.jobId, item]));
     const nextCards = new Set();
-    for (const job of jobs) {
+    for (const [index, job] of jobs.entries()) {
       const existing = cards.get(job.id);
-      const signature = JSON.stringify(job);
-      if (existing?.dataset.signature === signature) {
+      const jobSignature = JSON.stringify(job);
+      if (existing?.dataset.signature === jobSignature) {
         nextCards.add(existing);
         continue;
       }
-      const card = document.createElement("article");
+      const card = element("article", "gv3-job");
       card.dataset.jobId = job.id;
-      card.dataset.signature = signature;
-      card.className = "gv3-job";
-      const header = document.createElement("header");
-      const title = document.createElement("strong");
-      title.textContent = labels[job.status] || job.status;
-      const date = document.createElement("time");
-      date.dateTime = job.created_at;
-      date.textContent = new Date(job.created_at).toLocaleString("pt-BR");
-      const identity = document.createElement("div");
-      identity.className = "gv3-job-identity";
-      identity.append(title);
+      card.dataset.jobStatus = job.status;
+      card.dataset.signature = jobSignature;
+      const header = element("header", "gv3-job-header");
+      const identity = element("div", "gv3-job-identity");
+      identity.append(element("strong", "gv3-job-title", "Vídeo " + (index + 1)));
+      const statusTag = element("span", "gv3-state gv3-state-" + job.status, labels[job.status] || job.status);
+      identity.append(statusTag);
       if (job.mode === "manual" || job.mode === "automatic") {
-        const tag = document.createElement("span");
-        tag.className = "gv3-mode-tag";
-        tag.textContent = job.mode === "manual" ? "Manual" : "Automático";
-        identity.append(tag);
+        identity.append(element("span", "gv3-mode-tag", job.mode === "manual" ? "Manual" : "Automático"));
       }
+      const complete = job.status === "ready" && job.updated_at;
+      const timestamp = complete ? job.updated_at : job.created_at;
+      const date = element("time", "gv3-job-time");
+      date.dateTime = timestamp;
+      const at = new Date(timestamp);
+      date.textContent = (complete ? "Gerado" : "Enviado") + " em " +
+        at.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " às " +
+        at.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       header.append(identity, date);
       card.append(header);
-      if (job.error) {
-        const details = document.createElement("p");
-        details.className = "gv3-note";
-        details.textContent = job.error;
-        card.append(details);
-      }
+      if (job.error) card.append(element("p", "gv3-note", job.error));
       const results = variants.filter(([node]) => job.outputs?.[node]);
-      if (results.length) {
-        const details = document.createElement("details");
-        details.className = "gv3-compare";
-        const summary = document.createElement("summary");
-        summary.textContent = results.length === 2 ? "Abrir prévias de 24 e 30 fps" : "Abrir prévia do vídeo disponível";
-        const outputs = document.createElement("div");
-        outputs.className = "gv3-outputs";
-        const players = results.map(([node, fps]) => resultVariant(job, node, fps, job.outputs[node]));
+      const players = results.map(([node, fps]) => ({ ...resultVariant(job, node, fps, job.outputs[node]), node, fps }));
+      const showcase = createShowcase(job, results, players);
+      card.append(showcase);
+      let comparison = null;
+      if (players.length) {
+        comparison = element("details", "gv3-compare");
+        comparison.append(element("summary", "", players.length === 2 ? "Comparar prévias de 24 e 30 fps" : "Ver prévia detalhada"));
+        const outputs = element("div", "gv3-outputs");
         outputs.append(...players.map(player => player.tile));
-        details.append(summary, outputs);
-        details.addEventListener("toggle", () => {
+        comparison.append(outputs);
+        comparison.addEventListener("toggle", () => {
           for (const player of players) {
-            if (details.open) void player.open();
+            if (comparison.open) void player.open();
             else player.video.pause();
           }
         });
-        card.append(details);
-        if (existing?.querySelector("details")?.open) details.open = true;
+        if (existing?.querySelector(".gv3-compare")?.open) comparison.open = true;
+        card.append(comparison);
       }
-      addJobActions(card, job, card.querySelector("details"));
+      addJobActions(card, job, comparison);
+      const actions = card.querySelector(":scope > .gv3-actions");
+      const lastStatus = actions?.nextElementSibling;
+      const originalPreviews = lastStatus?.nextElementSibling;
+      const heroActions = showcase.querySelector(".gv3-primary-actions");
+      for (const label of ["Parar", "Tentar novamente"]) {
+        const button = [...(actions?.querySelectorAll("button") || [])].find(item => item.textContent === label);
+        if (button) { button.classList.add("gv3-recovery-button"); heroActions.append(button); }
+      }
+      const tools = element("details", "gv3-tools");
+      tools.append(element("summary", "", "Vídeo original, frame e outras ações"));
+      if (actions) tools.append(actions);
+      if (lastStatus) tools.append(lastStatus);
+      if (originalPreviews) tools.append(originalPreviews);
+      if (existing?.querySelector(".gv3-tools")?.open) tools.open = true;
+      card.append(tools);
       if (existing) existing.replaceWith(card);
       else list.append(card);
       nextCards.add(card);
     }
     for (const item of [...list.children]) if (!nextCards.has(item)) item.remove();
     if (!jobs.length) list.innerHTML = '<div class="gv3-empty">Nenhuma geração enviada.</div>';
+    applyFilters(jobs);
   }
   async function refresh() {
     if (!active() || loading) return;
@@ -399,10 +602,13 @@
         <div class="gv3-actions"><button class="btn primary" type="submit">Gerar vídeos</button><p class="gv3-status" data-status role="status"></p></div>
       </form>
       <section class="gv3-panel" aria-label="Resultados">
-        <header class="gv3-heading"><div><h3>Resultados</h3><p class="gv3-note">Compare as versões e baixe a que preferir.</p></div><div class="gv3-actions"><button class="btn" type="button" data-refresh>Atualizar</button><button class="btn" type="button" data-retry-all hidden>Tentar todos novamente</button></div></header>
+        <header class="gv3-heading"><div><h3>Produção</h3><p class="gv3-note">Vídeos gerados com IA · Prévia vertical 9:16</p></div><div class="gv3-heading-actions"><span class="gv3-queue-count" data-gv3-queue></span><button class="btn" type="button" data-refresh>Atualizar</button><button class="btn" type="button" data-retry-all hidden>Tentar todos novamente</button></div></header>
+        <nav class="gv3-filters" aria-label="Filtrar vídeos"><button type="button" data-gv3-filter="all" class="active">Todos</button><button type="button" data-gv3-filter="running">Gerando</button><button type="button" data-gv3-filter="ready">Prontos</button></nav>
+        <div class="gv3-empty gv3-filter-empty" data-gv3-filter-empty hidden>Nenhum vídeo nesta categoria.</div>
         <div class="gv3-jobs" data-jobs><div class="gv3-empty">Carregando resultados…</div></div>
       </section>`;
     panel.querySelector("[data-refresh]").onclick = refresh;
+    panel.querySelectorAll("[data-gv3-filter]").forEach(button => { button.onclick = () => { resultFilter = button.dataset.gv3Filter; const jobs = [...panel.querySelectorAll("[data-job-id]")].map(card => ({ status: card.dataset.jobStatus })); applyFilters(jobs); }; });
     const form = panel.querySelector("form");
     form.addEventListener("submit", submit);
     form.addEventListener("change", event => {
