@@ -48,7 +48,7 @@ begin
   where j.id=picked.id
   returning j.*;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.claim_genjutsu_v3_job(p_lease uuid)
@@ -82,7 +82,7 @@ begin
     lease_id=p_lease,lease_until=now()+interval '5 minutes',updated_at=now()
   where id=job.id returning * into job;
   return to_jsonb(job);
-end $function$
+end $function$;
 
 
 CREATE OR REPLACE FUNCTION public.claim_production_jobs(p_worker text, p_limit integer DEFAULT 1)
@@ -132,7 +132,7 @@ begin
   where j.id=picked.id
   returning j.*;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.lease_image_pipeline(p_id uuid, p_worker text, p_limit integer DEFAULT 1)
@@ -166,6 +166,6 @@ begin
   return query update public.face_swap_jobs set locked_by=p_worker,locked_at=now(),
     status=case when j.status='waiting' and j.meta->>'stage'<>'control_motion' then 'uploading' else j.status end,
     updated_at=now() where id=p_id returning *;
-end $function$
+end $function$;
 
 COMMIT;
