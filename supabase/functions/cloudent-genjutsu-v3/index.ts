@@ -276,7 +276,7 @@ Deno.serve(async req => {
     const owner = await userId(req);
     if (!owner) return reply({ error: "Acesso restrito." }, 403);
     if (action === "list" && req.method === "GET") {
-      const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at,input_video_path")
+      const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at,updated_at,input_video_path")
         .eq("user_id", owner).neq("status", "draft").order("created_at", { ascending: false }).limit(30);
       if (error) throw error;
       return reply({ jobs: (data || []).map(({ input_video_path, ...job }) => ({ ...job, mode: generationMode({ input_video_path }) })) });
