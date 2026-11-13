@@ -3917,6 +3917,89 @@ Deno.serve(async (req: Request) => {
       return json({ok:true,day,estimated_bytes:total,warn_bytes:warn,critical_bytes:critical});
     }
 
+    // Register a GENJUTSU V3 output in the calendar without a browser download + upload.
+    // The immutable scheduled copy is made inside the same B2 bucket.
+    if (req.method === "POST" && action === "genjutsu-v3-schedule") {
+      const body=await req.json();
+      const id=String(body.id||"");
+      const node=String(body.node||"");
+      const scheduledAt=String(body.scheduled_at||"");
+      const caption=String(body.caption||"").slice(0,2200);
+      const smartMode=body.smart_mode==="auto"?"auto":"manual";
+      const smartStrategy=String(body.smart_strategy||(smartMode==="auto"?"tested":"manual"));
+      if(!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(id)||!["148","170"].includes(node))
+        return json({error:"Vídeo ou versão inválida."},400);
+      if(!scheduledAt||!Number.isFinite(Date.parse(scheduledAt)))
+        return json({error:"Data de agendamento inválida."},400);
+      const accountId=await resolveCalendarInstagramAccount(admin,body.platform_account_id,userData.user.id);
+      const {data:job,error:jobError}=await admin.from("genjutsu_v3_jobs")
+        .select("id,user_id,status,outputs").eq("id",id).eq("user_id",userData.user.id).maybeSingle();
+      if(jobError)throw jobError;
+      if(!job||job.status!=="ready")return json({error:"Vídeo ainda não está pronto para a agenda."},409);
+      const output=job.outputs?.[node];
+      const expectedBytes=Number(output?.size);
+      if(!Number.isSafeInteger(expectedBytes)||expectedBytes<=0||expectedBytes>40*1024*1024)
+        return json({error:"Versão de vídeo indisponível."},409);
+      const cfg=await getCloudentR2Config(admin);
+      if(!cfg)return json({error:"Armazenamento Backblaze indisponível."},503);
+      const sourcePath=userData.user.id+"/genjutsu-v3/"+id+"/output-"+node+".mp4";
+      const destination=userData.user.id+"/uploads/"+new Date().toISOString().slice(0,10)+"/"+crypto.randomUUID()+".mp4";
+      const sourceHeader="/"+encodeURIComponent(cfg.bucket)+"/"+r2KeyPath(sourcePath);
+      const aws=new AwsClient({service:"s3",region:s3RegionFromEndpoint(cfg.endpoint),
+        accessKeyId:cfg.access_key_id,secretAccessKey:cfg.secret_access_key});
+      const copyRequest=new Request(cfg.endpoint+"/"+encodeURIComponent(cfg.bucket)+"/"+r2KeyPath(destination),
+        {method:"PUT",headers:{"x-amz-copy-source":sourceHeader}});
+      let copied=false,videoId:string|null=null,scheduleId:string|null=null;
+      try {
+        const copy=await fetch(await aws.sign(copyRequest),{signal:AbortSignal.timeout(30000)});
+        const copyBody=await copy.text();
+        if(!copy.ok||!copyBody.includes("<CopyObjectResult"))
+          throw new Error("Não foi possível copiar o vídeo no Backblaze (HTTP "+copy.status+").");
+        copied=true;
+        const head=await fetch(await r2PresignedUrl(cfg,"HEAD",destination,300),{method:"HEAD"});
+        const bytes=Number(head.headers.get("content-length")||0);
+        if(!head.ok||bytes!==expectedBytes)throw new Error("A cópia do vídeo não passou na verificação de tamanho.");
+        const fps=node==="148"?24:30;
+        const {data:video,error:videoError}=await admin.from("videos").insert({
+          storage_path:destination,storage_provider:"r2",file_name:"genjutsu-v3-"+fps+"fps.mp4",
+          mime_type:"video/mp4",size_bytes:bytes,caption,status:"scheduled",
+          platform:"instagram",platform_account_id:accountId,
+          cover_offset_ms:3500,cover_strategy:"auto_after_3s"
+        }).select().single();
+        if(videoError)throw videoError;
+        videoId=video.id;
+        const {data:schedule,error:scheduleError}=await admin.from("schedules").insert({
+          video_id:videoId,scheduled_at:scheduledAt,status:"scheduled",
+          smart_mode:smartMode,
+          smart_strategy:["stable","tested","test","strong","manual"].includes(smartStrategy)
+            ?smartStrategy:(smartMode==="auto"?"tested":"manual"),
+          smart_strategy_locked:smartMode!=="auto",
+          platform:"instagram",platform_account_id:accountId
+        }).select().single();
+        if(scheduleError)throw scheduleError;
+        scheduleId=schedule.id;
+        const {error:queueError}=await admin.from("job_queue").insert({
+          job_type:"publish_reel",platform:"instagram",platform_account_id:accountId,
+          schedule_id:scheduleId,run_at:scheduledAt,
+          payload:{schedule_id:scheduleId,genjutsu_v3_job_id:id,node}
+        });
+        if(queueError)throw queueError;
+        await admin.from("activity_logs").insert({
+          level:"info",event_type:"genjutsu_v3_scheduled",
+          message:"GENJUTSU V3 agendado por cópia interna no Backblaze",
+          meta:{user_id:userData.user.id,video_id:videoId,schedule_id:scheduleId,
+            genjutsu_v3_job_id:id,node}
+        }).then(()=>null).catch(()=>null);
+        return json({ok:true,video,schedule},201);
+      } catch(error) {
+        // Never delete the original GENJUTSU output; only the uncommitted copy.
+        if(scheduleId)await admin.from("schedules").delete().eq("id",scheduleId);
+        if(videoId)await admin.from("videos").delete().eq("id",videoId);
+        if(copied)await storageDeletePaths(admin,"r2",[destination]).catch(()=>null);
+        throw error;
+      }
+    }
+
     if (req.method === "POST" && action === "upload-ticket") {
       const body=await req.json();
       const scheduledAt=String(body.scheduled_at||"");
