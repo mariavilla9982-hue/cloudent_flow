@@ -56,8 +56,34 @@
     const link = document.createElement("a");
     link.href = object;
     link.download = name;
+    document.body.append(link);
     link.click();
-    setTimeout(() => URL.revokeObjectURL(object), 30000);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(object), 60000);
+  }
+
+  // Signed storage URLs can play in <video> but refuse cross-origin fetch.
+  // Always provide a browser-native fallback rather than silently doing nothing.
+  async function downloadVideo(url, name, status) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Download HTTP " + response.status);
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("Arquivo de vídeo vazio.");
+      saveFile(blob, name);
+      return;
+    } catch (error) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      if (status) status.textContent = "Download direto aberto. Caso o navegador exiba o vídeo, use Salvar/Baixar.";
+      if (typeof toast === "function") toast("Download direto aberto no navegador.", "info");
+    }
   }
 
   function resultVariant(job, node, fps, output) {
@@ -108,10 +134,13 @@
       download.disabled = true;
       status.textContent = "";
       try {
-        const response = await fetch(await getLink());
-        if (!response.ok) throw new Error("Não foi possível baixar o vídeo.");
-        saveFile(await response.blob(), "genjutsu-v3-" + suffix + ".mp4");
-      } catch (e) { status.textContent = e.message; }
+        status.textContent = "Preparando download…";
+        await downloadVideo(await getLink(), "genjutsu-v3-" + suffix + ".mp4", status);
+        if (status.textContent === "Preparando download…") status.textContent = "Download iniciado.";
+      } catch (e) {
+        status.textContent = e.message || "Falha no download.";
+        if (typeof toast === "function") toast(status.textContent, "err");
+      }
       finally { download.disabled = false; }
     };
 
@@ -159,9 +188,13 @@
     button.textContent = label;
     button.onclick = async () => {
       button.disabled = true;
+      button.setAttribute("aria-busy", "true");
       try { await handler(); }
-      catch (error) { message(error.message); }
-      finally { button.disabled = false; }
+      catch (error) {
+        message(error?.message || "Falha ao executar ação.");
+        if (typeof toast === "function") toast(error?.message || "Falha ao executar ação.", "err");
+      }
+      finally { button.disabled = false; button.removeAttribute("aria-busy"); }
     };
     return button;
   }
@@ -358,6 +391,9 @@
       versionOptions.append(button);
     }
     renderChoice();
+    if (!available) status.textContent = ["queued", "dispatching", "running"].includes(job.status)
+      ? "Aguardando a saída do vídeo. Preview, agenda e download serão liberados quando ficar pronto."
+      : "Nenhuma saída disponível. Use os controles de recuperação abaixo.";
     function action(label, className, handler, disabled = false) {
       const button = element("button", "btn " + className, label);
       button.type = "button";
@@ -365,11 +401,20 @@
       button.onclick = async () => {
         if (button.disabled) return;
         button.disabled = true;
+        button.setAttribute("aria-busy", "true");
         const previous = button.textContent;
+        status.textContent = label.includes("agenda") ? "Abrindo a agenda…" : label.includes("Baixar") ? "Preparando download…" : "Carregando prévia…";
         try { await handler(button); }
-        catch (error) { status.textContent = error.message || "Não foi possível concluir esta ação."; }
+        catch (error) {
+          status.textContent = error?.message || "Não foi possível concluir esta ação.";
+          if (typeof toast === "function") toast(status.textContent, "err");
+        }
         finally {
-          if (button.isConnected) { button.textContent = previous; button.disabled = disabled; }
+          if (button.isConnected) {
+            button.textContent = previous;
+            button.disabled = disabled;
+            button.removeAttribute("aria-busy");
+          }
         }
       };
       return button;
@@ -382,27 +427,59 @@
       if (typeof openScheduleModal !== "function") throw new Error("Agenda não disponível nesta tela.");
       const selected = playerFor();
       if (!selected) throw new Error("Selecione uma versão disponível.");
-      button.textContent = "Preparando " + selectedFps() + " fps…";
-      const response = await fetch(await selected.getLink());
-      if (!response.ok) throw new Error("Não foi possível preparar esta versão.");
-      const file = new File([await response.blob()], "genjutsu-v3-" + selectedFps() + "fps.mp4", { type: "video/mp4" });
-      if (!active() || !showcase.isConnected) return;
+      const fps = selectedFps();
+      // Open immediately on the user's click. Never wait for an entire video download
+      // before displaying the scheduling modal, especially on mobile connections.
       openScheduleModal();
-      const fileInput = document.getElementById("modalFile");
-      if (!fileInput) throw new Error("A agenda não apresentou o campo do vídeo.");
-      const transfer = new DataTransfer();
-      transfer.items.add(file);
-      fileInput.files = transfer.files;
-      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-      status.textContent = "Versão " + selectedFps() + " fps selecionada para a agenda.";
+      const modalHost = document.getElementById("modalHost");
+      const fileInput = modalHost?.querySelector("#modalFile");
+      const saveButton = modalHost?.querySelector(".calendar-modal-save");
+      if (!fileInput || !saveButton) throw new Error("O formulário de agendamento não abriu corretamente.");
+      const hint = document.createElement("p");
+      hint.className = "gv3-note";
+      hint.setAttribute("role", "status");
+      hint.style.cssText = "margin:8px 0;color:inherit;font-size:12px";
+      hint.textContent = "Preparando vídeo de " + fps + " fps para a agenda…";
+      fileInput.insertAdjacentElement("afterend", hint);
+      fileInput.disabled = true;
+      saveButton.disabled = true;
+      button.textContent = "Preparando " + fps + " fps…";
+      try {
+        const response = await fetch(await selected.getLink());
+        if (!response.ok) throw new Error("Falha ao baixar vídeo: HTTP " + response.status);
+        const blob = await response.blob();
+        if (!blob.size) throw new Error("O arquivo retornou vazio.");
+        const file = new File([blob], "genjutsu-v3-" + fps + "fps.mp4", { type: "video/mp4" });
+        // A 12-second production refresh may replace the original card. The modal
+        // is independent: check only that THIS scheduling modal still exists.
+        if (!modalHost.contains(fileInput)) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.disabled = false;
+        fileInput.files = transfer.files;
+        if (!fileInput.files.length) throw new Error("O navegador não aceitou o arquivo.");
+        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+        saveButton.disabled = false;
+        hint.textContent = "✓ Vídeo de " + fps + " fps preparado. Escolha a data e toque em Salvar no calendário.";
+        status.textContent = "Versão " + fps + " fps enviada ao formulário da agenda.";
+        if (typeof toast === "function") toast("Vídeo de " + fps + " fps pronto para agendar.", "ok");
+      } catch (error) {
+        if (modalHost.contains(fileInput)) {
+          fileInput.disabled = false;
+          // Keep Save disabled until the user manually supplies another valid file.
+          saveButton.disabled = !fileInput.files.length;
+          fileInput.addEventListener("change", () => { saveButton.disabled = !fileInput.files.length; }, { once: true });
+          hint.textContent = "Não consegui carregar automaticamente: " + (error?.message || "erro desconhecido") + ". Você pode escolher um arquivo manualmente.";
+        }
+        throw error;
+      }
     }, !available);
     const download = action("↓ Baixar", "gv3-download-button", async button => {
       const selected = playerFor();
       if (!selected) throw new Error("Vídeo ainda indisponível.");
       button.textContent = "Baixando…";
-      const response = await fetch(await selected.getLink());
-      if (!response.ok) throw new Error("Não foi possível baixar o vídeo.");
-      saveFile(await response.blob(), "genjutsu-v3-" + selectedFps() + "fps.mp4");
+      await downloadVideo(await selected.getLink(), "genjutsu-v3-" + selectedFps() + "fps.mp4", status);
+      if (status.textContent === "Preparando download…") status.textContent = "Download iniciado.";
     }, !available);
     const buttonGroup = element("div", "gv3-primary-actions");
     buttonGroup.append(preview, agenda, download);
@@ -455,7 +532,8 @@
     const nextCards = new Set();
     for (const [index, job] of jobs.entries()) {
       const existing = cards.get(job.id);
-      const jobSignature = JSON.stringify(job);
+      // Do not destroy interactive cards on worker heartbeat timestamp updates.
+      const jobSignature = JSON.stringify(job.status === "ready" ? job : { ...job, updated_at: null });
       if (existing?.dataset.signature === jobSignature) {
         nextCards.add(existing);
         continue;
