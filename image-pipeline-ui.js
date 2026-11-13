@@ -164,7 +164,7 @@
         try{
           if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada; selecione os vídeos novamente.');
           status.textContent='Vídeo '+(index+1)+' de '+entries.length+' · '+entry.original.name;
-          if(row)row.textContent='Preparando envio…';
+          if(row)row.textContent='Extraindo primeiro frame e preparando envio…';
           const genjutsu=(entry.workflow||defaultVideoWorkflow)==='genjutsu';
           if((genjutsu||(entry.workflow||defaultVideoWorkflow)==='genjutsu_v3')&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU V3: use MP4, WebM ou MOV de até 30 MiB.');
           const seconds=genjutsu?await videoDuration(entry):null;
@@ -173,9 +173,23 @@
           for(const c of characters.filter(c=>entry.characters.includes(c.id))){
             if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
             const variant=(entry.workflow||defaultVideoWorkflow)+':'+c.id;const id=entry.variantIds[variant]||(entry.variantIds[variant]=crypto.randomUUID());
-            if(row)row.textContent='Enviando para '+c.name+'…';
+            if(row)row.textContent='Preparando upload para '+c.name+'…';
             const ticket=await request('image-pipeline-ticket',{source:sources.faceSwap,job_id:id,character_id:c.id,workflow_key:entry.workflow||defaultVideoWorkflow,...(genjutsu?{duration_seconds:seconds}:{}),original:describe(entry.original),reference:describe(entry.reference)});
-            if(!ticket.registered){await uploadFaceSwapPart(ticket.original,entry.original,()=>{});if(!ticket.same_input)await uploadFaceSwapPart(ticket.reference,entry.reference,()=>{});if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');await request('image-pipeline-complete',{job_id:ticket.job_id});}
+            if(!ticket.registered){
+              const total=entry.original.size+(ticket.same_input?0:entry.reference.size);
+              let sentVideo=0,sentFrame=0,lastPaint=0;
+              const paint=()=>{
+                const now=Date.now();if(now-lastPaint<120)return;lastPaint=now;
+                const pct=Math.min(100,Math.floor(100*(sentVideo+sentFrame)/Math.max(1,total)));
+                if(row?.isConnected)row.textContent='Enviando '+c.name+' · '+pct+'%';
+              };
+              const uploads=[uploadFaceSwapPart(ticket.original,entry.original,bytes=>{sentVideo=bytes;paint();})];
+              if(!ticket.same_input)uploads.push(uploadFaceSwapPart(ticket.reference,entry.reference,bytes=>{sentFrame=bytes;paint();}));
+              await Promise.all(uploads);
+              if(row?.isConnected)row.textContent='Confirmando arquivos de '+c.name+'…';
+              if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
+              await request('image-pipeline-complete',{job_id:ticket.job_id});
+            }
           }
           entry.sent=true;entry.error='';completed++;if(row)row.textContent='Envio confirmado. Processamento automático na fila.';
         }catch(err){failures++;entry.error=err.message;if(row)row.textContent=err.message;if(uid!==cloudSession?.user?.id)break;}
