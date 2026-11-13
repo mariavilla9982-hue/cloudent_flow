@@ -3944,7 +3944,7 @@ Deno.serve(async (req: Request) => {
       if(!cfg)return json({error:"Armazenamento Backblaze indisponível."},503);
       const sourcePath=userData.user.id+"/genjutsu-v3/"+id+"/output-"+node+".mp4";
       const destination=userData.user.id+"/uploads/"+new Date().toISOString().slice(0,10)+"/"+crypto.randomUUID()+".mp4";
-      const sourceHeader="/"+encodeURIComponent(cfg.bucket)+"/"+r2KeyPath(sourcePath);
+      const sourceHeader=encodeURIComponent(cfg.bucket)+"/"+r2KeyPath(sourcePath);
       const aws=new AwsClient({service:"s3",region:s3RegionFromEndpoint(cfg.endpoint),
         accessKeyId:cfg.access_key_id,secretAccessKey:cfg.secret_access_key});
       const copyRequest=new Request(cfg.endpoint+"/"+encodeURIComponent(cfg.bucket)+"/"+r2KeyPath(destination),
