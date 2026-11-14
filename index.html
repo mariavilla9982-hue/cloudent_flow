@@ -8123,6 +8123,7 @@ async function confirmScheduleModal(button=null){
       });
       const video=res.video,schedule=res.schedule;
       if(!video?.id||!schedule?.id)throw new Error("O servidor não confirmou o agendamento.");
+      window.CloudentGenjutsuV3?.markScheduled?.(genjutsu.dataset.jobId);
       state.slots[keyFor(date,free)]={
         cloud:true,platform:"instagram",platformAccountId:accountId,scheduleId:schedule.id,videoId:video.id,
         name:video.file_name,size:Number(video.size_bytes||0),type:video.mime_type||"video/mp4",
@@ -12562,7 +12563,7 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=6"></script>
-<script src="/genjutsu-v3-ui.js?v=8"></script>
+<script src="/genjutsu-v3-ui.js?v=9"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=23"></script>
 <script src="/production-studio.js?v=7"></script>
 <script src="/image-pipeline-ui.js?v=21"></script>
