@@ -11,6 +11,8 @@
   const variants = [["148", 24], ["170", 30]];
   let panel = null, owner = null, busy = false, pending = null, loading = false;
   const selectedByJob = new Map();
+  const scheduledJobs = new Set();
+  let latestJobs = [];
   let resultFilter = "all";
   const active = () => panel?.isConnected && currentPage === "production" &&
     window.CloudentMotionControl?.mode === "genjutsu" && owner === cloudSession?.user?.id;
@@ -501,6 +503,7 @@
 
   function draw(jobs) {
     const list = panel.querySelector("[data-jobs]");
+    jobs = jobs.filter(job => !scheduledJobs.has(job.id));
     const signature = JSON.stringify(jobs);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature;
@@ -588,7 +591,7 @@
       const lastStatus = actions?.nextElementSibling;
       const originalPreviews = lastStatus?.nextElementSibling;
       const heroActions = showcase.querySelector(".gv3-primary-actions");
-      for (const label of ["Parar", "Tentar novamente"]) {
+      for (const label of ["Parar", "Tentar novamente", "Excluir"]) {
         const button = [...(actions?.querySelectorAll("button") || [])].find(item => item.textContent === label);
         if (button) { button.classList.add("gv3-recovery-button"); heroActions.append(button); }
       }
@@ -614,7 +617,13 @@
     loading = true;
     try {
       const { jobs } = await call("list");
-      if (active() && panel === target) draw(jobs || []);
+      if (active() && panel === target) {
+        latestJobs = jobs || [];
+        for (const id of scheduledJobs) {
+          if (!latestJobs.some(job => job.id === id)) scheduledJobs.delete(id);
+        }
+        draw(latestJobs);
+      }
     } catch (e) {
       if (active() && panel === target) notify(e.message);
     } finally { loading = false; }
@@ -669,7 +678,13 @@
     panel?.querySelectorAll("[data-object-url]").forEach(preview => URL.revokeObjectURL(preview.dataset.objectUrl));
     root.querySelector("[data-genjutsu-v3]")?.remove();
     if (!user) return;
-    if (owner !== user) { owner = user; pending = null; }
+    if (owner !== user) {
+      owner = user;
+      pending = null;
+      latestJobs = [];
+      scheduledJobs.clear();
+      selectedByJob.clear();
+    }
     panel = document.createElement("section");
     panel.dataset.genjutsuV3 = "";
     panel.innerHTML = `
@@ -698,7 +713,13 @@
     root.append(panel);
     void refresh();
   }
-  window.CloudentGenjutsuV3 = { render, refresh, get busy() { return busy; } };
+  function markScheduled(id) {
+    if (!id || owner !== cloudSession?.user?.id) return;
+    scheduledJobs.add(id);
+    selectedByJob.delete(id);
+    if (active()) draw(latestJobs);
+  }
+  window.CloudentGenjutsuV3 = { render, refresh, markScheduled, get busy() { return busy; } };
   setInterval(refresh, 12000);
   setInterval(tickTimers, 1000);
 })();

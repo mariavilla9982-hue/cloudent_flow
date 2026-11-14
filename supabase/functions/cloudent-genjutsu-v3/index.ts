@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { motionObjectConfig, motionObjectURL, motionCheckObject, putMotionPrimary, requireMotionStorage, storageRPC, MotionStorageSafetyError } from "../cloudent-motion-control-worker/motion-storage-protection.ts";
+import { safeGenjutsuError } from "../_shared/genjutsu-diagnostics.ts";
 
 const WORKFLOW = "2120974306862780417";
 const NODES = ["148", "170"] as const;
@@ -240,11 +241,18 @@ async function worker(master: string) {
     }
     const statusResult = await request("/task/openapi/status", { taskId: job.task_id });
     const state = String(statusResult.data?.taskStatus ?? statusResult.data?.status ?? statusResult.data ?? "").toUpperCase();
-    if (["FAILED", "CANCELED", "CANCELLED"].includes(state) ||
+    const providerFailed = state === "FAILED" || Number(result.code) === 805;
+    if (providerFailed || ["CANCELED", "CANCELLED"].includes(state) ||
         (job.provider_finished_at && Date.now() - Date.parse(job.provider_finished_at) > 4 * 60 * 1000) ||
         Date.now() - Date.parse(job.started_at) > 4 * 60 * 60 * 1000) {
       const missing = NODES.filter(node => !outputs[node]).map(node => `#${node}`).join(" e ");
-      await patch(job, { status: "failed", error: `Saída indisponível no RunningHub: ${missing}.`, ...release });
+      const reason = result.data?.failedReason ?? statusResult.data?.failedReason;
+      const node = /^\d{1,20}$/.test(String(reason?.node_id ?? "")) ? ` no nó #${reason.node_id}` : "";
+      const detail = safeGenjutsuError(reason?.exception_message || reason?.exception_type || reason?.node_name).slice(0, 350);
+      const error = providerFailed
+        ? `O RunningHub falhou${node}.${detail ? " " + detail : ""} Saídas faltando: ${missing}.`
+        : `Saída indisponível no RunningHub: ${missing}.`;
+      await patch(job, { status: "failed", error, ...release });
     } else await patch(job, { error: null, provider_finished_at: job.provider_finished_at || (state === "SUCCESS" ? new Date().toISOString() : null), ...release });
     return { ok: true };
   } catch (e) {
@@ -279,7 +287,18 @@ Deno.serve(async req => {
       const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at,updated_at,started_at,input_video_path")
         .eq("user_id", owner).neq("status", "draft").order("created_at", { ascending: false }).limit(30);
       if (error) throw error;
-      return reply({ jobs: (data || []).map(({ input_video_path, ...job }) => ({ ...job, mode: generationMode({ input_video_path }) })) });
+      const jobs = data || [];
+      const readyIds = jobs.filter(job => job.status === "ready").map(job => job.id);
+      const scheduled = new Set<string>();
+      if (readyIds.length) {
+        const { data: entries, error: scheduleError } = await admin.from("job_queue")
+          .select("genjutsu_v3_job_id:payload->>genjutsu_v3_job_id,schedules!inner(id)")
+          .eq("job_type", "publish_reel").in("payload->>genjutsu_v3_job_id", readyIds);
+        if (scheduleError) throw scheduleError;
+        for (const entry of entries || []) scheduled.add(entry.genjutsu_v3_job_id);
+      }
+      return reply({ jobs: jobs.filter(job => !scheduled.has(job.id))
+        .map(({ input_video_path, ...job }) => ({ ...job, mode: generationMode({ input_video_path }) })) });
     }
     if (action === "ticket" && req.method === "POST") {
       const { video_bytes, image_bytes, video_type, image_type, manual_prompt } = await req.json();
