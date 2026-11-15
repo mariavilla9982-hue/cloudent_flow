@@ -918,7 +918,15 @@ Deno.serve(async(req:Request)=>{
     const user=await requireUser(admin,req);let userId=String(user.id);
     const member=await requireXMember(admin,userId);
     const {data:rateOk,error:rateError}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:action==="dashboard"?"x-dashboard":action==="status"?"x-read":"x-write",p_limit:action==="dashboard"?4:action==="status"?120:100});if(rateError)throw rateError;if(!rateOk)return json({error:"rate_limit"},429);
-    if(action==="status")return json({...await statusPayload(admin,userId,master,url),dashboard_access:await canUseXDashboard(admin,userId,member)});
+    const fixedRepliesKey="x_fixed_replies:"+member.workspace_id+":"+userId;
+    if(action==="status"){
+      const [payload,dashboardAccess,saved]=await Promise.all([
+        statusPayload(admin,userId,master,url),canUseXDashboard(admin,userId,member),
+        admin.from("app_settings").select("value").eq("key",fixedRepliesKey).maybeSingle(),
+      ]);
+      if(saved.error)throw saved.error;
+      return json({...payload,dashboard_access:dashboardAccess,fixed_replies:Array.isArray(saved.data?.value)?saved.data.value:[]});
+    }
     if(action==="dashboard"){
       if(req.method!=="GET")return json({error:"method_not_allowed"},405);
       if(!await canUseXDashboard(admin,userId,member))return json({error:"forbidden"},403);
@@ -926,6 +934,17 @@ Deno.serve(async(req:Request)=>{
     }
     if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     const body=await parseBody(req);
+    if(action==="save-fixed-replies"){
+      if(!Array.isArray(body.replies)||body.replies.length>30||body.replies.some((reply:unknown)=>typeof reply!=="string"||reply.length>2000))
+        return json({error:"Salve até 30 comentários, um por linha."},400);
+      const replies=[...new Set(body.replies.map((reply:string)=>reply.trim()).filter(Boolean).map((reply:string)=>{
+        if(!twitterText.parseTweet(reply).valid)throw new HttpError("Cada comentário precisa caber em uma publicação do X.",400);
+        return reply;
+      }))];
+      const {error}=await admin.from("app_settings").upsert({key:fixedRepliesKey,value:replies,updated_at:new Date().toISOString()},{onConflict:"key"});
+      if(error)throw error;
+      return json({ok:true,fixed_replies:replies});
+    }
     if(member.role!=="admin"&&["google-configure","google-start","google-folder","sync"].includes(action))return json({error:"forbidden"},403);
     if(action==="buffer-channels"||action==="buffer-connect"){
       const {data:allowed,error}=await admin.rpc("cloudent_rate_limit",{p_user:userId,p_bucket:"x-buffer-connect",p_limit:20});
