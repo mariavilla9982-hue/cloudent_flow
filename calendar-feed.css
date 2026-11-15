@@ -60,3 +60,8 @@
 #calendar .feed-account p{margin:0}
 #calendar .feed-account select{min-height:42px}
 @media(max-width:580px){#calendar .feed-account{grid-template-columns:minmax(0,1fr)}}
+
+#calendar .feed-time-options{display:flex;gap:6px;flex-wrap:wrap}
+#calendar .feed-time-options button{min-height:36px;padding:5px 10px}
+#calendar .feed-time-options [aria-pressed=true]{background:#f5f5f5;color:#111}
+#calendar .feed-account>button{justify-self:start}
