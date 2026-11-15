@@ -74,7 +74,23 @@ async function runningHub(master: string) {
     if (!response.ok) throw new Error(`RunningHub retornou HTTP ${response.status}.`);
     return await response.json();
   };
-  return { request };
+  const uploadFrame = async (frame: Blob, filename: string) => {
+    const form = new FormData();
+    form.append("apiKey", apiKey);
+    form.append("fileType", "input");
+    form.append("file", frame, filename);
+    const response = await fetch(origin + "/task/openapi/upload", {
+      method: "POST", headers: { Authorization: `Bearer ${apiKey}` }, body: form,
+      redirect: "error", signal: AbortSignal.timeout(25000),
+    });
+    const result = response.ok ? await response.json() : null;
+    const filenameOnProvider = result?.data?.fileName;
+    if (Number(result?.code) !== 0 || typeof filenameOnProvider !== "string" ||
+        !/^(?:api\/)?[a-zA-Z0-9_.-]+\.(?:jpe?g|png|webp)$/i.test(filenameOnProvider))
+      throw new Error("RunningHub não confirmou o upload do frame.");
+    return filenameOnProvider;
+  };
+  return { request, uploadFrame };
 }
 function parse(value: any) { return typeof value === "string" ? JSON.parse(value) : value; }
 async function validateGraph(request: any) {
@@ -108,10 +124,10 @@ function providerOutput(items: unknown, node: string) {
     throw new Error("Endereço de saída RunningHub inválido.");
   return url.href;
 }
-async function downloadMp4(url: string) {
+async function readMedia(url: string, maxBytes: number, type: string) {
   const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(25000) });
-  if (!response.ok || !response.body || Number(response.headers.get("content-length")) > 40 * MIB)
-    throw new Error("Saída de vídeo indisponível ou acima de 40 MiB.");
+  if (!response.ok || !response.body || Number(response.headers.get("content-length")) > maxBytes)
+    throw new Error("Arquivo indisponível ou acima do limite.");
   const reader = response.body.getReader();
   const parts: Uint8Array<ArrayBuffer>[] = [];
   let size = 0;
@@ -120,11 +136,14 @@ async function downloadMp4(url: string) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 40 * MIB) throw new Error("Saída acima de 40 MiB.");
+      if (size > maxBytes) throw new Error("Arquivo acima do limite.");
       parts.push(Uint8Array.from(value));
     }
   } finally { await reader.cancel().catch(() => {}); }
-  const blob = new Blob(parts, { type: "video/mp4" });
+  return new Blob(parts, { type });
+}
+async function downloadMp4(url: string) {
+  const blob = await readMedia(url, 40 * MIB, "video/mp4");
   const signature = new TextDecoder().decode(await blob.slice(4, 8).arrayBuffer());
   if (signature !== "ftyp") throw new Error("RunningHub não retornou um MP4 válido.");
   return blob;
@@ -188,8 +207,9 @@ async function worker(master: string) {
   const job = await storageRPC(admin, "claim_genjutsu_v3_job", { p_lease: crypto.randomUUID() });
   if (!job) return { ok: true, idle: true };
   let dispatchSent = false;
+  let preparingFrame = false;
   try {
-    const { request } = await runningHub(master);
+    const { request, uploadFrame } = await runningHub(master);
     if (!job.task_id) {
       const queue = await settings("production_queue");
       if (queue?.enabled === false) { await patch(job, { status: "queued", ...release }); return { ok: true, paused: true }; }
@@ -203,7 +223,14 @@ async function worker(master: string) {
       await requireMotionStorage(admin);
       const cfg = await storage();
       if (!await storageRPC(admin, "motion_storage_record_read", { p_count: 2 })) throw new MotionStorageSafetyError("Orçamento de leituras atingido.");
-      const [video, image] = await Promise.all([motionObjectURL(cfg, "GET", inputPath(job, "video"), 3600), motionObjectURL(cfg, "GET", inputPath(job, "image"), 3600)]);
+      const [video, frameUrl] = await Promise.all([motionObjectURL(cfg, "GET", inputPath(job, "video"), 3600), motionObjectURL(cfg, "GET", inputPath(job, "image"))]);
+      preparingFrame = true;
+      const extension = ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as Record<string, string>)[job.image_type];
+      if (!extension) throw new Error("Formato do frame indisponível.");
+      const frame = await readMedia(frameUrl, 10 * MIB, job.image_type);
+      if (!frame.size) throw new Error("Frame vazio.");
+      const image = await uploadFrame(frame, "frame." + extension);
+      preparingFrame = false;
       dispatchSent = true;
       const created = await request("/task/openapi/create", { workflowId: WORKFLOW, addMetadata: true, nodeInfoList: [
         { nodeId: "1", fieldName: "video", fieldValue: video },
@@ -264,6 +291,7 @@ async function worker(master: string) {
       error: dispatchSent ? "O RunningHub não confirmou o envio. Confira a tarefa antes de repetir."
         : storagePaused ? "Aguardando o armazenamento principal."
         : job.task_id ? "Não foi possível recuperar a saída. O Cloudent verifica novamente enquanto a tarefa estiver disponível."
+        : preparingFrame ? "Não foi possível preparar o frame do nó #2 para o RunningHub. Tente novamente."
         : "Não foi possível iniciar a geração. Confira a configuração do RunningHub.",
       ...release,
     });
