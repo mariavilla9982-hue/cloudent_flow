@@ -94,7 +94,7 @@
         const id = calendarAccountId(a);
         const label = a.account_label || a.label || a.username || "Instagram";
         return '<option value="'+esc(id)+'"'+(id === selectedAccount ? ' selected' : '')+'>'+esc(label.startsWith("@") ? label : "@"+label)+'</option>';
-      }).join("") : '<option value="">Nenhuma conta conectada</option>')+'</select></section>'+
+      }).join("") : '<option value="">Nenhuma conta conectada</option>')+'</select>'+calendarSahryReconnect()+'</section>'+
       '<div class="feed-grid"><form id="feed-post-form" class="feed-panel feed-composer"><h3>Novo post</h3><fieldset><legend>Formato</legend><div class="feed-formats">'+
       '<label><input type="radio" name="format" value="single" checked> Foto única</label>'+
       '<label><input type="radio" name="format" value="carousel"> Carrossel</label></div></fieldset>'+
@@ -102,7 +102,7 @@
       '<div class="feed-photos"></div><label>Legenda opcional<textarea name="caption" rows="3" maxlength="2200"></textarea></label>'+
       '<div class="feed-dates"><label>Data<input type="date" name="date" required></label>'+
       '<label>Horário de Brasília<input type="time" name="time" required></label></div>'+
-      '<p data-feed-message role="status"></p><button type="submit" class="btn primary">Agendar post</button></form>'+
+      '<div class="feed-time-options" role="group" aria-label="Horários sugeridos"></div><p data-feed-message role="status"></p><button type="submit" class="btn primary">Agendar post</button></form>'+
       '<section class="feed-panel feed-preview-panel"><h3>Prévia do Instagram</h3><div class="feed-preview"></div></section></div>'+
       '<section class="feed-panel feed-list"><h3>Posts do Feed</h3><div data-feed-list></div></section>';
     attachTabs(root);
@@ -139,13 +139,32 @@
         '<button type="button" data-remove-index="'+i+'" aria-label="Remover foto '+(i+1)+'">×</button></div></div>').join("");
       preview();
     }
+    const renderTimes = () => {
+      const host = form.querySelector(".feed-time-options");
+      const times = calendarAccountPolicy(fields.account.value)?.times || ["07:30","10:00","13:00","16:00","18:30"];
+      host.innerHTML = times.map(time => {
+        const enabled = Boolean(fields.account.value) && Date.parse(fields.date.value+"T"+time+":00-03:00") > Date.now();
+        return '<button type="button" class="btn" data-feed-time="'+esc(time)+'" aria-pressed="'+(fields.time.value===time)+'" '+(enabled?'':'disabled')+'>'+esc(time)+'</button>';
+      }).join("");
+    };
+    form.querySelector(".feed-time-options").onclick = event => {
+      const button = event.target.closest("[data-feed-time]");
+      if (!button || button.disabled || busy || reading) return;
+      fields.time.value = button.dataset.feedTime;
+      renderTimes();
+      form.querySelector('[data-feed-time="'+fields.time.value+'"]')?.focus();
+    };
     fields.account.onchange = () => {
       const host = root.querySelector("[data-feed-list]");
       host.textContent = "Carregando posts…";
       preview();
+      renderTimes();
       void list(root,fields.account.value);
     };
-    form.oninput = event => { if (event.target.name === "caption") preview(); };
+    form.oninput = event => {
+      if (event.target.name === "caption") preview();
+      if (event.target.name === "date" || event.target.name === "time") renderTimes();
+    };
     form.onchange = async event => {
       if (reading) return;
       if (event.target.name === "format") {
@@ -246,6 +265,7 @@
       }
     };
     preview();
+    renderTimes();
     void list(root,fields.account.value);
   }
 
