@@ -79,18 +79,23 @@
     void list(root,account);
   }
 
-  function open() {
+  function open(preferredAccount) {
     if (busy || reading) return;
     const root = document.querySelector("#calendar");
     const accounts = calendarInstagramAccounts();
     feedUser = cloudSession?.user?.id ?? null;
     resetDraft();
     draft = {photos:[],carousel:false,index:0};
+    const selectedAccount = accounts.some(a => calendarAccountId(a) === preferredAccount) ? preferredAccount : calendarEnsureAccount();
     root.innerHTML = '<div class="ui3-page-head"><h2>Agenda</h2></div>'+tabs(true)+
-      '<div class="feed-grid"><form class="feed-panel feed-composer"><h3>Novo post</h3>'+
-      '<label>Conta do Instagram<select name="account" required>'+accounts.map(a =>
-        '<option value="'+esc(calendarAccountId(a))+'"'+(calendarAccountId(a) === calendarEnsureAccount() ? ' selected' : '')+'>'+esc(a.account_label || a.label || a.username)+'</option>'
-      ).join("")+'</select></label><fieldset><legend>Formato</legend><div class="feed-formats">'+
+      '<section class="feed-panel feed-account"><div><h3>Conta do Instagram</h3><p class="muted">Escolha a conta para agendar e ver os posts dela.</p></div>'+
+      '<select name="account" form="feed-post-form" aria-label="Conta do Instagram" required '+(!accounts.length?'disabled':'')+'>'+
+      (accounts.length ? accounts.map(a => {
+        const id = calendarAccountId(a);
+        const label = a.account_label || a.label || a.username || "Instagram";
+        return '<option value="'+esc(id)+'"'+(id === selectedAccount ? ' selected' : '')+'>'+esc(label.startsWith("@") ? label : "@"+label)+'</option>';
+      }).join("") : '<option value="">Nenhuma conta conectada</option>')+'</select></section>'+
+      '<div class="feed-grid"><form id="feed-post-form" class="feed-panel feed-composer"><h3>Novo post</h3><fieldset><legend>Formato</legend><div class="feed-formats">'+
       '<label><input type="radio" name="format" value="single" checked> Foto única</label>'+
       '<label><input type="radio" name="format" value="carousel"> Carrossel</label></div></fieldset>'+
       '<label class="feed-picker"><span class="feed-picker-icon" aria-hidden="true">＋</span><img class="feed-picker-thumb" alt="" hidden><span><strong data-feed-pick>Selecionar fotos</strong><small data-feed-filename>JPG, PNG ou WebP</small></span><input type="file" name="photos" aria-label="Selecionar fotos" accept="image/jpeg,image/png,image/webp"></label>'+
@@ -134,10 +139,15 @@
         '<button type="button" data-remove-index="'+i+'" aria-label="Remover foto '+(i+1)+'">×</button></div></div>').join("");
       preview();
     }
-    form.oninput = preview;
+    fields.account.onchange = () => {
+      const host = root.querySelector("[data-feed-list]");
+      host.textContent = "Carregando posts…";
+      preview();
+      void list(root,fields.account.value);
+    };
+    form.oninput = event => { if (event.target.name === "caption") preview(); };
     form.onchange = async event => {
       if (reading) return;
-      if (event.target.name === "account") void list(root,fields.account.value);
       if (event.target.name === "format") {
         draft.carousel = form.querySelector('[name="format"]:checked').value === "carousel";
         fields.photos.multiple = draft.carousel;
@@ -209,7 +219,7 @@
       };
       const blobs = draft.photos.map(photo => photo.blob);
       const author = feedUser;
-      const controls = [...form.querySelectorAll("input,select,textarea,button")].filter(el => !el.disabled);
+      const controls = [...form.elements].filter(el => !el.disabled);
       busy = true;
       controls.forEach(el => { el.disabled = true; });
       try {
@@ -227,7 +237,7 @@
         accountData = null;
         toast("Post agendado.","ok");
         busy = false;
-        if (root.contains(form) && cloudSession?.user?.id === author) open();
+        if (root.contains(form) && cloudSession?.user?.id === author) open(body.platform_account_id);
       } catch (error) {
         msg.textContent = error.message;
       } finally {
