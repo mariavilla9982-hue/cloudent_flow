@@ -29,3 +29,28 @@
 #calendar .feed-list-row>div{flex:1 1 155px}
 #calendar .feed-list-row small{color:#eeb5b5}
 @media(max-width:740px){#calendar .feed-grid{grid-template-columns:minmax(0,1fr)}}
+
+#calendar .feed-grid{gap:clamp(12px,2vw,24px)}
+#calendar .feed-grid>.feed-panel{background:#101010;padding:clamp(16px,2vw,26px);border-color:#414141}
+#calendar .feed-grid>.feed-panel h3{font-size:clamp(20px,2vw,25px);margin-bottom:8px}
+#calendar form.feed-composer{align-content:start;gap:16px}
+#calendar .feed-composer>button[type=submit]{width:100%;min-height:44px;background:#f5f5f5;color:#111;font-weight:700}
+#calendar .feed-formats{max-width:320px;gap:3px;padding:3px;border:1px solid #414141;border-radius:9px;background:#191919}
+#calendar .feed-formats label{justify-content:center;border:0;position:relative;cursor:pointer;min-height:38px}
+#calendar .feed-formats input{position:absolute;opacity:0;margin:0}
+#calendar .feed-formats label:focus-within,#calendar .feed-picker:focus-within{outline:2px solid #eee;outline-offset:3px}
+#calendar label.feed-picker{display:flex;align-items:center;gap:12px;position:relative;min-height:66px;border:1px dashed #666;border-radius:9px;padding:12px;cursor:pointer}
+#calendar .feed-picker input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+#calendar .feed-picker-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:7px;background:#262626;font-size:19px}
+#calendar .feed-picker small{display:block;color:#bababa;overflow-wrap:anywhere}
+#calendar .feed-photos:empty{display:none}
+#calendar .feed-preview{display:block;width:min(100%,420px);margin:16px auto 0;border:1px solid #555;border-radius:12px;overflow:hidden;background:#0b0b0b}
+#calendar .feed-preview-head{display:flex;align-items:center;gap:10px;padding:12px}
+#calendar .feed-preview-head span{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#292929}
+#calendar .feed-preview img{display:block;border-radius:0}
+#calendar .feed-preview p{padding:12px}
+#calendar .feed-preview-count{display:block;text-align:center;padding:8px;color:#ccc}
+#calendar .feed-placeholder{aspect-ratio:1;border:0;border-top:1px solid #363636;border-radius:0;padding:16px;background:#171717}
+#calendar .feed-list-row>span{border:1px solid #555;border-radius:999px;padding:4px 10px}
+#calendar .feed-picker :is(.feed-picker-icon,.feed-picker-thumb)[hidden]{display:none}
+#calendar .feed-picker-thumb{width:44px;height:44px;object-fit:cover;border-radius:7px;flex:none}
