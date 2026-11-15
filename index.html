@@ -4294,8 +4294,8 @@ body.trial-modal-open{overflow:hidden!important}
 .calendar-scale-group{display:grid;gap:6px;align-items:start}
 .calendar-scale-daughters{display:flex;gap:6px;flex-wrap:wrap}
 </style>
-<link rel="stylesheet" href="/calendar-feed.css?v=3">
-<script src="/calendar-feed.js?v=3" defer></script>
+<link rel="stylesheet" href="/calendar-feed.css?v=4">
+<script src="/calendar-feed.js?v=4" defer></script>
 </head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
@@ -5522,9 +5522,15 @@ function calendarReconnectButton(){
   const action="connectInstagram("+JSON.stringify(id)+")";
   return '<button type="button" class="btn" '+(calendarAccountSwitching?'disabled ':'')+'onclick="'+esc(action)+'" title="Renovar a autorização de @'+esc(label)+'">↻ Reconectar conta</button>';
 }
+function calendarSahryReconnect(){
+  const account=(platformAccounts||[]).find(a=>a.platform==="instagram"&&a.enabled===false&&String(a.account_label||"").toLowerCase().replace(/^@/,"")==="sahryjapah");
+  if(!account)return "";
+  const action="connectInstagram("+JSON.stringify(calendarAccountId(account))+",null,\"calendar\")";
+  return '<button type="button" class="btn" onclick="'+esc(action)+'">Reconectar @sahryjapah</button>';
+}
 function calendarAccountSwitcher(context="calendar"){
   const accounts=calendarInstagramAccounts();
-  if(!accounts.length)return "";
+  if(!accounts.length)return calendarSahryReconnect();
   const active=calendarEnsureAccount();
   const chip=a=>{
     const id=calendarAccountId(a),label=String(a.account_label||a.username||"Instagram"),photo=String(a?.config?.profile_picture_url||a?.profile_picture_url||"").trim();
@@ -5543,7 +5549,7 @@ function calendarAccountSwitcher(context="calendar"){
     return '<div class="calendar-scale-group">'+chip(a)+'<div class="calendar-scale-daughters">'+daughters.map(chip).join("")+
       (linked<2?scaleAction(action,"+ Conectar conta filha"):"")+'</div></div>';
   });
-  return '<div class="calendar-account-switcher"><span>Contas</span>'+items.join("")+calendarReconnectButton()+'</div>';
+  return '<div class="calendar-account-switcher"><span>Contas</span>'+items.join("")+calendarReconnectButton()+calendarSahryReconnect()+'</div>';
 }
 async function selectCalendarAccount(id,context="calendar"){
   id=String(id||"");
