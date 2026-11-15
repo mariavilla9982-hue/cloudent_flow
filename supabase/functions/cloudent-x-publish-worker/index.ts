@@ -935,14 +935,26 @@ Deno.serve(async(req:Request)=>{
     if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     const body=await parseBody(req);
     if(action==="save-fixed-replies"){
-      if(!Array.isArray(body.replies)||body.replies.length>30||body.replies.some((reply:unknown)=>typeof reply!=="string"||reply.length>2000))
-        return json({error:"Salve até 30 comentários, um por linha."},400);
+      if(!Array.isArray(body.replies)||body.replies.length>3||body.replies.some((reply:unknown)=>typeof reply!=="string"||reply.length>2000))
+        return json({error:"Salve até 3 comentários fixos."},400);
       const replies=[...new Set(body.replies.map((reply:string)=>reply.trim()).filter(Boolean).map((reply:string)=>{
         if(!twitterText.parseTweet(reply).valid)throw new HttpError("Cada comentário precisa caber em uma publicação do X.",400);
         return reply;
       }))];
-      const {error}=await admin.from("app_settings").upsert({key:fixedRepliesKey,value:replies,updated_at:new Date().toISOString()},{onConflict:"key"});
-      if(error)throw error;
+      const {data:saved,error:readError}=await admin.from("app_settings").select("value,updated_at").eq("key",fixedRepliesKey).maybeSingle();
+      if(readError)throw readError;
+      const conflict=()=>json({error:"A lista mudou. Atualize o X Studio e tente novamente."},409);
+      if(body.previous_replies!==undefined&&JSON.stringify(body.previous_replies)!==JSON.stringify(saved?.value??[]))return conflict();
+      const updated_at=new Date().toISOString();
+      if(saved){
+        const {data,error}=await admin.from("app_settings").update({value:replies,updated_at}).eq("key",fixedRepliesKey).eq("updated_at",saved.updated_at).select("key").maybeSingle();
+        if(error)throw error;
+        if(!data)return conflict();
+      }else{
+        const {error}=await admin.from("app_settings").insert({key:fixedRepliesKey,value:replies,updated_at});
+        if(error?.code==="23505")return conflict();
+        if(error)throw error;
+      }
       return json({ok:true,fixed_replies:replies});
     }
     if(member.role!=="admin"&&["google-configure","google-start","google-folder","sync"].includes(action))return json({error:"forbidden"},403);
