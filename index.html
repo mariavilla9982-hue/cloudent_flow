@@ -4294,8 +4294,8 @@ body.trial-modal-open{overflow:hidden!important}
 .calendar-scale-group{display:grid;gap:6px;align-items:start}
 .calendar-scale-daughters{display:flex;gap:6px;flex-wrap:wrap}
 </style>
-<link rel="stylesheet" href="/calendar-feed.css?v=1">
-<script src="/calendar-feed.js?v=1" defer></script>
+<link rel="stylesheet" href="/calendar-feed.css?v=2">
+<script src="/calendar-feed.js?v=2" defer></script>
 </head>
 <body class="auth-checking">
 <div id="authBoot" class="auth-boot" aria-label="Carregando CloudentFlow">
@@ -11436,7 +11436,7 @@ function xSelectionChanged(){
  xStudioPage(true);
 }
 function xRemoveSelected(i){if(xPostingBusy)return;xPostingFiles.splice(i,1);xBatchDrafts.splice(i,1);xSelectionChanged();}
-function xReplaceSelected(i,input){if(xPostingBusy||!input.files?.length)return;const file=input.files[0];const single=xPostingFiles.length===1;xPostingFiles[i]=file;const d=single?{...(xBatchDrafts[i]||{}),caption:xPostingDraft.caption,reply:xDraftReply,date:xComposeDate,account_ids:[...xTargetAccounts]}:(xBatchDrafts[i]||{});xBatchDrafts[i]={...d,ticket:null,uploaded:false,done:false,error:'',status:''};xSelectionChanged();}
+function xReplaceSelected(i,input){if(xPostingBusy||!input.files?.length)return;const file=input.files[0];const single=xPostingFiles.length===1;xPostingFiles[i]=file;const d=single?{...(xBatchDrafts[i]||{}),caption:xPostingDraft.caption,reply:xDraftReply,date:xComposeDate,account_ids:[...xTargetAccounts]}:(xBatchDrafts[i]||{});const video=file.type.startsWith('video/')||/\.(mp4|mov|webm)$/i.test(file.name);if(video&&!d.reply)d.reply=xShuffled(xPostingData?.fixed_replies||[])[0]||'';xBatchDrafts[i]={...d,ticket:null,uploaded:false,done:false,error:'',status:''};xSelectionChanged();}
 function xOpenGallery(){if(!xSelectedAccountId||xSelectedAccountId==='all'){toast('Selecione uma conta X.','err');return;}xOpenComposer();xGalleryCompose=true;xComposeDate='';xStudioPage(true);}
 function xSettingsState(){
  if(!xSettingsDraft||xSettingsDraft.account!==xSelectedAccountId){const c=xPostingData?.config||{};xSettingsDraft={account:xSelectedAccountId,slots:(c.daily_slots||['12:00','18:00']).join(', '),interval:c.interval_minutes||120,mode:c.queue_mode||'daily_slots',start:c.next_publish_at?xDateKey(c.next_publish_at)+'T'+xTimeKey(c.next_publish_at):''};}
@@ -11516,7 +11516,20 @@ function xQueueCaptionMarkup(p,draft){
  return `<label><input id="xUseCaptionQueue" type="checkbox" ${draft.useQueue?'checked':''} onchange="xDetailDraft.useQueue=this.checked"> Usar próxima legenda da fila</label><small>${rows.length?`${rows.length} legenda(s) disponível(is). Próxima: ${esc(rows[0].caption)}`:'Fila vazia: adicione uma legenda ou desmarque para publicar sem legenda.'} A legenda é reservada no momento do envio. Escrever uma legenda própria substitui a fila.</small>`;
 }
 function xSelectGallery(id){xSelectedPost=id;xComposeOpen=false;xStudioPage(true);xLoadPreview(id);}
-function xGalleryDetail(){const p=xAllPosts().find(p=>p.id===xSelectedPost);return p?`<aside class="x-detail-panel"><div class="x-panel-title"><h3>${esc(p.drive_file_name)}</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div>${xPreviewMarkup(p)}<p>${esc(p.post_text||'Legenda automática pela fila')}</p></aside>`:'';}
+function xEditGalleryPost(id){
+ xStudioTab='calendar';
+ xSelectPost(id);
+}
+function xUseFixedReply(){
+ if(!xDetailDraft)return;
+ const replies=xPostingData?.fixed_replies||[];
+ if(!replies.length)return;
+ const options=replies.filter(reply=>reply!==xDetailDraft.reply);
+ xDetailDraft.reply=xShuffled(options.length?options:replies)[0];
+ const field=document.getElementById('xDetailReply');
+ if(field){field.value=xDetailDraft.reply;field.focus();}
+}
+function xGalleryDetail(){const p=xAllPosts().find(p=>p.id===xSelectedPost);return p?`<aside class="x-detail-panel"><div class="x-panel-title"><h3>${esc(p.drive_file_name)}</h3><button class="x-icon-btn" onclick="xCloseDetail()">×</button></div>${xPreviewMarkup(p)}<p>${esc(p.post_text||'Legenda automática pela fila')}</p>${xEditable(p)&&xSelectedAccountId!=='all'?`<button type="button" class="x-primary-btn" onclick="xEditGalleryPost('${p.id}')">Editar e agendar</button>`:''}</aside>`:'';}
 
 async function loadXPostingStatus(){
  if(!cloudSession){xPostingData=null;xPostingLoaded=false;return}
@@ -11772,7 +11785,7 @@ function xDetailMarkup(){
  const draft=xEditable(p)&&xDetailDraft?.id===p.id?xDetailDraft:{caption:p.post_text||"",reply:p.reply_text||"",date:p.scheduled_at?xDateKey(p.scheduled_at)+"T"+xTimeKey(p.scheduled_at):xDefaultComposeDate()},editable=xEditable(p);
  return `<aside class="x-detail-panel"><div class="x-panel-title"><h3>Detalhes da publicação</h3><button class="x-icon-btn" aria-label="Fechar" onclick="xCloseDetail()">×</button></div>${xPreviewMarkup(p)}
  <strong class="x-detail-name">${esc(p.drive_file_name)}</strong>${editable?xSavedCaptionMarkup("detail"):""}${xQueueCaptionMarkup(p,draft)}<label for="xDetailCaption">Legenda opcional</label><textarea id="xDetailCaption" rows="4" ${!editable?"disabled":""} oninput="xDetailDraft.caption=this.value;document.getElementById('xDetailCount').textContent=Array.from(this.value.trim()).length+' / 280'">${esc(draft.caption)}</textarea><small id="xDetailCount" class="x-char-count">${Array.from(draft.caption.trim()).length} / 280</small>
- <label for="xDetailReply">Comentário opcional</label><textarea id="xDetailReply" rows="2" ${!editable?"disabled":""} oninput="xDetailDraft.reply=this.value">${esc(draft.reply??p.reply_text??"")}</textarea><label for="xDetailDate">Data e horário</label><input id="xDetailDate" type="datetime-local" value="${esc(draft.date)}" oninput="xDetailDraft.date=this.value" ${!editable?"disabled":""}><small>Horário de Brasília</small><div class="x-detail-status"><span>Status</span><span class="x-status ${p.status}">${xStatusLabels[p.status]||p.status}</span></div>
+ <label for="xDetailReply">Comentário opcional</label><textarea id="xDetailReply" rows="2" ${!editable?"disabled":""} oninput="xDetailDraft.reply=this.value">${esc(draft.reply??p.reply_text??"")}</textarea>${editable&&xPostingData?.fixed_replies?.length?'<button type="button" class="x-subtle-btn" onclick="xUseFixedReply()">Usar comentário fixo</button>':''}<label for="xDetailDate">Data e horário</label><input id="xDetailDate" type="datetime-local" value="${esc(draft.date)}" oninput="xDetailDraft.date=this.value" ${!editable?"disabled":""}><small>Horário de Brasília</small><div class="x-detail-status"><span>Status</span><span class="x-status ${p.status}">${xStatusLabels[p.status]||p.status}</span></div>
  ${p.last_error?`<p class="x-error">${esc(p.last_error)}</p>`:""}${p.meta?.publish_uncertain?'<p class="x-error">Confira a conta X antes de repetir este envio.</p>':""}
  ${editable?`<button class="x-primary-btn" onclick="xSaveDetail()" ${xPostingBusy?"disabled":""}>${p.scheduled_at?"Salvar alterações":"Adicionar à agenda"}</button>${p.status==="failed"?`<button class="x-subtle-btn" onclick="xPostingAction('retry','${p.id}')">Tentar novamente</button>`:""}<button class="x-subtle-btn" onclick="xPostingAction('skip','${p.id}')">Remover da agenda</button>`:""}
  ${p.reply_text?`<p>Comentário: ${esc(p.reply_text)}</p><small>${esc(p.reply_status)}</small>${p.reply_error?`<p class="x-error">${esc(p.reply_error)}</p>`:""}${p.reply_status==='failed'?`<button class="x-subtle-btn" onclick="xPostingAction('retry-reply','${p.id}')">Repetir comentário</button>`:""}`:""}
