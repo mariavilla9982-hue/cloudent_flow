@@ -976,6 +976,20 @@ Deno.serve(async(req:Request)=>{
       await admin.from("x_account_configs").update({enabled:false}).eq("platform_account_id",account.id);
       await auditX(admin,member,userId,account.id,action==="account-remove"?"account_removed":"account_disconnected");return json({ok:true});
     }
+    if(action==="shuffle-gallery"){
+      const account=await resolveXAccount(admin,userId,body);
+      if(!account.enabled||account.config?.status!=="connected")return json({error:"Conecte a conta para agendar."},409);
+      const from=String(body.from||""),until=String(body.until||"");
+      const start=Date.parse(from+"T00:00:00Z"),end=Date.parse(until+"T00:00:00Z");
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(until)||
+        !Number.isFinite(start)||!Number.isFinite(end)||end<=start||end-start>31*86400000||
+        new Date(start).toISOString().slice(0,10)!==from||new Date(end).toISOString().slice(0,10)!==until)
+        return json({error:"Período inválido."},400);
+      const {data,error}=await admin.rpc("schedule_x_gallery_shuffle",{p_user:userId,p_account:account.id,p_workspace:member.workspace_id,p_from:from,p_until:until});
+      if(error?.code==="23505")return json({error:"Um horário acabou de ser ocupado. Tente novamente."},409);
+      if(error)throw error;
+      return json({ok:true,count:data});
+    }
     if(action==="caption-add"||action==="caption-remove"){
       const account=await resolveXAccount(admin,userId,body);
       if(action==="caption-add"){
