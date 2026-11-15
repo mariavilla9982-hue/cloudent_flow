@@ -11796,24 +11796,43 @@ function xQueueMarkup(overview=false){
  rows.sort((a,b)=>overview?new Date(a.scheduled_at||a.created_at)-new Date(b.scheduled_at||b.created_at):new Date(a.created_at)-new Date(b.created_at));
  return `<section class="x-list-panel"><div class="x-panel-title"><h3>${overview?"Próximas publicações":"Fila por intervalo"}</h3><span>${rows.length} publicações</span></div><p class="x-muted">${overview?"Acompanhe os agendamentos e as publicações que precisam de atenção.":"Publicações sem horário individual seguem o intervalo definido em Configurações."}</p>${rows.length?rows.map(p=>`<button class="x-queue-row" onclick="xSelectPost('${p.id}')"><span class="x-queue-play">▷</span><span class="x-queue-copy"><strong>${esc(p.drive_file_name)}${xSelectedAccountId==='all'?' · @'+esc(xAccountList.find(a=>a.id===p.platform_account_id)?.username||''):''}</strong><small>${esc(p.post_text)}</small></span><span class="x-queue-date">${p.scheduled_at?esc(new Date(p.scheduled_at).toLocaleString("pt-BR",{timeZone:X_STUDIO_TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})):"Por intervalo"}</span><span class="x-status ${p.status}">${p.status==="queued"&&!p.scheduled_at?"Na fila":xStatusLabels[p.status]}</span></button>`).join(""):'<div class="x-list-empty">Nenhuma publicação aqui ainda.<button class="x-primary-btn" onclick="xOpenComposer()">＋ Adicionar publicação</button></div>'}</section>`;
 }
-async function xSaveFixedReplies(){
- if(xPostingBusy)return;
- const field=$('#xFixedReplies');
- if(!field)return;
- const replies=field.value.split('\n').map(line=>line.trim()).filter(Boolean);
+async function xChangeFixedReplies(removeIndex=null){
+ if(xPostingBusy||!xPostingData)return;
+ const field=$('#xNewFixedReply');
+ const current=xPostingData.fixed_replies||[];
+ const next=[...current];
+ if(removeIndex===null){
+  const reply=field?.value.trim();
+  if(!reply){toast('Escreva um comentário.','warn');return;}
+  if(next.length>=3){toast('Remova um comentário para adicionar outro.','warn');return;}
+  if(next.includes(reply)){toast('Esse comentário já está na lista.','warn');return;}
+  next.push(reply);
+ }else{
+  if(!Number.isInteger(removeIndex)||removeIndex<0||removeIndex>=next.length)return;
+  next.splice(removeIndex,1);
+ }
  xPostingBusy=true;xStatusRevision++;
  try{
-  const result=await xPostingRequest('save-fixed-replies',{replies});
+  const result=await xPostingRequest('save-fixed-replies',{replies:next,previous_replies:current});
   xStatusRevision++;
-  if(xPostingData)xPostingData.fixed_replies=result.fixed_replies;
-  if(field.isConnected)field.value=result.fixed_replies.join('\n');
-  toast('Comentários fixos salvos.','ok');
+  xPostingData.fixed_replies=result.fixed_replies;
+  toast(removeIndex===null?'Comentário adicionado.':'Comentário removido.','ok');
+  xPostingBusy=false;
+  xStudioPage(true);
  }catch(e){toast(e.message,'err');}
  finally{xPostingBusy=false;}
 }
+function xFixedRepliesMarkup(){
+ const replies=xPostingData?.fixed_replies||[], full=replies.length>=3;
+ return `<section class="x-settings-panel"><h3>Comentários fixos</h3><p class="x-muted">${replies.length} de 3 comentários. Novos vídeos recebem um comentário desta lista.</p>
+ <label for="xNewFixedReply">Novo comentário</label><textarea id="xNewFixedReply" rows="2" maxlength="2000" ${full?'disabled':''}></textarea>
+ <button type="button" class="x-primary-btn" onclick="xChangeFixedReplies()" ${full||!xPostingData?'disabled':''}>Adicionar comentário</button>
+ ${replies.map((reply,index)=>`<div class="x-batch-row"><p>${esc(reply)}</p><button type="button" class="x-subtle-btn" onclick="xChangeFixedReplies(${index})">Remover comentário</button></div>`).join('')}
+ </section>`;
+}
 function xSettingsMarkup(){
  const cfg=xPostingData?.config||{},draft=xSettingsState();
- return `<section class="x-settings-panel"><h3>Comentários fixos</h3><label for="xFixedReplies">Um comentário por linha</label><textarea id="xFixedReplies" rows="4">${esc((xPostingData?.fixed_replies||[]).join('\n'))}</textarea><small>Os novos vídeos já vêm com um desses comentários preenchido. Você pode editar ou apagar o texto antes de salvar o vídeo.</small><button type="button" class="x-subtle-btn" onclick="xSaveFixedReplies()">Salvar comentários fixos</button></section><section class="x-settings-panel"><h3>Configurações de postagem</h3><p class="x-muted">Agendamentos manuais mantêm seu horário. A galeria segue os horários diários ou o intervalo escolhido.</p>
+ return `${xFixedRepliesMarkup()}<section class="x-settings-panel"><h3>Configurações de postagem</h3><p class="x-muted">Agendamentos manuais mantêm seu horário. A galeria segue os horários diários ou o intervalo escolhido.</p>
  <label for="xDailySlots">Vagas diárias do calendário</label><input id="xDailySlots" value="${esc(draft.slots)}" oninput="xSettingsState().slots=this.value" placeholder="12:00, 18:00"><small>Separe os horários por vírgula. Até 15 vagas por dia.</small>
  <label for="xQueueMode">Automação da galeria</label><select id="xQueueMode" onchange="xSettingsState().mode=this.value"><option value="daily_slots" ${draft.mode==='daily_slots'?'selected':''}>Horários diários</option><option value="interval" ${draft.mode==='interval'?'selected':''}>Intervalo entre publicações</option></select>
  <label for="xPostingInterval">Intervalo da fila (minutos)</label><input id="xPostingInterval" type="number" min="5" max="10080" value="${draft.interval}" oninput="xSettingsState().interval=Number(this.value)">
