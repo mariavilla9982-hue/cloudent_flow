@@ -54,3 +54,9 @@
 #calendar .feed-list-row>span{border:1px solid #555;border-radius:999px;padding:4px 10px}
 #calendar .feed-picker :is(.feed-picker-icon,.feed-picker-thumb)[hidden]{display:none}
 #calendar .feed-picker-thumb{width:44px;height:44px;object-fit:cover;border-radius:7px;flex:none}
+
+#calendar .feed-account{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,290px);align-items:center;gap:12px 24px;margin-bottom:16px;padding:16px 20px;background:#101010;border-color:#414141}
+#calendar .feed-account h3{margin:0 0 4px;font-size:16px}
+#calendar .feed-account p{margin:0}
+#calendar .feed-account select{min-height:42px}
+@media(max-width:580px){#calendar .feed-account{grid-template-columns:minmax(0,1fr)}}
