@@ -87,18 +87,18 @@
     resetDraft();
     draft = {photos:[],carousel:false,index:0};
     root.innerHTML = '<div class="ui3-page-head"><h2>Agenda</h2></div>'+tabs(true)+
-      '<div class="feed-grid"><form class="feed-panel"><h3>Novo post</h3>'+
+      '<div class="feed-grid"><form class="feed-panel feed-composer"><h3>Novo post</h3>'+
       '<label>Conta do Instagram<select name="account" required>'+accounts.map(a =>
         '<option value="'+esc(calendarAccountId(a))+'"'+(calendarAccountId(a) === calendarEnsureAccount() ? ' selected' : '')+'>'+esc(a.account_label || a.label || a.username)+'</option>'
       ).join("")+'</select></label><fieldset><legend>Formato</legend><div class="feed-formats">'+
       '<label><input type="radio" name="format" value="single" checked> Foto única</label>'+
       '<label><input type="radio" name="format" value="carousel"> Carrossel</label></div></fieldset>'+
-      '<label>Fotos<input type="file" name="photos" accept="image/jpeg,image/png,image/webp"></label>'+
-      '<div class="feed-photos"></div><label>Legenda<textarea name="caption" rows="4" maxlength="2200"></textarea></label>'+
+      '<label class="feed-picker"><span class="feed-picker-icon" aria-hidden="true">＋</span><img class="feed-picker-thumb" alt="" hidden><span><strong data-feed-pick>Selecionar fotos</strong><small data-feed-filename>JPG, PNG ou WebP</small></span><input type="file" name="photos" aria-label="Selecionar fotos" accept="image/jpeg,image/png,image/webp"></label>'+
+      '<div class="feed-photos"></div><label>Legenda opcional<textarea name="caption" rows="3" maxlength="2200"></textarea></label>'+
       '<div class="feed-dates"><label>Data<input type="date" name="date" required></label>'+
       '<label>Horário de Brasília<input type="time" name="time" required></label></div>'+
       '<p data-feed-message role="status"></p><button type="submit" class="btn primary">Agendar post</button></form>'+
-      '<section class="feed-panel"><h3>Prévia do Instagram</h3><div class="feed-preview"></div></section></div>'+
+      '<section class="feed-panel feed-preview-panel"><h3>Prévia do Instagram</h3><div class="feed-preview"></div></section></div>'+
       '<section class="feed-panel feed-list"><h3>Posts do Feed</h3><div data-feed-list></div></section>';
     attachTabs(root);
     const form = root.querySelector("form");
@@ -109,9 +109,21 @@
     if (!accounts.length) msg.textContent = "Conecte uma conta do Instagram para agendar.";
     const preview = () => {
       const photo = draft.photos[draft.index];
-      root.querySelector(".feed-preview").innerHTML = '<b>'+esc(fields.account.selectedOptions[0]?.text)+'</b>'+
+      const account = fields.account.selectedOptions[0]?.text || "";
+      const handle = account && (account.startsWith("@") ? account : "@"+account);
+      const caption = fields.caption.value;
+      root.querySelector(".feed-preview").innerHTML =
+        '<div class="feed-preview-head"><span aria-hidden="true">'+esc(account.replace(/^@/,"").charAt(0).toUpperCase() || "•")+'</span><b>'+esc(handle)+'</b></div>'+
         (photo ? '<img src="'+photo.url+'" alt="Foto '+(draft.index+1)+' da publicação">' : '<div class="feed-placeholder">Adicione uma foto para ver a prévia</div>')+
-        '<p>'+esc(fields.caption.value)+'</p>';
+        (draft.carousel && draft.photos.length > 1 ? '<small class="feed-preview-count">'+(draft.index+1)+' / '+draft.photos.length+'</small>' : '')+
+        (caption ? '<p>'+esc(caption)+'</p>' : '');
+      const thumb = form.querySelector(".feed-picker-thumb");
+      thumb.hidden = !photo;
+      if (photo) thumb.src = photo.url;
+      else thumb.removeAttribute("src");
+      form.querySelector(".feed-picker-icon").hidden = Boolean(photo);
+      form.querySelector("[data-feed-pick]").textContent = draft.carousel || !photo ? "Selecionar fotos" : "Trocar foto";
+      form.querySelector("[data-feed-filename]").textContent = photo ? (draft.carousel ? draft.photos.length+" fotos selecionadas" : photo.name) : "JPG, PNG ou WebP";
     };
     function photos() {
       const host = root.querySelector(".feed-photos");
@@ -152,7 +164,7 @@
         const converted = [];
         for (const file of files) converted.push(await toJpeg(file));
         if (!draft.carousel) draft.photos.splice(0).forEach(photo => URL.revokeObjectURL(photo.url));
-        draft.photos.push(...converted.map(blob => ({blob,url:URL.createObjectURL(blob)})));
+        draft.photos.push(...converted.map((blob,index) => ({blob,name:files[index].name,url:URL.createObjectURL(blob)})));
         draft.index = 0;
         photos();
         msg.textContent = "";
