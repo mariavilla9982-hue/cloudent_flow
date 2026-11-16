@@ -102,28 +102,37 @@ function watchProviderFailure(jobId: string, taskId: string, origin: string, end
   EdgeRuntime.waitUntil(new Promise<void>(resolve => {
     let socket: WebSocket;
     try { socket = new WebSocket(url); } catch { resolve(); return; }
-    const end = () => {
+    let lastEvent: any = null;
+    let opened = false;
+    let closed = false;
+    const end = (reason: string) => {
+      if (closed) return;
+      closed = true;
       clearTimeout(timeout);
       clearInterval(ping);
       try { socket.close(); } catch { /* The provider already closed the connection. */ }
+      console.info(JSON.stringify({ event: "genjutsu_v3_socket_closed", task: taskId, reason, opened,
+        last_event: lastEvent?.event ?? null, last_node: lastEvent?.node_id ?? null }));
       resolve();
     };
-    const timeout = setTimeout(end, 55000);
+    const timeout = setTimeout(() => end("timeout"), 125000);
     const ping = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send("ping"); }, 20000);
-    socket.onclose = end;
-    socket.onerror = end;
+    socket.onopen = () => { opened = true; };
+    socket.onclose = () => end("closed");
+    socket.onerror = () => end("connection_error");
     socket.onmessage = async ({ data }) => {
       if (typeof data !== "string") return;
       let message;
       try { message = JSON.parse(data); } catch { return; }
-      const event = genjutsuExecutionEvent(message, taskId, null);
+      const event = genjutsuExecutionEvent(message, taskId, lastEvent);
+      if (event) lastEvent = event;
       if (!event?.error) return;
       const node = event.node_id ? ` no nó #${event.node_id}` : "";
       const error = `RunningHub${node}: ${event.error.slice(0, 350)}`;
       try {
         await admin.from(table).update({ error }).eq("id", jobId).eq("task_id", taskId)
           .or("status.eq.running,and(status.eq.failed,error.like.O RunningHub falhou sem informar o nó*)");
-      } finally { end(); }
+      } finally { end("execution_error"); }
     };
   }));
 }
@@ -333,9 +342,19 @@ async function worker(master: string) {
         (job.provider_finished_at && Date.now() - Date.parse(job.provider_finished_at) > 4 * 60 * 1000) ||
         Date.now() - Date.parse(job.started_at) > 4 * 60 * 60 * 1000) {
       const missing = NODES.filter(node => !outputs[node]).map(node => `#${node}`).join(" e ");
-      const reason = result.data?.failedReason ?? statusData?.failedReason;
+      let reason = result.data?.failedReason ?? statusData?.failedReason;
+      let message = statusData?.errorMessage;
+      if (providerFailed && !reason?.exception_message && !message && typeof statusData?.taskId !== "string") {
+        const current = await request("/openapi/v2/query", { taskId: job.task_id }).catch(() => null);
+        if (String(current?.taskId ?? "") === job.task_id && current.status === "FAILED") {
+          reason = current.failedReason ?? reason;
+          message = current.errorMessage;
+        }
+      }
       const node = /^\d{1,20}$/.test(String(reason?.node_id ?? "")) ? ` no nó #${reason.node_id}` : "";
-      const detail = safeGenjutsuError(reason?.exception_message || reason?.exception_type || reason?.node_name || statusData?.errorMessage).slice(0, 350);
+      const detail = safeGenjutsuError(reason?.exception_message || reason?.exception_type || reason?.node_name || message).slice(0, 350);
+      if (providerFailed) console.info(JSON.stringify({ event: "genjutsu_v3_provider_failed", task: job.task_id,
+        outputs_code: Number(result.code) || null, had_error_detail: Boolean(detail || job.error) }));
       const recorded = String(job.error || "").match(/^RunningHub(?: no nó #\d+)?: /) ? job.error : null;
       const error = providerFailed
         ? recorded || (detail
