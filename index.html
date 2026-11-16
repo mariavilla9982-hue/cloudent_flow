@@ -5603,7 +5603,7 @@ async function syncFromBackend(rows=null){
     const v=row.videos||{};
     state.slots[keyFor(date,slot)]={
       cloud:true,scheduleId:row.id,videoId:row.video_id,name:v.file_name||"Vídeo",
-      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",storagePath:v.storage_path||"",storageProvider:v.storage_provider||"supabase",
+      size:v.size_bytes||0,type:v.mime_type||"video/mp4",caption:v.caption||"",automaticCaption:row.instagram_calendar_caption!=null,storagePath:v.storage_path||"",storageProvider:v.storage_provider||"supabase",
       thumbnailPath:v.thumbnail_storage_path||"",
       coverOffsetMs:Number(v.cover_offset_ms||3500),coverStrategy:v.cover_strategy||"auto_after_3s",
       time,status:row.status||"scheduled",lastError:row.last_error||null,scheduledAt:row.scheduled_at,publishedAt:row.published_at||null,
@@ -5644,7 +5644,7 @@ async function syncAllCloudSlots(){
         smart_mode:x.smartMode||"manual",
         smart_strategy:x.smartStrategy||(x.smartMode==="auto"?"tested":"manual"),
         smart_strategy_locked:!!x.smartStrategyLocked,
-        caption:x.caption||""
+        ...(x.automaticCaption?{}:{caption:x.caption||""})
       })
     }));
   }
@@ -7401,8 +7401,8 @@ async function readCalendarLiveData(){
     if(currentKey&&!currentKey.startsWith(date+"#"))structural=true;
     if(x.time!==time)structural=true;
     const v=row.videos||{};
-    const content=[x.videoId,x.name,x.caption,x.thumbnailPath,x.trialVideoId,x.pretrial,x.smartMode,x.smartStrategy,x.smartStrategyLocked];
-    const nextContent=[row.video_id,v.file_name||"Vídeo",v.caption||"",v.thumbnail_storage_path||"",row.trial_video_id||null,row.pretrial||null,row.smart_mode||"manual",row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),!!row.smart_strategy_locked];
+    const content=[x.videoId,x.name,x.caption,x.automaticCaption,x.thumbnailPath,x.trialVideoId,x.pretrial,x.smartMode,x.smartStrategy,x.smartStrategyLocked];
+    const nextContent=[row.video_id,v.file_name||"Vídeo",v.caption||"",row.instagram_calendar_caption!=null,v.thumbnail_storage_path||"",row.trial_video_id||null,row.pretrial||null,row.smart_mode||"manual",row.smart_strategy||(row.smart_mode==="auto"?"tested":"manual"),!!row.smart_strategy_locked];
     if(JSON.stringify(content)!==JSON.stringify(nextContent))structural=true;
     x.status=row.status||x.status;
     x.lastError=row.last_error||null;
@@ -7548,7 +7548,7 @@ function renderSlot(date,i){
     </div>
     <div class="slot-caption-preview"><span>REELS PRINCIPAL · ${esc(x.time)}</span><b>${esc(x.name)}</b></div>
     ${trialAvailable?`<button class="btn" onclick="event.stopPropagation();openCalendarTrialModal('${x.scheduleId}')">◈ Reels Teste ${x.trialVideoId?'separado':'automático'} · ${esc(x.trialVideoId?x.pretrial?.file_name||'Vídeo separado':'Mesmo vídeo')} · ${x.pretrial?.scheduled_at?new Date(x.pretrial.scheduled_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'-20m'}</button>`:""}
-    ${x.caption?'<div class="slot-caption-preview" title="Mesma frase usada na legenda e no primeiro comentário"><span>LEGENDA + COMENTÁRIO</span><b>'+esc(x.caption)+'</b></div>':""}
+    ${x.caption?'<div class="slot-caption-preview"><span>'+(x.automaticCaption?'LEGENDA AUTOMÁTICA':'LEGENDA')+'</span><b>'+esc(x.caption)+'</b></div>':""}
     <div class="calendar-schedule-live-host">${calendarScheduleLive(x)}</div>
     <div class="calendar-performance-host" data-views="${Number(performance?.views||0)}">${calendarSlotPerformance(x,date)}</div>
   </div>`;
@@ -7839,7 +7839,7 @@ async function addVideoToSlot(file,date,slot,time=null,caption="",smartMode="aut
   const effectivePath=clean?.status==="ready"&&clean?.target_path?clean.target_path:(video.storage_path||"");
   if(calendarEnsureAccount()!==accountId){await syncFromBackend();return true;}
   if(String(schedule.platform_account_id)!==accountId)throw new Error("O agendamento retornou uma conta diferente da selecionada.");
-  state.slots[keyFor(date,slot)]={cloud:true,platform:"instagram",platformAccountId:schedule.platform_account_id,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,thumbnailPath:clean?.thumbnail_path||video.thumbnail_storage_path||"",coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption:video.caption||caption,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
+  state.slots[keyFor(date,slot)]={cloud:true,platform:"instagram",platformAccountId:schedule.platform_account_id,scheduleId:schedule.id,videoId:video.id,name:video.file_name,size:Number(clean?.report?.output_bytes||video.size_bytes||file.size),type:clean?.status==="ready"?"video/mp4":(video.mime_type||file.type),storagePath:effectivePath,thumbnailPath:clean?.thumbnail_path||video.thumbnail_storage_path||"",coverOffsetMs:Number(video.cover_offset_ms||3500),coverStrategy:video.cover_strategy||"auto_after_3s",time:t,caption:schedule.instagram_calendar_caption??(video.caption||caption),automaticCaption:schedule.instagram_calendar_caption!=null,status:"scheduled",scheduledAt:schedule.scheduled_at,smartMode,smartStrategy:schedule.smart_strategy||strategy,smartStrategyLocked:!!schedule.smart_strategy_locked,mediaCleanStatus:clean?.status||"pending"};
   save();
   if(clean?.status==="ready")log(`${file.name} com metadados removidos e agendado para ${date} às ${t}.`,"ok");
   else log(`${file.name} agendado para ${date} às ${t}; Media Cleaner: ${clean?.status||"pendente"}.`,clean?.status==="skipped"?"warn":"ok");
@@ -8133,7 +8133,7 @@ async function confirmScheduleModal(button=null){
       state.slots[keyFor(date,free)]={
         cloud:true,platform:"instagram",platformAccountId:accountId,scheduleId:schedule.id,videoId:video.id,
         name:video.file_name,size:Number(video.size_bytes||0),type:video.mime_type||"video/mp4",
-        storagePath:video.storage_path||"",time,caption:video.caption||caption,
+        storagePath:video.storage_path||"",time,caption:schedule.instagram_calendar_caption??(video.caption||caption),automaticCaption:schedule.instagram_calendar_caption!=null,
         status:"scheduled",scheduledAt:schedule.scheduled_at,
         smartMode:auto?"auto":"manual",smartStrategy:schedule.smart_strategy||choice.strategy,
         smartStrategyLocked:!!schedule.smart_strategy_locked
@@ -8172,7 +8172,7 @@ function openEditScheduleModal(date,slot){
     <div class="formgrid">
       <div class="field"><label>Novo dia</label><select id="editDay">${dates.map(d=>{const iso=localISO(d);return `<option value="${iso}" ${iso===date?"selected":""}>${d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</option>`}).join("")}</select></div>
       <div class="field"><label>Horário</label><input id="editTime" type="time" value="${x.time}"><div class="note">Se você alterar a hora, este post fica travado no horário escolhido e o Smart Scheduler não muda depois.</div></div>
-      <div class="field full"><label>Legenda</label><textarea id="editCaption">${esc(x.caption||"")}</textarea></div>
+      <div class="field full"><label>Legenda</label><textarea id="editCaption" ${x.automaticCaption?"readonly":""}>${esc(x.caption||"")}</textarea>${x.automaticCaption?'<div class="note">Legenda escolhida automaticamente para este dia.</div>':""}</div>
       <div class="field full"><label>Trocar vídeo (opcional)</label><input id="editFile" type="file" accept="video/*"><div class="note">Se não escolher outro arquivo, o vídeo atual será mantido.</div></div>
       <div class="field"><label>Status local</label><select id="editStatus">
         ${["agendado","fila","publicando","publicado","erro"].map(s=>`<option value="${s}" ${getStatus(x)===s?"selected":""}>${statusLabel(s)}</option>`).join("")}

@@ -62,7 +62,7 @@ Deno.serve(async(req:Request)=>{
     const body=await req.json().catch(()=>({}));
     const scheduleId=String(body.schedule_id||"");if(!scheduleId)return out({ok:false,error:"schedule_id_required"},400);
 
-    const {data:s,error:se}=await admin.from("schedules").select("id,video_id,status,published_at,instagram_media_id,platform_account_id,attempt_count,last_error,instagram_scale_caption").eq("id",scheduleId).maybeSingle();if(se)throw se;
+    const {data:s,error:se}=await admin.from("schedules").select("id,video_id,status,published_at,instagram_media_id,platform_account_id,attempt_count,last_error,instagram_scale_caption,instagram_calendar_caption").eq("id",scheduleId).maybeSingle();if(se)throw se;
     if(!s)return out({ok:false,error:"schedule_not_found"},404);
     if(s.instagram_media_id||s.status==="published")return out({ok:true,state:"already_published",instagram_media_id:s.instagram_media_id});
     if(!s.platform_account_id)throw new Error("schedule_without_platform_account");
@@ -95,7 +95,8 @@ Deno.serve(async(req:Request)=>{
     let containerId=String(payload.container_id||"");
     const {data:captionsPaused,error:captionPolicyError}=await admin.rpc("instagram_calendar_captions_paused",{p_account_id:pa.id});
     if(captionPolicyError)throw captionPolicyError;
-    const caption=captionsPaused?"":String(s.instagram_scale_caption??v.caption??"").slice(0,2200);
+    const calendarCaption=typeof s.instagram_calendar_caption==="string"?s.instagram_calendar_caption:null;
+    const caption=calendarCaption??(captionsPaused?"":String(s.instagram_scale_caption??v.caption??"").slice(0,2200));
     const now=new Date().toISOString();
 
     if(!containerId){
@@ -108,7 +109,7 @@ Deno.serve(async(req:Request)=>{
       const created=await graph(base,igId+"/media",String(token),"POST",{media_type:"REELS",video_url:mediaUrl,caption,share_to_feed:"false",thumb_offset:String(coverOffsetMs)});
       containerId=String(created.id||"");
       if(!containerId)throw new Error("instagram_container_receipt_missing");
-      payload={...payload,container_id:containerId,container_created_at:now,cover_offset_ms:coverOffsetMs,platform_account_id:String(pa.id),first_comment_message:firstCommentMessage,caption_suppressed:captionsPaused,share_to_feed:false};
+      payload={...payload,container_id:containerId,container_created_at:now,cover_offset_ms:coverOffsetMs,platform_account_id:String(pa.id),first_comment_message:firstCommentMessage,caption_suppressed:calendarCaption===null&&captionsPaused,calendar_caption:calendarCaption,share_to_feed:false};
       await admin.from("job_queue").update({status:"running",attempts:Math.max(1,Number(j.attempts||0)+1),locked_at:now,locked_by:worker,last_error:null,payload,updated_at:now}).eq("id",j.id).eq("locked_by",worker).throwOnError();
       await admin.from("schedules").update({status:"processing",attempt_count:Math.max(1,Number(s.attempt_count||0)+1),last_error:null}).eq("id",scheduleId);
       return out({ok:true,state:"container_created",container_id:containerId,first_comment_message:firstCommentMessage,share_to_feed:false});
@@ -121,12 +122,13 @@ Deno.serve(async(req:Request)=>{
     }
     const st=payload.instagram_media_id?{status_code:"FINISHED"}:await graph(base,containerId+"?fields=status_code,status",String(token),"GET");
     const code=String(st.status_code||"");
-    if(captionsPaused&&!payload.caption_suppressed&&!payload.publish_started_at&&!payload.instagram_media_id&&["FINISHED","IN_PROGRESS","ERROR","EXPIRED"].includes(code)){
+    const captionChanged=calendarCaption===null?captionsPaused&&!payload.caption_suppressed:payload.calendar_caption!==calendarCaption;
+    if(captionChanged&&!payload.publish_started_at&&!payload.instagram_media_id&&["FINISHED","IN_PROGRESS","ERROR","EXPIRED"].includes(code)){
       delete payload.container_id;
       delete payload.container_created_at;
       delete payload.first_comment_message;
       await admin.from("job_queue").update({payload,updated_at:now}).eq("id",j.id).eq("locked_by",worker).throwOnError();
-      return out({ok:true,state:"captionless_container_pending"});
+      return out({ok:true,state:calendarCaption===null?"captionless_container_pending":"caption_updated_container_pending"});
     }
     if(code!=="FINISHED"){
       if(code==="ERROR"||code==="EXPIRED"){

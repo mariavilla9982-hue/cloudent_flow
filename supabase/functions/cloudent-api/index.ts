@@ -374,7 +374,7 @@ Deno.serve(async (req: Request) => {
       const compactQueue=url.searchParams.get("compact")==="1";
       const queueSelect=compactQueue
         ?"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,published_at,videos(id,file_name)"
-        :"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,instagram_scale_caption,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
+        :"id,created_at,video_id,trial_video_id,scheduled_at,status,smart_mode,smart_strategy,smart_strategy_locked,platform,platform_account_id,attempt_count,last_error,instagram_media_id,published_at,instagram_scale_caption,instagram_calendar_caption,videos(id,file_name,caption,storage_path,storage_provider,thumbnail_storage_path,size_bytes,mime_type,platform,duration_seconds,cover_offset_ms,cover_strategy)";
       let queueQuery=admin
         .from("schedules")
         .select(queueSelect)
@@ -422,7 +422,8 @@ Deno.serve(async (req: Request) => {
         const snaps=bySchedule[String(row.id)]||[];
         return {
           ...row,
-          videos:row.instagram_scale_caption!=null&&row.videos?{...row.videos,caption:row.instagram_scale_caption}:row.videos,
+          videos:(row.instagram_calendar_caption!=null||row.instagram_scale_caption!=null)&&row.videos
+            ?{...row.videos,caption:row.instagram_calendar_caption??row.instagram_scale_caption}:row.videos,
           pretrial:pretrialBySchedule[String(row.id)]||null,
           calendar_metrics:{
             latest:snaps[0]||null,
@@ -4409,7 +4410,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const { data: current, error: currentError } = await admin
-        .from("schedules").select("id,video_id,scheduled_at,status,platform,platform_account_id").eq("id", id).single();
+        .from("schedules").select("id,video_id,scheduled_at,status,platform,platform_account_id,instagram_calendar_caption").eq("id", id).single();
       if (currentError) throw currentError;
       if(body.platform_account_id!==undefined&&String(body.platform_account_id)!==String(current.platform_account_id)){
         return json({error:"schedule_account_mismatch",user_message:"Este vídeo pertence a outra conta. Atualize o calendário antes de editar."},409);
@@ -4420,7 +4421,7 @@ Deno.serve(async (req: Request) => {
         if (error) throw error;
       }
 
-      if (body.caption !== undefined) {
+      if (body.caption !== undefined && current.instagram_calendar_caption == null) {
         const { error } = await admin.from("videos").update({ caption: String(body.caption) }).eq("id", current.video_id);
         if (error) throw error;
       }
