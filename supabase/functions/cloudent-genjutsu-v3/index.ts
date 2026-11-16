@@ -96,7 +96,9 @@ function watchProviderFailure(jobId: string, taskId: string, origin: string, end
   if (typeof endpoint !== "string") return;
   let url: URL;
   try { url = new URL(endpoint); } catch { return; }
-  if (url.protocol !== "wss:" || url.host !== new URL(origin).host || url.username || url.password) return;
+  const allowedHost = url.host === new URL(origin).host ||
+    (["www.runninghub.cn", "www.runninghub.ai"].includes(url.host) && url.pathname === "/ws/c_instance");
+  if (url.protocol !== "wss:" || !allowedHost || url.username || url.password) return;
   EdgeRuntime.waitUntil(new Promise<void>(resolve => {
     let socket: WebSocket;
     try { socket = new WebSocket(url); } catch { resolve(); return; }
@@ -126,6 +128,15 @@ function watchProviderFailure(jobId: string, taskId: string, origin: string, end
   }));
 }
 function parse(value: any) { return typeof value === "string" ? JSON.parse(value) : value; }
+function validationFailure(promptTips: unknown) {
+  let validation;
+  try { validation = parse(promptTips); } catch { return null; }
+  if (validation?.result !== false) return null;
+  const node = Object.keys(validation.node_errors ?? {}).find(id => /^\d{1,20}$/.test(id));
+  const reason = (node ? validation.node_errors[node]?.errors?.[0] : null) ?? validation.error;
+  const detail = safeGenjutsuError(reason?.message || reason?.type).slice(0, 350);
+  return detail ? `RunningHub${node ? ` no nó #${node}` : ""}: ${detail}` : null;
+}
 async function validateGraph(request: any) {
   const result = await request("/api/openapi/getJsonApiFormat", { workflowId: WORKFLOW });
   const data = parse(result.data);
@@ -278,7 +289,8 @@ async function worker(master: string) {
       }
       if (!/^\d+$/.test(taskId)) throw new Error("RunningHub não confirmou a tarefa.");
       console.info(JSON.stringify({ event: "genjutsu_v3_created", job: job.id, task: taskId }));
-      await patch(job, { status: "running", task_id: taskId, started_at: new Date().toISOString(), error: null, ...release });
+      await patch(job, { status: "running", task_id: taskId, started_at: new Date().toISOString(),
+        error: validationFailure(created.data?.promptTips), ...release });
       watchProviderFailure(job.id, taskId, origin, created.data?.netWssUrl);
       return { ok: true };
     }
@@ -319,7 +331,7 @@ async function worker(master: string) {
       await patch(job, { status: "failed", error, ...release });
     } else {
       await patch(job, { provider_finished_at: job.provider_finished_at || (state === "SUCCESS" ? new Date().toISOString() : null), ...release });
-      watchProviderFailure(job.id, job.task_id, origin, result.data?.netWssUrl);
+      watchProviderFailure(job.id, job.task_id, origin, result.data?.netWssUrl ?? statusResult.data?.netWssUrl);
     }
     return { ok: true };
   } catch (e) {
