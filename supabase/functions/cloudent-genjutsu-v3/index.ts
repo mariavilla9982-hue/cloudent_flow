@@ -247,6 +247,21 @@ function promptInputs(job: any) {
     ...(manual && job.manual_prompt ? [{ nodeId: "115", fieldName: "value", fieldValue: job.manual_prompt }] : []),
   ];
 }
+async function providerTaskStatus(request: (path: string, body: { taskId: string }) => Promise<any>, taskId: string) {
+  const activeOrTerminal = ["QUEUED", "RUNNING", "SUCCESS", "FAILED", "CANCELED", "CANCELLED"];
+  const legacy = await request("/task/openapi/status", { taskId }).catch(() => null);
+  const state = String(legacy?.data?.taskStatus ?? legacy?.data?.status ?? legacy?.data ?? "").toUpperCase();
+  if (Number(legacy?.code) === 0 && activeOrTerminal.includes(state)) {
+    return { state, data: legacy.data };
+  }
+
+  const current = await request("/openapi/v2/query", { taskId }).catch(() => null);
+  const currentState = String(current?.status ?? "").toUpperCase();
+  if (String(current?.taskId ?? "") === taskId && activeOrTerminal.includes(currentState)) {
+    return { state: currentState, data: current };
+  }
+  return { state: "UNKNOWN", data: null };
+}
 async function worker(master: string) {
   const job = await storageRPC(admin, "claim_genjutsu_v3_job", { p_lease: crypto.randomUUID() });
   if (!job) return { ok: true, idle: true };
@@ -257,9 +272,9 @@ async function worker(master: string) {
     if (!job.task_id) {
       const queue = await settings("production_queue");
       if (queue?.enabled === false) { await patch(job, { status: "queued", ...release }); return { ok: true, paused: true }; }
-      const capacity = await request("/openapi/v2/queue/status");
-      const limit = Number(capacity.data?.concurrentLimit), active = Number(capacity.data?.totalCurrentTasks);
-      if (Number(capacity.code) !== 0 || !Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(active) || active < 0 || active >= limit) {
+      const capacity = await request("/openapi/v2/queue/status").catch(() => null);
+      const limit = Number(capacity?.data?.concurrentLimit), active = Number(capacity?.data?.totalCurrentTasks);
+      if (Number(capacity?.code) !== 0 || !Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(active) || active < 0 || active >= limit) {
         await patch(job, { status: "queued", ...release });
         return { ok: true, waiting: true };
       }
@@ -312,16 +327,15 @@ async function worker(master: string) {
       await patch(job, { status: "ready", error: mismatch ? `A saída #${mismatch} veio com ${outputs[mismatch].fps} fps.` : null, ...release });
       return { ok: true, ready: true };
     }
-    const statusResult = await request("/task/openapi/status", { taskId: job.task_id });
-    const state = String(statusResult.data?.taskStatus ?? statusResult.data?.status ?? statusResult.data ?? "").toUpperCase();
-    const providerFailed = state === "FAILED" || Number(result.code) === 805;
+    const { state, data: statusData } = await providerTaskStatus(request, job.task_id);
+    const providerFailed = state === "FAILED";
     if (providerFailed || ["CANCELED", "CANCELLED"].includes(state) ||
         (job.provider_finished_at && Date.now() - Date.parse(job.provider_finished_at) > 4 * 60 * 1000) ||
         Date.now() - Date.parse(job.started_at) > 4 * 60 * 60 * 1000) {
       const missing = NODES.filter(node => !outputs[node]).map(node => `#${node}`).join(" e ");
-      const reason = result.data?.failedReason ?? statusResult.data?.failedReason;
+      const reason = result.data?.failedReason ?? statusData?.failedReason;
       const node = /^\d{1,20}$/.test(String(reason?.node_id ?? "")) ? ` no nó #${reason.node_id}` : "";
-      const detail = safeGenjutsuError(reason?.exception_message || reason?.exception_type || reason?.node_name).slice(0, 350);
+      const detail = safeGenjutsuError(reason?.exception_message || reason?.exception_type || reason?.node_name || statusData?.errorMessage).slice(0, 350);
       const recorded = String(job.error || "").match(/^RunningHub(?: no nó #\d+)?: /) ? job.error : null;
       const error = providerFailed
         ? recorded || (detail
@@ -331,7 +345,7 @@ async function worker(master: string) {
       await patch(job, { status: "failed", error, ...release });
     } else {
       await patch(job, { provider_finished_at: job.provider_finished_at || (state === "SUCCESS" ? new Date().toISOString() : null), ...release });
-      watchProviderFailure(job.id, job.task_id, origin, result.data?.netWssUrl ?? statusResult.data?.netWssUrl);
+      watchProviderFailure(job.id, job.task_id, origin, result.data?.netWssUrl ?? statusData?.netWssUrl);
     }
     return { ok: true };
   } catch (e) {
