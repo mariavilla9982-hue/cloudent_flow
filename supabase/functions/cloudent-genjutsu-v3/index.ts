@@ -299,8 +299,12 @@ async function worker(master: string) {
       if (!frame.size) throw new Error("Frame vazio.");
       const image = await uploadFrame(frame, "frame." + extension);
       preparingFrame = false;
+      const { data: plusTest, error: plusTestError } = await admin.from("app_settings").delete()
+        .eq("key", "genjutsu_v3_plus_test").eq("value->>job_id", job.id).select("key").maybeSingle();
+      if (plusTestError) throw plusTestError;
       dispatchSent = true;
-      const created = await request("/task/openapi/create", { workflowId: WORKFLOW, addMetadata: true, nodeInfoList: [
+      const created = await request("/task/openapi/create", { workflowId: WORKFLOW, addMetadata: true,
+        ...(plusTest ? { instanceType: "plus" } : {}), nodeInfoList: [
         { nodeId: "1", fieldName: "video", fieldValue: video },
         { nodeId: "2", fieldName: "image", fieldValue: image },
         { nodeId: "169", fieldName: "output_fps", fieldValue: "30" },
@@ -312,7 +316,8 @@ async function worker(master: string) {
         return { ok: false };
       }
       if (!/^\d+$/.test(taskId)) throw new Error("RunningHub não confirmou a tarefa.");
-      console.info(JSON.stringify({ event: "genjutsu_v3_created", job: job.id, task: taskId }));
+      console.info(JSON.stringify({ event: "genjutsu_v3_created", job: job.id, task: taskId,
+        ...(plusTest ? { instance_type: "plus" } : {}) }));
       await patch(job, { status: "running", task_id: taskId, started_at: new Date().toISOString(),
         error: validationFailure(created.data?.promptTips), ...release });
       watchProviderFailure(job.id, taskId, origin, created.data?.netWssUrl);
