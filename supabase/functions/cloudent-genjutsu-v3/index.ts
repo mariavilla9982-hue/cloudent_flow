@@ -4,6 +4,7 @@ import { motionObjectConfig, motionObjectURL, motionCheckObject, putMotionPrimar
 import { genjutsuExecutionEvent, safeGenjutsuError } from "../_shared/genjutsu-diagnostics.ts";
 
 const WORKFLOW = "2120974306862780417";
+const INSTANCE_TYPE = "ultra";
 const NODES = ["148", "170"] as const;
 const MIB = 1024 * 1024;
 const table = "genjutsu_v3_jobs";
@@ -299,12 +300,9 @@ async function worker(master: string) {
       if (!frame.size) throw new Error("Frame vazio.");
       const image = await uploadFrame(frame, "frame." + extension);
       preparingFrame = false;
-      const { data: plusTest, error: plusTestError } = await admin.from("app_settings").delete()
-        .eq("key", "genjutsu_v3_plus_test").eq("value->>job_id", job.id).select("key").maybeSingle();
-      if (plusTestError) throw plusTestError;
       dispatchSent = true;
       const created = await request("/task/openapi/create", { workflowId: WORKFLOW, addMetadata: true,
-        ...(plusTest ? { instanceType: "plus" } : {}), nodeInfoList: [
+        instanceType: INSTANCE_TYPE, nodeInfoList: [
         { nodeId: "1", fieldName: "video", fieldValue: video },
         { nodeId: "2", fieldName: "image", fieldValue: image },
         { nodeId: "169", fieldName: "output_fps", fieldValue: "30" },
@@ -317,7 +315,7 @@ async function worker(master: string) {
       }
       if (!/^\d+$/.test(taskId)) throw new Error("RunningHub não confirmou a tarefa.");
       console.info(JSON.stringify({ event: "genjutsu_v3_created", job: job.id, task: taskId,
-        ...(plusTest ? { instance_type: "plus" } : {}) }));
+        instance_type: INSTANCE_TYPE }));
       await patch(job, { status: "running", task_id: taskId, started_at: new Date().toISOString(),
         error: validationFailure(created.data?.promptTips), ...release });
       watchProviderFailure(job.id, taskId, origin, created.data?.netWssUrl);
