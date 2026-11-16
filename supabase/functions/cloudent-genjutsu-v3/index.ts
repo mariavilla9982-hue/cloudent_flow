@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { motionObjectConfig, motionObjectURL, motionCheckObject, putMotionPrimary, requireMotionStorage, storageRPC, MotionStorageSafetyError } from "../cloudent-motion-control-worker/motion-storage-protection.ts";
-import { safeGenjutsuError } from "../_shared/genjutsu-diagnostics.ts";
+import { genjutsuExecutionEvent, safeGenjutsuError } from "../_shared/genjutsu-diagnostics.ts";
 
 const WORKFLOW = "2120974306862780417";
 const NODES = ["148", "170"] as const;
@@ -90,7 +90,40 @@ async function runningHub(master: string) {
       throw new Error("RunningHub não confirmou o upload do frame.");
     return filenameOnProvider;
   };
-  return { request, uploadFrame };
+  return { request, uploadFrame, origin };
+}
+function watchProviderFailure(jobId: string, taskId: string, origin: string, endpoint: unknown) {
+  if (typeof endpoint !== "string") return;
+  let url: URL;
+  try { url = new URL(endpoint); } catch { return; }
+  if (url.protocol !== "wss:" || url.host !== new URL(origin).host || url.username || url.password) return;
+  EdgeRuntime.waitUntil(new Promise<void>(resolve => {
+    let socket: WebSocket;
+    try { socket = new WebSocket(url); } catch { resolve(); return; }
+    const end = () => {
+      clearTimeout(timeout);
+      clearInterval(ping);
+      try { socket.close(); } catch { /* The provider already closed the connection. */ }
+      resolve();
+    };
+    const timeout = setTimeout(end, 55000);
+    const ping = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send("ping"); }, 20000);
+    socket.onclose = end;
+    socket.onerror = end;
+    socket.onmessage = async ({ data }) => {
+      if (typeof data !== "string") return;
+      let message;
+      try { message = JSON.parse(data); } catch { return; }
+      const event = genjutsuExecutionEvent(message, taskId, null);
+      if (!event?.error) return;
+      const node = event.node_id ? ` no nó #${event.node_id}` : "";
+      const error = `RunningHub${node}: ${event.error.slice(0, 350)}`;
+      try {
+        await admin.from(table).update({ error }).eq("id", jobId).eq("task_id", taskId)
+          .or("status.eq.running,and(status.eq.failed,error.like.O RunningHub falhou sem informar o nó*)");
+      } finally { end(); }
+    };
+  }));
 }
 function parse(value: any) { return typeof value === "string" ? JSON.parse(value) : value; }
 async function validateGraph(request: any) {
@@ -209,7 +242,7 @@ async function worker(master: string) {
   let dispatchSent = false;
   let preparingFrame = false;
   try {
-    const { request, uploadFrame } = await runningHub(master);
+    const { request, uploadFrame, origin } = await runningHub(master);
     if (!job.task_id) {
       const queue = await settings("production_queue");
       if (queue?.enabled === false) { await patch(job, { status: "queued", ...release }); return { ok: true, paused: true }; }
@@ -246,6 +279,7 @@ async function worker(master: string) {
       if (!/^\d+$/.test(taskId)) throw new Error("RunningHub não confirmou a tarefa.");
       console.info(JSON.stringify({ event: "genjutsu_v3_created", job: job.id, task: taskId }));
       await patch(job, { status: "running", task_id: taskId, started_at: new Date().toISOString(), error: null, ...release });
+      watchProviderFailure(job.id, taskId, origin, created.data?.netWssUrl);
       return { ok: true };
     }
     const result = await request("/task/openapi/outputs", { taskId: job.task_id });
@@ -276,11 +310,17 @@ async function worker(master: string) {
       const reason = result.data?.failedReason ?? statusResult.data?.failedReason;
       const node = /^\d{1,20}$/.test(String(reason?.node_id ?? "")) ? ` no nó #${reason.node_id}` : "";
       const detail = safeGenjutsuError(reason?.exception_message || reason?.exception_type || reason?.node_name).slice(0, 350);
+      const recorded = String(job.error || "").match(/^RunningHub(?: no nó #\d+)?: /) ? job.error : null;
       const error = providerFailed
-        ? `O RunningHub falhou${node}.${detail ? " " + detail : ""} Saídas faltando: ${missing}.`
+        ? recorded || (detail
+          ? `O RunningHub falhou${node}. ${detail} Saídas faltando: ${missing}.`
+          : `O RunningHub falhou sem informar o nó. Saídas faltando: ${missing}.`)
         : `Saída indisponível no RunningHub: ${missing}.`;
       await patch(job, { status: "failed", error, ...release });
-    } else await patch(job, { error: null, provider_finished_at: job.provider_finished_at || (state === "SUCCESS" ? new Date().toISOString() : null), ...release });
+    } else {
+      await patch(job, { provider_finished_at: job.provider_finished_at || (state === "SUCCESS" ? new Date().toISOString() : null), ...release });
+      watchProviderFailure(job.id, job.task_id, origin, result.data?.netWssUrl);
+    }
     return { ok: true };
   } catch (e) {
     console.error("GENJUTSU V3", job.id, e instanceof Error ? e.name : "unknown");
