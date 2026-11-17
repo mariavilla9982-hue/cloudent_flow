@@ -8,11 +8,26 @@ import {PIPELINE_VIDEO_WORKFLOWS,pipelineVideoWorkflow} from './image-pipeline-w
 const JOB_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function uploadedObjectMatches(address:string,size:number){
   // A presigned GET URL cannot be reused for HEAD: S3 signs the HTTP method.
-  const r=await fetch(address,{method:'GET',headers:{Range:'bytes=0-0'},signal:AbortSignal.timeout(15000)});
-  const range=r.headers.get('content-range')||'';
-  const actual=r.status===206?Number(range.match(/\/(\d+)$/)?.[1]):Number(r.headers.get('content-length'));
-  try{await r.body?.cancel();}catch{}
-  return r.ok&&Number.isSafeInteger(actual)&&actual===Number(size)&&actual>0;
+  // The B2/S3 connection sometimes resets while checking an already uploaded object.
+  // Only retry transient failures; never assume a failed check means the upload is missing.
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const r=await fetch(address,{method:'GET',headers:{Range:'bytes=0-0'},signal:AbortSignal.timeout(15000)});
+      const range=r.headers.get('content-range')||'';
+      const actual=r.status===206?Number(range.match(/\/(\d+)$/)?.[1]):Number(r.headers.get('content-length'));
+      try{await r.body?.cancel();}catch{}
+      if(r.status===429||r.status>=500)throw new Error('storage_http_'+r.status);
+      return r.ok&&Number.isSafeInteger(actual)&&actual===Number(size)&&actual>0;
+    }catch(error){
+      if(attempt===2){
+        // Never log a presigned URL: it contains temporary access credentials.
+        console.warn('image_pipeline_storage_verify_retry_exhausted',String(error).slice(0,180));
+        throw new Error('Falha temporária ao confirmar o upload no Backblaze B2. Tente novamente; os envios confirmados foram preservados.');
+      }
+      await new Promise(resolve=>setTimeout(resolve,350*(attempt+1)));
+    }
+  }
+  return false;
 }
 function genjutsuMedia(job:any,userId:string,kind:string){
   if(job?.meta?.video_workflow?.key!=='genjutsu'||job.meta.stage==='upload')return [];
@@ -241,6 +256,11 @@ export async function imagePipelineApi(d:any){
       const actual=b.source==='face_swap_photo'&&key==='original'?'supabase':p;
       if(actual==='r2')parts[key]={path,upload_url:await signPut(cfg,path),content_type:type,provider:actual};
       else{const signed=check(await admin.storage.from('production').createSignedUploadUrl(path,{upsert:true}));parts[key]={path,upload_url:signed.signedUrl,content_type:type,provider:actual};}
+      // A retry after a transient verification error must not re-upload finished parts.
+      if(old){
+        const expectedSize=Number(key==='original'?first.size:(ref?.size||first.size));
+        parts[key].already_uploaded=await uploadedObjectMatches(await signGet(actual,path),expectedSize);
+      }
     }
     return json({ok:true,job_id:id,...parts,model_selected:photo&&!!character,same_input:originalPath===framePath});
   }
