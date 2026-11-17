@@ -48,7 +48,12 @@ export async function imagePipelineApi(d:any){
   const owner=async(id:string)=>check(await admin.from('face_swap_jobs').select('*').eq('id',id).eq('user_id',user.id).contains('meta',{pipeline_version:2}).maybeSingle());
   const retryJob=async(j:any,failedOnly=false):Promise<{ok:boolean;status?:number;error?:string}>=>{
     if(j.meta.stage==='control_motion')return retryPipelineMotion(admin,user.id,j.id,j,failedOnly);
-    if(j.status!=='failed'||j.meta.dispatch_uncertain||!j.meta.provider_failed)return {ok:false,error:'A tarefa ainda está ativa ou exige reconciliação com o provedor. Nenhuma geração foi repetida.',status:409};
+    // RunningHub refuses submissions when only free points remain. No external task
+    // exists in this case, so a manual retry is safe after the user buys paid points.
+    // Do not auto-retry or loosen protection for uncertain provider dispatches.
+    const paidPointsRejected=j.meta?.stage==='face_swap'&&j.meta?.error_stage==='face_swap'&&
+      !j.runninghub_task_id&&/^Insufficient paid points\b/i.test(String(j.last_error||''));
+    if(j.status!=='failed'||j.meta.dispatch_uncertain||(!j.meta.provider_failed&&!paidPointsRejected))return {ok:false,error:'A tarefa ainda está ativa ou exige reconciliação com o provedor. Nenhuma geração foi repetida.',status:409};
     const m={...j.meta,dispatch_intent:null,provider_failed:false,error_stage:null};
     let retry=admin.from('face_swap_jobs').update({status:'waiting',runninghub_task_id:null,last_error:null,meta:m}).eq('id',j.id).eq('user_id',user.id).eq('status','failed').is('hidden_at',null);
     retry=j.runninghub_task_id?retry.eq('runninghub_task_id',j.runninghub_task_id):retry.is('runninghub_task_id',null);
