@@ -41,4 +41,16 @@ const frontend=fs.readFileSync('image-pipeline-ui.js','utf8');
 assert(frontend.includes('if(ticket.original?.already_uploaded)sentVideo=entry.original.size'));
 assert(frontend.includes('if(ticket.reference?.already_uploaded)sentFrame=entry.reference.size'));
 assert(source.includes('parts[key].already_uploaded=await uploadedObjectMatches'));
+const retryGuard=source.match(/const paidPointsRejected=([\s\S]*?);\n    if\(j.status/);
+assert(retryGuard,'safe paid-points retry guard exists');
+const canRetryAfterCredits=Function('j','return ('+retryGuard[1]+')');
+const paidPointsJob={
+  meta:{stage:'face_swap',error_stage:'face_swap'},
+  runninghub_task_id:null,
+  last_error:'Insufficient paid points. Consumer API keys can only spend paid points; free points are not accepted.'
+};
+assert.equal(canRetryAfterCredits(paidPointsJob),true,'manual retry becomes eligible after paid-points rejection');
+assert.equal(canRetryAfterCredits({...paidPointsJob,runninghub_task_id:'existing-task'}),false,'never retry an existing external task');
+assert.equal(canRetryAfterCredits({...paidPointsJob,last_error:'Server error'}),false,'unrelated errors remain protected');
+console.log('PASS RunningHub: paid-points rejection manual retry eligibility, existing task and unrelated-error guards');
 console.log('PASS B2: network retries, 5xx retries, 404 no retry, size verification, bounded failure, and resumable tickets');
