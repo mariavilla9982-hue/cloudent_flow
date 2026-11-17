@@ -122,7 +122,7 @@ Deno.serve(async(req:Request)=>{
     auth.searchParams.set("scope",[...requiredScopes,"instagram_business_manage_comments","instagram_business_manage_insights"].join(","));
     auth.searchParams.set("state",state);
     auth.searchParams.set("enable_fb_login","0");
-    auth.searchParams.set("force_authentication","1");
+    auth.searchParams.set("force_reauth","true");
     return out({ok:true,url:auth.toString(),redirect_uri:redirectUri()});
   }
 
