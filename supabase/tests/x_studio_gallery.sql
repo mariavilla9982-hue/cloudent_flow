@@ -14,10 +14,10 @@ begin
  if x_next_daily_slot(array['06:00','15:00'],'2026-10-18T17:00:00Z')<>'2026-10-18T18:00:00Z'::timestamptz then raise exception 'wrong_brasilia_slot';end if;
  p:=claim_x_account_post(a.id,'qa-gallery');
  if p->>'id'<>j::text or p->>'post_text'<>'Legenda neutra de teste' then raise exception 'caption_not_assigned';end if;
- if (select status from x_caption_queue where id=c)<>'reserved' or (select status from x_caption_queue where id=other_caption)<>'pending' then raise exception 'caption_cross_account';end if;
+ if (select used_at from x_caption_queue where id=c) is null or (select used_at from x_caption_queue where id=other_caption) is not null then raise exception 'caption_cross_account';end if;
  if claim_x_account_post(a.id,'qa-second') is not null then raise exception 'double_claim';end if;
  perform complete_x_upload_post(j,'qa-gallery',a.id,'Legenda neutra de teste','qa-media','qa-post');
- if (select status from x_caption_queue where id=c)<>'used' then raise exception 'caption_not_consumed';end if;
+ if (select status from x_caption_queue where id=c)<>'pending' then raise exception 'caption_no_longer_reusable';end if;
  if (select next_publish_at from x_account_configs where platform_account_id=a.id)<>x_next_daily_slot(array['06:00','15:00','21:00'],now()) then raise exception 'queue_ignored_daily_slots';end if;
  if (select scheduled_at from x_drive_posts where id=manual)<>target then raise exception 'manual_schedule_changed';end if;
  if has_table_privilege('authenticated','public.x_caption_queue','SELECT') or has_table_privilege('anon','public.x_caption_queue','SELECT') then raise exception 'private_caption_queue_exposed';end if;
