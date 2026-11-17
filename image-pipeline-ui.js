@@ -183,9 +183,14 @@
                 const pct=Math.min(100,Math.floor(100*(sentVideo+sentFrame)/Math.max(1,total)));
                 if(row?.isConnected)row.textContent='Enviando '+c.name+' · '+pct+'%';
               };
-              const uploads=[uploadFaceSwapPart(ticket.original,entry.original,bytes=>{sentVideo=bytes;paint();})];
-              if(!ticket.same_input)uploads.push(uploadFaceSwapPart(ticket.reference,entry.reference,bytes=>{sentFrame=bytes;paint();}));
-              await Promise.all(uploads);
+              const uploads=[];
+              if(ticket.original?.already_uploaded)sentVideo=entry.original.size;
+              else uploads.push(uploadFaceSwapPart(ticket.original,entry.original,bytes=>{sentVideo=bytes;paint();}));
+              if(!ticket.same_input){
+                if(ticket.reference?.already_uploaded)sentFrame=entry.reference.size;
+                else uploads.push(uploadFaceSwapPart(ticket.reference,entry.reference,bytes=>{sentFrame=bytes;paint();}));
+              }
+              if(uploads.length)await Promise.all(uploads);
               if(row?.isConnected)row.textContent='Confirmando arquivos de '+c.name+'…';
               if(uid!==cloudSession?.user?.id)throw new Error('Sessão alterada durante o envio.');
               await request('image-pipeline-complete',{job_id:ticket.job_id});
