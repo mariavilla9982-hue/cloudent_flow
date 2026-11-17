@@ -22,20 +22,22 @@
   function patchCalendarScheduling(){
     if(typeof scheduleProductionResult!=="function"||scheduleProductionResult.__motionSafe)return;
     const nativeSchedule=scheduleProductionResult;
-    const wrapped=async function(id,button=null){
-      const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+    const wrapped=async function(id,button=null,knownJob=null,genjutsuNode=null){
+      if(genjutsuNode)return nativeSchedule.call(this,id,button,knownJob,genjutsuNode);
+      const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
       const motionPreview=String(job?.meta?.workflow_key||"")==="motion_control"&&
         !!job?.meta?.motion_preview_available&&!!job?.result_video_id;
       if(motionPreview&&job.status!=="ready"){
         try{if(button)actionButtonBusy(button,true,"Finalizando…")}catch{}
         const ready=await waitMotionReady(id);
+        try{if(button)actionButtonBusy(button,false)}catch{}
         if(!ready){
-          try{if(button)actionButtonBusy(button,false)}catch{}
           toast("O vídeo já foi salvo. Estou terminando o encerramento da task; tente novamente em alguns segundos.","warn");
           return;
         }
+        return nativeSchedule.call(this,id,button,ready);
       }
-      return nativeSchedule.call(this,id,button);
+      return nativeSchedule.call(this,id,button,knownJob);
     };
     wrapped.__motionSafe=true;
     scheduleProductionResult=wrapped;

@@ -8,7 +8,7 @@ elements['.production-schedule-modal']=scheduleModal;
 elements['#modalHost'].querySelector=selector=>selector==='.production-schedule-modal'?scheduleModal:elements['#modalHost'].innerHTML.includes('id="productionScheduleLoading"')?loadingNode:null;
 const day='2026-10-12';
 const rows=[{id:'S',platform:'instagram',platform_account_id:'A',scheduled_at:day+'T07:30:00',status:'scheduled'}];
-const messages=[];let payload,readPath;
+const messages=[];let payload,readPath,writePath;
 const ctx=vm.createContext({
   AbortController,setTimeout,clearTimeout,
   localStorage:{getItem:()=> 'A',setItem(){}},platformAccounts:[{id:'A',platform:'instagram',username:'alpha'},{id:'B',platform:'instagram',username:'beta'},{id:'X',platform:'x',username:'x'}],
@@ -16,7 +16,7 @@ const ctx=vm.createContext({
   localISO:d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
   $:key=>elements[key],document:{querySelectorAll:()=>[]},esc:s=>String(s),minutesOf:t=>/^\d{2}:\d{2}$/.test(t||'')?Number(t.slice(0,2))*60+Number(t.slice(3)):NaN,
   cloudSession:{},productionData:{jobs:[{id:'JOB',result_video_id:'VIDEO',meta:{}}]},productionSelectedJobs:new Set(),currentPage:'other',
-  loadPlatformAccounts:async()=>{},queueResourcePath:()=>'?resource=queue',cloudFetch:async(path,options)=>{if(!options?.body){readPath=path;return rows;}payload=JSON.parse(options.body);return {schedule:{id:'NEW'}}},
+  loadPlatformAccounts:async()=>{},queueResourcePath:()=>'?resource=queue',cloudFetch:async(path,options)=>{if(!options?.body){readPath=path;return rows;}writePath=path;payload=JSON.parse(options.body);return {schedule:{id:'NEW'}}},
   toast:msg=>messages.push(msg),friendlyCloudentError:s=>s,actionButtonBusy:(button,busy)=>{if(button)button.disabled=busy},closeModal(){},loadProductionData:async()=>{},syncFromBackend:async()=>{},
   window:{},
   runMediaCleaner:async()=>{assert.equal(elements['#productionScheduleAccount'].disabled,true);elements['#productionScheduleAccount'].value='A';return {status:'ready'}}
@@ -24,6 +24,9 @@ const ctx=vm.createContext({
 vm.runInContext(html.slice(html.indexOf('const CALENDAR_ACCOUNT_KEY='),html.indexOf('function calendarAccountSwitcher')),ctx);
 vm.runInContext(html.slice(html.indexOf('function productionCalendarCapacity('),html.indexOf('async function openProductionCalendarOverview')),ctx);
 vm.runInContext(html.slice(html.indexOf('const genjutsuScheduleInFlight='),html.indexOf('async function removeProductionResultFromCalendar')),ctx);
+// The production bundle installs this wrapper after loading the main SPA.
+const motion=readFileSync(new URL('../../motion-control-production.js',import.meta.url),'utf8');
+vm.runInContext(motion.slice(motion.indexOf('  function patchCalendarScheduling(){'),motion.indexOf('  function patchMotionThumbFailures(){'))+'\npatchCalendarScheduling();',ctx);
 const job=ctx.productionData.jobs[0];
 ctx.productionData.jobs=[];
 await ctx.openProductionScheduleModal('JOB',1,job);
@@ -59,6 +62,7 @@ elements['#productionScheduleAccount'].value='B';
 elements['#productionScheduleSave'].disabled=false;
 ctx.refreshProductionScheduleAccount();
 await elements['#productionScheduleSave'].onclick();
+assert.equal(writePath,'?action=genjutsu-v3-schedule');
 assert.equal(payload.platform_account_id,'B');assert.equal(payload.node,'170');assert.equal(marked,'V3');
 // Opening responds immediately, loads both resources in parallel, and respects close/logout.
 ctx.productionData.jobs=[{id:'JOB',result_video_id:'VIDEO',meta:{}}];
