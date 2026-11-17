@@ -3,7 +3,7 @@ const crypto=require('node:crypto').webcrypto;
 const A='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',U='user-a',V='user-b';
 class Query{
  constructor(db,table){this.db=db;this.table=table;this.filters=[];this.op='read';this.patch={};}
- select(){return this;}eq(k,v){this.filters.push(r=>r[k]===v);return this;}is(k,v){return this.eq(k,v);}in(k,v){this.filters.push(r=>v.includes(r[k]));return this;}order(){return this;}limit(){return this;}not(){return this;}
+ select(){return this;}eq(k,v){this.filters.push(r=>r[k]===v);return this;}neq(k,v){this.filters.push(r=>r[k]!==v);return this;}is(k,v){return this.eq(k,v);}in(k,v){this.filters.push(r=>v.includes(r[k]));return this;}order(){return this;}limit(){return this;}not(){return this;}
  update(p){this.op='update';this.patch=p;return this;}insert(p){this.op='insert';this.patch=p;return this;}upsert(p){return this.insert(p);}delete(){this.op='delete';return this;}
  async result(){const rows=this.db[this.table]||[];const selected=rows.filter(r=>this.filters.every(f=>f(r)));if(this.op==='insert'){rows.push(...(Array.isArray(this.patch)?this.patch:[this.patch]));this.db[this.table]=rows;return {data:[this.patch],error:null};}if(this.op==='update')for(const r of selected)Object.assign(r,this.patch);return {data:selected.map(r=>({...r})),error:null};}
  async maybeSingle(){const r=await this.result();return {...r,data:r.data[0]||null};}single(){return this.maybeSingle();}then(a,b){return this.result().then(a,b);}

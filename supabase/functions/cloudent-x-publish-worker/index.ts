@@ -742,7 +742,7 @@ async function statusPayload(admin:any,userId:string,master:string,url:URL){
  const [postResult,configResult,captionResult]=await Promise.all([
   ids.length?admin.from("x_drive_posts").select("id,user_id,platform_account_id,drive_file_name,drive_mime_type,drive_size_bytes,status,post_text,scheduled_at,x_post_id,attempts,max_attempts,last_error,published_at,meta,created_at,reply_text,reply_status,external_reply_id,reply_error,metrics,metrics_synced_at").eq("workspace_id",member.workspace_id).in("platform_account_id",ids).order("created_at",{ascending:false}).limit(500):null,
   active?admin.from("x_account_configs").select("*").eq("platform_account_id",active.id).maybeSingle():null,
-  active?admin.from("x_caption_queue").select("id,caption,status,created_at").eq("platform_account_id",active.id).eq("user_id",userId).eq("workspace_id",member.workspace_id).in("status",["pending","reserved"]).order("created_at").limit(100):null
+  active?admin.from("x_caption_queue").select("id,caption,status,created_at").eq("platform_account_id",active.id).eq("user_id",userId).eq("workspace_id",member.workspace_id).neq("status","removed").order("used_at",{ascending:true,nullsFirst:true}).order("created_at").order("id").limit(500):null
  ]);
  for(const result of [postResult,configResult,captionResult])if(result?.error)throw result.error;
  const posts:any[]=postResult?.data||[],captions:any[]=captionResult?.data||[];
@@ -994,12 +994,12 @@ Deno.serve(async(req:Request)=>{
       const account=await resolveXAccount(admin,userId,body);
       if(action==="caption-add"){
         const caption=captionValue(body.caption);
-        const {count,error:countError}=await admin.from("x_caption_queue").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("platform_account_id",account.id).in("status",["pending","reserved"]);if(countError)throw countError;
-        if((count||0)>=500)return json({error:"Limite de 500 legendas pendentes por conta."},409);
+        const {count,error:countError}=await admin.from("x_caption_queue").select("id",{count:"exact",head:true}).eq("user_id",userId).eq("platform_account_id",account.id).eq("workspace_id",member.workspace_id).neq("status","removed");if(countError)throw countError;
+        if((count||0)>=500)return json({error:"Limite de 500 legendas salvas por conta."},409);
         const {data,error}=await admin.from("x_caption_queue").insert({user_id:userId,workspace_id:member.workspace_id,platform_account_id:account.id,caption}).select("id,caption,status,created_at").single();if(error)throw error;
         return json({ok:true,caption:data});
       }else{
-        const {data,error}=await admin.from("x_caption_queue").update({status:"removed"}).eq("id",body.id).eq("user_id",userId).eq("platform_account_id",account.id).eq("status","pending").select("id").maybeSingle();if(error)throw error;if(!data)return json({error:"Legenda já reservada ou indisponível."},409);
+        const {data,error}=await admin.from("x_caption_queue").update({status:"removed"}).eq("id",body.id).eq("user_id",userId).eq("platform_account_id",account.id).eq("workspace_id",member.workspace_id).neq("status","removed").select("id").maybeSingle();if(error)throw error;if(!data)return json({error:"Legenda indisponível."},409);
       }
       return json({ok:true});
     }

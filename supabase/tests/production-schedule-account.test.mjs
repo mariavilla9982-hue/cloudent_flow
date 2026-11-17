@@ -46,6 +46,20 @@ assert.equal(payload.platform_account_id,'B');assert.equal(payload.caption,'Pres
 payload=null;elements['#productionScheduleAccount'].value='REMOVED';
 await ctx.scheduleProductionResult('JOB');assert.equal(payload,null);assert.match(messages.at(-1),/Escolha uma conta/);
 ctx.refreshProductionScheduleAccount();assert.equal(elements['#productionScheduleSave'].disabled,true);
+// V3 opens on Jujuh even if another account is active and submits the selected output.
+vm.runInContext("platformAccounts.find(a=>a.id==='B').username='jujuhmartinss'",ctx);
+elements['#modalHost'].innerHTML='';
+ctx.runMediaCleaner=async()=>{throw new Error('V3 must use the server-side copy')};
+let marked;
+ctx.window.CloudentGenjutsuV3={markScheduled:id=>{marked=id}};
+await ctx.openProductionScheduleModal('V3',null,{id:'V3'},'170');
+assert.match(elements['#modalHost'].innerHTML,/<option value="B" selected>@jujuhmartinss/);
+assert.match(elements['#modalHost'].innerHTML,/30 fps/);
+elements['#productionScheduleAccount'].value='B';
+elements['#productionScheduleSave'].disabled=false;
+ctx.refreshProductionScheduleAccount();
+await elements['#productionScheduleSave'].onclick();
+assert.equal(payload.platform_account_id,'B');assert.equal(payload.node,'170');assert.equal(marked,'V3');
 // Opening responds immediately, loads both resources in parallel, and respects close/logout.
 ctx.productionData.jobs=[{id:'JOB',result_video_id:'VIDEO',meta:{}}];
 elements['#modalHost'].innerHTML='';

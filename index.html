@@ -9732,7 +9732,7 @@ async function sendProductionResultToBulk(id,button=null){
     toast("Vídeo enviado para a fila. Trial → 1 min → Reel normal.","ok");
   }catch(e){actionButtonBusy(button,false);toast(friendlyCloudentError(e?.message||"erro"),"err")}
 }
-async function openProductionScheduleModal(id,number,knownJob=null){
+async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=null){
   if(!cloudSession)return;
   const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
   if(!job)return;
@@ -9753,8 +9753,11 @@ async function openProductionScheduleModal(id,number,knownJob=null){
   }
   const scheduled=!!job.meta?.scheduled;
   const linked=queue.find(x=>String(x.id)===String(job.meta?.schedule_id));
-  const accountId=scheduled?calendarRowAccountId(linked):calendarEnsureAccount();
   const accounts=calendarInstagramAccounts();
+  const jujuh=accounts.find(a=>[a.account_label,a.username,a.config?.username].some(value=>
+    String(value||"").replace(/^@/,"").toLowerCase()==="jujuhmartinss"));
+  const accountId=scheduled?calendarRowAccountId(linked)
+    :genjutsuNode?calendarAccountId(jujuh||(accounts.length===1?accounts[0]:null)):calendarEnsureAccount();
   const scheduledAt=job.meta?.scheduled_at?new Date(job.meta.scheduled_at):null;
   const today=new Date(),tomorrow=new Date(today);tomorrow.setDate(today.getDate()+1);
   const rows=productionCalendarCapacity(accountId,queue);
@@ -9769,7 +9772,7 @@ async function openProductionScheduleModal(id,number,knownJob=null){
   const noSpace=!scheduled&&(!accountId||!rows.some(x=>x.free>0));
 
   $("#modalHost").innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-box production-schedule-modal">'+
-    '<div class="modal-head"><div><b>'+(scheduled?'Vídeo final '+number+' no calendário':'Adicionar Vídeo final '+number+' ao calendário')+'</b>'+
+    '<div class="modal-head"><div><b>'+(genjutsuNode?'Agendar GENJUTSU V3 · '+(genjutsuNode==='148'?'24':'30')+' fps':scheduled?'Vídeo final '+number+' no calendário':'Adicionar Vídeo final '+number+' ao calendário')+'</b>'+
       '<div class="muted">'+(scheduled?'Você pode remover do calendário sem apagar o vídeo gerado.':'Escolha um dia pelas vagas disponíveis. O horário continua manual e protegido do Smart Scheduler.')+'</div></div>'+
       '<button class="btn" onclick="closeModal()">Fechar</button></div>'+
     '<div class="field production-calendar-fields"><label for="productionScheduleAccount">Conta Instagram</label><select id="productionScheduleAccount" '+(scheduled?'disabled':'onchange="refreshProductionScheduleAccount()"')+'>'+
@@ -9792,9 +9795,9 @@ async function openProductionScheduleModal(id,number,knownJob=null){
   const modal=host.querySelector(".production-schedule-modal");
   if(modal)modal.scheduleQueue=queue;
   const save=$("#productionScheduleSave");
-  if(save)save.onclick=()=>scheduleProductionResult(id,save,job);
+  if(save)save.onclick=()=>scheduleProductionResult(id,save,job,genjutsuNode);
 }
-async function scheduleProductionResult(id,button=null,knownJob=null){
+async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNode=null){
   if(button?.disabled)return;
   const accountId=productionScheduleAccountId();
   if(!accountId){toast("Escolha uma conta Instagram disponível.","err");return}
@@ -9812,19 +9815,27 @@ async function scheduleProductionResult(id,button=null,knownJob=null){
   try{
     const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
     let clean={status:"legacy"};
-    if(job?.result_video_id){
+    if(!genjutsuNode&&job?.result_video_id){
       if(button)button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>Preparando vídeo…</span>';
       clean=await runMediaCleaner("video",job.result_video_id,{quiet:true});
       if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
     }
     if(!cloudSession||cloudSession.user?.id!==userId||button?.isConnected===false)return;
     actionButtonBusy(button,true,"Salvando horário…");
-    const result=await cloudFetch("?action=production-schedule",{
+    const result=await cloudFetch(genjutsuNode?"?action=genjutsu-v3-schedule":"?action=production-schedule",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id,scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual",platform_account_id:accountId})
+      body:JSON.stringify({id,...(genjutsuNode?{node:genjutsuNode}:{}),scheduled_at:at.toISOString(),caption,smart_mode:"manual",smart_strategy:"manual",platform_account_id:accountId})
     });
     if(!cloudSession||cloudSession.user?.id!==userId)return;
+    if(genjutsuNode){
+      if(!result?.schedule?.id)throw new Error("O servidor não confirmou o agendamento.");
+      window.CloudentGenjutsuV3?.markScheduled?.(id);
+      if(button?.isConnected!==false)closeModal();
+      toast("GENJUTSU agendado para "+day+" às "+time+".","ok");
+      void syncFromBackend().catch(error=>console.warn("Atualização da agenda pendente:",error.message));
+      return;
+    }
     if(job){
       job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:at.toISOString(),platform_account_id:accountId};
     }
@@ -11460,7 +11471,7 @@ function xUploadMime(file){
 }
 function xIsPhoto(post){return post.drive_mime_type==="image/jpeg"||post.drive_mime_type==="image/png";}
 function xMediaControls(i){return `<div class="x-selected-media-actions"><button type="button" class="x-subtle-btn" onclick="xRemoveSelected(${i})" ${xPostingBusy?'disabled':''}>Remover arquivo</button><label class="x-subtle-btn">Trocar arquivo<input type="file" accept="${X_MEDIA_ACCEPT}" onchange="xReplaceSelected(${i},this)" ${xPostingBusy?'disabled':''}></label></div>`;}
-function xCaptionQueueMarkup(){const rows=xPostingData?.captions||[];return `<section class="x-settings-panel"><h3>Fila de legendas</h3><button class="x-subtle-btn" onclick="xSetTab('calendar')">Ir para a agenda</button><p class="x-muted">Publicações da galeria sem legenda própria usam a próxima legenda disponível desta conta. Cada legenda fica reservada para uma publicação no momento do envio.</p><label for="xNewCaption">Nova legenda</label><textarea id="xNewCaption" rows="3" placeholder="Escreva uma legenda" oninput="xCaptionDraft=this.value">${esc(xCaptionDraft)}</textarea><button class="x-primary-btn" onclick="xAddCaption()" ${xCaptionBusy||!xSelectedAccountId||xSelectedAccountId==='all'?'disabled':''}>Adicionar legenda à fila</button>${rows.map(c=>`<div class="x-batch-row"><p>${esc(c.caption)}</p><small>${c.status==='reserved'?'Reservada para um vídeo':'Aguardando vídeo'}</small>${c.status==='pending'?`<button class="x-primary-btn" onclick="xScheduleCaption('${c.id}')">Usar ao agendar</button><button class="x-subtle-btn" onclick="xRemoveCaption('${c.id}')">Remover legenda</button>`:''}</div>`).join('')||'<p>Nenhuma legenda na fila desta conta.</p>'}</section>`;}
+function xCaptionQueueMarkup(){const rows=xPostingData?.captions||[];return `<section class="x-settings-panel"><h3>Fila de legendas</h3><button class="x-subtle-btn" onclick="xSetTab('calendar')">Ir para a agenda</button><p class="x-muted">Publicações da galeria sem legenda própria usam a próxima legenda disponível desta conta. As legendas podem ser reutilizadas e ficam na fila até serem removidas.</p><label for="xNewCaption">Nova legenda</label><textarea id="xNewCaption" rows="3" placeholder="Escreva uma legenda" oninput="xCaptionDraft=this.value">${esc(xCaptionDraft)}</textarea><button class="x-primary-btn" onclick="xAddCaption()" ${xCaptionBusy||!xSelectedAccountId||xSelectedAccountId==='all'?'disabled':''}>Adicionar legenda à fila</button>${rows.map(c=>`<div class="x-batch-row"><p>${esc(c.caption)}</p><small>${c.status==='used'?'Já usada · disponível':c.status==='reserved'?'Em uso · disponível':'Disponível'}</small>${c.status!=='removed'?`<button class="x-primary-btn" onclick="xScheduleCaption('${c.id}')">Usar ao agendar</button><button class="x-subtle-btn" onclick="xRemoveCaption('${c.id}')">Remover legenda</button>`:''}</div>`).join('')||'<p>Nenhuma legenda na fila desta conta.</p>'}</section>`;}
 async function xAddCaption(){
  if(xCaptionBusy)return;
  const caption=$('#xNewCaption')?.value?.trim();
@@ -11508,7 +11519,7 @@ async function xShuffleGallerySchedule(){
  finally{xPostingBusy=false;if(currentPage==='xStudio')xStudioPage(true);}
 }
 function xGalleryMarkup(){const rows=xAvailableGallery();return `<section class="x-list-panel"><div class="x-panel-title"><h3>Galeria de mídia</h3><button class="x-primary-btn" onclick="xOpenGallery()">Adicionar à galeria</button></div><p class="x-muted">Escolha uma foto ou vídeo para agendar.</p><button type="button" class="x-subtle-btn" onclick="xShuffleGallerySchedule()" ${!rows.length||xPostingBusy?'disabled':''}>Sortear mídias e legendas para a agenda</button><div class="x-gallery-grid">${rows.map(p=>`<div class="x-batch-row">${p.thumbnail_url?`<img src="${esc(p.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="240" height="160" style="width:100%;height:160px;object-fit:contain;background:#0b0b0b;border-radius:8px">`:''}<strong>${esc(p.drive_file_name)}</strong><small>${esc(p.post_text||'Usar próxima legenda da fila')} · ${esc(p.status)}</small><button class="x-subtle-btn" onclick="xSelectGallery('${p.id}')">Ver prévia</button>${xEditable(p)?`<button class="x-primary-btn" onclick="xScheduleGallery('${p.id}')">Agendar</button><button class="x-subtle-btn" onclick="xPostingAction('skip','${p.id}')">Remover da galeria</button>`:''}</div>`).join('')||'<p>Sua galeria ainda está vazia.</p>'}</div></section>`;}
-function xAvailableGallery(){return xAllPosts().filter(p=>p.platform_account_id===xSelectedAccountId&&!p.scheduled_at&&xEditable(p));}
+function xAvailableGallery(){return xAllPosts().filter(p=>p.platform_account_id===xSelectedAccountId&&!p.scheduled_at&&!p.published_at&&!p.x_post_id&&xEditable(p));}
 function xScheduleGallery(id){
  if(xPostingBusy)return;
  const p=xAvailableGallery().find(p=>p.id===id);if(!p)return;
@@ -11519,22 +11530,22 @@ function xScheduleGallery(id){
 }
 function xScheduleCaption(id){
  if(xPostingBusy)return;
- const c=(xPostingData?.captions||[]).find(c=>c.id===id&&c.status==='pending');if(!c)return;
+ const c=(xPostingData?.captions||[]).find(c=>c.id===id&&c.status!=='removed');if(!c)return;
  xStudioTab='calendar';xOpenComposer();xPostingDraft.caption=c.caption;xStudioPage(true);
 }
 function xSavedMediaMarkup(){const rows=xAvailableGallery();return `<label for="xSavedMedia">Usar mídia da galeria</label><select id="xSavedMedia" onchange="xScheduleGallery(this.value)" ${xPostingBusy?'disabled':''}><option value="">${rows.length?'Escolher foto ou vídeo já salvo':'Nenhuma mídia disponível nesta conta'}</option>${rows.map(p=>`<option value="${esc(p.id)}">${esc(p.drive_file_name)}</option>`).join('')}</select>`;}
-function xSavedCaptionMarkup(target){const rows=(xPostingData?.captions||[]).filter(c=>c.status==='pending');return `<label for="xSavedCaption">Usar texto da fila de legendas</label><select id="xSavedCaption" onchange="xUseCaption(this.value,'${target}')" ${xPostingBusy?'disabled':''}><option value="">${rows.length?'Escolher legenda':'Nenhuma legenda disponível nesta conta'}</option>${rows.map(c=>`<option value="${esc(c.id)}">${esc(c.caption)}</option>`).join('')}</select><small>O texto é copiado; a legenda continua disponível na fila automática.</small>`;}
+function xSavedCaptionMarkup(target){const rows=(xPostingData?.captions||[]).filter(c=>c.status!=='removed');return `<label for="xSavedCaption">Usar texto da fila de legendas</label><select id="xSavedCaption" onchange="xUseCaption(this.value,'${target}')" ${xPostingBusy?'disabled':''}><option value="">${rows.length?'Escolher legenda':'Nenhuma legenda disponível nesta conta'}</option>${rows.map(c=>`<option value="${esc(c.id)}">${esc(c.caption)}</option>`).join('')}</select><small>O texto é copiado; a legenda continua disponível na fila automática.</small>`;}
 function xUseCaption(id,target){
  if(xPostingBusy)return;
- const c=(xPostingData?.captions||[]).find(c=>c.id===id&&c.status==='pending');if(!c)return;
+ const c=(xPostingData?.captions||[]).find(c=>c.id===id&&c.status!=='removed');if(!c)return;
  if(target==='detail'&&xDetailDraft)xDetailDraft.caption=c.caption;else xPostingDraft.caption=c.caption;
  xStudioPage(true);
 }
 function xQueueCaptionEligible(p){return !p.post_text?.trim()&&p.meta?.allow_empty_caption!==true;}
 function xQueueCaptionMarkup(p,draft){
  if(!xEditable(p)||!xQueueCaptionEligible(p))return '';
- const rows=(xPostingData?.captions||[]).filter(c=>c.status==='pending');
- return `<label><input id="xUseCaptionQueue" type="checkbox" ${draft.useQueue?'checked':''} onchange="xDetailDraft.useQueue=this.checked"> Usar próxima legenda da fila</label><small>${rows.length?`${rows.length} legenda(s) disponível(is). Próxima: ${esc(rows[0].caption)}`:'Fila vazia: adicione uma legenda ou desmarque para publicar sem legenda.'} A legenda é reservada no momento do envio. Escrever uma legenda própria substitui a fila.</small>`;
+ const rows=(xPostingData?.captions||[]).filter(c=>c.status!=='removed');
+ return `<label><input id="xUseCaptionQueue" type="checkbox" ${draft.useQueue?'checked':''} onchange="xDetailDraft.useQueue=this.checked"> Usar próxima legenda da fila</label><small>${rows.length?`${rows.length} legenda(s) disponível(is). Próxima: ${esc(rows[0].caption)}`:'Fila vazia: adicione uma legenda ou desmarque para publicar sem legenda.'} A legenda permanece disponível depois do envio. Escrever uma legenda própria substitui a fila.</small>`;
 }
 function xSelectGallery(id){xSelectedPost=id;xComposeOpen=false;xStudioPage(true);xLoadPreview(id);}
 function xEditGalleryPost(id){
@@ -12647,7 +12658,7 @@ async function saveProductionTrial(button){
 init();
 </script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=6"></script>
-<script src="/genjutsu-v3-ui.js?v=9"></script>
+<script src="/genjutsu-v3-ui.js?v=10"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=23"></script>
 <script src="/production-studio.js?v=7"></script>
 <script src="/image-pipeline-ui.js?v=21"></script>

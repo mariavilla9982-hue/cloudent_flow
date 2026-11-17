@@ -442,30 +442,10 @@
       await loadPreview(true);
       video?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, !available);
-    const agenda = action("▦ Adicionar à agenda", "primary gv3-agenda-button", () => {
-      if (typeof openScheduleModal !== "function") throw new Error("Agenda não disponível nesta tela.");
-      const selected = playerFor();
-      if (!selected) throw new Error("Selecione uma versão disponível.");
-      const fps = selectedFps();
-      openScheduleModal();
-      const fileInput = document.getElementById("modalFile");
-      if (!fileInput) throw new Error("O agendador não abriu corretamente.");
-      // The server performs an S3 CopyObject when the user saves the date.
-      const marker = document.createElement("input");
-      marker.type = "hidden";
-      marker.id = "modalGenjutsuV3";
-      marker.dataset.jobId = job.id;
-      marker.dataset.node = selectedNode;
-      fileInput.insertAdjacentElement("afterend", marker);
-      const field = fileInput.closest(".field");
-      field.hidden = true;
-      field.style.display = "none";
-      const hint = document.createElement("p");
-      hint.className = "note";
-      hint.setAttribute("role", "status");
-      hint.textContent = "✓ GENJUTSU V3 · " + fps + " fps selecionado. O vídeo será copiado direto do Backblaze ao salvar, sem novo upload.";
-      field.insertAdjacentElement("afterend", hint);
-      status.textContent = "Agenda aberta para a versão " + fps + " fps.";
+    const agenda = action("▦ Adicionar à agenda", "primary gv3-agenda-button", async () => {
+      if (typeof openProductionScheduleModal !== "function") throw new Error("Agenda não disponível nesta tela.");
+      if (!playerFor()) throw new Error("Selecione uma versão disponível.");
+      await openProductionScheduleModal(job.id, null, job, selectedNode);
     }, !available);
     const download = action("↓ Baixar", "gv3-download-button", async button => {
       const selected = playerFor();
