@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__cfProductionScheduleMobilePatchV3)return;
-  window.__cfProductionScheduleMobilePatchV3=true;
+  if(window.__cfProductionScheduleMobilePatchV4)return;
+  window.__cfProductionScheduleMobilePatchV4=true;
 
   const oldStyle=document.getElementById('cf-production-schedule-mobile-style');
   if(oldStyle)oldStyle.remove();
@@ -347,40 +347,9 @@
     host.classList.add('cf-production-schedule-host');
     modal.classList.add('production-schedule-mobile-shell');
 
-    // Fallback inline para vencer qualquer CSS legado do app/PWA.
-    host.style.setProperty('position','fixed','important');
-    host.style.setProperty('inset','0','important');
-    host.style.setProperty('width','100vw','important');
-    host.style.setProperty('height','100dvh','important');
-    host.style.setProperty('z-index','2147483000','important');
-    host.style.setProperty('margin','0','important');
-    host.style.setProperty('padding','0','important');
-    host.style.setProperty('background','#080808','important');
-    host.style.setProperty('overflow','hidden','important');
-
-    modal.style.setProperty('position','absolute','important');
-    modal.style.setProperty('inset','0','important');
-    modal.style.setProperty('width','100%','important');
-    modal.style.setProperty('height','100%','important');
-    modal.style.setProperty('margin','0','important');
-    modal.style.setProperty('padding','0','important');
-    modal.style.setProperty('display','block','important');
-    modal.style.setProperty('background','#080808','important');
-    modal.style.setProperty('overflow','hidden','important');
-
-    box.style.setProperty('position','absolute','important');
-    box.style.setProperty('inset','0','important');
-    box.style.setProperty('width','100%','important');
-    box.style.setProperty('height','100dvh','important');
-    box.style.setProperty('max-width','none','important');
-    box.style.setProperty('max-height','none','important');
-    box.style.setProperty('margin','0','important');
-    box.style.setProperty('border','0','important');
-    box.style.setProperty('border-radius','0','important');
-    box.style.setProperty('background','#080808','important');
-    box.style.setProperty('overflow-y','auto','important');
-    box.style.setProperty('box-sizing','border-box','important');
   }
+
+  window.CloudentProductionScheduleMobile={clearState};
 
   function installObserver(){
     host=document.getElementById('modalHost');
@@ -388,10 +357,7 @@
     rememberHostPosition();
     promoteProductionSchedule();
     if(typeof MutationObserver==='function'){
-      new MutationObserver(()=>{
-        promoteProductionSchedule();
-        requestAnimationFrame(promoteProductionSchedule);
-      }).observe(host,{childList:true,subtree:true});
+      new MutationObserver(promoteProductionSchedule).observe(host,{childList:true});
     }
     return true;
   }

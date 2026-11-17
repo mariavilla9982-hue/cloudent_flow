@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v103";
+const CACHE="cloudentflow-pwa-v104";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -20,7 +20,7 @@ async function injectCalendarPatch(response){
     html=html.replace(/<script\b[^>]*src=["'][^"']*dashboard-multi-account-patch\.js[^"']*["'][^>]*><\/script>/gi,'');
     html=html.includes('</body>')?html.replace('</body>',dashboardTag+'</body>'):html+dashboardTag;
     const calendarTag='<script src="/calendar-connect-patch.js?v=8"></script>';
-    const mobileScheduleTag='<script src="/production-schedule-mobile-patch.js?v=3"></script>';
+    const mobileScheduleTag='<script src="/production-schedule-mobile-patch.js?v=4"></script>';
     const timeHotfixTag='<script src="/production-schedule-time-hotfix.js?v=1"></script>';
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';

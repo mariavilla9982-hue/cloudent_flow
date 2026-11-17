@@ -8020,6 +8020,7 @@ function closeModal(){
   }
   if(m?.dataset.url)URL.revokeObjectURL(m.dataset.url);
   $("#modalHost").innerHTML="";
+  window.CloudentProductionScheduleMobile?.clearState();
   document.body.classList.remove("trial-modal-open");
 }
 let dragInfo=null;
@@ -9732,8 +9733,13 @@ async function sendProductionResultToBulk(id,button=null){
     toast("Vídeo enviado para a fila. Trial → 1 min → Reel normal.","ok");
   }catch(e){actionButtonBusy(button,false);toast(friendlyCloudentError(e?.message||"erro"),"err")}
 }
+const genjutsuScheduleInFlight=new Set();
 async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=null){
   if(!cloudSession)return;
+  if(genjutsuNode&&genjutsuScheduleInFlight.has(id)){
+    toast("Este vídeo já está sendo adicionado ao calendário.","warn");
+    return;
+  }
   const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
   if(!job)return;
   const session=cloudSession,page=currentPage,host=$("#modalHost");
@@ -9789,7 +9795,8 @@ async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=
           '<div class="field"><label>Horário</label><input id="productionScheduleTime" type="time" value="'+esc(initialTime)+'"></div>'+
           '<div class="field full"><label>Legenda</label><textarea id="productionScheduleCaption" placeholder="Legenda do Reel..."></textarea></div>'+
         '</div>'+
-        '<div class="toolbar production-calendar-modal-actions"><button id="productionScheduleSave" class="btn primary" '+(noSpace?'disabled':'')+'>'+(!accountId?'Escolha uma conta':noSpace?'Semana sem vagas base':'＋ Adicionar ao calendário')+'</button></div>'
+        '<p id="productionScheduleFeedback" class="muted" role="status" aria-live="polite" hidden></p>'+
+        '<div class="toolbar production-calendar-modal-actions"><button type="button" id="productionScheduleSave" class="btn primary" '+(noSpace?'disabled':'')+'>'+(!accountId?'Escolha uma conta':noSpace?'Semana sem vagas base':'＋ Adicionar ao calendário')+'</button></div>'
     )+
   '</div></div>';
   const modal=host.querySelector(".production-schedule-modal");
@@ -9798,19 +9805,28 @@ async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=
   if(save)save.onclick=()=>scheduleProductionResult(id,save,job,genjutsuNode);
 }
 async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNode=null){
-  if(button?.disabled)return;
+  if(button?.disabled||(genjutsuNode&&genjutsuScheduleInFlight.has(id)))return;
+  const feedback=$("#productionScheduleFeedback");
+  const report=(message,level="warn")=>{
+    if(!feedback||feedback.isConnected===false){toast(message,level);return;}
+    feedback.textContent=message;
+    feedback.hidden=false;
+    feedback.scrollIntoView?.({block:"nearest"});
+  };
   const accountId=productionScheduleAccountId();
-  if(!accountId){toast("Escolha uma conta Instagram disponível.","err");return}
+  if(!accountId){report("Escolha uma conta Instagram disponível.","err");return}
   const day=$("#productionScheduleDay")?.value,time=$("#productionScheduleTime")?.value,caption=$("#productionScheduleCaption")?.value||"";
-  if(!day||!time){toast("Escolha dia e horário.","err");return}
+  if(!day||!time){report("Escolha dia e horário.","err");return}
   const capacity=productionCalendarCapacity(accountId,productionScheduleQueue()).find(x=>x.date===day);
-  if(!capacity||capacity.free<=0){toast("Esse dia não tem vaga base livre.","err");return}
+  if(!capacity||capacity.free<=0){report("Esse dia não tem vaga base livre.","err");return}
   const check=validateProductionSchedule(accountId,day,time);
-  if(!check.ok){toast(check.msg,"err");return}
+  if(!check.ok){report(check.msg,"err");return}
   const [h,m]=time.split(":").map(Number),at=new Date(day+"T00:00:00");at.setHours(h,m,0,0);
   const accountPicker=$("#productionScheduleAccount");
   const userId=cloudSession?.user?.id;
   if(accountPicker)accountPicker.disabled=true;
+  if(feedback)feedback.hidden=true;
+  if(genjutsuNode)genjutsuScheduleInFlight.add(id);
   actionButtonBusy(button,true,"Adicionando…");
   try{
     const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
@@ -9821,7 +9837,7 @@ async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNod
       if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
     }
     if(!cloudSession||cloudSession.user?.id!==userId||button?.isConnected===false)return;
-    actionButtonBusy(button,true,"Salvando horário…");
+    actionButtonBusy(button,true,genjutsuNode?"Adicionando vídeo…":"Salvando horário…");
     const result=await cloudFetch(genjutsuNode?"?action=genjutsu-v3-schedule":"?action=production-schedule",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
@@ -9830,8 +9846,8 @@ async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNod
     if(!cloudSession||cloudSession.user?.id!==userId)return;
     if(genjutsuNode){
       if(!result?.schedule?.id)throw new Error("O servidor não confirmou o agendamento.");
-      window.CloudentGenjutsuV3?.markScheduled?.(id);
       if(button?.isConnected!==false)closeModal();
+      window.CloudentGenjutsuV3?.markScheduled?.(id);
       toast("GENJUTSU agendado para "+day+" às "+time+".","ok");
       void syncFromBackend().catch(error=>console.warn("Atualização da agenda pendente:",error.message));
       return;
@@ -9853,7 +9869,9 @@ async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNod
   }catch(e){
     if(accountPicker)accountPicker.disabled=false;
     actionButtonBusy(button,false);
-    toast(e.message,"err");
+    report(friendlyCloudentError(e.message),"err");
+  }finally{
+    if(genjutsuNode)genjutsuScheduleInFlight.delete(id);
   }
 }
 async function removeProductionResultFromCalendar(id,button=null){

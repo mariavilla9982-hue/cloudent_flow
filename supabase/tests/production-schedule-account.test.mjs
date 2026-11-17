@@ -23,7 +23,7 @@ const ctx=vm.createContext({
 });
 vm.runInContext(html.slice(html.indexOf('const CALENDAR_ACCOUNT_KEY='),html.indexOf('function calendarAccountSwitcher')),ctx);
 vm.runInContext(html.slice(html.indexOf('function productionCalendarCapacity('),html.indexOf('async function openProductionCalendarOverview')),ctx);
-vm.runInContext(html.slice(html.indexOf('async function openProductionScheduleModal('),html.indexOf('async function removeProductionResultFromCalendar')),ctx);
+vm.runInContext(html.slice(html.indexOf('const genjutsuScheduleInFlight='),html.indexOf('async function removeProductionResultFromCalendar')),ctx);
 const job=ctx.productionData.jobs[0];
 ctx.productionData.jobs=[];
 await ctx.openProductionScheduleModal('JOB',1,job);
