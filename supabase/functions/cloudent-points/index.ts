@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import { accountAmounts, taskAmounts } from '../_shared/runninghub-points.ts';
+import { pointsStatement } from '../_shared/points-statement.ts';
 
 const env = Deno.env.get('SUPABASE_URL')!;
 const admin = createClient(env, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
@@ -80,6 +81,10 @@ Deno.serve(async req => {
       return reply({ ok: true });
     }
     if (!await authorized(req)) return reply({ error: 'Acesso restrito.' }, 403);
+    if (req.method === 'GET' && action === 'statement') {
+      try { return reply(await pointsStatement(admin,new URL(req.url))); }
+      catch (error) { if(error instanceof Error && error.message==='invalid_filter')return reply({error:'Filtro inválido.'},400);throw error; }
+    }
     if (req.method !== 'GET' && !(req.method === 'POST' && action === 'refresh')) return reply({ error: 'invalid_method' }, 405);
     if (req.method === 'POST') {
       const request = await provider();

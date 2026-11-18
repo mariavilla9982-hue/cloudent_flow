@@ -9,7 +9,7 @@
   ];
   const mediaCache=new Map(),followersCache=new Map(),pending=new Map();
   const periods={'1':'Hoje','7':'Últimos 7 dias','30':'Últimos 30 dias','90':'Últimos 90 dias'};
-  let period='30',viewer='',generation=0,refreshing=false;
+  let period='1',viewer='',generation=0,refreshing=false;
   const safe=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number=value=>value===null||value===undefined||value===''||typeof value==='boolean'?null:(Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null);
   const format=value=>value===null?'—':value.toLocaleString('pt-BR');
@@ -18,7 +18,7 @@
   function resetViewer(){
     const key=permitted()?sessionKey():'';
     if(key===viewer)return;
-    viewer=key;generation++;mediaCache.clear();followersCache.clear();pending.clear();refreshing=false;period='30';
+    viewer=key;generation++;mediaCache.clear();followersCache.clear();pending.clear();refreshing=false;period='1';
   }
   function accounts(){
     if(!permitted()||!Array.isArray(platformAccounts))return [];

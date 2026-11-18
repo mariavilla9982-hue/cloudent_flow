@@ -153,7 +153,7 @@
     if(root.querySelector('[data-genjutsu-root]')){
       root.querySelectorAll('.production-workflow-tab').forEach(b=>{b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});
       if(mode!=='genjutsu'){mode='genjutsu';selected='';dockNode=null;revision++;releaseMedia();}
-      layoutStudio(root,'genjutsu');
+      // GENJUTSU shares the V3 panels and cards; preserve their layout.
       return;
     }
     const nextMode=root.classList.contains('motion-control-mode')?'motion':'standard';

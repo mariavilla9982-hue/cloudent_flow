@@ -4279,7 +4279,7 @@ body.trial-modal-open{overflow:hidden!important}
 
 </style>
 <style>.x-only .top-search-trigger,.x-only .top-actions,.x-only .mobile-appbar-actions,.x-only .sidebar-foot{display:none!important}.x-account-select{background:#111;color:#fff;border:1px solid #444;border-radius:8px;padding:9px;max-width:220px;font-size:12px}.x-batch-row{padding:12px 0;border-bottom:1px solid #333;display:grid;gap:7px}.x-targets{display:flex;gap:10px;flex-wrap:wrap;font-size:12px}.x-targets label{display:flex;align-items:center;gap:5px}.x-targets input{width:auto}.x-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.x-metric-grid div{padding:14px;border:1px solid #333;border-radius:8px}@media(max-width:700px){.x-header-actions{flex-wrap:wrap}.x-account-select{max-width:100%}}.x-selected-media-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}.x-selected-media-actions label{display:inline-flex;align-items:center;cursor:pointer}.x-selected-media-actions input[type=file]{display:none}.x-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.x-gallery-grid .x-batch-row{min-width:0;overflow-wrap:anywhere}</style><link rel="stylesheet" href="/production-studio.css?v=14">
-<link rel="stylesheet" href="/genjutsu-v3.css?v=5">
+<link rel="stylesheet" href="/genjutsu-v3.css?v=6">
 <style>
 .scale-accounts-list{display:grid;gap:10px;margin-top:16px}
 .scale-account-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -4477,7 +4477,6 @@ const navItems=[
   ["trialReels","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 17l-5-9V3\"></path><path d=\"M8 14h8\"></path></svg>","Reels de teste"],
   ["bulkPublish","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 5h14v14H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M3 8V3h5M21 16v5h-5\"></path></svg>","Postagem em lote"],
   ["faceSwap","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 4.5a5 5 0 0 0 0 10\"></path><path d=\"M15.5 19.5a5 5 0 0 0 0-10\"></path><circle cx=\"9\" cy=\"9\" r=\"1\"></circle><circle cx=\"15\" cy=\"15\" r=\"1\"></circle><path d=\"M6 18c2.2 2 9.8 2 12 0\"></path><path d=\"M17 4l2 2-2 2M7 20l-2-2 2-2\"></path></svg>","Face Swap"],
-  ["upscale","↑","Upscale"],
   ["faceSwapPhoto","◈","Face Swap Foto"],
   ["production","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4h14v16H5z\"></path><path d=\"m10 9 5 3-5 3V9Z\"></path><path d=\"M2 8h3M19 8h3M2 16h3M19 16h3\"></path></svg>","Produção IA"],
   ["xStudio","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 4l14 16M19 4 5 20\"></path></svg>","X Studio"],
@@ -6046,6 +6045,7 @@ function nav(){
 }
 
 function showPage(id){
+  if(id==="upscale")id="faceSwap";
   if(cloudSession&&!canAccessPage(id)){deniedPage();return;}
   const denied=document.getElementById("accessDenied");if(denied)denied.hidden=true;
 
@@ -10142,7 +10142,7 @@ function productionPage(){
   const calendarCapacity=productionCalendarCapacity();
   const calendarFree=calendarCapacity.reduce((sum,x)=>sum+x.free,0);
   const workerOnline=!!worker?.online;
-  const credits=Number.isFinite(Number(rh.credits))?Number(rh.credits):null;
+  const credits=window.CloudentPoints?.balance??null;
   const activeTasks=Number.isFinite(Number(rh.activeTasks))?Number(rh.activeTasks):null;
   const rows=jobs.length
     ? jobs.map((j,i)=>productionJobRow(j,i,jobs.length)).join("")
@@ -10151,7 +10151,7 @@ function productionPage(){
   root.innerHTML=
     '<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>Fila de produção</h2><p>Vídeo original + frame da modelo. O processamento continua no servidor.</p></div>'+
     '<div class="production-head-actions">'+
-      '<span class="runninghub-credit-pill">◉ <b>'+(credits===null?"—":credits.toLocaleString("pt-BR"))+'</b> créditos</span>'+
+      '<span class="runninghub-credit-pill">◉ <b>'+(credits===null?"—":credits.toLocaleString("pt-BR"))+'</b> pontos</span>'+
       '<span class="status-pill '+(workerOnline?"ok":"warn")+'">'+(workerOnline?"Worker online":"Worker aguardando")+'</span>'+
     '</div></div>'+
 
@@ -11953,7 +11953,9 @@ function tiktokStudioPage(){platformStudioPage("tiktok")}
 
 function setSettingsTab(tab){
   settingsTab=tab;
-  if(tab==="health"){
+  if(tab==="expenses"){
+    settings();void window.CloudentPoints?.load();void window.CloudentPoints?.loadStatement();
+  }else if(tab==="health"){
     settings();
     if(cloudSession)loadSystemHealth().then(settings).catch(()=>settings());
   }else if(tab==="notifications"){
@@ -12172,7 +12174,7 @@ function systemHealthMarkup(){
   const workerTotal=workers.length;
   const bucketRows=Object.entries(buckets).sort((a,b)=>Number(b[1]?.bytes||0)-Number(a[1]?.bytes||0));
   const checked=h.checked_at?relativeTime(h.checked_at):"agora";
-  const rhCredits=Number.isFinite(Number(rh.credits))?Number(rh.credits):null;
+  const rhCredits=window.CloudentPoints?.balance??null;
 
   return '<div class="system-health-wrap">'+
     '<div class="system-health-hero '+state.cls+'">'+
@@ -12191,11 +12193,8 @@ function systemHealthMarkup(){
         '<div class="system-meter"><i style="width:'+egressPct+'%"></i></div>'+
         '<span>'+(egressLevel==="critical"?"Crítico — evite previews repetidos":egressLevel==="warn"?"Atenção — consumo diário alto":"Normal — previews protegidos")+'</span>'+
       '</div>'+
-      '<div class="system-usage-card '+(rhCredits!==null&&rh.avg_credits_per_job&&rhCredits<rh.avg_credits_per_job*3?"warn":"ok")+'">'+
-        '<div class="system-usage-card-head"><div><small>RUNNINGHUB</small><b>'+(rhCredits===null?"—":rhCredits.toLocaleString("pt-BR"))+' <em>créditos</em></b></div><strong>'+(rh.estimated_jobs_remaining===null||rh.estimated_jobs_remaining===undefined?"—":"~"+rh.estimated_jobs_remaining+" jobs")+'</strong></div>'+
-        '<div class="system-meter credit"><i style="width:'+(rhCredits===null?0:Math.min(100,Math.max(8,rh.estimated_jobs_remaining?Math.min(100,rh.estimated_jobs_remaining*10):15)))+'%"></i></div>'+
-        '<span>'+(rh.avg_credits_per_job?"média ~"+Number(rh.avg_credits_per_job).toLocaleString("pt-BR")+" créditos por geração":"aguardando média de consumo")+'</span>'+
-      '</div>'+
+      '<div class="system-usage-card"><div class="system-usage-card-head"><div><small>RUNNINGHUB</small><b>'+(rhCredits===null?'—':rhCredits.toLocaleString('pt-BR'))+' <em>pontos</em></b></div></div><button class="btn" onclick="CloudentPoints.openExpenses()">Ver extrato de gastos</button></div>'+
+    '</div>'+
     '</div>'+
 
     '<div class="system-health-two-col">'+
@@ -12253,7 +12252,7 @@ function settings(){
   const rhReady=!!(rh.enabled&&rhMapped&&rhCfg.apiKeyConfigured);
   const a=automationData||{settings:{},workers:[]};
   const cfg=a.settings?.automation||{},smart=a.settings?.smart_scheduler||{};
-  const tabs=[["general","Geral"],["notifications","Notificações"],["health","Saúde & limites"],["integrations","Integrações"],["automation","Automação"],["logs","Logs"]];
+  const tabs=[["general","Geral"],["expenses","Gastos"],["notifications","Notificações"],["health","Saúde & limites"],["integrations","Integrações"],["automation","Automação"],["logs","Logs"]];
   let body="";
 
   if(settingsTab==="general"){
@@ -12270,6 +12269,8 @@ function settings(){
         <button class="btn primary" onclick="installCloudentApp()">⬇ Instalar aplicativo</button>
       </div>
     </div>`;
+  }else if(settingsTab==="expenses"){
+    body=window.CloudentPoints?.expenses()||"<p>Carregando gastos…</p>";
   }else if(settingsTab==="notifications"){
     body=notificationsMarkup();
   }else if(settingsTab==="health"){
@@ -12378,7 +12379,7 @@ function settings(){
         </div>
 
         <div class="runninghub-settings-intro runninghub-settings-intro-4">
-          <div><b>Créditos</b><span class="rh-credit-number">${Number.isFinite(Number(rhStatus.credits))?Number(rhStatus.credits).toLocaleString("pt-BR"):"—"}</span></div>
+          <div><b>Pontos</b><span class="rh-credit-number">${window.CloudentPoints?.balance==null?"—":window.CloudentPoints.balance.toLocaleString("pt-BR")}</span></div>
           <div><b>Load Video</b><span>Node #336 · vídeo original</span></div>
           <div><b>Reference Image</b><span>Node #338 · frame da modelo</span></div>
           <div><b>Worker</b><span>${rhWorker?.online?"Online 24/7":"Aguardando"}</span></div>
@@ -12685,13 +12686,13 @@ async function saveProductionTrial(button){
 
 init();
 </script>
-<script src="/runninghub-points.js?v=1"></script>
-<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=7"></script>
-<script src="/genjutsu-ui.js?v=17"></script>
+<script src="/runninghub-points.js?v=2"></script>
+<script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=8"></script>
+<script src="/genjutsu-ui.js?v=18"></script>
 <script src="/genjutsu-v3-ui.js?v=11"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=25"></script>
-<script src="/production-studio.js?v=7"></script>
-<script src="/image-pipeline-ui.js?v=22"></script>
+<script src="/production-studio.js?v=8"></script>
+<script src="/image-pipeline-ui.js?v=23"></script>
 </body>
 </html>
 

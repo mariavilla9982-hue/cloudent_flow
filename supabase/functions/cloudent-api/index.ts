@@ -3686,6 +3686,8 @@ Deno.serve(async (req: Request) => {
       const targetPath=String(body.target_path||"");
       const thumbnailPath=String(body.thumbnail_path||"");
       let report=(body.report&&typeof body.report==="object")?body.report:{};
+      if(report.reencoded!==false||report.stream_copy_verified!==true||report.technical_validation_passed!==true)
+        return json({error:"media_fidelity_not_verified"},422);
       if(!["video","trial"].includes(entityType)||!id)return json({error:"media_clean_entity_invalid"},400);
       const expected=userData.user.id+"/cleaned/"+entityType+"/"+id+".mp4";
       const expectedThumb=userData.user.id+"/thumbnails/"+entityType+"/"+id+".jpg";

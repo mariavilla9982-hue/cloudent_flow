@@ -154,6 +154,7 @@ export async function imagePipelineApi(d:any){
   }
   if(req.method==='POST'&&action==='image-pipeline-ticket'){
     const b=await req.json();
+    if(b.source==='upscale_manual')return json({error:'Upscale removido. Use Face Swap ou GENJUTSU.'},410);
     if(!['face_swap_natural','face_swap_photo','upscale_manual'].includes(b.source))return json({error:'Origem inválida'},400);
     const id=String(b.job_id||'');if(!JOB_ID.test(id))return json({error:'Job inválido'},400);
     const image=(p:any)=>p&&['image/jpeg','image/png','image/webp'].includes(p.type)&&Number.isSafeInteger(p.size)&&p.size>0&&p.size<=10*1024*1024;

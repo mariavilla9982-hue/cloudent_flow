@@ -10,7 +10,7 @@ Object.defineProperty(container,'innerHTML',{set(value){this.html=value;section=
 for(const kind of ['video','frame']){const box=node(),parts=new Map(['.production-upload-preview','input','[data-clear]','.production-upload-meta'].map(s=>[s,node()]));box.querySelector=s=>parts.get(s);nodes.set('[data-gen-drop="'+kind+'"]',box);}
 const mediaBoxes={};
 for(const kind of ['original','frame']){const placeholder=node();placeholder.replaceWith=media=>mediaBoxes[kind].media=media;mediaBoxes[kind]={querySelector:()=>placeholder};}
-const target={dataset:{jobMedia:'existing'},isConnected:true,querySelector:s=>s==='.genjutsu-preview-placeholder, img'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
+const target={dataset:{jobMedia:'existing'},isConnected:true,replaceChildren:media=>mediaBoxes.frame.media=media,setAttribute(){},querySelector:s=>s==='.genjutsu-preview-placeholder, img'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
 nodes.get('[data-gen-jobs]').querySelectorAll=()=>[target];
 let recoveryJob=null,failedJobs=[],resolveBulk=null;
 let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],modal=null,resolveResult=null,deferResult=false,previewFailure=false;
@@ -50,18 +50,13 @@ assert(nodes.get('[data-gen-jobs]').innerHTML.includes('studio-identity studio-m
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('>Jujuh</span>'));
 assert(container.innerHTML.includes('genjutsu-upload-workspace'));assert(!container.innerHTML.includes('studio-production-result'));assert(container.innerHTML.includes('production-queue-card'));
 assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('<progress'));
-assert.equal(mediaBoxes.frame.media.src,'https://b2.test/frame.webp');
-assert.equal(mediaBoxes.frame.media.style.cssText,'display:block;width:100%;height:100%;object-fit:contain');
+assert.equal(mediaBoxes.frame.media.src,'https://b2.test/result.mp4');
+assert.equal(mediaBoxes.frame.media.poster,'https://b2.test/frame.webp');
+assert.equal(mediaBoxes.frame.media.controls,true);
+assert.equal(mediaBoxes.frame.media.playsInline,true);
 const oldMedia=mediaBoxes.frame.media;await c.window.CloudentGenjutsu.refresh();
-assert.equal(mediaBoxes.frame.media,oldMedia,'polling preserves the media player');
-assert.equal(calls.filter(x=>x.path.includes('resource=image-pipeline-preview')).length,1,'signed previews are reused');
-oldMedia.onerror();
-await new Promise(resolve=>setImmediate(resolve));
-assert.equal(oldMedia.hidden,true,'hide a broken frame before loading a replacement');
-assert.equal(mediaBoxes.frame.media.src,'https://b2.test/signed','retry with a verified saved frame');
-assert.equal(calls.filter(x=>x.path.includes('resource=image-pipeline-preview')&&x.path.includes('verified=1')).length,1,'one verified fallback');
-
-
+assert.equal(mediaBoxes.frame.media,oldMedia,'polling preserves the inline player');
+assert.equal(calls.filter(x=>x.path.includes('resource=image-pipeline-preview')).length,1,'signed posters are reused');
 
 const input=nodes.get('input[type=file]');input.type='file';input.files=[video];section.onchange({target:input});
 let entryId=nodes.get('[data-gen-entries]').innerHTML.match(/data-entry="([^"]+)"/)[1];
@@ -91,8 +86,8 @@ choose('frame',new File(['bad'],'bad.svg',{type:'image/svg+xml'}));assert(nodes.
 choose('frame',customFrame);failUpload=true;await manualClick();assert(nodes.get('[data-draft-error]').textContent.includes('upload interrupted'));await manualClick();
 const manualTickets=calls.filter(x=>x.body?.input_mode==='manual_frame');assert.equal(manualTickets.length,2);assert.equal(manualTickets[0].body.job_id,manualTickets[1].body.job_id);assert.equal(manualTickets[0].body.character_id,undefined);assert.equal(manualTickets[0].body.reference.name,'custom.webp');assert.equal(uploadedFiles.at(-1),customFrame);assert.equal(uploadedFiles.at(-2),video);assert.equal(frameReads,1,'manual frame cannot trigger extraction');
 assert.equal(nodes.get('[data-gen-drop="frame"]').querySelector('.production-upload-meta').textContent,'Clique para escolher o arquivo');
-// Preview opens only after an explicit click; polling cannot replace a player.
-assert(!calls.some(c=>c.path.includes('image-pipeline-result')));
+// Inline playback reads the original result; only an explicit click opens a modal.
+assert(calls.some(c=>c.path.includes('image-pipeline-result')));assert.equal(modal,null);
 const clickAction=(dataset)=>{const b=node();b.dataset=dataset;b.hasAttribute=()=>false;return section.onclick({target:{closest:()=>b}});};
 await clickAction({prompt:'existing'});assert.equal(modal.canvas.child.textContent,'subject_definitions: <script>alert(1)</script>');assert.equal(modal.canvas.child.className,'genjutsu-prompt-text');c.closeModal();
 await clickAction({preview:'existing'});assert(modal.isConnected);assert.equal(modal.canvas.child.savedSrc,'https://b2.test/result.mp4');

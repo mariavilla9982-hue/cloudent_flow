@@ -19,15 +19,15 @@ const sample={balance:{points:88.5,coins:100,fetched_at:new Date().toISOString()
  {key:'today',module:'all',points:12.8,tasks:3,pending:1},
  {key:'month',module:'all',points:40,tasks:10,pending:2},
  {key:'today',module:'GENJUTSU V3',points:10,tasks:1,pending:0}],modules:[],recent:[]};
-const c={window:null,document:{createElement:()=>({}),head:{appendChild(){}}},cloudSession:{access_token:'session1'},cloudAccess:{role:'admin'},currentPage:'overview',overview:()=>{},console,Intl,Date};c.window=c;
+const c={window:null,document:{createElement:()=>({}),head:{appendChild(){}},querySelectorAll:()=>[],querySelector:()=>null},setInterval:()=>{},URLSearchParams,cloudSession:{access_token:'session1'},cloudAccess:{role:'admin'},currentPage:'overview',overview:()=>{},console,Intl,Date};c.window=c;
 let calls=0,reply=sample,fail=false,wait;
 c.edgeFetch=async()=>{calls++;if(wait)await wait;if(fail)throw Error('offline');return reply};
 vm.createContext(c);vm.runInContext(fs.readFileSync('runninghub-points.js','utf8'),c);
 assert(!c.CloudentPoints.markup().includes('>0 <small>pts'));
 await Promise.all([c.CloudentPoints.load(),c.CloudentPoints.load()]);assert.equal(calls,1);
-assert(c.CloudentPoints.markup().includes('88,5'));assert(c.CloudentPoints.markup().includes('Totais parciais'));
+assert(c.CloudentPoints.markup().includes('88,5'));assert(c.CloudentPoints.markup().includes('cobrança(s) pendente(s)'));
 await c.CloudentPoints.load();assert.equal(calls,1);
-c.CloudentPoints.select('GENJUTSU V3');assert(!c.CloudentPoints.markup().includes('12,8'));
+assert(!c.CloudentPoints.markup().includes('RH coins'));assert(!c.CloudentPoints.expenses().includes('RH coins'));assert(c.CloudentPoints.header().includes('88,5'));
 fail=true;await c.CloudentPoints.refresh();assert(c.CloudentPoints.markup().includes('88,5'));assert(c.CloudentPoints.markup().includes('Última leitura preservada'));
 fail=false;let release;wait=new Promise(r=>release=r);const pending=c.CloudentPoints.refresh();
 c.cloudSession=null;assert.equal(c.CloudentPoints.markup(),'');release();await pending;

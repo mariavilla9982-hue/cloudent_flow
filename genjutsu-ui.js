@@ -1,6 +1,7 @@
 (()=>{
   if(window.CloudentGenjutsu)return;
   const e=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let queueFilter='all';
   let draft={},owner='',entries=[],jobs=[],busy=false,loading=false,timer=null,characters=[],fixedModels=[],readiness=null,lastCheck=0,revision=0;
   const previewCache=new Map(),verifiedMenus=new WeakSet(),pendingActions=new Set(),pendingRetries=new Set();
   let previewObserver=null,jobsMarkup='',mediaRevision=0,jobsRevision=0,retryingAll=false,refreshAgain=false;
@@ -152,18 +153,19 @@
         (child?.status==='ready'?'<button type="button" class="btn" data-trial="'+id+'">Reels Teste</button><button type="button" class="btn" data-bulk="'+id+'">Mandar para lote</button>':'')+
         (canStop?'<button type="button" class="btn danger" data-stop="'+id+'">Parar</button>':'')+
         (finished||failed?'<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button>':'');
-      return '<article class="production-job genjutsu-card '+(finished?'is-complete':'')+'" data-studio-state="'+(activity?'active':state==='cancelled'?'failed':state)+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
-        '<div class="production-job-num">'+String(n).padStart(2,'0')+'</div>'+
-        '<button type="button" class="production-media-cell" '+(hasResult?'data-preview':'data-original')+'="'+id+'" aria-label="'+(hasResult?'Ver resultado':'Ver vídeo original')+' · Vídeo '+n+'" title="'+e(job.meta?.source_file_name||job.original_file_name)+'">'+
-        '<span class="production-media-preview-shell" '+(hasFrame?'data-job-media="'+id+'"':'data-thumb-unavailable')+'><span class="genjutsu-preview-placeholder">'+(hasFrame?'▶':'Sem prévia')+'</span></span><div><b>Vídeo '+n+'</b><small>'+e(model)+'</small></div></button>'+
-        '<div class="production-job-state">'+(job.meta?.character_name?'<span class="studio-identity studio-model-tag" data-character="'+e(window.CloudentStudio?.modelOf?.(job)||job.meta?.character_id||job.meta?.character?.id||'')+'">'+e(job.meta.character_name)+'</span>':'')+bar+
+      const hidden=queueFilter==='ready'?!hasResult:queueFilter==='running'?(finished||failed):false;
+      const generated=child?.completed_at||job.completed_at;
+      return '<article class="gv3-job genjutsu-card '+(finished?'is-complete':'')+'" '+(hidden?'hidden':'')+' data-studio-state="'+(activity?'active':state==='cancelled'?'failed':state)+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
+        '<header class="gv3-job-header"><div class="gv3-job-identity"><strong class="gv3-job-title">Vídeo '+n+'</strong><span class="gv3-mode-tag studio-identity studio-model-tag" data-character="'+e(job.meta?.character_id||'')+'">'+e(model)+'</span></div><time class="gv3-job-time">'+e(new Date(generated||job.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}))+'</time></header>'+
+        '<div class="gv3-showcase"><div class="gv3-feature"><'+(hasResult?'div':'button type="button"')+' class="production-media-cell" '+(hasResult?'data-preview':'data-original')+'="'+id+'" aria-label="'+(hasResult?'Ver resultado':'Ver vídeo original')+' · Vídeo '+n+'" title="'+e(job.meta?.source_file_name||job.original_file_name)+'"><span class="production-media-preview-shell" '+(hasFrame?'data-job-media="'+id+'"':'data-thumb-unavailable')+'><span class="genjutsu-preview-placeholder">'+(hasFrame?'▶':'Sem prévia')+'</span></span></'+(hasResult?'div':'button')+'><span class="gv3-ratio">9:16</span></div>'+
+        '<div class="gv3-showcase-controls"><p class="gv3-feature-title">PRÉVIA VERTICAL · 9:16</p><div class="production-job-state">'+bar+
         '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+steps+detail+retryMarkup(job)+
         (!finished?'<div class="genjutsu-times">'+elapsedMarkup(job,failed||cancelled)+'</div>':'')+
-        (error?'<em role="alert" title="'+e(error)+'">'+e(error)+'</em>':'')+'</div>'+
-        '<div class="production-job-actions">'+(hasResult?'<button type="button" class="btn studio-select-result" data-preview="'+id+'">Ver resultado</button>':'')+
-                (child?.status==='ready'?'<button type="button" class="btn" data-calendar="'+id+'">Calendário</button>':'')+
+        (error?'<em role="alert" title="'+e(error)+'">'+e(error)+'</em>':'')+'</div><b class="gv3-option-heading">Versão para agenda</b><div class="gv3-selected-note">Original do RunningHub · qualidade preservada</div>'+
+        '<div class="production-job-actions gv3-primary-actions">'+(hasResult?'<button type="button" class="btn" data-preview="'+id+'">Ver resultado</button><button type="button" class="btn" data-download="'+id+'">Baixar</button>':'')+
+        (child?.status==='ready'?'<button type="button" class="btn primary" data-calendar="'+id+'">Adicionar ao calendário</button>':'')+
         (retry?'<button type="button" class="btn" data-retry="'+id+'"'+(retrying?' disabled aria-busy="true"':'')+'>'+(retrying?'Retomando…':'Tentar novamente')+'</button>':'')+
-        '<details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></article>';
+        '<details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></div></div></article>';
     }).join('')||'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
     if(markup===jobsMarkup&&node.innerHTML)return;
     const openMenu=node.querySelector?.('.genjutsu-more[open]')?.closest?.('[data-gen-job]')?.dataset.genJob;
@@ -229,6 +231,11 @@
         if(!current())return;
         const img=document.createElement('img');
         img.alt='';img.loading='lazy';
+        const resultJob=jobs.find(j=>j.id===id);
+        if(resultJob?.production?.result_video_id){
+          const output=await previewURL(id,'result');if(!current())return;
+          const video=document.createElement('video');video.controls=true;video.playsInline=true;video.preload='metadata';video.poster=result.url;video.src=output.url;video.className='gv3-featured-video';target.replaceChildren(video);return;
+        }
         img.style.cssText='display:block;width:100%;height:100%;object-fit:contain';
         img.addEventListener('error',()=>{
           if(!current())return;
@@ -469,9 +476,10 @@
     const tabs=[['standard','Vídeo 7 minutos'],['motion_control','Motion Control v7'],['genjutsu','GENJUTSU · LLM'],['genjutsu_v3_history','Histórico V3']].map(([key,name])=>'<button class="production-workflow-tab '+(key==='genjutsu'?'active':'')+'" type="button" role="tab" aria-selected="'+(key==='genjutsu')+'" onclick="CloudentMotionControl.setMode(\''+key+'\')">'+name+'</button>').join('');
     const inputs=[['video','Vídeo de referência','video/mp4,video/webm,video/quicktime','▶'],['frame','Frame / personagem','image/jpeg,image/png,image/webp','▧']].map(([kind,label,accept,icon])=>'<div class="production-drop production-drop-live" data-gen-drop="'+kind+'" tabindex="0" role="button" aria-label="Escolher '+label+'"><input id="genjutsu-'+kind+'" type="file" data-gen-file="'+kind+'" accept="'+accept+'" hidden><div class="production-upload-preview"><span class="production-drop-icon">'+icon+'</span></div><button type="button" class="production-draft-clear" data-clear="'+kind+'" aria-label="Remover '+label+'">×</button><label class="production-upload-overlay" for="genjutsu-'+kind+'"><b class="production-upload-title">'+label+'</b><small class="production-upload-meta">Clique para escolher o arquivo</small></label></div>').join('');
     container.innerHTML='<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU</h2><p>Prepare seus arquivos, acompanhe a fila e confira o resultado.</p></div></div><div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+tabs+'</div>'+
-      '<section data-genjutsu-root data-owner="'+e(owner)+'"><div class="genjutsu-upload-workspace"><div class="production-main-grid production-only-upload"><div class="card production-upload-card"><div class="ui3-panel-head"><div><span>Novo job</span><h3>Gerar com LLM</h3></div></div><p class="production-note">Escolha Jujuh ou Sahry para usar a foto fixa, ou envie seu próprio frame. A LLM prepara o prompt automaticamente.</p><div class="genjutsu-fixed-models" data-gen-fixed-models></div><div class="production-input-grid">'+inputs+'</div><details class="studio-prompt"><summary>Prompt manual (opcional)</summary><label class="genjutsu-manual-prompt"><textarea aria-label="Prompt manual" data-manual-prompt rows="4" maxlength="64000" placeholder="Deixe em branco para gerar o prompt automaticamente."></textarea></label></details><button type="button" class="btn primary production-add-btn" data-send-manual disabled>Adicionar à fila</button><div class="production-note">O processamento continua no servidor. Acompanhe as etapas na fila abaixo.</div><p data-draft-error role="alert"></p></div></div></div>'+
+      (window.CloudentPoints?.header()||'')+'<section data-genjutsu-root data-owner="'+e(owner)+'"><div class="genjutsu-upload-workspace"><div class="genjutsu-compose"><div class="gv3-panel production-upload-card"><div class="ui3-panel-head"><div><span>Novo job</span><h3>Gerar com LLM</h3></div></div><p class="production-note">Escolha Jujuh ou Sahry para usar a foto fixa, ou envie seu próprio frame. A LLM prepara o prompt automaticamente.</p><div class="genjutsu-fixed-models" data-gen-fixed-models></div><div class="production-input-grid">'+inputs+'</div><details class="studio-prompt"><summary>Prompt manual (opcional)</summary><label class="genjutsu-manual-prompt"><textarea aria-label="Prompt manual" data-manual-prompt rows="4" maxlength="64000" placeholder="Deixe em branco para gerar o prompt automaticamente."></textarea></label></details><button type="button" class="btn primary production-add-btn" data-send-manual disabled>Adicionar à fila</button><div class="production-note">O processamento continua no servidor. Acompanhe as etapas na fila abaixo.</div><p data-draft-error role="alert"></p></div></div></div>'+
       '<details class="studio-diagnostics"><summary>Controles da fila e informações de uso</summary><div><p class="muted" data-gen-config role="status">Conferindo configuração…</p><p class="muted">Vídeo até 30 MiB · frame JPG, PNG ou WebP até 10 MiB.</p><label class="genjutsu-limit">Prompts em preparação <select data-gen-prompt-limit aria-label="Limite de prompts simultâneos"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label><button type="button" class="btn" data-refresh>↻ Atualizar</button><details class="genjutsu-auto"><summary>Preparar com uma modelo salva</summary><label>Vídeos de referência<input data-auto-videos type="file" accept="video/mp4,video/webm,video/quicktime" multiple></label><div data-gen-entries></div><button type="button" class="btn primary" data-send disabled>Adicionar à fila</button></details></div></details>'+
-      '<p data-gen-status role="status" aria-live="polite"></p><p data-gen-error role="alert"></p><div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3 data-gen-count>0 vídeo(s)</h3></div><button type="button" class="btn" data-retry-all hidden>Tentar todos novamente</button></div><div class="production-queue" data-gen-jobs></div></div></section>';
+      '<p data-gen-status role="status" aria-live="polite"></p><p data-gen-error role="alert"></p><div class="gv3-panel production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3 data-gen-count>0 vídeo(s)</h3></div><button type="button" class="btn" data-retry-all hidden>Tentar todos novamente</button></div><nav class="gv3-filters" aria-label="Filtrar vídeos"><button type="button" class="active" data-gen-filter="all">Todos</button><button type="button" data-gen-filter="running">Em andamento</button><button type="button" data-gen-filter="ready">Prontos</button></nav><div class="gv3-jobs" data-gen-jobs></div></div></section>';
+    void window.CloudentPoints?.load();
     const section=root();
     section.addEventListener?.('toggle',event=>{if(event.target.matches?.('.genjutsu-more'))verifyMenu(event.target);},true);
     section.oninput=event=>{
@@ -505,6 +513,7 @@
     section.onkeydown=event=>{if((event.key==='Enter'||event.key===' ')&&event.target.dataset.genDrop){event.preventDefault();event.target.querySelector('input').click();}};
     section.onclick=event=>{
       const button=event.target.closest('button');if(!button){const box=event.target.closest('[data-gen-drop]');if(box&&!event.target.closest('video,label,input,a'))box.querySelector('input').click();return;}
+      if(button.dataset.genFilter){queueFilter=button.dataset.genFilter;for(const item of section.querySelectorAll('[data-gen-filter]'))item.classList.toggle('active',item===button);jobsMarkup='';drawJobs();return;}
       if(button.dataset.fixedModel){
         if(busy||draft.locked)return;const model=fixedModels.find(m=>m.key===button.dataset.fixedModel);if(!model?.photo_id)return;
         draft.fixedModel=model;setDraftMedia('frame',{name:model.name,type:model.mime_type,size:model.size_bytes},model.photo_url);message('',true);return;

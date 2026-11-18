@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v108";
+const CACHE="cloudentflow-pwa-v109";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -16,7 +16,7 @@ async function injectCalendarPatch(response){
       .replace(/const SUPABASE_KEY\s*=\s*["'][^"']+["'];/, 'const SUPABASE_KEY=window.CloudentConfig?.publishableKey||"";');
     if(!html.includes('src="/api/auth-config"'))html=html.replace('<head>','<head><script src="/api/auth-config"></script>');
     // Native and cached documents use the same dashboard, after the inline SPA.
-    const dashboardTag='<script src="/runninghub-points.js?v=1"></script><script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=7"></script>';
+    const dashboardTag='<script src="/runninghub-points.js?v=2"></script><script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=8"></script>';
     html=html.replace(/<script\b[^>]*src=["'][^"']*runninghub-points\.js[^"']*["'][^>]*><\/script>/gi,'');
     html=html.replace(/<script\b[^>]*src=["'][^"']*dashboard-multi-account-patch\.js[^"']*["'][^>]*><\/script>/gi,'');
     html=html.includes('</body>')?html.replace('</body>',dashboardTag+'</body>'):html+dashboardTag;
@@ -51,7 +51,8 @@ async function injectCalendarPatch(response){
     html=html.replace(oldViralsPatch,"").replace(oldForYouPatch,"").replace(oldForYouWatchdog,"");
     html=html.replace(/<script\b[^>]*src=["'][^"']*genjutsu-ui\.js[^"']*["'][^>]*><\/script>/gi,"");
 
-    const genTags='<script src="/genjutsu-ui.js?v=17"></script><script src="/genjutsu-v3-ui.js?v=11"></script>';
+    html=html.replace(/genjutsu-v3\.css\?v=\d+/g,'genjutsu-v3.css?v=6');
+    const genTags='<script src="/genjutsu-ui.js?v=18"></script><script src="/genjutsu-v3-ui.js?v=11"></script>';
     html=html.replace(/<script\b[^>]*src=["'][^"']*genjutsu-v3-ui\.js[^"']*["'][^>]*><\/script>/gi,'');
     html=html.includes('</body>')?html.replace('</body>',genTags+'</body>'):html+genTags;
 
@@ -60,10 +61,10 @@ async function injectCalendarPatch(response){
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
-    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=22');
-    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=7').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=14');
+    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=23');
+    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=8').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=14');
     if(html.includes('image-pipeline-ui.js')){
-      if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=7"></script>$&');
+      if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=8"></script>$&');
       if(!html.includes('production-studio.css'))html=html.replace('</head>','<link rel="stylesheet" href="/production-studio.css?v=14"></head>');
     }
     // The staged pipeline owns its queue. Keep the old decorator only for legacy documents.

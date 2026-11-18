@@ -109,6 +109,15 @@ def _probe(ffmpeg, path):
     return result
 
 
+def _preserves_streams(before, after):
+    dimensions = all(isinstance(before.get(k), int) and before[k] > 0
+                     and before[k] == after.get(k) for k in ("width", "height"))
+    codecs = all(before.get(k) == after.get(k) for k in ("video_codec", "audio_codec", "has_audio"))
+    duration = abs(float(before.get("duration_seconds") or 0) - float(after.get("duration_seconds") or 0)) <= 0.15
+    fps = before.get("fps") is None or after.get("fps") is None or abs(before["fps"] - after["fps"]) < 0.01
+    return dimensions and codecs and duration and fps
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
@@ -215,6 +224,9 @@ class handler(BaseHTTPRequestHandler):
                 return _json(self, {"ok": False, "error": "ffmpeg_failed", "message": message}, 422)
 
             after = _probe(ffmpeg, output_path)
+            # Validate before uploading either asset. Never publish a degraded copy.
+            if not _preserves_streams(before, after):
+                return _json(self, {"ok": False, "error": "media_fidelity_mismatch"}, 422)
 
             thumbnail_error = None
             thumbnail_bytes = 0
@@ -325,12 +337,7 @@ class handler(BaseHTTPRequestHandler):
             duration_before = float(before.get("duration_seconds") or 0)
             duration_after = float(after.get("duration_seconds") or 0)
             duration_delta = abs(duration_before - duration_after)
-            stream_copy_verified = (
-                same_geometry
-                and same_video_codec
-                and same_audio_codec
-                and duration_delta <= 0.15
-            )
+            stream_copy_verified = _preserves_streams(before, after)
 
             warnings = []
             if not same_geometry:

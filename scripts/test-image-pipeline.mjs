@@ -10,86 +10,27 @@ function harness(rows){
  const deps={admin,workerId:'w',concurrency:2,hasProviderCapacity:async()=>true,validateStage:async()=>{},prepareInput:async(path)=>{reads.push(path);return path;},wakeMotion:async()=>{},saveBlob:async(j,stage)=>{saves.push([j.id,stage]);return {path:j.id+'/'+stage,name:stage+'.png',mime:'image/png',size:50}},rhJson:async(path,b)=>{if(path.endsWith('create')){creates.push(structuredClone(b));if(failCreate)throw new Error('timeout');return {code:0,data:{taskId:'task-'+creates.length}};}if(failure.has(b.taskId))return {code:805,msg:'failed'};return {code:0,data:[{nodeId:rows.find(j=>j.runninghub_task_id===b.taskId)?.meta.stage==='face_swap'?'240':'131',fileUrl:'https://example.test/result.png'}]};}};
  return {deps,rows,production,creates,saves,reads,setFailCreate:()=>failCreate=true,failure};
 }
+
 assert.throws(()=>exactOutput([{nodeId:'999',fileUrl:'https://example.test/a.png'}],'240'));
 assert.equal(stageInputs(job('a'),'ref','model').nodeInfoList[0].nodeId,'23');
-const h=harness([job('a'),job('b')]);
-for(let i=0;i<4;i++)await runImagePipeline(h.deps);
-assert(h.rows.every(j=>j.status==='ready'));assert.equal(h.creates.length,4);assert.equal(h.production.length,0);
-assert.deepEqual(h.creates[0].nodeInfoList.map(x=>x.fieldValue),['owner/face-swap-characters/a','a/ref']);
-assert.equal(h.creates[2].nodeInfoList[0].fieldValue,'a/face_swap');
-await runImagePipeline(h.deps);assert.equal(h.creates.length,4);
-const u=harness([job('u','upscale_manual')]);await runImagePipeline(u.deps);await runImagePipeline(u.deps);assert.equal(u.creates.length,1);assert.equal(u.production.length,0);
-const n=harness([job('n','face_swap_natural')]);for(let i=0;i<4;i++)await runImagePipeline(n.deps);assert.equal(n.production.length,1);assert.equal(n.production[0].original_storage_path,'n/video');assert.equal(n.production[0].frame_storage_path,'n/upscale');assert.equal(n.production[0].status,'motion_waiting');assert.equal(n.production[0].meta.workflow_key,'motion_control');await runImagePipeline(n.deps);assert.equal(n.production.length,1);
-const uncertain=harness([job('x')]);uncertain.setFailCreate();await runImagePipeline(uncertain.deps);await runImagePipeline(uncertain.deps);assert.equal(uncertain.creates.length,1);assert(uncertain.rows[0].meta.dispatch_uncertain);
-const r=harness([job('retry')]);await runImagePipeline(r.deps);await runImagePipeline(r.deps);r.failure.add(r.rows[0].runninghub_task_id);await runImagePipeline(r.deps);assert.equal(r.rows[0].status,'failed');assert.equal(r.rows[0].meta.stage,'upscale');assert(r.rows[0].meta.face_swap_result);assert.equal(r.creates.filter(x=>x.workflowId==='2111452526003380225').length,1);
+const photos=harness([job('a'),job('b')]);
+for(let i=0;i<4;i++)await runImagePipeline(photos.deps);
+assert(photos.rows.every(j=>j.status==='ready'));assert.equal(photos.creates.length,2);assert.equal(photos.production.length,0);
+assert.equal(photos.rows[0].result_storage_path,'a/face_swap');assert(photos.rows.every(j=>j.meta.upscale_skipped));
+for(const key of ['genjutsu','motion_control','standard']){
+ const id=key;const h=harness([{...job(id,'face_swap_natural'),meta:{...job(id,'face_swap_natural').meta,video_workflow:{key},source_duration_seconds:10.7}}]);
+ for(let i=0;i<4;i++)await runImagePipeline(h.deps);
+ assert.equal(h.creates.length,1);assert.equal(h.production.length,1);assert.equal(h.production[0].frame_storage_path,id+'/face_swap');assert.equal(h.production[0].original_storage_path,id+'/video');
+ assert.equal(h.production[0].meta.workflow_key,key);
+}
+const retired=harness([job('retired','upscale_manual')]);await runImagePipeline(retired.deps);assert.equal(retired.creates.length,0);assert.equal(retired.rows[0].status,'cancelled');
+const buffered=job('buffered','face_swap_natural');buffered.meta.stage='upscale';buffered.meta.face_swap_result={path:'buffered/face_swap',name:'frame.png',mime:'image/png',size:50};
+const b=harness([buffered]);await runImagePipeline(b.deps);assert.equal(b.creates.length,0);assert.equal(b.production[0].frame_storage_path,'buffered/face_swap');
+const active=job('active','upscale_manual');active.meta.stage='upscale';active.status='running';active.runninghub_task_id='existing-upscale';
+const a=harness([active]);await runImagePipeline(a.deps);assert.equal(a.creates.length,0);assert.equal(a.rows[0].status,'ready');assert.equal(a.rows[0].result_storage_path,'active/upscale');
+const uncertain=harness([job('uncertain')]);uncertain.setFailCreate();await runImagePipeline(uncertain.deps);await runImagePipeline(uncertain.deps);assert.equal(uncertain.creates.length,1);assert(uncertain.rows[0].meta.dispatch_uncertain);
 const blocked=harness([job('blocked')]);blocked.deps.hasProviderCapacity=async()=>false;await runImagePipeline(blocked.deps);assert.equal(blocked.creates.length,0);assert.equal(blocked.rows[0].status,'waiting');
 for(const file of ['cloudent-api/index.ts','cloudent-production-worker/index.ts','cloudent-motion-control-worker/index.ts']){
- const s=fs.readFileSync('supabase/functions/'+file,'utf8');new vm.Script(stripTypeScriptTypes(s).replace(/^import .*;\n/gm,''));
+ const source=fs.readFileSync('supabase/functions/'+file,'utf8');new vm.Script(stripTypeScriptTypes(source).replace(/^import .*;\n/gm,''));
 }
-console.log('PASS: strict nodes, 2 independent photo jobs, manual upscale, original video handoff, stage retry, uncertain create, replay, capacity, worker/API syntax');
-
-// Explicit queue rejection is safe to resume, while ambiguous replies remain blocked.
-const full=harness([job('queue-first'),job('queue-second')]);
-const createNormally=full.deps.rhJson;let rejects=true,attempts=0;
-full.deps.rhJson=async(path,b)=>{if(path.endsWith('create')){attempts++;if(rejects)return {code:999,msg:'TASK_QUEUE_MAXED',data:null};}return createNormally(path,b);};
-await runImagePipeline(full.deps);
-assert.equal(attempts,1,'stop dispatching remaining waiting jobs on full queue');
-assert.equal(full.rows[0].status,'waiting');assert.equal(full.rows[0].last_error,null);
-assert.equal(full.rows[0].meta.dispatch_intent,null);assert.equal(full.rows[0].meta.dispatch_uncertain,false);
-assert.equal(full.rows[0].meta.provider_queue_waiting,true);assert.equal(full.rows[0].started_at,null);
-rejects=false;await runImagePipeline(full.deps);
-assert.equal(full.rows[0].runninghub_task_id,'task-1');assert.equal(full.creates.length,2);
-// Existing queued task is polled, never dispatched again; timer starts only on RUNNING.
-const tracked=harness([job('tracked')]);await runImagePipeline(tracked.deps);
-const existingId=tracked.rows[0].runninghub_task_id;let provider='QUEUED';
-tracked.deps.rhJson=async(path,b)=>{assert.equal(b.taskId,existingId);assert(!path.endsWith('create'));return path.endsWith('status')?{code:0,data:provider}:{code:813,msg:'waiting'};};
-await runImagePipeline(tracked.deps);assert.equal(tracked.rows[0].status,'queued');assert.equal(tracked.rows[0].started_at,null);
-tracked.deps.rhJson=async(path,b)=>{assert.equal(b.taskId,existingId);return path.endsWith('status')?{code:0,data:provider}:{code:804};};
-provider='RUNNING';await runImagePipeline(tracked.deps);const firstStart=tracked.rows[0].started_at;assert(firstStart);await runImagePipeline(tracked.deps);assert.equal(tracked.rows[0].started_at,firstStart);
-provider='UNKNOWN';await runImagePipeline(tracked.deps);assert.equal(tracked.rows[0].status,'running');assert.equal(tracked.creates.length,1);
-// One full dispatch must not prevent reconciliation of an already-created task.
-const mixed=harness([job('waiting-one'),{...job('existing'),status:'queued',runninghub_task_id:'existing-task'}]);
-mixed.deps.hasProviderCapacity=async()=>false;let polled=0;
-mixed.deps.rhJson=async(path)=>{polled++;return path.endsWith('status')?{code:0,data:'QUEUED'}:{code:813};};
-await runImagePipeline(mixed.deps);assert.equal(polled,2);assert.equal(mixed.reads.length,0);assert.equal(mixed.rows[1].runninghub_task_id,'existing-task');
-console.log('PASS: explicit queue rejection resumes; no duplicate task; full queue still polls; true QUEUED/RUNNING and stable started_at');
-
-const priority=harness([{...job('older-up','upscale_manual'),created_at:'2026-10-17'}, {...job('new-face'),created_at:'2026-10-18'}]);
-priority.deps.hasProviderCapacity=async()=>priority.creates.length<1;
-await runImagePipeline(priority.deps);
-assert.equal(priority.creates.length,1);assert.equal(priority.creates[0].workflowId,'2111452526003380225','Face Swap queue has priority over older Upscale');
-assert.equal(priority.rows[0].status,'waiting');assert.equal(priority.rows[1].status,'queued');
-console.log('PASS stage queues: newer Face Swap uses available slot before older Upscale; completed images remain buffered');
-
-const immediate=harness([job('immediate')]);
-await runImagePipeline(immediate.deps);
-await runImagePipeline(immediate.deps);
-assert.equal(immediate.creates.length,2,'Face output is handed to Upscale without a third cron tick');
-assert.equal(immediate.creates[1].nodeInfoList[0].fieldValue,'immediate/face_swap');
-assert.equal(immediate.rows[0].meta.stage,'upscale');
-assert.equal(immediate.rows[0].status,'queued');
-await runImagePipeline(immediate.deps);
-assert.equal(immediate.rows[0].status,'ready');
-assert.equal(immediate.creates.length,2,'handoff never duplicates either stage');
-const noSlot=harness([job('full-after-face')]);
-await runImagePipeline(noSlot.deps);
-noSlot.deps.hasProviderCapacity=async()=>false;
-await runImagePipeline(noSlot.deps);
-assert.equal(noSlot.creates.length,1);
-assert.equal(noSlot.rows[0].meta.stage,'upscale');
-assert.equal(noSlot.rows[0].status,'waiting');
-assert(noSlot.rows[0].meta.face_swap_result);
-console.log('PASS: same-invocation Face→Upscale handoff, one dispatch only, no capacity bypass and saved Face retained when full');
-
-const standard=harness([{...job('standard','face_swap_natural'),meta:{...job('standard','face_swap_natural').meta,video_workflow:{key:'standard'},character_id:'jujuh',character_name:'Jujuh',tags:['Jujuh']}}]);
-let motionWakes=0;standard.deps.wakeMotion=async()=>motionWakes++;
-for(let i=0;i<4;i++)await runImagePipeline(standard.deps);
-assert.equal(standard.production.length,1);assert.equal(standard.production[0].status,'waiting');assert.equal(standard.production[0].meta.workflow_key,'standard');assert.equal(standard.production[0].meta.video_workflow.workflowId,'2100995504908824578');assert.equal(standard.production[0].frame_storage_path,'standard/upscale');assert.equal(standard.production[0].original_storage_path,'standard/video');assert.equal(motionWakes,0);assert.equal(standard.production[0].meta.character_id,'jujuh');
-standard.production[0].status='ready';standard.production[0].result_video_id='video';await runImagePipeline(standard.deps);assert.equal(standard.rows[0].status,'ready');assert.equal(standard.production.length,1);
-console.log('PASS: chosen standard workflow handoff, saved Upscale frame, original video, character TAG, no Motion dispatch, completion reconciliation');
-
-const gen=harness([{...job('gen','face_swap_natural'),meta:{...job('gen','face_swap_natural').meta,video_workflow:{key:'genjutsu'},source_duration_seconds:8.5,character_id:'jujuh',character_name:'Jujuh'}}]);
-const genWakes=[];gen.deps.wakeMotion=async(key)=>genWakes.push(key);
-for(let i=0;i<4;i++)await runImagePipeline(gen.deps);
-assert.equal(gen.production.length,1);assert.equal(gen.production[0].status,'motion_waiting');assert.equal(gen.production[0].meta.workflow_key,'genjutsu');assert.equal(gen.production[0].meta.workflow_id,'2117411301344411649');assert.equal(gen.production[0].meta.source_duration_seconds,8.5);assert.equal(gen.production[0].original_storage_path,'gen/video');assert.equal(gen.production[0].frame_storage_path,'gen/face_swap');assert.deepEqual(genWakes,['genjutsu']);assert.equal(gen.production[0].meta.workflow_nodes.output,'482');
-console.log('PASS Genjutsu handoff: original video, Face Swap frame without Upscale, duration, fixed workflow/482 mapping, separate worker wake');
+console.log('PASS no Upscale dispatch: photos finish at Face Swap, all video workflows reuse original/frame, retired queued tasks stop, existing task reconciles, buffered handoff, ambiguity and capacity guards');

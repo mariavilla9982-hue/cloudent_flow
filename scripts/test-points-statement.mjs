@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {statementFilter,pointsStatement} from '../supabase/functions/_shared/points-statement.ts';
+const at=new Date('2026-11-19T01:30:00Z');
+assert.equal(statementFilter(new URL('https://test?period=today'),at).since,'2026-11-18T03:00:00.000Z');
+assert.equal(statementFilter(new URL('https://test?period=yesterday'),at).until,'2026-11-18T03:00:00.000Z');
+assert.equal(statementFilter(new URL('https://test?period=month'),at).since,'2026-11-01T03:00:00.000Z');
+assert.equal(statementFilter(new URL('https://test?period=all'),at).since,null);
+for(const query of ['page=-1','page=0.5','period=unknown','module='+('x'.repeat(81))])assert.throws(()=>statementFilter(new URL('https://test?'+query)));
+const calls=[];const q={select(...a){calls.push(['select',...a]);return q},gte(...a){calls.push(['gte',...a]);return q},lt(...a){calls.push(['lt',...a]);return q},eq(...a){calls.push(['eq',...a]);return q},order(...a){calls.push(['order',...a]);return q},range(...a){calls.push(['range',...a]);return {data:[{task_id:'1',points:null,settled:false}],count:101}}};
+const result=await pointsStatement({from:t=>{assert.equal(t,'runninghub_charges');return q}},new URL('https://test?period=all&page=1&module=GENJUTSU%20legado'));
+assert.equal(result.rows[0].points,null);assert.equal(result.count,101);assert.deepEqual(calls.find(c=>c[0]==='range'),['range',50,99]);assert.deepEqual(calls.find(c=>c[0]==='eq'),['eq','module','GENJUTSU legado']);assert(!calls.some(c=>c[0]==='gte'));assert.equal(calls.filter(c=>c[0]==='order').length,2);
+console.log('PASS expenses: BRT boundaries, filters, bounded stable pagination, null points preserved and exact count');
