@@ -88,12 +88,50 @@ def instagram(settings=None):
     return client
 
 
-def challenge_state(client, started_at=None):
-    """Keep the actual response encrypted, rather than losing the checkpoint."""
-    settings = client.get_settings()
+def verification_response(client, error=None):
+    """Use already received data only, including exception evidence if the
+    library replaced last_json. Never stringify an exception into output."""
     raw = getattr(client, 'last_json', None)
-    if isinstance(raw, dict) and len(json.dumps(raw).encode()) <= 40000:
-        settings['_cloudent_pending'] = {'created_at':started_at if started_at is not None else time.time(), 'last_json':raw}
+    if isinstance(raw,dict) and (raw.get('challenge') or raw.get('challenge_context')):
+        return raw
+    if error is not None:
+        fields = ('message','status','error_type','challenge','challenge_context',
+            'bloks_action','step_name','step_data','caa_actions')
+        payload = {k:getattr(error,k) for k in fields if getattr(error,k,None) is not None}
+        if payload.get('challenge') or payload.get('challenge_context'):
+            return payload
+        response = getattr(error,'response',None)
+        if response is not None:
+            try:
+                value = response.json()
+                if isinstance(value,dict):
+                    return value
+            except (ValueError,TypeError):
+                pass
+    return raw if isinstance(raw,dict) else None
+
+
+def challenge_state(client, started_at=None, error=None):
+    """Preserve bounded encrypted evidence even when the provider body is big."""
+    settings = client.get_settings()
+    raw = verification_response(client,error)
+    pending = {'created_at':started_at if started_at is not None else time.time(),
+        'summary':describe_verification(raw), 'capture':'missing'}
+    if isinstance(raw,dict):
+        if len(json.dumps(raw).encode()) <= 40000:
+            pending.update(last_json=raw,capture='complete')
+        else:
+            # Keep continuation fields; never discard all evidence for a large
+            # Bloks body. The safe structural summary describes the original.
+            keys = ('message','status','error_type','challenge','challenge_context',
+                'bloks_action','step_name','step_data')
+            compact = {k:raw[k] for k in keys if k in raw and len(json.dumps(raw[k]).encode())<=16000}
+            if len(json.dumps(compact).encode())>40000:
+                compact = {k:v for k,v in compact.items() if k in ('challenge','challenge_context','bloks_action')}
+            if len(json.dumps(compact).encode())<=40000:
+                pending['last_json'] = compact
+            pending['capture'] = 'bounded'
+    settings['_cloudent_pending'] = pending
     return settings
 
 
@@ -139,15 +177,7 @@ def error_code(error):
     return 'instagram_request_failed'
 
 
-def verification_diagnostic(token, user_id, body):
-    """Owner-authorized inspection in this backend only. No Instagram request,
-    client construction, login, session update or raw values in the response."""
-    if body.get('confirm_username') != USERNAME:
-        raise PilotError('confirmation_required')
-    saved = control(token, 'diagnostic_read', {'confirm_username': USERNAME})
-    settings = unseal(saved.get('settings_cipher'), user_id)
-    pending = settings.get('_cloudent_pending') or {}
-    raw = pending.get('last_json')
+def describe_verification(raw):
     # Fixed vocabulary, never echo arbitrary keys, text, URLs, contexts or IDs.
     known = frozenset(('message','status','error_type','challenge','challenge_context',
         'challenge_required','api_path','url','native_flow','step_name','step_data',
@@ -192,14 +222,27 @@ def verification_diagnostic(token, user_id, body):
     if not step and isinstance(nested,dict):
         step = nested.get('step_name')
     hint = challenge_hint(raw)
+    api_path = nested.get('api_path') if isinstance(nested,dict) else None
+    family = 'auth_platform' if isinstance(api_path,str) and api_path.startswith('/auth_platform/') else 'challenge' if isinstance(api_path,str) and api_path.startswith('/challenge/') else 'unrecognized'
+    return {'hint':hint,'step':step if isinstance(step,str) and step in steps else 'unrecognized','route_family':family,'schema':schema}
+
+
+def verification_diagnostic(token, user_id, body):
+    """Inspect only in this backend. No provider request or state mutation."""
+    if body.get('confirm_username') != USERNAME:
+        raise PilotError('confirmation_required')
+    saved = control(token, 'diagnostic_read', {'confirm_username': USERNAME})
+    settings = unseal(saved.get('settings_cipher'), user_id)
+    pending = settings.get('_cloudent_pending') or {}
+    raw = pending.get('last_json')
     created = pending.get('created_at')
     age = max(0,int(time.time()-created)) if isinstance(created,(int,float)) else None
+    report = pending.get('summary') or describe_verification(raw)
     return {'ok':True,'diagnostic':{
         'saved_response':isinstance(raw,dict), 'age_seconds':age,
-        'expired':age is None or age > 600, 'hint':hint,
-        'step':step if isinstance(step,str) and step in steps else 'unrecognized',
-        'schema':schema, 'instagram_requests':0,
-        'session_changed':False}}
+        'expired':age is None or age > 600, **report,
+        'capture':pending.get('capture','legacy' if raw else 'missing'),
+        'instagram_requests':0, 'session_changed':False}}
 
 
 def login(token, user_id, body):
@@ -250,7 +293,7 @@ def login(token, user_id, body):
     except Exception as error:
         err = error.code if isinstance(error, PilotError) else error_code(error)
         phase = 'two_factor' if err == 'two_factor_required' else 'blocked'
-        raw = getattr(client,'last_json',None) if client else None
+        raw = verification_response(client,error) if client else None
         hint = challenge_hint(raw)
         if resume and checkpoint_raw and err == 'instagram_login_required':
             hint = challenge_hint(checkpoint_raw)
@@ -258,7 +301,7 @@ def login(token, user_id, body):
             client.last_json = checkpoint_raw
             err = 'resume_password_required'
         control(token, 'login_finish', {'lease':claim['lease'], 'phase':phase, 'error_code':err,
-            'settings_cipher':seal(challenge_state(client, checkpoint_started), user_id) if client else None,
+            'settings_cipher':seal(challenge_state(client, checkpoint_started, error), user_id) if client else None,
             'challenge':hint,'is_resume':resume})
         return {'ok':False, 'phase':phase, 'error_code':err, 'challenge':hint}
 

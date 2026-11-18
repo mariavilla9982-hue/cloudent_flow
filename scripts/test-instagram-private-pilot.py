@@ -181,3 +181,18 @@ with patch.object(p,'control',side_effect=AssertionError('confirmation required'
     try:p.verification_diagnostic('fixture','owner',{});raise AssertionError('must reject')
     except p.PilotError as e:assert e.code=='confirmation_required'
 print('PASS: read-only diagnostic, exact account, no login/client/network, expired response inspection, allowlisted schema, no raw fields/secrets in output')
+
+# A large Bloks body must not silently erase the entire checkpoint.
+client=Client();client.last_json={'challenge':{'native_flow':True,'api_path':'/challenge/private'},'payload':'x'*80000}
+saved=p.challenge_state(client)
+assert saved['_cloudent_pending']['capture']=='bounded'
+assert saved['_cloudent_pending']['last_json']['challenge']['native_flow']
+assert saved['_cloudent_pending']['summary']['hint']['kind']=='native'
+assert len(p.json.dumps(saved).encode())<60000
+# Preserve exception-provided challenge evidence when last_json was replaced.
+client.last_json=None
+error=type('ChallengeRequired',(Exception,),{'challenge':{'native_flow':True,'api_path':'/challenge/private'},'message':'challenge_required'})()
+saved=p.challenge_state(client,error=error)
+assert saved['_cloudent_pending']['last_json']['challenge']['native_flow']
+assert saved['_cloudent_pending']['capture']=='complete'
+print('PASS: oversized response retains bounded encrypted continuation and safe summary; exception evidence fallback; no silent checkpoint loss')
