@@ -88,12 +88,12 @@ def instagram(settings=None):
     return client
 
 
-def challenge_state(client):
+def challenge_state(client, started_at=None):
     """Keep the actual response encrypted, rather than losing the checkpoint."""
     settings = client.get_settings()
     raw = getattr(client, 'last_json', None)
     if isinstance(raw, dict) and len(json.dumps(raw).encode()) <= 40000:
-        settings['_cloudent_pending'] = {'created_at':time.time(), 'last_json':raw}
+        settings['_cloudent_pending'] = {'created_at':started_at if started_at is not None else time.time(), 'last_json':raw}
     return settings
 
 
@@ -120,7 +120,8 @@ def challenge_hint(raw):
     walk(raw)
     # Supported upstream continuation; do not invent a native approval endpoint.
     resumable = isinstance(raw,dict) and raw.get('bloks_action') == 'com.bloks.www.ig.challenge.redirect.async' and bool(raw.get('challenge_context'))
-    return {'matching_number':next(iter(numbers)) if len(numbers)==1 else None, 'can_resume':bool(resumable)}
+    native = raw.get('challenge') if isinstance(raw,dict) else None
+    return {'matching_number':next(iter(numbers)) if len(numbers)==1 else None, 'can_resume':bool(resumable), 'kind':'app_approval' if resumable else 'native' if isinstance(native,dict) and native.get('native_flow') else 'unsupported'}
 
 
 def error_code(error):
@@ -145,8 +146,19 @@ def login(token, user_id, body):
     if (not resume and (not isinstance(password, str) or not 1 <= len(password) <= 512)) or len(code) > 16:
         raise PilotError('credentials_required')
     cipher_key()  # Fail before contacting Instagram if persistence is unavailable.
-    claim = control(token, 'login_claim')
+    if resume:
+        state = control(token, 'status')
+        hint = state.get('challenge') or {}
+        if hint.get('expired'):
+            raise PilotError('challenge_expired', 409)
+        if not hint.get('can_resume'):
+            raise PilotError('challenge_not_resumable', 409)
+    if resume and password is not None and (not isinstance(password,str) or not 1 <= len(password) <= 512):
+        raise PilotError('credentials_required')
+    claim = control(token, 'resume_claim' if resume else 'login_claim')
     client = None
+    checkpoint_started = None
+    checkpoint_raw = None
     try:
         client = instagram(unseal(claim.get('settings_cipher'), user_id))
         # Library logs can contain private response data; never forward them.
@@ -154,11 +166,17 @@ def login(token, user_id, body):
             if resume:
                 pending = getattr(client,'cloudent_pending',None) or {}
                 raw = pending.get('last_json')
+                checkpoint_raw = raw
+                checkpoint_started = pending.get('created_at',0)
                 if time.time()-pending.get('created_at',0)>600 or not challenge_hint(raw)['can_resume']:
                     raise PilotError('challenge_not_resumable')
                 client.username = USERNAME
                 client.last_json = raw
                 client.challenge_bloks_redirect_dismiss()
+                # Acknowledging approval is not necessarily an authenticated login.
+                # Finish only with credentials entered explicitly for this action.
+                if password:
+                    client.login(USERNAME, password, verification_code=code)
             else:
                 client.login(USERNAME, password, verification_code=code)
             profile = client.account_info()
@@ -169,9 +187,16 @@ def login(token, user_id, body):
     except Exception as error:
         err = error.code if isinstance(error, PilotError) else error_code(error)
         phase = 'two_factor' if err == 'two_factor_required' else 'blocked'
-        hint = challenge_hint(getattr(client,'last_json',None)) if client else {}
+        raw = getattr(client,'last_json',None) if client else None
+        hint = challenge_hint(raw)
+        if resume and checkpoint_raw and err == 'instagram_login_required':
+            hint = challenge_hint(checkpoint_raw)
+            hint['needs_password'] = True
+            client.last_json = checkpoint_raw
+            err = 'resume_password_required'
         control(token, 'login_finish', {'lease':claim['lease'], 'phase':phase, 'error_code':err,
-            'settings_cipher':seal(challenge_state(client), user_id) if client else None})
+            'settings_cipher':seal(challenge_state(client, checkpoint_started), user_id) if client else None,
+            'challenge':hint,'is_resume':resume})
         return {'ok':False, 'phase':phase, 'error_code':err, 'challenge':hint}
 
 

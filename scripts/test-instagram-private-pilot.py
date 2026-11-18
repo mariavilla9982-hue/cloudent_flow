@@ -50,6 +50,8 @@ class Client:
 events=[]
 def control(token, action, payload=None):
     events.append((action,payload))
+    if action == 'status':
+        return {'phase':'blocked','challenge':{'can_resume':True,'expired':False}}
     if action.endswith('_claim'):
         return {'lease':'fixture-lease','settings_cipher':sealed,'video_id':'fixture-video'}
     return {'ok':True}
@@ -111,7 +113,7 @@ assert p.challenge_hint({'matching_number':40})['matching_number']=='40'
 assert p.challenge_hint({'matching_number':40,'nested':{'challenge_number':59}})['matching_number'] is None
 assert p.challenge_hint({'code':'123456','description':'Account 19 has 40 photos'})['matching_number'] is None
 raw={'bloks_action':'com.bloks.www.ig.challenge.redirect.async','challenge_context':'fixture-private-context'}
-assert p.challenge_hint(raw)=={'matching_number':None,'can_resume':True}
+assert p.challenge_hint(raw)=={'matching_number':None,'can_resume':True,'kind':'app_approval'}
 assert not p.challenge_hint({'challenge':{'native_flow':True}})['can_resume']
 client=Client();client.last_json=raw
 saved=p.challenge_state(client)
@@ -131,3 +133,35 @@ for expired in [False,True]:
         assert result['phase']==('blocked' if expired else 'connected')
         assert client.resumes==(0 if expired else 1)
 print('PASS: no guessed number, explicit labels only, conflicting/OTP/phone rejected, encrypted checkpoint, resume without relogin, checkpoint expiry')
+
+# Expired/unsupported checkpoints stop before claim, decrypt or provider traffic.
+for hint,expected in [({'expired':True,'can_resume':True},'challenge_expired'),({'expired':False,'can_resume':False},'challenge_not_resumable')]:
+    events.clear()
+    with patch.object(p,'control',return_value={'phase':'blocked','challenge':hint}) as calls,patch.object(p,'unseal',side_effect=AssertionError('must not decrypt')),patch.object(p,'instagram',side_effect=AssertionError('must not call provider')):
+        try:p.login('fixture','owner',{'action':'resume'})
+        except p.PilotError as error:assert error.code==expected
+        else:raise AssertionError('must reject checkpoint')
+        assert calls.call_count==1
+
+class FinalizeClient(ResumeClient):
+    def __init__(self):
+        super().__init__();self.logins=0;self.ready=False
+    def login(self,username,password,verification_code=''):
+        assert username=='sahryjapah' and password=='fixture-only';self.logins+=1;self.ready=True
+    def account_info(self):
+        if not self.ready:raise type('LoginRequired',(Exception,),{})()
+        return super().account_info()
+
+client=FinalizeClient();events.clear()
+with patch.object(p,'instagram',return_value=client),patch.object(p,'control',side_effect=control):
+    result=p.login('fixture','owner',{'action':'resume'})
+    assert result['error_code']=='resume_password_required' and result['challenge']['needs_password']
+    assert client.logins==0 and client.resumes==1
+    saved=p.unseal(events[-1][1]['settings_cipher'],'owner')
+    assert saved['_cloudent_pending']['created_at']==client.cloudent_pending['created_at']
+client=FinalizeClient();events.clear()
+with patch.object(p,'instagram',return_value=client),patch.object(p,'control',side_effect=control):
+    result=p.login('fixture','owner',{'action':'resume','password':'fixture-only'})
+    assert result['phase']=='connected' and client.logins==1 and client.resumes==1
+    assert 'fixture-only' not in str(events[-1][1])
+print('PASS: expired checkpoint stops before decrypt/claim, same-client password finalization, missing-password continuation, no password persistence, fixed checkpoint lifetime')
