@@ -517,3 +517,9 @@
 #production [data-genjutsu-root] .production-input-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 :is(#production,#faceSwap,#faceSwapPhoto) :is(.card,.studio-input-card,.studio-result-dock){border-radius:16px;border-color:#343434;background:#141414}
 @media(max-width:540px){#production [data-genjutsu-root] .production-input-grid{grid-template-columns:1fr}}
+
+/* Override legacy thumbnail dimensions inside the shared vertical showcase. */
+#production [data-genjutsu-root] .genjutsu-upload-workspace{width:100%!important;max-width:none!important;margin:0!important}
+#production [data-genjutsu-root] .genjutsu-card .production-media-preview-shell{width:100%!important;height:100%!important;min-width:0!important;aspect-ratio:9/16!important;border-radius:0!important}
+#production [data-genjutsu-root] .genjutsu-card .production-media-preview-shell img{width:100%!important;height:100%!important;max-height:none!important;object-fit:contain!important}
+#production [data-genjutsu-root] .gv3-panel{background:var(--gv3-panel)!important;border-color:var(--gv3-line)!important}

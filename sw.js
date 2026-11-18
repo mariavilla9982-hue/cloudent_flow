@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v109";
+const CACHE="cloudentflow-pwa-v110";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -51,7 +51,7 @@ async function injectCalendarPatch(response){
     html=html.replace(oldViralsPatch,"").replace(oldForYouPatch,"").replace(oldForYouWatchdog,"");
     html=html.replace(/<script\b[^>]*src=["'][^"']*genjutsu-ui\.js[^"']*["'][^>]*><\/script>/gi,"");
 
-    html=html.replace(/genjutsu-v3\.css\?v=\d+/g,'genjutsu-v3.css?v=6');
+    html=html.replace(/genjutsu-v3\.css\?v=\d+/g,'genjutsu-v3.css?v=7');
     const genTags='<script src="/genjutsu-ui.js?v=18"></script><script src="/genjutsu-v3-ui.js?v=11"></script>';
     html=html.replace(/<script\b[^>]*src=["'][^"']*genjutsu-v3-ui\.js[^"']*["'][^>]*><\/script>/gi,'');
     html=html.includes('</body>')?html.replace('</body>',genTags+'</body>'):html+genTags;
