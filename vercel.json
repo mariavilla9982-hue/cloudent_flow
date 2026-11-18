@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
+    "api/instagram-session-test.js": {
+      "includeFiles": "lib/instagram-session-test.html"
+    },
+    "api/instagram-private-pilot.py": {
+      "maxDuration": 300
+    },
     "api/media_cleaner.py": {
       "maxDuration": 300
     },
