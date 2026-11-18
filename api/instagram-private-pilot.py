@@ -4,7 +4,6 @@ import contextlib
 import io
 import json
 import logging
-import hmac
 import os
 import re
 import subprocess
@@ -230,38 +229,6 @@ def publish(token, user_id, body):
 
 
 def dispatch(headers, body):
-    if body.get('action') == 'inspect_saved':
-        # Temporary, expiring diagnostic. It cannot log in, approve, or publish.
-        expected, _, until = os.environ.get('INSTAGRAM_PILOT_INSPECT', '').partition(':')
-        supplied = headers.get('Authorization', '').removeprefix('Bearer ')
-        if not expected or not until.isdigit() or time.time()>int(until) or not hmac.compare_digest(expected,supplied):
-            raise PilotError('diagnostic_disabled',410)
-        owner = '8ab89cf8-699e-4ae8-833f-1f215f1d4d69'
-        saved = unseal(str(body.get('settings_cipher','')),owner)
-        pending = saved.get('_cloudent_pending') or {}
-        raw = pending.get('last_json') or {}
-        client = None
-        if body.get('read_checkpoint') is True:
-            challenge = raw.get('challenge') or {}
-            path = challenge.get('api_path','')
-            if not re.fullmatch(r'/challenge/[0-9]+/[A-Za-z0-9_-]+/?',path):
-                raise PilotError('unsupported_checkpoint_read')
-            client = instagram(saved)
-            with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
-                try:
-                    client._send_private_request(path.lstrip('/'),params={'guid':client.uuid,'device_id':client.android_device_id})
-                except Exception:
-                    pass
-            raw = getattr(client,'last_json',{})
-        def shape(value,depth=0):
-            if depth>5:return type(value).__name__
-            if isinstance(value,dict):return {str(k)[:80]:shape(v,depth+1) for k,v in list(value.items())[:70]}
-            if isinstance(value,list):return [shape(v,depth+1) for v in value[:3]]
-            return type(value).__name__
-        safe = {k:raw[k] for k in ('step_name','bloks_action','challenge_type_enum_str','action','type','status')
-            if isinstance(raw.get(k),str) and re.fullmatch(r'[A-Za-z0-9_. -]{1,120}',raw[k])}
-        return {'has_pending':bool(pending),'age_seconds':int(time.time()-pending.get('created_at',0)),
-            'shape':shape(raw),'safe':safe,'hint':challenge_hint(raw)}
     if headers.get('Origin') not in (None, ORIGIN):
         raise PilotError('origin_rejected', 403)
     token = headers.get('Authorization', '')
