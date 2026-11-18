@@ -134,9 +134,11 @@
           </div>
           ${views>0&&row.views!==null?`<div class="cf-dash-bar" aria-label="${Math.round(row.views/views*100)}% das visualizações disponíveis" role="img"><span style="width:${row.views/views*100}%"></span></div>`:''}
         </article>`).join('')||'<p class="cf-dash-empty">Nenhuma conta Instagram está conectada. <button type="button" onclick="showPage(\'accounts\')">Gerenciar contas</button></p>'}</div></section>
+      ${window.CloudentPoints?.markup()||''}
       <footer class="cf-dash-footer"><div><button type="button" onclick="showPage('metrics')">Ver métricas →</button><button type="button" onclick="showPage('admin')">Painel de admin</button></div><small>Fonte: Instagram (Meta) · Cache de até 5 min</small></footer>
     </div>`;
     if(rows.some(row=>row.waiting)&&!refreshing)void load(false);
+    if(currentPage==='overview')void window.CloudentPoints?.load();
   }
   window.setDashboardAnalyticsPeriod=value=>{
     if(!Object.hasOwn(periods,String(value)))return;

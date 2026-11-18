@@ -83,7 +83,7 @@ function fixture(){
  const swContext=vm.createContext({self:{addEventListener:()=>{}},Response,Headers});vm.runInContext(sw,swContext);
  const legacy='<head></head><body><script>const example=1;</script><script src="/dashboard-multi-account-patch.js?v=1"></script><script src="/dashboard-multi-account-patch.js?v=6"></script></body>';
  const patched=await (await swContext.injectCalendarPatch(new Response(legacy,{headers:{'content-type':'text/html'}}))).text();
- assert.equal((patched.match(/src="\/dashboard-multi-account-patch.js\?v=6"/g)||[]).length,1);
- assert(patched.indexOf('const example=1')<patched.indexOf('dashboard-multi-account-patch.js?v=6'));
+ assert.equal((patched.match(/src="\/dashboard-multi-account-patch.js\?v=7"/g)||[]).length,1);
+ assert(patched.indexOf('const example=1')<patched.indexOf('dashboard-multi-account-patch.js?v=7'));
  console.log('PASS dashboard: scoped accounts, official account totals and Story breakdown, period cache, GET-only cadence, real Stories, stale data, session/role/logout guards, late responses, empty state, PWA v67 single loader');
 })().catch(e=>{console.error(e);process.exitCode=1});
