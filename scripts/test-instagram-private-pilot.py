@@ -165,3 +165,19 @@ with patch.object(p,'instagram',return_value=client),patch.object(p,'control',si
     assert result['phase']=='connected' and client.logins==1 and client.resumes==1
     assert 'fixture-only' not in str(events[-1][1])
 print('PASS: expired checkpoint stops before decrypt/claim, same-client password finalization, missing-password continuation, no password persistence, fixed checkpoint lifetime')
+
+# Authorized diagnostic returns structure only; no provider requests or state writes.
+raw={'message':'do not echo fixture-secret','challenge':{'api_path':'/challenge/fixture-secret','step_name':'auth_platform','challenge_context':'fixture-secret','data':{'matching_number':'27','email':'fixture-secret@example.test'}},'fixture-secret':'private'}
+state={**settings,'_cloudent_pending':{'created_at':p.time.time()-700,'last_json':raw}}
+with patch.object(p,'control',return_value={'settings_cipher':p.seal(state,'owner')}) as rpc, patch.object(p,'instagram',side_effect=AssertionError('no client')), patch.object(p.requests,'request',side_effect=AssertionError('no network')):
+    result=p.verification_diagnostic('fixture','owner',{'confirm_username':'sahryjapah'})
+    assert result['diagnostic']['expired'] and result['diagnostic']['instagram_requests']==0
+    assert result['diagnostic']['hint']['matching_number']=='27'
+    assert 'fixture-secret' not in p.json.dumps(result)
+    assert 'settings_cipher' not in p.json.dumps(result)
+    assert result['diagnostic']['step']=='auth_platform'
+    assert rpc.call_count==1 and rpc.call_args.args[1]=='diagnostic_read'
+with patch.object(p,'control',side_effect=AssertionError('confirmation required')):
+    try:p.verification_diagnostic('fixture','owner',{});raise AssertionError('must reject')
+    except p.PilotError as e:assert e.code=='confirmation_required'
+print('PASS: read-only diagnostic, exact account, no login/client/network, expired response inspection, allowlisted schema, no raw fields/secrets in output')

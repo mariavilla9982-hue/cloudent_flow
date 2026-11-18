@@ -160,6 +160,7 @@
 #production :is([data-genjutsu-v3],[data-genjutsu-root]) .gv3-jobs { gap: 14px; }
 #production :is([data-genjutsu-v3],[data-genjutsu-root]) .gv3-job {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: 13px;
   background: linear-gradient(145deg, #1b1b1d 0%, #101011 52%, #0c0c0d 100%);
@@ -288,6 +289,7 @@
 }
 #production :is([data-genjutsu-v3],[data-genjutsu-root]) .gv3-showcase-controls {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   align-content: start;
   gap: 10px;
@@ -517,6 +519,43 @@
 #production [data-genjutsu-root] .production-input-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 :is(#production,#faceSwap,#faceSwapPhoto) :is(.card,.studio-input-card,.studio-result-dock){border-radius:16px;border-color:#343434;background:#141414}
 @media(max-width:540px){#production [data-genjutsu-root] .production-input-grid{grid-template-columns:1fr}}
+
+/* Current cards own their rows; legacy table-cell placement must not create
+   implicit columns inside the nested showcase controls. Shared with V3. */
+#production.studio-page.studio-page :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-job {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: start;
+}
+#production.studio-page.studio-page :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-showcase-controls > * {
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+  min-width: 0;
+  max-width: 100%;
+}
+#production.studio-page.studio-page :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100% !important;
+}
+#production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-job-identity { flex: 1 1 auto; }
+#production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-job-title { white-space: nowrap; }
+#production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-selected-note { border-radius: 10px; }
+#production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-primary-actions .btn { overflow-wrap: normal; word-break: normal; }
+#production [data-genjutsu-root] .gv3-feature .production-media-preview-shell:has(video)::after { content: none; }
+@media(max-width:700px) {
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-filters { flex-wrap: wrap; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-showcase { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-feature { width: min(100%, 280px); justify-self: center; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-job-header { flex-wrap: wrap; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-job-time { flex-basis: 100%; white-space: normal; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-feature-title { font-size: 11px; }
+  #production.studio-page.studio-page :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-primary-actions .btn { flex: 1 1 125px !important; min-height: 44px !important; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-primary-actions :is([data-calendar],.gv3-agenda-button) { flex-basis: 100% !important; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .gv3-selected-note { width: auto; font-size: 12px; }
+  #production :is([data-genjutsu-root],[data-genjutsu-v3]) .production-status { font-size: 12px; overflow-wrap: normal; word-break: normal; }
+}
 
 /* Override legacy thumbnail dimensions inside the shared vertical showcase. */
 #production [data-genjutsu-root] .genjutsu-upload-workspace{width:100%!important;max-width:none!important;margin:0!important}

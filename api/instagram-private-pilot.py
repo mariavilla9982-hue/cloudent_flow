@@ -139,6 +139,69 @@ def error_code(error):
     return 'instagram_request_failed'
 
 
+def verification_diagnostic(token, user_id, body):
+    """Owner-authorized inspection in this backend only. No Instagram request,
+    client construction, login, session update or raw values in the response."""
+    if body.get('confirm_username') != USERNAME:
+        raise PilotError('confirmation_required')
+    saved = control(token, 'diagnostic_read', {'confirm_username': USERNAME})
+    settings = unseal(saved.get('settings_cipher'), user_id)
+    pending = settings.get('_cloudent_pending') or {}
+    raw = pending.get('last_json')
+    # Fixed vocabulary, never echo arbitrary keys, text, URLs, contexts or IDs.
+    known = frozenset(('message','status','error_type','challenge','challenge_context',
+        'challenge_required','api_path','url','native_flow','step_name','step_data',
+        'bloks_action','bloks_payload','bloks_data','layout','tree','children',
+        'data','action','type','title','text','description','buttons','choices',
+        'matching_number','number_matching_code','challenge_number','number',
+        'auth_platform','auth_platform_screen','auth_platform_screen_data',
+        'flow','flow_name','screen','screen_id','challenge_type','verify_method',
+        'is_bloks_web','is_native','checkpoint_url','challenge_url','contact_point',
+        'two_factor_info','two_factor_required','phone_number','email','nonce',
+        'client_context','step','error','errors','error_body','error_title',
+        'error_message','login_response','response','exception_name','exception',
+        'challenge_params','challenge_response','rendered','payload'))
+    schema = []
+    def shape(value, path='response', depth=0):
+        if depth > 8 or len(schema) >= 80:
+            return
+        if isinstance(value, dict):
+            keys = sorted(k for k in value if k in known)
+            schema.append({'path':path, 'type':'object', 'fields':keys,
+                'other_field_count':len(value)-len(keys)})
+            for key in keys:
+                if isinstance(value[key], (dict,list)):
+                    shape(value[key], path+'.'+key, depth+1)
+                elif isinstance(value[key],str) and value[key].lstrip().startswith(('{','[')):
+                    try:
+                        shape(json.loads(value[key]),path+'.'+key+'.encoded',depth+1)
+                    except (ValueError,RecursionError):
+                        pass
+        elif isinstance(value,list):
+            schema.append({'path':path,'type':'array','length':len(value)})
+            for item in value[:3]:
+                if isinstance(item,(dict,list)):
+                    shape(item,path+'[]',depth+1)
+    shape(raw)
+    steps = {'select_verify_method','verify_email','submit_phone','verify_code',
+        'delta_login_review','contact_point_selection','scraping_warning',
+        'verify_email_code','verify_phone','verify_sms_code','review_login',
+        'change_password','take_selfie','recaptcha','auth_platform'}
+    step = raw.get('step_name') if isinstance(raw,dict) else None
+    nested = raw.get('challenge') if isinstance(raw,dict) else None
+    if not step and isinstance(nested,dict):
+        step = nested.get('step_name')
+    hint = challenge_hint(raw)
+    created = pending.get('created_at')
+    age = max(0,int(time.time()-created)) if isinstance(created,(int,float)) else None
+    return {'ok':True,'diagnostic':{
+        'saved_response':isinstance(raw,dict), 'age_seconds':age,
+        'expired':age is None or age > 600, 'hint':hint,
+        'step':step if isinstance(step,str) and step in steps else 'unrecognized',
+        'schema':schema, 'instagram_requests':0,
+        'session_changed':False}}
+
+
 def login(token, user_id, body):
     password = body.get('password')
     code = str(body.get('verification_code') or '').strip()
@@ -266,6 +329,8 @@ def dispatch(headers, body):
     action = body.get('action')
     if action == 'status':
         return control(token, 'status')
+    if action == 'diagnostic':
+        return verification_diagnostic(token, session['user_id'], body)
     if action in ('login','resume'):
         return login(token, session['user_id'], body)
     if action == 'publish':

@@ -53,6 +53,7 @@ $('login').addEventListener('submit',event=>{event.preventDefault();run(async()=
  }else if(result.error_code)say(messages[result.error_code]||messages.instagram_request_failed);
 })});
 $('resume').addEventListener('click',()=>run(async()=>{say('Conferindo a confirmação na mesma sessão…');const password=$('password').value,verification_code=$('code').value;$('password').value='';$('code').value='';const result=await call({action:'resume',...(password?{password}:{}),...(verification_code?{verification_code}:{})});await refresh();if(result.error_code){verification(result.challenge||{});say(result.error_code==='challenge_not_resumable'?'A confirmação anterior expirou ou não permite retomada. Nenhuma nova tentativa de login foi iniciada.':messages[result.error_code]||messages.instagram_request_failed)}}));
+$('diagnostic').addEventListener('click',()=>run(async()=>{say('Analisando a resposta salva no backend, sem novo login…');const result=await call({action:'diagnostic',confirm_username:'sahryjapah'});$('diagnosticReport').textContent=JSON.stringify(result.diagnostic,null,2);$('diagnosticReport').hidden=false;say('Diagnóstico concluído. Nenhuma tentativa de login ou publicação foi realizada.')}));
 $('publish').addEventListener('click',()=>run(async()=>{say('Publicando o vídeo de teste. Aguarde a confirmação…');await call({action:'publish',confirm_username:'sahryjapah'});await refresh()}));
 run(refresh);
 })();
