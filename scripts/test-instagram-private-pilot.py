@@ -104,3 +104,30 @@ for error,phase in [(None,'published'),(TimeoutError('fixture'),'uncertain')]:
         assert events[-1][0]=='publish_finish'
         assert ('media_id' in events[-1][1]) == (phase=='published')
 print('PASS: encryption/tampering/owner, auth/origin/admin, login/2FA/account, durable claim/failure/no retry, source allowlist')
+
+assert p.challenge_hint({'step_data':{'phone_number':'59','choices':[59,19,40]}})['matching_number'] is None
+assert p.challenge_hint({'title':'Tap the number 19 on your other device'})['matching_number']=='19'
+assert p.challenge_hint({'matching_number':40})['matching_number']=='40'
+assert p.challenge_hint({'matching_number':40,'nested':{'challenge_number':59}})['matching_number'] is None
+assert p.challenge_hint({'code':'123456','description':'Account 19 has 40 photos'})['matching_number'] is None
+raw={'bloks_action':'com.bloks.www.ig.challenge.redirect.async','challenge_context':'fixture-private-context'}
+assert p.challenge_hint(raw)=={'matching_number':None,'can_resume':True}
+assert not p.challenge_hint({'challenge':{'native_flow':True}})['can_resume']
+client=Client();client.last_json=raw
+saved=p.challenge_state(client)
+assert saved['_cloudent_pending']['last_json']==raw
+assert p.unseal(p.seal(saved,'owner'),'owner')['_cloudent_pending']['last_json']==raw
+class ResumeClient(Client):
+    def __init__(self,expired=False):
+        super().__init__();self.cloudent_pending={'created_at':0 if expired else p.time.time(),'last_json':raw};self.resumes=0
+    def login(self,*args,**kwargs):
+        raise AssertionError('resume must never start a new login')
+    def challenge_bloks_redirect_dismiss(self):
+        self.resumes+=1
+for expired in [False,True]:
+    client=ResumeClient(expired);events.clear()
+    with patch.object(p,'instagram',return_value=client),patch.object(p,'control',side_effect=control):
+        result=p.login('fixture','owner',{'action':'resume'})
+        assert result['phase']==('blocked' if expired else 'connected')
+        assert client.resumes==(0 if expired else 1)
+print('PASS: no guessed number, explicit labels only, conflicting/OTP/phone rejected, encrypted checkpoint, resume without relogin, checkpoint expiry')

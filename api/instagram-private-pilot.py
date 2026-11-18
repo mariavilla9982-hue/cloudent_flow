@@ -5,8 +5,10 @@ import io
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
+import time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
@@ -80,8 +82,45 @@ def instagram(settings=None):
     client.private_request_logger = client.logger
     client.request_timeout = 20
     if settings:
+        settings = dict(settings)
+        client.cloudent_pending = settings.pop('_cloudent_pending', None)
         client.set_settings(settings)
     return client
+
+
+def challenge_state(client):
+    """Keep the actual response encrypted, rather than losing the checkpoint."""
+    settings = client.get_settings()
+    raw = getattr(client, 'last_json', None)
+    if isinstance(raw, dict) and len(json.dumps(raw).encode()) <= 40000:
+        settings['_cloudent_pending'] = {'created_at':time.time(), 'last_json':raw}
+    return settings
+
+
+def challenge_hint(raw):
+    """Only a labelled value from Instagram may be shown. Never guess from choices."""
+    numbers = set()
+    def walk(value, depth=0):
+        if depth > 10:
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in ('matching_number','number_matching_code','challenge_number') and re.fullmatch(r'\d{1,2}',str(item)):
+                    numbers.add(str(item))
+                elif key in ('title','text','description') and isinstance(item,str):
+                    # Accept an explicit human-readable instruction, not arbitrary digits.
+                    match = re.search(r'\b(?:tap|select|choose|toque|selecione|escolha)\s+(?:the\s+)?(?:number|número)\s*[:#]?\s*(\d{1,2})\b',item,re.I)
+                    if match:
+                        numbers.add(match.group(1))
+                elif isinstance(item,(dict,list)):
+                    walk(item,depth+1)
+        elif isinstance(value,list):
+            for item in value[:100]:
+                walk(item,depth+1)
+    walk(raw)
+    # Supported upstream continuation; do not invent a native approval endpoint.
+    resumable = isinstance(raw,dict) and raw.get('bloks_action') == 'com.bloks.www.ig.challenge.redirect.async' and bool(raw.get('challenge_context'))
+    return {'matching_number':next(iter(numbers)) if len(numbers)==1 else None, 'can_resume':bool(resumable)}
 
 
 def error_code(error):
@@ -102,7 +141,8 @@ def error_code(error):
 def login(token, user_id, body):
     password = body.get('password')
     code = str(body.get('verification_code') or '').strip()
-    if not isinstance(password, str) or not 1 <= len(password) <= 512 or len(code) > 16:
+    resume = body.get('action') == 'resume'
+    if (not resume and (not isinstance(password, str) or not 1 <= len(password) <= 512)) or len(code) > 16:
         raise PilotError('credentials_required')
     cipher_key()  # Fail before contacting Instagram if persistence is unavailable.
     claim = control(token, 'login_claim')
@@ -111,7 +151,16 @@ def login(token, user_id, body):
         client = instagram(unseal(claim.get('settings_cipher'), user_id))
         # Library logs can contain private response data; never forward them.
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            client.login(USERNAME, password, verification_code=code)
+            if resume:
+                pending = getattr(client,'cloudent_pending',None) or {}
+                raw = pending.get('last_json')
+                if time.time()-pending.get('created_at',0)>600 or not challenge_hint(raw)['can_resume']:
+                    raise PilotError('challenge_not_resumable')
+                client.username = USERNAME
+                client.last_json = raw
+                client.challenge_bloks_redirect_dismiss()
+            else:
+                client.login(USERNAME, password, verification_code=code)
             profile = client.account_info()
         if str(profile.username).lower() != USERNAME:
             raise PilotError('instagram_account_mismatch', 409)
@@ -120,9 +169,10 @@ def login(token, user_id, body):
     except Exception as error:
         err = error.code if isinstance(error, PilotError) else error_code(error)
         phase = 'two_factor' if err == 'two_factor_required' else 'blocked'
+        hint = challenge_hint(getattr(client,'last_json',None)) if client else {}
         control(token, 'login_finish', {'lease':claim['lease'], 'phase':phase, 'error_code':err,
-            'settings_cipher':seal(client.get_settings(), user_id) if client else None})
-        return {'ok':False, 'phase':phase, 'error_code':err}
+            'settings_cipher':seal(challenge_state(client), user_id) if client else None})
+        return {'ok':False, 'phase':phase, 'error_code':err, 'challenge':hint}
 
 
 def download_video(url, target):
@@ -191,7 +241,7 @@ def dispatch(headers, body):
     action = body.get('action')
     if action == 'status':
         return control(token, 'status')
-    if action == 'login':
+    if action in ('login','resume'):
         return login(token, session['user_id'], body)
     if action == 'publish':
         return publish(token, session['user_id'], body)

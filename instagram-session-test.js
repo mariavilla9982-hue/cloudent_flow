@@ -1,7 +1,16 @@
 (()=>{'use strict';
-const $=id=>document.getElementById(id),key='cloudentflow-user-session';let busy=false;
-const messages={login_cloudent_required:'Entre no CloudentFlow e abra este link novamente.',admin_required:'Este teste exige seu acesso de administradora.',backend_rejected:'A operação não foi liberada. Se você acabou de tentar conectar, aguarde um minuto antes de repetir.',two_factor_required:'O Instagram pediu verificação em duas etapas. Aguarde um minuto, informe novamente a senha e o código atual.',instagram_verification_required:'O Instagram pediu uma confirmação de segurança. Abra a conta no aplicativo e confira os avisos de login. Não repetiremos o acesso automaticamente.',bad_credentials:'O Instagram recusou o usuário ou a senha. Confira o acesso da @sahryjapah.',instagram_rate_limited:'O Instagram limitou o acesso. O teste foi pausado; não vamos insistir automaticamente.',instagram_login_required:'O Instagram recusou a sessão. Será necessário reconectar.',instagram_account_mismatch:'A sessão não corresponde à @sahryjapah. O envio foi bloqueado.',configuration_unavailable:'A conexão está temporariamente indisponível.',instagram_request_failed:'O Instagram não concluiu a operação. O teste foi pausado.',media_source_unavailable:'O arquivo do vídeo não está disponível para este teste.',request_unavailable:'Não foi possível concluir a consulta. Atualize para conferir o estado antes de tentar qualquer envio.'};
+const $=id=>document.getElementById(id),key='cloudentflow-user-session';let busy=false,challenge=null;
+const messages={login_cloudent_required:'Entre no CloudentFlow e abra este link novamente.',admin_required:'Este teste exige seu acesso de administradora.',backend_rejected:'A operação não foi liberada. Se você acabou de tentar conectar, aguarde um minuto antes de repetir.',two_factor_required:'O Instagram pediu verificação em duas etapas. Aguarde um minuto, informe novamente a senha e o código atual.',instagram_verification_required:'A tentativa anterior parou na verificação do Instagram. Sem o número informado pela origem, não selecione uma opção no aplicativo.',bad_credentials:'O Instagram recusou o usuário ou a senha. Confira o acesso da @sahryjapah.',instagram_rate_limited:'O Instagram limitou o acesso. O teste foi pausado; não vamos insistir automaticamente.',instagram_login_required:'O Instagram recusou a sessão. Será necessário reconectar.',instagram_account_mismatch:'A sessão não corresponde à @sahryjapah. O envio foi bloqueado.',configuration_unavailable:'A conexão está temporariamente indisponível.',instagram_request_failed:'O Instagram não concluiu a operação. O teste foi pausado.',media_source_unavailable:'O arquivo do vídeo não está disponível para este teste.',request_unavailable:'Não foi possível concluir a consulta. Atualize para conferir o estado antes de tentar qualquer envio.'};
 function say(text){$('status').textContent=text}
+function verification(hint){
+ challenge=hint||null;
+ $('verification').hidden=!challenge;
+ $('resume').hidden=!challenge?.can_resume;
+ const number=String(challenge?.matching_number??'');
+ const hasNumber=/^\d{1,2}$/.test(number);
+ $('matchingNumber').hidden=!hasNumber;$('matchingNumber').textContent=hasNumber?number:'';
+ $('verificationText').textContent=hasNumber?'O Instagram informou o número abaixo. Na confirmação da tentativa que você acabou de iniciar, selecione exatamente este número.':'O Instagram não forneceu um número legível para esta tentativa. Não escolha uma das opções no chute. Essa confirmação por números ainda não pode ser concluída por esta tela. Se você já usa um autenticador, pode tentar a senha com o código atual dele.';
+}
 async function token(){
  let session;try{session=JSON.parse(localStorage.getItem(key)||'null')}catch{}
  if(!session?.access_token)throw new Error('login_cloudent_required');
@@ -22,6 +31,7 @@ function render(data){
  $('login').hidden=!['new','two_factor','blocked','login_pending'].includes(data.phase);
  $('connected').hidden=data.phase!=='connected';$('filename').textContent=data.file_name||'Vídeo pendente da Sahry Japah';
  $('result').hidden=true;
+ if(data.phase==='connected'||data.phase==='published')verification(null);
  if(data.phase==='connected')say('Acesso à @sahryjapah validado. Você já pode executar o teste com um vídeo.');
  else if(data.phase==='published'){
   say('Publicação confirmada no Instagram. O teste foi concluído e o vídeo foi marcado como publicado na agenda.');
@@ -34,8 +44,13 @@ async function run(work){if(busy)return;busy=true;document.querySelectorAll('but
 async function refresh(){render(await call({action:'status'}))}
 $('login').addEventListener('submit',event=>{event.preventDefault();run(async()=>{
  const password=$('password').value,verification_code=$('code').value;$('password').value='';$('code').value='';say('Conectando à @sahryjapah…');
- const result=await call({action:'login',password,verification_code});await refresh();if(result.error_code)say(messages[result.error_code]||messages.instagram_request_failed);
+ verification(null);
+ const result=await call({action:'login',password,verification_code});await refresh();
+ if(result.error_code==='instagram_verification_required'){
+  verification(result.challenge||{});say('O Instagram exige confirmar esta tentativa. Confira as instruções abaixo antes de aprovar qualquer acesso.');
+ }else if(result.error_code)say(messages[result.error_code]||messages.instagram_request_failed);
 })});
+$('resume').addEventListener('click',()=>run(async()=>{say('Conferindo a confirmação na mesma sessão…');const result=await call({action:'resume'});await refresh();if(result.error_code){verification(result.challenge||{});say(result.error_code==='challenge_not_resumable'?'A confirmação anterior expirou ou não permite retomada. Nenhuma nova tentativa de login foi iniciada.':messages[result.error_code]||messages.instagram_request_failed)}}));
 $('publish').addEventListener('click',()=>run(async()=>{say('Publicando o vídeo de teste. Aguarde a confirmação…');await call({action:'publish',confirm_username:'sahryjapah'});await refresh()}));
 run(refresh);
 })();
