@@ -10274,22 +10274,32 @@ function syncFaceSwapUploadProgressUi(){
 }
 function uploadFaceSwapPart(part,blob,onProgress){
   return new Promise((resolve,reject)=>{
-    const xhr=new XMLHttpRequest();
-    xhr.open("PUT",part.upload_url,true);
-    xhr.timeout=10*60*1000;
-    const type=part.content_type||blob.type||"application/octet-stream";
-    if(type)xhr.setRequestHeader("Content-Type",type);
-    xhr.upload.onprogress=(event)=>{
-      if(event.lengthComputable&&typeof onProgress==="function")onProgress(event.loaded,event.total);
+    let attempts=0;
+    const send=()=>{
+      attempts++;
+      const xhr=new XMLHttpRequest();
+      xhr.open("PUT",part.upload_url,true);
+      xhr.timeout=10*60*1000;
+      const type=part.content_type||blob.type||"application/octet-stream";
+      if(type)xhr.setRequestHeader("Content-Type",type);
+      const retry=message=>{
+        if(attempts<3)setTimeout(send,attempts*350);
+        else reject(new Error(message));
+      };
+      xhr.upload.onprogress=event=>{
+        if(event.lengthComputable&&typeof onProgress==="function")onProgress(event.loaded,event.total);
+      };
+      xhr.onload=()=>{
+        if(xhr.status>=200&&xhr.status<300)resolve();
+        else if([408,429,500,502,503,504].includes(xhr.status))retry("O armazenamento não confirmou o upload após três tentativas. Tente novamente.");
+        else reject(new Error("Upload do Face Swap falhou · HTTP "+xhr.status));
+      };
+      xhr.onerror=()=>retry("A conexão caiu durante o upload do Face Swap. Tente novamente.");
+      xhr.ontimeout=()=>reject(new Error("O upload demorou mais de 10 minutos e foi interrompido."));
+      xhr.onabort=()=>reject(new Error("Upload do Face Swap cancelado."));
+      xhr.send(blob);
     };
-    xhr.onload=()=>{
-      if(xhr.status>=200&&xhr.status<300)resolve();
-      else reject(new Error("Upload do Face Swap falhou · HTTP "+xhr.status));
-    };
-    xhr.onerror=()=>reject(new Error("A conexão caiu durante o upload do Face Swap."));
-    xhr.ontimeout=()=>reject(new Error("O upload demorou mais de 10 minutos e foi interrompido."));
-    xhr.onabort=()=>reject(new Error("Upload do Face Swap cancelado."));
-    xhr.send(blob);
+    send();
   });
 }
 async function uploadFaceSwapJobDirect(video,frame,autoSend){

@@ -12,6 +12,9 @@
     },
     "api/foryou-worker-wake.js": {
       "maxDuration": 60
+    },
+    "api/recover-frame.py": {
+      "maxDuration": 120
     }
   },
   "crons": [

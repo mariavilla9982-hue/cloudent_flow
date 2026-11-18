@@ -5,15 +5,9 @@ import {retryPipelineMotion,knownGenjutsu503} from './image-pipeline-retry.ts';
 import {ROOT_IMAGE_B64,ROOT_IMAGE_SHA} from './image-pipeline-root.ts';
 import {PIPELINE_CHARACTERS} from './image-pipeline-characters.ts';
 import {PIPELINE_VIDEO_WORKFLOWS,pipelineVideoWorkflow} from './image-pipeline-workflows.ts';
+import {uploadedObjectMatches} from './upload-verification.ts';
+export {uploadedObjectMatches} from './upload-verification.ts';
 const JOB_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export async function uploadedObjectMatches(address:string,size:number){
-  // A presigned GET URL cannot be reused for HEAD: S3 signs the HTTP method.
-  const r=await fetch(address,{method:'GET',headers:{Range:'bytes=0-0'},signal:AbortSignal.timeout(15000)});
-  const range=r.headers.get('content-range')||'';
-  const actual=r.status===206?Number(range.match(/\/(\d+)$/)?.[1]):Number(r.headers.get('content-length'));
-  try{await r.body?.cancel();}catch{}
-  return r.ok&&Number.isSafeInteger(actual)&&actual===Number(size)&&actual>0;
-}
 function genjutsuMedia(job:any,userId:string,kind:string){
   if(job?.meta?.video_workflow?.key!=='genjutsu'||job.meta.stage==='upload')return [];
   const original={path:job.original_storage_path,name:job.meta.source_file_name||job.original_file_name,mime:job.original_mime_type,size:job.original_size_bytes};
@@ -247,10 +241,12 @@ export async function imagePipelineApi(d:any){
   if(req.method==='POST'&&action==='image-pipeline-complete'){
     const b=await req.json(),j=await owner(String(b.job_id||''));if(!j)return json({error:'Job não encontrado'},404);
     if(j.meta.stage!=='upload')return json({ok:true,job:j});
-    for(const [path,size,provider] of [[j.original_storage_path,j.original_size_bytes,j.meta.source==='face_swap_photo'?'supabase':j.storage_provider],[j.frame_storage_path,j.frame_size_bytes,j.storage_provider]]){
-      const address=await signGet(provider,path);
-      if(!await uploadedObjectMatches(address,Number(size)))return json({error:'Upload incompleto; selecione novamente os arquivos.'},409);
-    }
+    try{
+      for(const [path,size,provider] of [[j.original_storage_path,j.original_size_bytes,j.meta.source==='face_swap_photo'?'supabase':j.storage_provider],[j.frame_storage_path,j.frame_size_bytes,j.storage_provider]]){
+        const address=await signGet(provider,path);
+        if(!await uploadedObjectMatches(address,Number(size)))return json({error:'Upload incompleto; selecione novamente os arquivos.'},409);
+      }
+    }catch{return json({error:'O armazenamento está instável. Seus arquivos foram preservados; tente confirmar novamente.',retryable:true},503);}
     const m={...j.meta,stage:j.meta.input_mode==='manual_frame'?'frame_ready':j.meta.source==='upscale_manual'?'upscale':'face_swap',pipeline_status:'UPLOADED'};
     if(m.source==='face_swap_photo'&&!m.character_id){
       const blob=check(await admin.storage.from('production').download(j.original_storage_path));
