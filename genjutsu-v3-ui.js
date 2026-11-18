@@ -15,7 +15,7 @@
   let latestJobs = [];
   let resultFilter = "all";
   const active = () => panel?.isConnected && currentPage === "production" &&
-    window.CloudentMotionControl?.mode === "genjutsu" && owner === cloudSession?.user?.id;
+    window.CloudentMotionControl?.mode === "genjutsu_v3_history" && owner === cloudSession?.user?.id;
 
   function formatElapsed(started) {
     const ms = Date.parse(started || "");
@@ -258,18 +258,7 @@
         const file = await inputFile(kind);
         if (active()) saveFile(file, file.name);
       });
-      if (job.status === "failed") add(reuse, async () => {
-        const form = panel.querySelector("form");
-        const file = await inputFile(kind);
-        if (!active() || !form.isConnected || busy) return;
-        const field = form.elements[kind];
-        if (field.files.length && !confirm("Substituir o arquivo selecionado?")) return;
-        const transfer = new DataTransfer();
-        transfer.items.add(file);
-        field.files = transfer.files;
-        showSelectedFile(field);
-        form.scrollIntoView({ block: "nearest" });
-      });
+
     }
     if (["queued", "running"].includes(job.status)) add("Parar", async () => {
       if (!confirm("Parar esta produção do GENJUTSU V3?")) return;
@@ -277,11 +266,6 @@
       await refresh();
     });
     if (["ready", "failed"].includes(job.status)) {
-      add("Tentar novamente", async () => {
-        if (job.status === "ready" && !confirm("Gerar este vídeo novamente?")) return;
-        await retryJob(job);
-        await refresh();
-      });
       add("Excluir", async () => {
         if (!confirm("Remover este vídeo da fila?")) return;
         await call("delete", { id: job.id }, {});
@@ -492,7 +476,7 @@
       .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || String(a.id).localeCompare(String(b.id)));
     const queuePositions = new Map(waitingJobs.map((job, i) => [job.id, i + 1]));
     const failed = jobs.filter(job => job.status === "failed");
-    retryAll.hidden = !failed.length;
+    retryAll.hidden = true;
     retryAll.onclick = async () => {
       retryAll.disabled = true;
       try {
@@ -668,15 +652,7 @@
     panel = document.createElement("section");
     panel.dataset.genjutsuV3 = "";
     panel.innerHTML = `
-      <form class="gv3-panel">
-        <header class="gv3-heading"><div><h3>Nova geração</h3><p class="gv3-note">Use um vídeo de até 15 segundos.</p></div></header>
-        <div class="gv3-inputs">
-          ${mediaField({ name: "video", title: "Vídeo de referência", kind: "vídeo", accept: "video/mp4,video/webm,video/quicktime", formats: "MP4, MOV ou WebM · até 30 MiB", icon: "▷" })}
-          ${mediaField({ name: "image", title: "Foto do personagem", kind: "foto", accept: "image/jpeg,image/png,image/webp", formats: "JPG, PNG ou WebP · até 10 MiB", icon: "▧" })}
-        </div>
-        <label class="gv3-prompt"><b>Prompt manual</b><textarea name="manual_prompt" rows="4" required maxlength="8000" placeholder="Descreva o personagem em inglês…"></textarea></label>
-        <div class="gv3-actions"><button class="btn primary" type="submit">Gerar vídeos</button><p class="gv3-status" data-status role="status"></p></div>
-      </form>
+      <div class="gv3-panel"><h3>Resultados do V3</h3><p class="gv3-note">As novas gerações usam GENJUTSU · LLM. Aqui você pode ver, baixar e agendar os vídeos anteriores.</p><p class="gv3-status" data-status role="status"></p></div>
       <section class="gv3-panel" aria-label="Resultados">
         <header class="gv3-heading"><div><h3>Produção</h3><p class="gv3-note">Vídeos gerados com IA · Prévia vertical 9:16</p></div><div class="gv3-heading-actions"><span class="gv3-queue-count" data-gv3-queue></span><button class="btn" type="button" data-refresh>Atualizar</button><button class="btn" type="button" data-retry-all hidden>Tentar todos novamente</button></div></header>
         <nav class="gv3-filters" aria-label="Filtrar vídeos"><button type="button" data-gv3-filter="all" class="active">Todos</button><button type="button" data-gv3-filter="running">Em andamento</button><button type="button" data-gv3-filter="ready">Prontos</button></nav>
@@ -685,11 +661,6 @@
       </section>`;
     panel.querySelector("[data-refresh]").onclick = refresh;
     panel.querySelectorAll("[data-gv3-filter]").forEach(button => { button.onclick = () => { resultFilter = button.dataset.gv3Filter; const jobs = [...panel.querySelectorAll("[data-job-id]")].map(card => ({ status: card.dataset.jobStatus })); applyFilters(jobs); }; });
-    const form = panel.querySelector("form");
-    form.addEventListener("submit", submit);
-    form.addEventListener("change", event => {
-      if (event.target.matches("input[type=file]")) showSelectedFile(event.target);
-    });
     root.append(panel);
     void refresh();
   }

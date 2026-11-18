@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { motionObjectConfig, motionObjectURL, motionCheckObject, putMotionPrimary, requireMotionStorage, storageRPC, MotionStorageSafetyError } from "../cloudent-motion-control-worker/motion-storage-protection.ts";
 import { genjutsuExecutionEvent, safeGenjutsuError } from "../_shared/genjutsu-diagnostics.ts";
 
+import { genjutsuModelsApi } from "../_shared/genjutsu-v3-models.ts";
+
 const WORKFLOW = "2120974306862780417";
 const INSTANCE_TYPE = "ultra";
 const NODES = ["148", "170"] as const;
@@ -248,7 +250,7 @@ async function videoFps(blob: Blob) {
   return null;
 }
 function generationMode(job: any) {
-  return job.input_video_path ? "automatic" : "manual";
+  return job.model_key || job.input_video_path ? "automatic" : "manual";
 }
 function promptInputs(job: any) {
   const manual = generationMode(job) === "manual";
@@ -275,6 +277,11 @@ async function providerTaskStatus(request: (path: string, body: { taskId: string
 async function worker(master: string) {
   const job = await storageRPC(admin, "claim_genjutsu_v3_job", { p_lease: crypto.randomUUID() });
   if (!job) return { ok: true, idle: true };
+  // The former workflow is archived. Existing task IDs may still be reconciled.
+  if (!job.task_id) {
+    await patch(job, { status: "failed", error: "V3 substituído pelo GENJUTSU com LLM. Nenhuma nova tarefa foi iniciada.", ...release });
+    return { ok: true, retired: true };
+  }
   let dispatchSent = false;
   let preparingFrame = false;
   try {
@@ -387,20 +394,40 @@ async function worker(master: string) {
   }
 }
 
+async function modelApi(req: Request, action: string | null, owner: string) {
+  return await genjutsuModelsApi({ admin, owner, action, req, reply, storage, inputPath,
+    sign: motionObjectURL,
+    guard: () => requireMotionStorage(admin),
+    verify: (cfg: any, path: string, size: number) => motionCheckObject(admin, cfg, path, size),
+    put: (cfg: any, path: string, blob: Blob, mime: string) => putMotionPrimary(admin, cfg, path, blob, mime),
+  });
+}
+
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   const url = new URL(req.url), action = url.searchParams.get("action");
   try {
-    if (action === "worker" || action === "verify-workflow") {
+    if (action === "worker" || action === "verify-workflow" || action === "model-import") {
       const supplied = req.headers.get("x-cloudent-worker-secret");
       if (req.method !== "POST" || !supplied || supplied !== await storageRPC(admin, "get_cloudent_worker_secret")) return reply({ error: "unauthorized" }, 401);
+      if (action === "model-import") {
+        const body = await req.clone().json();
+        const member = await admin.from("app_members").select("user_id").eq("user_id", body.owner)
+          .eq("enabled", true).eq("role", "admin").maybeSingle();
+        if (member.error || !member.data) return reply({ error: "Administrador inválido." }, 403);
+        return await modelApi(req, action, body.owner);
+      }
       if (action === "worker") return reply(await worker(supplied));
       return reply(await validateGraph((await runningHub(supplied)).request));
     }
     const owner = await userId(req);
     if (!owner) return reply({ error: "Acesso restrito." }, 403);
+    if (["ticket", "direct-ticket", "submit", "retry"].includes(action || ""))
+      return reply({ error: "O GENJUTSU V3 foi substituído pelo GENJUTSU com LLM. Atualize a página; os resultados anteriores continuam no Histórico V3." }, 409);
+    const modelResponse = await modelApi(req, action, owner);
+    if (modelResponse) return modelResponse;
     if (action === "list" && req.method === "GET") {
-      const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at,updated_at,started_at,input_video_path")
+      const { data, error } = await admin.from(table).select("id,status,outputs,error,created_at,updated_at,started_at,input_video_path,model_key,model_photo_id,model_tag,source_file_name")
         .eq("user_id", owner).neq("status", "draft").order("created_at", { ascending: false }).limit(30);
       if (error) throw error;
       const jobs = data || [];
@@ -414,7 +441,7 @@ Deno.serve(async req => {
         for (const entry of entries || []) scheduled.add(entry.genjutsu_v3_job_id);
       }
       return reply({ jobs: jobs.filter(job => !scheduled.has(job.id))
-        .map(({ input_video_path, ...job }) => ({ ...job, mode: generationMode({ input_video_path }) })) });
+        .map(({ input_video_path, ...job }) => ({ ...job, mode: generationMode({ ...job, input_video_path }) })) });
     }
     if (action === "ticket" && req.method === "POST") {
       const { video_bytes, image_bytes, video_type, image_type, manual_prompt } = await req.json();
@@ -450,12 +477,12 @@ Deno.serve(async req => {
     }
     if (action === "input" && req.method === "GET") {
       const kind = url.searchParams.get("kind");
-      if (job.status === "draft" || (kind !== "video" && kind !== "image")) return reply({ error: "Arquivo indisponível." }, 404);
+      if ((job.status === "draft" && !(job.model_key && kind === "image")) || (kind !== "video" && kind !== "image")) return reply({ error: "Arquivo indisponível." }, 404);
       if (!await storageRPC(admin, "motion_storage_record_read", { p_count: 1 })) return reply({ error: "Limite de leitura do armazenamento atingido." }, 503);
       return reply({ url: await motionObjectURL(await storage(), "GET", inputPath(job, kind)), type: kind === "video" ? job.video_type : job.image_type });
     }
     if (["retry", "stop", "delete"].includes(action) && req.method === "POST") {
-      const terminal = job.status === "ready" || job.status === "failed";
+      const terminal = ["ready", "failed", "cancelled"].includes(job.status);
       const match = (query: any) => query.eq("id", id).eq("user_id", owner).eq("status", job.status).eq("updated_at", job.updated_at);
       const changed = (data: any) => data ? reply({ ok: true }) : reply({ error: "A tarefa mudou. Atualize e tente novamente." }, 409);
       if (action === "delete" && terminal) {
@@ -473,7 +500,7 @@ Deno.serve(async req => {
       }
       if (action === "stop" && job.status === "queued") {
         const { data, error } = await match(admin.from(table).update({
-          status: "failed", error: "Produção parada.", updated_at: new Date().toISOString(), ...release,
+          status: "cancelled", error: "Produção parada.", updated_at: new Date().toISOString(), ...release,
         })).select("id").maybeSingle();
         if (error) throw error;
         return changed(data);
@@ -492,7 +519,7 @@ Deno.serve(async req => {
             const result = await request("/task/openapi/cancel", { taskId: locked.task_id });
             if (Number(result.code) !== 0) return reply({ error: "O RunningHub ainda não confirmou a parada." }, 409);
           }
-          await patch(locked, { status: "failed", error: "Produção parada.", ...release });
+          await patch(locked, { status: "cancelled", error: "Produção parada.", ...release });
           return reply({ ok: true });
         } finally {
           const { error: unlockError } = await admin.from(table).update(release).eq("id", id).eq("lease_id", lease);

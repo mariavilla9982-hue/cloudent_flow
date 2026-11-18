@@ -129,3 +129,35 @@ assert.deepEqual(await (await result()).json(),{url:'https://r2.test/owner/produ
 p.hidden_at=new Date().toISOString();
 assert.equal((await result()).status,404);
 console.log('PASS batch retry: dedupe, partial results, content block, ownership, workflow isolation, single wake and protected result URL');
+
+// Fixed model replacement: owner-scoped snapshot and one server-side copy, never a reference PUT.
+db.genjutsu_v3_models=[{user_id:'owner',model_key:'jujuh',photo_id:'fixed-photo'}];
+db.genjutsu_v3_model_photos=[{id:'fixed-photo',user_id:'owner',model_key:'jujuh',storage_path:'owner/fixed.png',mime_type:'image/png',size_bytes:120}];
+db.app_settings[0].value={ready:true,workflowId:'2117411301344411649'};
+objects.set('owner/fixed.png',120);
+const fixed={...body,job_id:'10000000-0000-4000-8000-000000000099',model_key:'jujuh',photo_id:'fixed-photo',reference:{name:'tampered.jpg',type:'image/jpeg',size:1}};
+globalThis.fetch=async url=>{const size=objects.get(new URL(url).pathname.slice(1));return size?new Response('x',{status:206,headers:{'Content-Range':'bytes 0-0/'+size}}):new Response(null,{status:404});};
+try{
+  assert.equal((await call('image-pipeline-ticket',fixed,'stranger')).status,409,'foreign owner cannot use a fixed photo');
+  assert.equal((await call('image-pipeline-ticket',{...fixed,photo_id:'stale'})).status,409);
+  const before=copies.length, response=await call('image-pipeline-ticket',fixed);
+  assert.equal(response.status,200);assert.equal(response.body.reference,undefined,'client cannot overwrite fixed reference');
+  const row=db.face_swap_jobs.find(r=>r.id===fixed.job_id);
+  assert.equal(row.frame_size_bytes,120);assert.equal(row.frame_mime_type,'image/png');
+  assert.equal(row.meta.fixed_model.photo_id,'fixed-photo');assert.deepEqual(row.meta.tags,['JUJUH']);
+  assert.equal(copies.length,before+1);assert.equal(copies.at(-1)[0],'owner/fixed.png');
+  assert.equal((await call('image-pipeline-ticket',fixed)).status,200);
+  assert.equal(copies.length,before+1,'replay must not recopy');
+  assert.equal((await call('image-pipeline-ticket',{...fixed,model_key:undefined})).status,409,'cannot turn fixed photo into client PUT');
+  assert.equal((await call('image-pipeline-ticket',{...fixed,model_key:'sahry_japah'})).status,409);
+  db.genjutsu_v3_models[0].photo_id='new-photo';
+  assert.equal((await call('image-pipeline-ticket',fixed)).status,200,'retry retains snapshot after model changes');
+  objects.set(row.original_storage_path,row.original_size_bytes);
+  assert.equal((await call('image-pipeline-complete',{job_id:fixed.job_id})).status,200);
+  await runImagePipeline(deps);
+  const child=db.production_jobs.find(r=>r.id===fixed.job_id);
+  assert.equal(child.meta.workflow_key,'genjutsu');assert.equal(child.frame_storage_path,row.frame_storage_path);
+  assert.equal(child.meta.genjutsu_prompt,undefined,'automatic prompt is prepared by the LLM worker');assert.equal(child.meta.workflow_nodes.frame,'496');assert.equal(mediaCreates,0);
+  assert.equal((await call('image-pipeline-ticket',{...body,workflow_key:'genjutsu_v3',input_mode:undefined})).status,409);
+}finally{globalThis.fetch=savedFetch;}
+console.log('PASS fixed-model LLM replacement: owner/stale/model/PUT guards, trusted metadata, immutable snapshot, idempotent B2 copy and exact LLM handoff without image GPU');

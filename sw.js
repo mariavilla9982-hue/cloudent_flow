@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v107";
+const CACHE="cloudentflow-pwa-v108";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -26,7 +26,7 @@ async function injectCalendarPatch(response){
     const faceSwapCharacterTag='<script src="/face-swap-character-presets.js?v=6"></script>';
     const faceSwapQueueTag='<script src="/face-swap-queue-patch.js?v=2"></script>';
     const backblazeGuardTag='<script src="/backblaze-media-guard.js?v=1"></script>';
-    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=24"></script>';
+    const motionControlTag='<script id="cloudentMotionControlScript" src="/motion-control-production.js?v=25"></script>';
     const oldCalendarPatch=/<script\b[^>]*src=["'][^"']*calendar-connect-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldMobileSchedulePatch=/<script\b[^>]*src=["'][^"']*production-schedule-mobile-patch\.js[^"']*["'][^>]*><\/script>/gi;
     const oldTimeHotfix=/<script\b[^>]*src=["'][^"']*production-schedule-time-hotfix\.js[^"']*["'][^>]*><\/script>/gi;
@@ -51,16 +51,20 @@ async function injectCalendarPatch(response){
     html=html.replace(oldViralsPatch,"").replace(oldForYouPatch,"").replace(oldForYouWatchdog,"");
     html=html.replace(/<script\b[^>]*src=["'][^"']*genjutsu-ui\.js[^"']*["'][^>]*><\/script>/gi,"");
 
+    const genTags='<script src="/genjutsu-ui.js?v=17"></script><script src="/genjutsu-v3-ui.js?v=11"></script>';
+    html=html.replace(/<script\b[^>]*src=["'][^"']*genjutsu-v3-ui\.js[^"']*["'][^>]*><\/script>/gi,'');
+    html=html.includes('</body>')?html.replace('</body>',genTags+'</body>'):html+genTags;
+
     // Cached native and legacy documents share one selector controller.
     html=html.replace(oldFaceSwapCharacterClickHotfix,'');
     if(oldFaceSwapCharacter.test(html))html=html.replace(oldFaceSwapCharacter,faceSwapCharacterTag);
     else html=html.includes('</body>')?html.replace('</body>',faceSwapCharacterTag+'</body>'):html+faceSwapCharacterTag;
 
-    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=19');
-    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=7').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=13');
+    html=html.replace(/image-pipeline-ui\.js\?v=\d+/g,'image-pipeline-ui.js?v=22');
+    html=html.replace(/production-studio\.js\?v=\d+/g,'production-studio.js?v=7').replace(/production-studio\.css\?v=\d+/g,'production-studio.css?v=14');
     if(html.includes('image-pipeline-ui.js')){
       if(!html.includes('production-studio.js'))html=html.replace(/<script\b[^>]*src=["'][^"']*image-pipeline-ui\.js[^"']*["'][^>]*><\/script>/i,'<script src="/production-studio.js?v=7"></script>$&');
-      if(!html.includes('production-studio.css'))html=html.replace('</head>','<link rel="stylesheet" href="/production-studio.css?v=13"></head>');
+      if(!html.includes('production-studio.css'))html=html.replace('</head>','<link rel="stylesheet" href="/production-studio.css?v=14"></head>');
     }
     // The staged pipeline owns its queue. Keep the old decorator only for legacy documents.
     if(html.includes('image-pipeline-ui.js'))html=html.replace(oldFaceSwapQueue,'');
@@ -183,6 +187,7 @@ self.addEventListener("fetch",event=>{
     url.pathname==="/face-swap-queue-patch.js"||
     url.pathname==="/backblaze-media-guard.js"||
     url.pathname==="/genjutsu-ui.js"||
+    url.pathname==="/genjutsu-v3-ui.js"||
     url.pathname==="/motion-control-production.js"||
     url.pathname==="/image-pipeline-ui.js"||
     url.pathname==="/motion-control-core-v6.js"||

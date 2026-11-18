@@ -14,7 +14,8 @@
   const MOTION="motion_control";
   const STANDARD="standard";
   const GENJUTSU="genjutsu";
-  let activeMode=[STANDARD,MOTION,GENJUTSU].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):GENJUTSU;
+  const GENJUTSU_HISTORY="genjutsu_v3_history";
+  let activeMode=[STANDARD,MOTION,GENJUTSU,GENJUTSU_HISTORY].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):GENJUTSU;
   let motionConfig=null;
   let configLoadedAt=0;
   const MOTION_EDGE=(window.CloudentConfig?.supabaseUrl||"")+"/functions/v1/cloudent-motion-control";
@@ -95,7 +96,7 @@
   }
 
   function productionWorkflowTabs(){
-    const workflows=[[STANDARD,"Vídeo 7 minutos"],[MOTION,"Motion Control v7"],[GENJUTSU,"GENJUTSU V3"]];
+    const workflows=[[STANDARD,"Vídeo 7 minutos"],[MOTION,"Motion Control v7"],[GENJUTSU,"GENJUTSU · LLM"],[GENJUTSU_HISTORY,"Histórico V3"]];
     return '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
       workflows.map(([key,label])=>'<button type="button" role="tab" aria-selected="'+(activeMode===key)+
         '" class="production-workflow-tab'+(activeMode===key?' active':'')+
@@ -107,7 +108,7 @@
     if(!root)return;
     root.classList.remove("motion-control-mode");
     if(!root.querySelector("[data-genjutsu-v3]")){
-      root.innerHTML='<div class="ui3-page-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU V3</h2></div></div>'+
+      root.innerHTML='<div class="ui3-page-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>Histórico GENJUTSU V3</h2></div></div>'+
         productionWorkflowTabs();
     }
     window.CloudentGenjutsuV3?.render(root);
@@ -238,7 +239,8 @@
 
   const nativeProductionPage=productionPage;
   productionPage=function(...args){
-    if(activeMode===GENJUTSU){renderGenjutsuV3(document.getElementById("production"));return;}
+    if(activeMode===GENJUTSU){window.CloudentGenjutsu?.render(document.getElementById("production"));return;}
+    if(activeMode===GENJUTSU_HISTORY){renderGenjutsuV3(document.getElementById("production"));return;}
     const data=typeof productionData!=="undefined"?productionData:null;
     const all=data?.jobs;
     if(data&&Array.isArray(all))data.jobs=all.filter(belongsToMode);
@@ -346,9 +348,9 @@
   };
 
   async function setMode(mode){
-    const next=[STANDARD,MOTION,GENJUTSU].includes(mode)?mode:STANDARD;
+    const next=[STANDARD,MOTION,GENJUTSU,GENJUTSU_HISTORY].includes(mode)?mode:STANDARD;
     if(next===activeMode)return;
-    if(productionUploading||window.CloudentGenjutsuV3?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
+    if(productionUploading||window.CloudentGenjutsu?.busy||window.CloudentGenjutsuV3?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
     activeMode=next;
     localStorage.setItem(MODE_KEY,activeMode);
     try{releaseProductionDraft()}catch{}

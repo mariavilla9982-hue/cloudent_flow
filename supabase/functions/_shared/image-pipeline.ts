@@ -89,10 +89,10 @@ export async function runImagePipeline(d:any){
       }
       const stage=m.stage;
       if(!['face_swap','upscale'].includes(stage))throw new Error('Etapa inválida');
-      // Hand the completed Face Swap frame to GENJUTSU V3 before dispatching
+      // Hand the completed Face Swap frame directly to Genjutsu before dispatching
       // any Upscale task. Existing in-flight Upscale tasks continue normally.
       if(stage==='upscale'&&m.source==='face_swap_natural'&&
-          m.video_workflow?.key==='genjutsu_v3'&&!j.runninghub_task_id&&
+          ['genjutsu','genjutsu_v3'].includes(m.video_workflow?.key)&&!j.runninghub_task_id&&
           !m.dispatch_intent&&!m.upscale_result&&m.face_swap_result){
         const frame=m.face_swap_result;
         if(['image/jpeg','image/png','image/webp'].includes(frame.mime)&&
@@ -159,7 +159,7 @@ export async function runImagePipeline(d:any){
       const saved=await saveBlob(j,stage,item);
       m={...await billedMeta(),[stage+'_result']:saved,[stage+'_completed_at']:new Date().toISOString(),dispatch_intent:null,provider_failed:false,dispatch_uncertain:false,error_stage:null,provider_queue_waiting:false,provider_status:'SUCCESS'};
       if(stage==='face_swap'){
-        const directV3=m.source==='face_swap_natural'&&m.video_workflow?.key==='genjutsu_v3'&&
+        const directV3=m.source==='face_swap_natural'&&['genjutsu','genjutsu_v3'].includes(m.video_workflow?.key)&&
           ['image/jpeg','image/png','image/webp'].includes(saved.mime)&&
           Number.isSafeInteger(saved.size)&&saved.size>0&&saved.size<=12*1024*1024;
         const nextMeta={...m,stage:'upscale',pipeline_status:directV3?'UPSCALE_SKIPPED':'UPSCALE_WAITING',

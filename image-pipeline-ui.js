@@ -40,8 +40,8 @@
     for(const el of document.querySelectorAll("#"+currentPage+" [data-pipeline-started]"))
       el.textContent=elapsedText(el.dataset.pipelineStarted);
   }
-  const defaultVideoWorkflow='genjutsu_v3';
-  const videoWorkflows=[{key:'genjutsu_v3',label:'GENJUTSU V3'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
+  const defaultVideoWorkflow='genjutsu';
+  const videoWorkflows=[{key:'genjutsu',label:'GENJUTSU · LLM'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
   const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
   function workflowSelector(d){
     return '<label class="pipeline-workflow"><b>Workflow após Face Swap</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||defaultVideoWorkflow)===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>GENJUTSU V3 recebe a foto gerada pelo Face Swap diretamente, sem Upscale. Os outros workflows mantêm as etapas atuais.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
@@ -166,7 +166,7 @@
           status.textContent='Vídeo '+(index+1)+' de '+entries.length+' · '+entry.original.name;
           if(row)row.textContent='Extraindo primeiro frame e preparando envio…';
           const genjutsu=(entry.workflow||defaultVideoWorkflow)==='genjutsu';
-          if((genjutsu||(entry.workflow||defaultVideoWorkflow)==='genjutsu_v3')&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU V3: use MP4, WebM ou MOV de até 30 MiB.');
+          if((genjutsu||(entry.workflow||defaultVideoWorkflow)==='genjutsu_v3')&&(!['video/mp4','video/webm','video/quicktime'].includes(entry.original.type)||entry.original.size>30*1024*1024))throw new Error('GENJUTSU: use MP4, WebM ou MOV de até 30 MiB.');
           const seconds=genjutsu?await videoDuration(entry):null;
           entry.workflowLocked=true;lockWorkflows(root);
           entry.reference=entry.reference||new File([await extractFirstFrameBlob(entry.urls.original)],'primeiro-frame.jpg',{type:'image/jpeg'});
@@ -401,7 +401,7 @@
         if(b.dataset.mode){if(busy.has(page))return;showPage(b.dataset.mode);return;}
         if(b.dataset.remove){const k=b.dataset.remove,d=drafts[page];if(d?.urls[k])URL.revokeObjectURL(d.urls[k]);if(d){delete d[k];delete d.urls[k];d.id=crypto.randomUUID();d.variantIds={};}root.querySelector('input[name="'+k+'"]').value='';root.querySelector('[data-preview="'+k+'"]').replaceChildren();if(photo)photoSelection(root,d);return;}
         if(b.hasAttribute('data-refresh'))return await refresh();
-        if(b.hasAttribute('data-open-v3')){showPage('production');await window.CloudentMotionControl?.setMode('genjutsu');return;}
+        if(b.hasAttribute('data-open-v3')){showPage('production');await window.CloudentMotionControl?.setMode('genjutsu_v3_history');return;}
         if(b.dataset.original){
           b.disabled=true;const id=b.dataset.original;
           const r=await cloudFetch('?resource=image-pipeline-preview&kind=original&id='+encodeURIComponent(id));

@@ -1,7 +1,7 @@
 (()=>{
   if(window.CloudentGenjutsu)return;
   const e=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let draft={},owner='',entries=[],jobs=[],busy=false,loading=false,timer=null,characters=[],readiness=null,lastCheck=0,revision=0;
+  let draft={},owner='',entries=[],jobs=[],busy=false,loading=false,timer=null,characters=[],fixedModels=[],readiness=null,lastCheck=0,revision=0;
   const previewCache=new Map(),verifiedMenus=new WeakSet(),pendingActions=new Set(),pendingRetries=new Set();
   let previewObserver=null,jobsMarkup='',mediaRevision=0,jobsRevision=0,retryingAll=false,refreshAgain=false;
   const active=()=>currentPage==='production'&&window.CloudentMotionControl?.mode==='genjutsu';
@@ -13,7 +13,7 @@
     if(document.querySelector('#modalHost [data-gen-modal]'))closeModal();
     owner=uid;revision++;mediaRevision++;pendingActions.clear();pendingRetries.clear();retryingAll=false;refreshAgain=false;previewCache.clear();previewObserver?.disconnect();jobsMarkup='';for(const entry of entries)URL.revokeObjectURL(entry.url);
     for(const key of ['url','frameUrl'])if(draft[key])URL.revokeObjectURL(draft[key]);draft={};
-    entries=[];jobs=[];characters=[];readiness=null;lastCheck=0;loading=false;
+    entries=[];jobs=[];characters=[];fixedModels=[];readiness=null;lastCheck=0;loading=false;
   }
   function message(text,error=false){const box=root()?.querySelector(error?'[data-gen-error]':'[data-gen-status]');if(box)box.textContent=text;}
   function drawDraft(){
@@ -33,6 +33,8 @@
     if(prompt){prompt.disabled=busy||!!draft.locked;if(prompt.value!==(draft.manualPrompt||''))prompt.value=draft.manualPrompt||'';}
     const button=section.querySelector('[data-send-manual]');if(button){button.disabled=busy||!canSend(draft);button.textContent=busy?'Enviando…':'Adicionar à fila';button.setAttribute('aria-busy',String(busy));}
     const error=section.querySelector('[data-draft-error]');if(error)error.textContent=draft.error||'';
+    const models=section.querySelector('[data-gen-fixed-models]');
+    if(models)models.innerHTML=fixedModels.map(model=>'<button type="button" class="genjutsu-model-card '+(draft.fixedModel?.key===model.key?'selected':'')+'" data-fixed-model="'+e(model.key)+'" aria-pressed="'+(draft.fixedModel?.key===model.key)+'" '+(busy||draft.locked||!model.photo_id?'disabled':'')+'>'+(model.photo_url?'<img loading="lazy" alt="Folha de '+e(model.name)+'" src="'+e(model.photo_url)+'">':'<span>▧</span>')+'<span><b>'+e(model.name)+'</b><small>'+(model.photo_id?'Usar foto fixa':'Foto não cadastrada')+'</small></span></button>').join('');
   }
   async function sendManual(){
     if(busy)return;
@@ -310,13 +312,14 @@
       if(uid!==cloudSession?.user?.id||rev!==revision)return;
       if(queueRev===jobsRevision){jobs=(result.jobs||[]).filter(j=>j.meta?.video_workflow?.key==='genjutsu');drawJobs();}
       if(!characters.length){const r=await cloudFetch('?resource=image-pipeline-characters&metadata=1');if(uid!==cloudSession?.user?.id||rev!==revision)return;characters=(r.characters||[]).map(c=>({id:c.id,name:c.name}));drawEntries();}
+      if(!fixedModels.length){const r=await cloudFetch('?resource=image-pipeline-genjutsu-models');if(uid!==cloudSession?.user?.id||rev!==revision)return;fixedModels=r.models||[];drawDraft();}
       if(Date.now()-lastCheck>60000){
         const url=(window.CloudentConfig?.supabaseUrl||'')+'/functions/v1/cloudent-genjutsu';
         const response=await fetch(url,{headers:{Authorization:'Bearer '+cloudSession.access_token,apikey:SUPABASE_KEY},cache:'no-store',signal:AbortSignal.timeout(15000)});
         if(uid!==cloudSession?.user?.id||rev!==revision)return;
         if(!response.ok)throw new Error('Não foi possível confirmar a configuração do Genjutsu.');
         const status=await response.json();const limit=root()?.querySelector('[data-gen-prompt-limit]');if(limit)limit.value=String(status.queue?.promptConcurrency||2);readiness=status.active?status.readiness:null;lastCheck=Date.now();
-        const label=root()?.querySelector('[data-gen-config]');if(label)label.textContent=readiness?.ready?'Gemini conectado · Ultra 84 GB · até 2 vídeos · prompts independentes':readiness?.runninghub?.available?'RunningHub disponível · use um prompt manual enquanto o Gemini estiver indisponível.':'Configuração pendente no servidor. Nenhum envio será iniciado.';drawEntries();
+        const label=root()?.querySelector('[data-gen-config]');if(label)label.textContent=readiness?.ready?(status.queue?.promptConcurrency===1?'LLM conectada · fila serial · 1 vídeo por vez':'LLM conectada · Ultra 84 GB · até 2 vídeos · prompts independentes'):readiness?.runninghub?.available?'RunningHub disponível · use um prompt manual enquanto o Gemini estiver indisponível.':'Configuração pendente no servidor. Nenhum envio será iniciado.';drawEntries();
       }
     }catch(error){if(uid===cloudSession?.user?.id&&rev===revision)message(error.message,true);}
     finally{if(rev===revision){loading=false;if(refreshAgain){refreshAgain=false;void refresh();}}}
@@ -346,8 +349,8 @@
           entry.frame=entry.frame||new File([await extractFirstFrameBlob(entry.url)],'primeiro-frame.jpg',{type:'image/jpeg'});
           if(uid!==cloudSession?.user?.id||rev!==revision)throw new Error('Sessão alterada.');
           const describe=file=>({name:file.name,type:file.type,size:file.size});
-          const ticket=await request('image-pipeline-ticket',{source:'face_swap_natural',job_id:entry.id,...(entry.inputMode==='manual_frame'?{input_mode:'manual_frame',manual_prompt:entry.manualPrompt||undefined,reuse:entry.reuse}:{character_id:entry.character}),workflow_key:'genjutsu',duration_seconds:seconds,original:describe(entry.file),reference:describe(entry.frame)});
-          if(!ticket.registered){if(!entry.reuse?.original)await uploadFaceSwapPart(ticket.original,entry.file,()=>{});if(!entry.reuse?.reference)await uploadFaceSwapPart(ticket.reference,entry.frame,()=>{});if(uid!==cloudSession?.user?.id||rev!==revision)throw new Error('Sessão alterada.');await request('image-pipeline-complete',{job_id:entry.id});}
+          const ticket=await request('image-pipeline-ticket',{source:'face_swap_natural',job_id:entry.id,...(entry.inputMode==='manual_frame'?{input_mode:'manual_frame',manual_prompt:entry.manualPrompt||undefined,reuse:entry.reuse,...(entry.fixedModel?{model_key:entry.fixedModel.key,photo_id:entry.fixedModel.photo_id}:{})}:{character_id:entry.character}),workflow_key:'genjutsu',duration_seconds:seconds,original:describe(entry.file),reference:describe(entry.frame)});
+          if(!ticket.registered){if(!entry.reuse?.original)await uploadFaceSwapPart(ticket.original,entry.file,()=>{});if(ticket.reference&&!entry.reuse?.reference)await uploadFaceSwapPart(ticket.reference,entry.frame,()=>{});if(uid!==cloudSession?.user?.id||rev!==revision)throw new Error('Sessão alterada.');await request('image-pipeline-complete',{job_id:entry.id});}
           if(uid!==cloudSession?.user?.id||rev!==revision)break;
           entries=entries.filter(x=>x!==entry);URL.revokeObjectURL(entry.url);message('Envio confirmado. A produção continua na nuvem.');
         }catch(error){entry.error=error.message;message(error.message,true);if(uid!==cloudSession?.user?.id||rev!==revision)break;}
@@ -463,10 +466,10 @@
   function render(container){
     reset();const existing=root();if(existing&&existing.dataset.owner===owner){refresh();return;}
     container.classList.remove('motion-control-mode');container.classList.add('studio-page');mediaRevision++;
-    const tabs=[['standard','Vídeo 7 minutos'],['motion_control','Motion Control v7'],['genjutsu','GENJUTSU']].map(([key,name])=>'<button class="production-workflow-tab '+(key==='genjutsu'?'active':'')+'" type="button" role="tab" aria-selected="'+(key==='genjutsu')+'" onclick="CloudentMotionControl.setMode(\''+key+'\')">'+name+'</button>').join('');
+    const tabs=[['standard','Vídeo 7 minutos'],['motion_control','Motion Control v7'],['genjutsu','GENJUTSU · LLM'],['genjutsu_v3_history','Histórico V3']].map(([key,name])=>'<button class="production-workflow-tab '+(key==='genjutsu'?'active':'')+'" type="button" role="tab" aria-selected="'+(key==='genjutsu')+'" onclick="CloudentMotionControl.setMode(\''+key+'\')">'+name+'</button>').join('');
     const inputs=[['video','Vídeo de referência','video/mp4,video/webm,video/quicktime','▶'],['frame','Frame / personagem','image/jpeg,image/png,image/webp','▧']].map(([kind,label,accept,icon])=>'<div class="production-drop production-drop-live" data-gen-drop="'+kind+'" tabindex="0" role="button" aria-label="Escolher '+label+'"><input id="genjutsu-'+kind+'" type="file" data-gen-file="'+kind+'" accept="'+accept+'" hidden><div class="production-upload-preview"><span class="production-drop-icon">'+icon+'</span></div><button type="button" class="production-draft-clear" data-clear="'+kind+'" aria-label="Remover '+label+'">×</button><label class="production-upload-overlay" for="genjutsu-'+kind+'"><b class="production-upload-title">'+label+'</b><small class="production-upload-meta">Clique para escolher o arquivo</small></label></div>').join('');
     container.innerHTML='<div class="ui3-page-head production-head"><div><span class="ui3-eyebrow">PRODUÇÃO IA</span><h2>GENJUTSU</h2><p>Prepare seus arquivos, acompanhe a fila e confira o resultado.</p></div></div><div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+tabs+'</div>'+
-      '<section data-genjutsu-root data-owner="'+e(owner)+'"><div class="genjutsu-upload-workspace"><div class="production-main-grid production-only-upload"><div class="card production-upload-card"><div class="ui3-panel-head"><div><span>Novo job</span><h3>Preparar geração</h3></div></div><div class="production-input-grid">'+inputs+'</div><details class="studio-prompt"><summary>Prompt manual (opcional)</summary><label class="genjutsu-manual-prompt"><textarea aria-label="Prompt manual" data-manual-prompt rows="4" maxlength="64000" placeholder="Deixe em branco para gerar o prompt automaticamente."></textarea></label></details><button type="button" class="btn primary production-add-btn" data-send-manual disabled>Adicionar à fila</button><div class="production-note">O processamento continua no servidor. Acompanhe as etapas na fila abaixo.</div><p data-draft-error role="alert"></p></div></div></div>'+
+      '<section data-genjutsu-root data-owner="'+e(owner)+'"><div class="genjutsu-upload-workspace"><div class="production-main-grid production-only-upload"><div class="card production-upload-card"><div class="ui3-panel-head"><div><span>Novo job</span><h3>Gerar com LLM</h3></div></div><p class="production-note">Escolha Jujuh ou Sahry para usar a foto fixa, ou envie seu próprio frame. A LLM prepara o prompt automaticamente.</p><div class="genjutsu-fixed-models" data-gen-fixed-models></div><div class="production-input-grid">'+inputs+'</div><details class="studio-prompt"><summary>Prompt manual (opcional)</summary><label class="genjutsu-manual-prompt"><textarea aria-label="Prompt manual" data-manual-prompt rows="4" maxlength="64000" placeholder="Deixe em branco para gerar o prompt automaticamente."></textarea></label></details><button type="button" class="btn primary production-add-btn" data-send-manual disabled>Adicionar à fila</button><div class="production-note">O processamento continua no servidor. Acompanhe as etapas na fila abaixo.</div><p data-draft-error role="alert"></p></div></div></div>'+
       '<details class="studio-diagnostics"><summary>Controles da fila e informações de uso</summary><div><p class="muted" data-gen-config role="status">Conferindo configuração…</p><p class="muted">Vídeo até 30 MiB · frame JPG, PNG ou WebP até 10 MiB.</p><label class="genjutsu-limit">Prompts em preparação <select data-gen-prompt-limit aria-label="Limite de prompts simultâneos"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label><button type="button" class="btn" data-refresh>↻ Atualizar</button><details class="genjutsu-auto"><summary>Preparar com uma modelo salva</summary><label>Vídeos de referência<input data-auto-videos type="file" accept="video/mp4,video/webm,video/quicktime" multiple></label><div data-gen-entries></div><button type="button" class="btn primary" data-send disabled>Adicionar à fila</button></details></div></details>'+
       '<p data-gen-status role="status" aria-live="polite"></p><p data-gen-error role="alert"></p><div class="card production-queue-card"><div class="ui3-panel-head"><div><span>Fila</span><h3 data-gen-count>0 vídeo(s)</h3></div><button type="button" class="btn" data-retry-all hidden>Tentar todos novamente</button></div><div class="production-queue" data-gen-jobs></div></div></section>';
     const section=root();
@@ -490,7 +493,7 @@
           const video=kind==='video',allowed=video?['video/mp4','video/webm','video/quicktime']:['image/jpeg','image/png','image/webp'];
           if(!allowed.includes(file.type)||!file.size||file.size>(video?30:10)*1024*1024)throw new Error(video?'Envie um vídeo MP4, WebM ou MOV de até 30 MiB.':'Envie um frame JPG, PNG ou WebP de até 10 MiB.');
           if(draft.id){entries=entries.filter(x=>x!==draft);delete draft.id;}
-          setDraftMedia(kind,file,URL.createObjectURL(file));message('',true);
+          if(kind==='frame')delete draft.fixedModel;setDraftMedia(kind,file,URL.createObjectURL(file));message('',true);
         }catch(error){message(error.message,true);}finally{event.target.value='';}
       }else if(event.target.type==='file'){
         try{const files=[...event.target.files];for(const file of files)if(!['video/mp4','video/webm','video/quicktime'].includes(file.type)||!file.size||file.size>30*1024*1024)throw new Error('Selecione vídeos de até 30 MiB em MP4, WebM ou MOV.');
@@ -502,12 +505,16 @@
     section.onkeydown=event=>{if((event.key==='Enter'||event.key===' ')&&event.target.dataset.genDrop){event.preventDefault();event.target.querySelector('input').click();}};
     section.onclick=event=>{
       const button=event.target.closest('button');if(!button){const box=event.target.closest('[data-gen-drop]');if(box&&!event.target.closest('video,label,input,a'))box.querySelector('input').click();return;}
+      if(button.dataset.fixedModel){
+        if(busy||draft.locked)return;const model=fixedModels.find(m=>m.key===button.dataset.fixedModel);if(!model?.photo_id)return;
+        draft.fixedModel=model;setDraftMedia('frame',{name:model.name,type:model.mime_type,size:model.size_bytes},model.photo_url);message('',true);return;
+      }
       if(button.hasAttribute('data-send-manual'))return sendManual();
       if(button.hasAttribute('data-refresh'))return refresh();
       if(button.hasAttribute('data-retry-all'))return retryJobs(jobs.filter(canRetry).map(job=>job.id),true);
       if(button.dataset.clear){
         if(busy)return;entries=entries.filter(x=>x!==draft);
-        const video=button.dataset.clear==='video',key=video?'url':'frameUrl';if(draft[key])URL.revokeObjectURL(draft[key]);
+        const video=button.dataset.clear==='video',key=video?'url':'frameUrl';if(!video)delete draft.fixedModel;if(draft[key])URL.revokeObjectURL(draft[key]);
         if(draft.reuse)delete draft.reuse[video?'original':'reference'];
         delete draft[video?'file':'frame'];delete draft[key];delete draft.duration;delete draft.error;delete draft.id;delete draft.locked;drawDraft();return;
       }
