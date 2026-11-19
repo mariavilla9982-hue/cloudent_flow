@@ -19,7 +19,7 @@ function harness(options={}){
     motionStorageRead:async()=>{events.push('download-copy');return new Response(options.corrupt?new Blob(['bad']):blob);},
     fetch:async()=>Response.json({data:{netWssUrl:'wss://www.runninghub.ai/ws?Rh-Comfy-Auth=private-token'}})
   });vm.runInContext(functions,c);
-  const rhJson=async(path,{taskId},timeoutMs)=>{assert.equal(taskId,'task');assert.equal(timeoutMs,8000);events.push(path);
+  const rhJson=async(path,{taskId},signal)=>{assert.equal(taskId,'task');assert(signal instanceof AbortSignal);events.push(path);
     if(path.endsWith('cancel')){cancels++;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
     if(options.statusError)throw Error('provider unreachable');return {code:0,data:++status===1||options.keepRunning?'RUNNING':'CANCELLED'};
   };
