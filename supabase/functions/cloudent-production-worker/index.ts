@@ -311,7 +311,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
           const response=await rhJson("/task/openapi/cancel",{taskId},AbortSignal.timeout(8000));
           responseCode=response?.code??null;
           responseMessage=safeGenjutsuError(response?.msg??response?.message??"").slice(0,180);
-          accepted=responseCode!==null&&responseCode!==''&&Number(responseCode)===0;
+          accepted=responseCode===0||responseCode==='0';
           // Retry only explicit transient failures; unknown payloads fail closed.
           permanent=!accepted&&![408,429,500,502,503,504].includes(Number(responseCode));
           requestError=accepted?null:"RunningHub recusou o cancelamento (code "+String(responseCode)+").";
@@ -320,7 +320,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
           requestError=safeGenjutsuError(e instanceof Error?e.message:String(e));
           if(failure.httpStatus){
             responseCode=failure.providerCode??failure.httpStatus;
-            permanent=![408,429].includes(Number(failure.httpStatus))&&Number(failure.httpStatus)<500;
+            permanent=Number(failure.providerCode)===817||(![408,429].includes(Number(failure.httpStatus))&&Number(failure.httpStatus)<500);
           }
           accepted=false;
         }

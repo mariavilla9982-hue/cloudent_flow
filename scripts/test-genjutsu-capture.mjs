@@ -22,7 +22,7 @@ function harness(options={}){
     fetch:async()=>Response.json({data:{netWssUrl:'wss://www.runninghub.ai/ws?Rh-Comfy-Auth=private-token'}})
   });vm.runInContext(functions,c);
   const rhJson=async(path,{taskId},signal)=>{assert.equal(taskId,'task');assert(signal instanceof AbortSignal);events.push(path);
-    if(path.endsWith('cancel')){cancels++;assert.equal(row.meta.provider_cancel_audit.at(-1).outcome,'sending');if(options.sessionExpired)throw Object.assign(Error('session expired'),{httpStatus:401});if(options.cancelResponse)return options.cancelResponse;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
+    if(path.endsWith('cancel')){cancels++;assert.equal(row.meta.provider_cancel_audit.at(-1).outcome,'sending');if(options.httpDenied)throw Object.assign(Error('APIKEY_TASK_CANCEL_NOT_ALLOWED'),{httpStatus:500,providerCode:817});if(options.sessionExpired)throw Object.assign(Error('session expired'),{httpStatus:401});if(options.cancelResponse)return options.cancelResponse;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
     if(options.statusError)throw Error('provider unreachable');return {code:0,data:options.naturalSuccess?'SUCCESS':++status===1||options.keepRunning?'RUNNING':'CANCELLED'};
   };
   return {c,admin,rhJson,events,writes,queue,get row(){return row;}};
@@ -55,7 +55,7 @@ for(const options of [{cancelRejected:true,keepRunning:true},{cancelError:true,k
 }
 console.log('PASS 482 capture checksum before bounded cancellation, immediate request before status, retry, pending, provider errors');
 
-for(const options of [{cancelResponse:{code:817,msg:'APIKEY_TASK_CANCEL_NOT_ALLOWED'}},{sessionExpired:true},{cancelResponse:{unexpected:true}}]){
+for(const options of [{cancelResponse:{code:817,msg:'APIKEY_TASK_CANCEL_NOT_ALLOWED'}},{httpDenied:true},{sessionExpired:true},{cancelResponse:{unexpected:true}},{cancelResponse:{code:false}}]){
   const h=harness({...options,keepRunning:true});
   assert.equal(await h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson),false);
   assert.equal(h.events.filter(x=>x.endsWith('/cancel')).length,1);
