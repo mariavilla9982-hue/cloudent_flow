@@ -1,0 +1,32 @@
+name: GENJUTSU provider cancellation regression
+on:
+  push:
+    branches:
+      - fix/genjutsu-llm-provider-cancel-20261118
+  pull_request:
+    paths:
+      - 'supabase/functions/cloudent-production-worker/**'
+      - 'supabase/functions/_shared/genjutsu-display.ts'
+      - 'scripts/test-genjutsu*.mjs'
+      - '.github/workflows/genjutsu-provider-cancel.yml'
+permissions:
+  contents: read
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Verify cancellation and capture regressions
+        run: |
+          node --experimental-strip-types scripts/test-genjutsu-capture.mjs
+          node --experimental-strip-types scripts/test-genjutsu-stale-capture.mjs
+          node --experimental-strip-types scripts/test-genjutsu-display.mjs
+          node --experimental-strip-types scripts/test-genjutsu-ui.mjs
+          node --experimental-strip-types scripts/test-genjutsu-one-at-a-time.mjs
+          node --experimental-strip-types scripts/test-runninghub-points.mjs
