@@ -223,7 +223,7 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
   }
 }
 
-async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,body:any)=>Promise<any>){
+async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,body:any,timeoutMs?:number)=>Promise<any>){
   const {data:job,error}=await admin.from("production_jobs").select("*").eq("id",jobId).maybeSingle();
   if(error)throw error;
   if(!job||!isMotionPreviewJob(job)||!job.result_video_id||!job.result_storage_path||!job.meta?.motion_preview_available)return false;
@@ -278,7 +278,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         .in("status",["queued","running"]).select("id").maybeSingle();
       if(prepareError)throw prepareError;
       if(!prepared)return false;
-      let attempts=0,accepted=recentlyAccepted,responseCode:any=null,responseMessage:string|null=null;
+      let attempts=0,accepted=recentlyAccepted,responseCode:any=meta.provider_cancel_response_code??null,responseMessage:string|null=meta.provider_cancel_response_message??null;
       let requestError:string|null=null;
       const maxAttempts=recentlyAccepted?0:Math.min(3,Math.max(0,9-previousCount));
       for(let i=0;i<maxAttempts;i++){
@@ -311,7 +311,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         provider_cancel_response_code:responseCode,provider_cancel_response_message:responseMessage,
         provider_cancel_error:terminal?null:(requestError||statusError||(accepted?"Encerramento ainda não confirmado.":"Cancelamento não confirmado.")),
         provider_task_pending:!terminal,provider_terminal_status:terminal?String(state.data).toUpperCase():null,
-        genjutsu_cancel_phase:terminal?"PROVIDER_STOPPED":"CANCEL_FAILED",
+        genjutsu_cancel_phase:terminal?"PROVIDER_STOPPED":accepted?"CANCELLING_PROVIDER":"CANCEL_FAILED",
         ...(terminal?{provider_stop_confirmed_at:finishedAt,provider_cancel_confirmed_at:finishedAt}:{})};
       const {data:changed,error:updateError}=await admin.from("production_jobs").update({
         status:terminal?"ready":"running",progress:terminal?100:99,
