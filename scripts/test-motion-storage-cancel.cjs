@@ -5,7 +5,7 @@ const bytes=new Uint8Array(32);bytes.set(Buffer.from('ftyp'),4);const blob=new B
 async function scenario(options={}){
  let job={id:'job',user_id:'owner',status:'running',runninghub_task_id:'task',result_video_id:'video',result_storage_path:'owner/production-results/job.mp4',storage_provider:'supabase',meta:{workflow_key:'motion_control',workflow_id:'2110721194974982146',motion_preview_available:true,result_node_id:'384',motion_preview_file:{task_id:'task'}}};
  if(options.patch)job={...job,...options.patch};
- let video={id:'video',status:'ready',storage_path:job.result_storage_path,storage_provider:'supabase',size_bytes:32,mime_type:'video/mp4'};
+ let video={id:'video',user_id:'owner',status:'ready',storage_path:job.result_storage_path,storage_provider:'supabase',size_bytes:32,mime_type:'video/mp4'};
  if(options.videoPatch)video={...video,...options.videoPatch};
  const events=[];let statusCalls=0;
  const admin={from(table){let update;const q={select(){return q},eq(){return q},in(){return q},update(v){update=v;return q},async maybeSingle(){if(update){events.push('persist_verified');job={...job,...update};return {data:{id:job.id}}}return {data:table==='production_jobs'?structuredClone(job):video}},then(ok,bad){events.push('persist_state');if(update)job={...job,...update};return Promise.resolve({error:null}).then(ok,bad)}};return q},storage:{from(){return {download:async()=>{events.push('verify_storage');return options.downloadFails?{error:{message:'offline'}}:{data:blob}}}}}};
