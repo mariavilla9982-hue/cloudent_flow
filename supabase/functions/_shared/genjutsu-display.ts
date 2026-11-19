@@ -7,7 +7,13 @@ export function genjutsuDisplay(p:any,parent:any,now=Date.now()){
  let key='queued',label='Na fila',activity=false;
  if(p?.status==='cancelled'||parent?.status==='cancelled'){key='cancelled';label='Cancelado';}
  else if(p?.status==='failed'||parent?.status==='failed'){key='failed';label=genjutsuContentBlockMessage(s.verifiedProviderFinishReason)?'Bloqueado pelo Gemini':'Precisa de atenção';}
- else if(p?.result_video_id){key=p.status==='ready'?'complete':'capturing';label=p.status==='ready'?'Concluído':'Vídeo salvo · encerrando tarefa';activity=p.status!=='ready';}
+ else if(p?.result_video_id){
+   const pending=!!m.provider_task_pending&&p?.status!=='ready';
+   const error=m.genjutsu_cancel_phase==='CANCEL_FAILED';
+   key=p.status==='ready'?'complete':error?'cancel_failed':'capturing';
+   label=p.status==='ready'?'Vídeo pronto':error?'Vídeo salvo · cancelamento pendente':pending?'Finalizando task no RunningHub':'Vídeo salvo · encerrando tarefa';
+   activity=p.status!=='ready'&&!error;
+ }
  else if(m.genjutsu_stop_requested_task_id&&String(m.genjutsu_stop_requested_task_id)===task){key='stopping';label='Cancelamento em confirmação';activity=true;}
  else if(m.motion_preview_file||m.motion_capture_checkpoint){key='capturing';label='Capturando resultado';activity=true;}
  else if(p?.status==='running'){key='running';label='Gerando vídeo';activity=true;}
