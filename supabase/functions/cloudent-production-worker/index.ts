@@ -307,13 +307,35 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
       }
       const terminal=Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
       const finishedAt=new Date().toISOString();
+      const providerStatus=terminal?String(state.data).toUpperCase():null;
+      // SUCCESS means execution finished; it does NOT prove the cancel request worked.
+      const cancelConfirmed=terminal&&["CANCELLED","CANCELED"].includes(providerStatus||"");
+      const cancelDenied=Number(responseCode)===817;
+      if(cancelDenied){
+        // Fail closed: halt NEW GENJUTSU dispatches without disabling existing task monitoring.
+        try{
+          const {data:queueCfg,error:queueReadError}=await admin.from("app_settings").select("value").eq("key","genjutsu_queue_config").maybeSingle();
+          if(queueReadError)throw queueReadError;
+          if(queueCfg){
+            const {error:pauseError}=await admin.from("app_settings").update({
+              value:{...(queueCfg.value||{}),paused:true,
+                pause_reason:"RunningHub APIKEY_TASK_CANCEL_NOT_ALLOWED (817): autorização de cancelamento pendente",
+                paused_at:finishedAt},updated_at:finishedAt
+            }).eq("key","genjutsu_queue_config");
+            if(pauseError)throw pauseError;
+          }
+        }catch(e){console.error("genjutsu_cancel_permission_pause_failed",e instanceof Error?e.message:String(e));}
+      }
       const finalMeta={...initialMeta,provider_cancel_requested_at:attempts?began:meta.provider_cancel_requested_at||null,
         provider_cancel_attempts:previousCount+attempts,provider_cancel_accepted:accepted,
         provider_cancel_response_code:responseCode,provider_cancel_response_message:responseMessage,
-        provider_cancel_error:terminal?null:(requestError||statusError||(accepted?"Encerramento ainda não confirmado.":"Cancelamento não confirmado.")),
-        provider_task_pending:!terminal,provider_terminal_status:terminal?String(state.data).toUpperCase():null,
-        genjutsu_cancel_phase:terminal?"PROVIDER_STOPPED":accepted?"CANCELLING_PROVIDER":"CANCEL_FAILED",
-        ...(terminal?{provider_stop_confirmed_at:finishedAt,provider_cancel_confirmed_at:finishedAt}:{})};
+        provider_cancel_error:cancelConfirmed?null:(cancelDenied
+          ?"RunningHub recusou o cancelamento com esta API Key (817 APIKEY_TASK_CANCEL_NOT_ALLOWED)."
+          :(requestError||statusError||(terminal?"Task finalizada sem confirmação de cancelamento.":accepted?"Encerramento ainda não confirmado.":"Cancelamento não confirmado."))),
+        provider_task_pending:!terminal,provider_terminal_status:providerStatus,
+        provider_cancel_confirmed:cancelConfirmed,
+        genjutsu_cancel_phase:cancelConfirmed?"PROVIDER_STOPPED":terminal?"PROVIDER_FINISHED_NOT_CANCELLED":accepted?"CANCELLING_PROVIDER":"CANCEL_FAILED",
+        ...(cancelConfirmed?{provider_stop_confirmed_at:finishedAt,provider_cancel_confirmed_at:finishedAt}:{})};
       const {data:changed,error:updateError}=await admin.from("production_jobs").update({
         status:terminal?"ready":"running",progress:terminal?100:99,
         completed_at:terminal?finishedAt:null,meta:finalMeta,updated_at:finishedAt,last_error:null
@@ -321,9 +343,10 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         .in("status",["queued","running"]).select("id").maybeSingle();
       if(updateError)throw updateError;
       if(!changed)return false;
-      try{await admin.from("activity_logs").insert({level:terminal?"info":"warning",
-        event_type:"genjutsu_provider_cancel",message:terminal?"Task encerrada no RunningHub":"Vídeo preservado; cancelamento do RunningHub pendente",
+      try{await admin.from("activity_logs").insert({level:cancelConfirmed?"info":"warning",
+        event_type:"genjutsu_provider_cancel",message:cancelConfirmed?"Task cancelada no RunningHub":terminal?"Task finalizada sem cancelamento confirmado":"Vídeo preservado; cancelamento do RunningHub pendente",
         meta:{production_job_id:job.id,task_id:taskId,attempts,accepted,provider_status:finalMeta.provider_terminal_status,
+          response_code:responseCode,response_message:responseMessage,cancel_confirmed:cancelConfirmed,
           lag_ms:finalMeta.provider_cancel_lag_ms,error:finalMeta.provider_cancel_error}});}catch{}
       if(terminal)await admin.rpc("wake_genjutsu_queue");
       return terminal;
