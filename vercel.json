@@ -1,6 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
+    "api/runninghub-browser.js": {
+      "maxDuration": 60,
+      "includeFiles": "lib/runninghub-ui-*"
+    },
     "api/instagram-session-test.js": {
       "includeFiles": "lib/instagram-session-test.html"
     },

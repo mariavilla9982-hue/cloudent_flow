@@ -9,13 +9,17 @@ export function genjutsuDisplay(p:any,parent:any,now=Date.now()){
  else if(p?.status==='failed'||parent?.status==='failed'){key='failed';label=genjutsuContentBlockMessage(s.verifiedProviderFinishReason)?'Bloqueado pelo Gemini':'Precisa de atenção';}
  else if(p?.result_video_id){
    const pending=!!m.provider_task_pending&&p?.status!=='ready';
-   const error=m.genjutsu_cancel_phase==='CANCEL_FAILED';
+   const error=['CANCEL_FAILED','CANCEL_REFUSED'].includes(m.genjutsu_cancel_phase);
    key=p.status==='ready'?'complete':error?'cancel_failed':'capturing';
    label=p.status==='ready'?'Vídeo pronto':error?'Vídeo salvo · cancelamento pendente':pending?'Finalizando task no RunningHub':'Vídeo salvo · encerrando tarefa';
    activity=p.status!=='ready'&&!error;
+   if(m.provider_cancel_confirmed===true){key='complete';label='Cancelamento confirmado · vídeo salvo';activity=false;}
+   else if(m.genjutsu_cancel_phase==='PROVIDER_FINISHED_NOT_CANCELLED'){key='complete';label='Execução finalizada sem cancelamento';activity=false;}
+   else if(m.genjutsu_cancel_phase==='CANCEL_REFUSED'){key='cancel_failed';label='Cancelamento recusado · vídeo salvo';activity=false;}
+   else if(m.genjutsu_cancel_phase==='CANCELLING_PROVIDER'){key='capturing';label='Solicitando cancelamento · pode continuar consumindo pontos';activity=true;}
  }
  else if(m.genjutsu_stop_requested_task_id&&String(m.genjutsu_stop_requested_task_id)===task){key='stopping';label='Cancelamento em confirmação';activity=true;}
- else if(m.motion_preview_file||m.motion_capture_checkpoint){key='capturing';label='Capturando resultado';activity=true;}
+ else if(m.motion_preview_file||m.motion_capture_checkpoint){key='capturing';label=m.motion_preview_verified_at?'Vídeo verificado':m.motion_capture_checkpoint?'Salvando vídeo':'Vídeo detectado';activity=true;}
  else if(p?.status==='running'){key='running';label='Gerando vídeo';activity=true;}
  else if(p?.status==='queued'){key='provider_queued';label='Na fila do RunningHub';}
  else if(p?.status==='uploading'){key='uploading';label='Enviando ao RunningHub';activity=true;}

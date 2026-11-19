@@ -173,12 +173,15 @@ Deno.serve(async(req:Request)=>{
     if(!supplied||supplied!==String(expected||""))return out({ok:false,error:"unauthorized"},401);
     await admin.from("worker_runtime").upsert({worker_name:workflowKey,last_heartbeat:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:"worker_name"});
 
-    const [{data:integration,error:ie},{data:queueSetting},{data:motionSetting}]=await Promise.all([
+    const [{data:integration,error:ie},{data:queueSetting},{data:motionSetting},{data:genjutsuQueue,error:gqe},{data:uiSetting,error:uie}]=await Promise.all([
       admin.from("integrations").select("enabled,config").eq("provider","runninghub").maybeSingle(),
       admin.from("app_settings").select("value").eq("key","production_queue").maybeSingle(),
-      admin.from("app_settings").select("value").eq("key","motion_control_workflow").maybeSingle()
+      admin.from("app_settings").select("value").eq("key","motion_control_workflow").maybeSingle(),
+      admin.from("app_settings").select("value").eq("key","genjutsu_queue_config").maybeSingle(),
+      admin.from("app_settings").select("value").eq("key","genjutsu_ui_cancel").maybeSingle()
     ]);
     if(ie)throw ie;
+    if(genjutsu&&(gqe||uie||genjutsuQueue?.value?.paused===true))return out({ok:true,processed:0,cancel_safety_paused:true,message:"GENJUTSU pausado: confirmação de cancelamento pendente."});
     const rh:any=integration?.config||{},cfg:any=genjutsu?GENJUTSU_CONFIG:motionSetting?.value||{};
     let apiKey="";if(rh.apiKeyCipher&&rh.apiKeyIv){try{apiKey=await decrypt(String(rh.apiKeyCipher),String(rh.apiKeyIv),String(expected))}catch{}}
     const base=cleanBase(rh.baseUrl),concurrency=Math.max(1,Math.min(10,Number(rh.concurrency||1)));
@@ -225,6 +228,23 @@ Deno.serve(async(req:Request)=>{
     const waitingQuery=admin.from("production_jobs").select("*",{count:"exact",head:true});
     const {count:waiting}=await (genjutsu?waitingQuery.in("status",["motion_waiting","uploading"]):waitingQuery.eq("status","motion_waiting")).contains("meta",{workflow_key:workflowKey}).lte("next_attempt_at",new Date().toISOString());
     if(!Number(waiting||0))return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency});
+
+    if(genjutsu&&uiSetting?.value?.mode==='browser_ui'){
+      let ready=false;
+      if(uiSetting.value.enabled===true&&uiSetting.value.cancellation_proven===true){
+        try{
+          const response=await fetch('https://cloudent-flow.vercel.app/api/runninghub-browser',{
+            method:'POST',headers:{'Content-Type':'application/json','x-cloudent-worker-secret':String(expected)},
+            body:JSON.stringify({operation:'probe'}),signal:AbortSignal.timeout(45000)
+          });
+          const result=await response.json();ready=response.ok&&result.ok===true&&result.ready===true&&result.account_id===uiSetting.value.account_id;
+        }catch{}
+      }
+      if(!ready){
+        await admin.from('app_settings').upsert({key:'genjutsu_queue_config',value:{...genjutsuQueue?.value,paused:true,paused_at:new Date().toISOString(),pause_reason:'Sessão de cancelamento indisponível ou cancelamento real ainda não comprovado.'},updated_at:new Date().toISOString()},{onConflict:'key'});
+        return out({ok:true,processed:0,cancel_safety_paused:true,message:'Nova geração bloqueada: cancelamento indisponível.'});
+      }
+    }
 
     // Account capacity includes tasks created outside CloudentFlow. Check before any claim or media read/upload.
     let providerCapacity;

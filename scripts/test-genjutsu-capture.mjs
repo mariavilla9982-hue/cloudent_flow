@@ -23,8 +23,9 @@ function harness(options={}){
   });vm.runInContext(functions,c);
   const rhJson=async(path,{taskId},signal)=>{assert.equal(taskId,'task');assert(signal instanceof AbortSignal);events.push(path);
     if(path.endsWith('cancel')){cancels++;assert.equal(row.meta.provider_cancel_audit.at(-1).outcome,'sending');if(options.httpDenied)throw Object.assign(Error('APIKEY_TASK_CANCEL_NOT_ALLOWED'),{httpStatus:500,providerCode:817});if(options.sessionExpired)throw Object.assign(Error('session expired'),{httpStatus:401});if(options.cancelResponse)return options.cancelResponse;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
-    if(options.statusError)throw Error('provider unreachable');return {code:0,data:options.naturalSuccess?'SUCCESS':++status===1||options.keepRunning?'RUNNING':'CANCELLED'};
+    if(options.statusError)throw Error('provider unreachable');return {code:0,data:options.nativeStatus|| (options.naturalSuccess?'SUCCESS':++status===1||options.keepRunning?'RUNNING':'CANCELLED')};
   };
+  if(options.uiResponse)rhJson.cancelUI=async payload=>{assert.equal(payload.task_id,'task');assert(payload.lease.startsWith('genjutsu-provider-stop-'));events.push('/ui/cancel');return options.uiResponse;};
   return {c,admin,rhJson,events,writes,queue,get row(){return row;}};
 }
 const h=harness();assert.equal(h.c.isMotionPreviewJob(h.row),true);assert.equal(h.c.motionOutputNode(h.row),'482');
@@ -81,6 +82,23 @@ assert.equal(natural.row.meta.genjutsu_cancel_phase,'PROVIDER_FINISHED_NOT_CANCE
 assert(natural.queue.paused);
 assert(natural.writes.some(x=>x.meta?.provider_cancel_audit?.at(-1)?.outcome==='sending'));
 console.log('PASS 817/401/unexpected response stop immediately; restart reconciles intent/acceptance; lifetime retry cap; SUCCESS never confirms cancel');
+for(const scenario of [
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'FAILED',confirmed:true},
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'SUCCESS',confirmed:false},
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'RUNNING',confirmed:false},
+  {uiResponse:{ok:false,task_id:'task',error:'authentication_required'},keepRunning:true,confirmed:false},
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:false,status:'RUNNING'},keepRunning:true,confirmed:false},
+  {uiResponse:{ok:true,task_id:'other',accepted:true,confirmed:true,status:'CANCEL'},keepRunning:true,confirmed:false},
+]){
+  const h=harness(scenario);await h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson);
+  assert.equal(h.row.meta.provider_cancel_confirmed,scenario.confirmed);
+  assert.equal(h.row.meta.provider_cancel_method,'authenticated_ui');
+  assert(!h.events.includes('/task/openapi/cancel'));
+  assert.equal(h.events.filter(x=>x==='/ui/cancel').length,1);
+  assert.equal(h.row.result_video_id,'job');
+  if(!scenario.confirmed)assert(h.queue.paused);
+}
+console.log('PASS UI bridge proof binding, authoritative CANCEL, conflicting SUCCESS, auth refusal, no OpenAPI fallback');
 
 // Exercise the actual monitor: 482 is copied in its event handler while channel auth is in memory.
 const monitor=harness();let captured=false,closed=false;monitor.row.result_video_id=null;monitor.row.meta.motion_preview_file=null;

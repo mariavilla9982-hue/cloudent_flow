@@ -1,0 +1,23 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {stripTypeScriptTypes} from 'node:module';
+const source=fs.readFileSync('supabase/functions/cloudent-runninghub-ui/index.ts','utf8').replace(/^import.*\n/,'').replace(/^export /gm,'');
+const owner='owner',task='2123236869265518593',lease='genjutsu-provider-stop-test';
+const job={id:'abcdef00-0000-0000-0000-000000000000',user_id:owner,runninghub_task_id:task,locked_by:lease,status:'running',result_video_id:'video',result_storage_path:'owner/production-results/job.mp4',meta:{workflow_key:'genjutsu',result_node_id:'482',motion_preview_file:{task_id:task,node_id:'482'},motion_preview_verified_at:'2026-11-19T00:00:00Z',motion_preview_sha256:'a'.repeat(64),motion_preview_source_sha256:'a'.repeat(64),motion_preview_verified_bytes:42}};
+const video={id:'video',user_id:owner,status:'ready',storage_path:job.result_storage_path,size_bytes:42};
+let handler;
+const cfg={owner_user_id:owner,account_id:'2093283289942581250',enabled:true};
+const admin={rpc:async()=>({data:'master'}),auth:{getUser:async t=>t==='owner-token'?{data:{user:{id:owner}}}:{error:true}},from(table){let filters=[],value;const q={select(){return q;},eq(k,v){filters.push([k,v]);return q;},update(v){value=v;return q;},async maybeSingle(){const row=table==='app_settings'?{value:cfg}:table==='app_members'?{user_id:owner,enabled:true,role:'admin'}:table==='production_jobs'?job:video;return {data:filters.every(([k,v])=>table==='app_settings'||row[k]===v)?structuredClone(row):null};},then(resolve){if(value&&table==='app_settings')Object.assign(cfg,value.value);return Promise.resolve({error:null}).then(resolve);}};return q;}};
+const c=vm.createContext({createClient:()=>admin,Deno:{env:{get:()=>''},serve:f=>{handler=f;}},Request,Response,JSON,Date,String,Number,Array,RegExp,Error});vm.runInContext(stripTypeScriptTypes(source),c);
+assert(c.eligibleUICancel(job,video,task,lease,owner));
+for(const [j,v,t,l,o]of [[job,video,'other',lease,owner],[job,video,task,'wrong',owner],[job,video,task,lease,'other'],[job,{...video,user_id:'other'},task,lease,owner],[{...job,meta:{...job.meta,motion_preview_sha256:''}},video,task,lease,owner],[job,{...video,size_bytes:43},task,lease,owner]])assert(!c.eligibleUICancel(j,v,t,l,o));
+async function request(operation,headers={},extra={}){return handler(new Request('https://test/',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify({operation,job_id:job.id,task_id:task,lease,...extra})}));}
+assert.equal((await request('cancel')).status,401);
+assert.equal((await request('cancel',{Authorization:'Bearer owner-token'})).status,403);
+assert.equal((await request('setup',{'x-cloudent-worker-secret':'master'})).status,403);
+assert.equal((await request('cancel',{'x-cloudent-worker-secret':'master'},{task_id:'2123236869265518594'})).status,409);
+assert.equal((await request('cancel',{'x-cloudent-worker-secret':'master'},{lease:'other'})).status,409);
+const allowed=await request('cancel',{'x-cloudent-worker-secret':'master'});assert.equal(allowed.status,200);assert(!JSON.stringify(await allowed.json()).includes('master'));
+assert.equal((await request('setup',{Authorization:'Bearer owner-token'})).status,200);
+console.log('PASS UI bridge authorization: admin-only setup, worker-only cancel, exact task/owner/lease/hash/size, no secret response');

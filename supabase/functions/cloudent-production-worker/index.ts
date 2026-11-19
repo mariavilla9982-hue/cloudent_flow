@@ -266,6 +266,8 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
     if(!claimed)return false;
     try{
       const began=new Date().toISOString();
+      const uiCancel=(rhJson as any).cancelUI;
+      const useUI=typeof uiCancel==='function';
       const previousCount=Math.max(0,Number(meta.provider_cancel_attempts||0));
       const recentlyAccepted=meta.provider_cancel_accepted===true;
       const audit=Array.isArray(meta.provider_cancel_audit)?[...meta.provider_cancel_audit]:[];
@@ -274,6 +276,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
       const uncertainDelivery=audit.some((a:any)=>a.task_id===taskId&&a.outcome==='sending');
       let permanent=meta.provider_cancel_permanent===true||Number(meta.provider_cancel_response_code)===817;
       const initialMeta={...meta,provider_task_pending:true,genjutsu_cancel_phase:"CANCELLING_PROVIDER",
+        provider_cancel_method:useUI?'authenticated_ui':'openapi',
         provider_cancel_started_at:began,
         provider_cancel_lag_ms:meta.provider_cancel_lag_ms??(Number.isFinite(Date.parse(meta.motion_preview_saved_at||""))
           ?Math.max(0,Date.parse(began)-Date.parse(meta.motion_preview_saved_at)):null),
@@ -287,6 +290,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
       if(!prepared)return false;
       let attempts=0,accepted=recentlyAccepted,responseCode:any=meta.provider_cancel_response_code??null,responseMessage:string|null=meta.provider_cancel_response_message??null;
       let requestError:string|null=null;
+      let uiProof:any=useUI&&meta.provider_cancel_ui_proof?.task_id===taskId?meta.provider_cancel_ui_proof:null;
       const persistAttempt=async()=>{
         const {data:saved,error:saveError}=await admin.from('production_jobs').update({
           meta:{...initialMeta,provider_cancel_audit:audit,provider_cancel_attempts:previousCount+attempts,
@@ -298,7 +302,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
           .in('status',['queued','running']).select('id').maybeSingle();
         if(saveError)throw saveError;if(!saved)throw new Error('genjutsu_cancel_lease_lost');
       };
-      const maxAttempts=recentlyAccepted||permanent||uncertainDelivery?0:Math.max(0,3-previousCount);
+      const maxAttempts=recentlyAccepted||permanent||uncertainDelivery?0:useUI?Math.max(0,1-previousCount):Math.max(0,3-previousCount);
       for(let i=0;i<maxAttempts;i++){
         if(i)await new Promise(resolve=>setTimeout(resolve,i===1?400:900));
         attempts++;
@@ -308,7 +312,13 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         await persistAttempt();
         try{
           attempt.sent_at=new Date().toISOString();
-          const response=await rhJson("/task/openapi/cancel",{taskId},AbortSignal.timeout(8000));
+          let response:any;
+          if(useUI){
+            uiProof=await uiCancel({job_id:job.id,task_id:taskId,lease});
+            if(uiProof?.task_id&&uiProof.task_id!==taskId)throw new Error('ui_task_mismatch');
+            response={code:uiProof?.ok&&(uiProof.accepted||uiProof.confirmed)?0:409,msg:uiProof?.error||'ui_cancel_not_confirmed'};
+            Object.assign(attempt,{method:'authenticated_ui',ui_proof:uiProof});
+          }else response=await rhJson("/task/openapi/cancel",{taskId},AbortSignal.timeout(8000));
           responseCode=response?.code??null;
           responseMessage=safeGenjutsuError(response?.msg??response?.message??"").slice(0,180);
           accepted=responseCode===0||responseCode==='0';
@@ -335,13 +345,17 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         if(poll)await new Promise(resolve=>setTimeout(resolve,poll===1?400:900));
         try{state=await rhJson("/task/openapi/status",{taskId},AbortSignal.timeout(8000));statusError=null;}
         catch(e){statusError=e instanceof Error?e.message:String(e);}
-        if(Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase()))break;
+        if(Number(state?.code)===0&&["SUCCESS","FAILED","CANCEL","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase()))break;
       }
-      const terminal=Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
+      const nativeTerminal=Number(state?.code)===0&&["SUCCESS","FAILED","CANCEL","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
+      const uiTerminal=!!(uiProof?.ok&&uiProof?.task_id===taskId&&['CANCEL','SUCCESS','FAILED'].includes(uiProof?.status));
+      const terminal=nativeTerminal;
       const finishedAt=new Date().toISOString();
-      const providerStatus=terminal?String(state.data).toUpperCase():null;
+      const nativeStatus=nativeTerminal?String(state.data).toUpperCase():null;
+      const providerStatus=uiTerminal&&nativeStatus!=='SUCCESS'?uiProof.status:nativeStatus;
       // SUCCESS means execution finished; it does NOT prove the cancel request worked.
-      const cancelConfirmed=terminal&&["CANCELLED","CANCELED"].includes(providerStatus||"");
+      const cancelConfirmed=terminal&&(["CANCEL","CANCELLED","CANCELED"].includes(nativeStatus||'')||
+        (nativeTerminal&&uiTerminal&&uiProof.confirmed===true&&uiProof.status==='CANCEL'&&nativeStatus!=='SUCCESS'));
       const cancelDenied=Number(responseCode)===817;
       if(!cancelConfirmed){
         // Fail closed: halt NEW GENJUTSU dispatches without disabling existing task monitoring.
@@ -364,6 +378,8 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         provider_cancel_after_verified_ms:meta.provider_cancel_after_verified_ms??(firstSent?Math.max(0,Date.parse(firstSent)-Date.parse(meta.motion_preview_verified_at)):null),
         provider_cancel_attempts:previousCount+attempts,provider_cancel_accepted:accepted,
         provider_cancel_audit:audit,provider_cancel_permanent:permanent,
+        ...(uiProof?{provider_cancel_ui_proof:uiProof}:{}),
+        ...(uiProof?.clicked_at?{provider_cancel_ui_after_verified_ms:Math.max(0,Date.parse(uiProof.clicked_at)-Date.parse(meta.motion_preview_verified_at))}:{}),
         provider_cancel_delivery_uncertain:uncertainDelivery,
         provider_cancel_response_code:responseCode,provider_cancel_response_message:responseMessage,
         provider_cancel_error:cancelConfirmed?null:(cancelDenied
@@ -380,6 +396,10 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         .in("status",["queued","running"]).select("id").maybeSingle();
       if(updateError)throw updateError;
       if(!changed)return false;
+      if(useUI&&cancelConfirmed){
+        const {data:uiConfig}=await admin.from('app_settings').select('value').eq('key','genjutsu_ui_cancel').maybeSingle();
+        if(uiConfig)await admin.from('app_settings').update({value:{...uiConfig.value,cancellation_proven:true,proof_task_id:taskId,proof_at:finishedAt},updated_at:finishedAt}).eq('key','genjutsu_ui_cancel');
+      }
       try{await admin.from("activity_logs").insert({level:cancelConfirmed?"info":"warning",
         event_type:"genjutsu_provider_cancel",message:cancelConfirmed?"Task cancelada no RunningHub":terminal?"Task finalizada sem cancelamento confirmado":"Vídeo preservado; cancelamento do RunningHub pendente",
         meta:{production_job_id:job.id,task_id:taskId,attempts,accepted,provider_status:finalMeta.provider_terminal_status,
@@ -427,9 +447,10 @@ Deno.serve(async(req:Request)=>{
       worker_name:"production",last_heartbeat:new Date().toISOString(),updated_at:new Date().toISOString()
     },{onConflict:"worker_name"});
 
-    const [{data:integration,error:ie},{data:queueSetting}]=await Promise.all([
+    const [{data:integration,error:ie},{data:queueSetting},{data:uiSetting}]=await Promise.all([
       admin.from("integrations").select("enabled,config").eq("provider","runninghub").maybeSingle(),
-      admin.from("app_settings").select("value").eq("key","production_queue").maybeSingle()
+      admin.from("app_settings").select("value").eq("key","production_queue").maybeSingle(),
+      admin.from("app_settings").select("value").eq("key","genjutsu_ui_cancel").maybeSingle()
     ]);
     if(ie)throw ie;
 
@@ -486,6 +507,22 @@ Deno.serve(async(req:Request)=>{
       let j:any={};try{j=await r.json()}catch{}
       if(!r.ok)throw Object.assign(new Error(j?.msg||j?.message||("RunningHub HTTP "+r.status)),{httpStatus:r.status,providerCode:j?.code});
       return j;
+    }
+    if(uiSetting?.value?.mode==='browser_ui'){
+      // Selected explicitly; an expired browser session must never fall back to
+      // the OpenAPI credential that refused cancellation.
+      const callUI=async(operation:string,payload:any)=>{
+        if(uiSetting.value.enabled!==true)return {ok:false,error:'ui_session_not_ready',task_id:payload.task_id};
+        const r=await fetch('https://cloudent-flow.vercel.app/api/runninghub-browser',{
+          method:'POST',headers:{'Content-Type':'application/json','x-cloudent-worker-secret':String(expected)},
+          body:JSON.stringify({operation,...payload}),signal:AbortSignal.timeout(45000)
+        });
+        let value:any;try{value=await r.json();}catch{return {ok:false,error:'ui_bridge_unavailable',task_id:payload.task_id};}
+        if(!r.ok)return {ok:false,error:value?.error||'ui_bridge_unavailable',task_id:payload.task_id};
+        return value;
+      };
+      (rhJson as any).cancelUI=(payload:any)=>callUI('cancel',payload);
+      (rhJson as any).prepareUI=(payload:any)=>callUI('prepare',payload);
     }
 
     async function prepareInput(path:string,name:string,mime:string,provider="supabase",characterAudit:any=null){
@@ -913,6 +950,15 @@ Deno.serve(async(req:Request)=>{
           motionState=await readMotionProviderStatus(base,apiKey,String(job.runninghub_task_id));
           const synced=await applyGenjutsuStatus(admin,job,motionState);if(!synced)continue;Object.assign(job,synced);
           if(!['queued','running'].includes(job.status))continue;
+          if(!job.result_video_id&&!job.meta?.provider_cancel_ui_prepared_at&&typeof (rhJson as any).prepareUI==='function'){
+            EdgeRuntime.waitUntil((async()=>{
+              const proof=await (rhJson as any).prepareUI({job_id:job.id,task_id:job.runninghub_task_id}).catch(()=>null);
+              if(!proof?.ok)return;
+              const {data:latest}=await admin.from('production_jobs').select('meta,updated_at').eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).maybeSingle();
+              if(latest)await admin.from('production_jobs').update({meta:{...latest.meta,provider_cancel_ui_prepared_at:new Date().toISOString()},updated_at:new Date().toISOString()})
+                .eq('id',job.id).eq('runninghub_task_id',job.runninghub_task_id).eq('updated_at',latest.updated_at);
+            })());
+          }
         }
         if(isMotionPreviewJob(job)){
           if(job.result_video_id&&job.meta?.motion_preview_available){
