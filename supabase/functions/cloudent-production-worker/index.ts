@@ -4,6 +4,7 @@ import {genjutsuExecutionEvent,safeGenjutsuError} from '../_shared/genjutsu-diag
 import {pipelineVideoWorkflow} from '../_shared/image-pipeline-workflows.ts';
 import {enrichFailedMotionJobs,enrichPreviousMotionFailure} from "../_shared/motion-failure-repair.ts";
 import {runImagePipeline,isPipeline} from '../_shared/image-pipeline.ts';
+import {reconcileImageCharges} from '../_shared/image-pipeline-billing.ts';
 import {motionStorageHealth,motionStorageRead,requireMotionStorage,reserveMotionStorage,commitMotionStorage,putMotionPrimary,MotionStorageSafetyError} from "./motion-storage-protection.ts";
 import {isMotionStatusJob,readMotionProviderStatus,applyMotionProviderStatus} from "./motion-provider-state.ts";
 
@@ -223,7 +224,7 @@ async function watchMotionPreview(admin:any,job:any,base:string,apiKey:string,ma
   }
 }
 
-async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,body:any)=>Promise<any>){
+async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,body:any,signal?:AbortSignal)=>Promise<any>){
   const {data:job,error}=await admin.from("production_jobs").select("*").eq("id",jobId).maybeSingle();
   if(error)throw error;
   if(!job||!isMotionPreviewJob(job)||!job.result_video_id||!job.result_storage_path||!job.meta?.motion_preview_available)return false;
@@ -251,6 +252,85 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
     Object.assign(meta,{motion_preview_verified_at:new Date().toISOString(),motion_preview_sha256:digest.sha256,motion_preview_verified_bytes:digest.size_bytes});
     const {data:verified,error:verificationError}=await admin.from("production_jobs").update({meta}).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]).select("id").maybeSingle();
     if(verificationError)throw verificationError;if(!verified)return false;
+  }
+  // GENJUTSU: a saída 482 já foi copiada e validada acima. Não consultar
+  // o status antes de pedir o cancelamento: a consulta introduz atraso.
+  if(isGenjutsuPreviewJob(job)){
+    const lease="genjutsu-provider-stop-"+crypto.randomUUID();
+    const {data:claimed,error:claimError}=await admin.from("production_jobs")
+      .update({locked_by:lease,locked_at:new Date().toISOString()})
+      .eq("id",job.id).eq("runninghub_task_id",taskId)
+      .eq("result_video_id",job.result_video_id).in("status",["queued","running"])
+      .is("locked_by",null).select("id").maybeSingle();
+    if(claimError)throw claimError;
+    if(!claimed)return false;
+    try{
+      const began=new Date().toISOString();
+      const previousCount=Math.max(0,Number(meta.provider_cancel_attempts||0));
+      const priorAt=Date.parse(meta.provider_cancel_requested_at||"");
+      const recentlyAccepted=meta.provider_cancel_accepted===true&&Number.isFinite(priorAt)&&Date.now()-priorAt<15000;
+      const initialMeta={...meta,provider_task_pending:true,genjutsu_cancel_phase:"CANCELLING_PROVIDER",
+        provider_cancel_started_at:began,
+        provider_cancel_lag_ms:Number.isFinite(Date.parse(meta.motion_preview_saved_at||""))
+          ?Math.max(0,Date.parse(began)-Date.parse(meta.motion_preview_saved_at)):null};
+      const {data:prepared,error:prepareError}=await admin.from("production_jobs")
+        .update({meta:initialMeta,progress:99,updated_at:began})
+        .eq("id",job.id).eq("runninghub_task_id",taskId).eq("locked_by",lease)
+        .in("status",["queued","running"]).select("id").maybeSingle();
+      if(prepareError)throw prepareError;
+      if(!prepared)return false;
+      let attempts=0,accepted=recentlyAccepted,responseCode:any=meta.provider_cancel_response_code??null,responseMessage:string|null=meta.provider_cancel_response_message??null;
+      let requestError:string|null=null;
+      const maxAttempts=recentlyAccepted?0:Math.min(3,Math.max(0,9-previousCount));
+      for(let i=0;i<maxAttempts;i++){
+        if(i)await new Promise(resolve=>setTimeout(resolve,i===1?400:900));
+        attempts++;
+        try{
+          const response=await rhJson("/task/openapi/cancel",{taskId},AbortSignal.timeout(8000));
+          responseCode=response?.code??null;
+          responseMessage=String(response?.msg??response?.message??"").slice(0,180);
+          accepted=Number(responseCode)===0;
+          requestError=accepted?null:"RunningHub recusou o cancelamento (code "+String(responseCode)+").";
+        }catch(e){
+          requestError=e instanceof Error?e.message:String(e);
+          accepted=false;
+        }
+        if(accepted)break;
+      }
+      let state:any=null,statusError:string|null=null;
+      // Confirmação real; aceitação de /cancel não basta para liberar GPU/fila.
+      for(let poll=0;poll<(accepted?3:1);poll++){
+        if(poll)await new Promise(resolve=>setTimeout(resolve,poll===1?400:900));
+        try{state=await rhJson("/task/openapi/status",{taskId},AbortSignal.timeout(8000));statusError=null;}
+        catch(e){statusError=e instanceof Error?e.message:String(e);}
+        if(Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase()))break;
+      }
+      const terminal=Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
+      const finishedAt=new Date().toISOString();
+      const finalMeta={...initialMeta,provider_cancel_requested_at:attempts?began:meta.provider_cancel_requested_at||null,
+        provider_cancel_attempts:previousCount+attempts,provider_cancel_accepted:accepted,
+        provider_cancel_response_code:responseCode,provider_cancel_response_message:responseMessage,
+        provider_cancel_error:terminal?null:(requestError||statusError||(accepted?"Encerramento ainda não confirmado.":"Cancelamento não confirmado.")),
+        provider_task_pending:!terminal,provider_terminal_status:terminal?String(state.data).toUpperCase():null,
+        genjutsu_cancel_phase:terminal?"PROVIDER_STOPPED":accepted?"CANCELLING_PROVIDER":"CANCEL_FAILED",
+        ...(terminal?{provider_stop_confirmed_at:finishedAt,provider_cancel_confirmed_at:finishedAt}:{})};
+      const {data:changed,error:updateError}=await admin.from("production_jobs").update({
+        status:terminal?"ready":"running",progress:terminal?100:99,
+        completed_at:terminal?finishedAt:null,meta:finalMeta,updated_at:finishedAt,last_error:null
+      }).eq("id",job.id).eq("runninghub_task_id",taskId).eq("locked_by",lease)
+        .in("status",["queued","running"]).select("id").maybeSingle();
+      if(updateError)throw updateError;
+      if(!changed)return false;
+      try{await admin.from("activity_logs").insert({level:terminal?"info":"warning",
+        event_type:"genjutsu_provider_cancel",message:terminal?"Task encerrada no RunningHub":"Vídeo preservado; cancelamento do RunningHub pendente",
+        meta:{production_job_id:job.id,task_id:taskId,attempts,accepted,provider_status:finalMeta.provider_terminal_status,
+          lag_ms:finalMeta.provider_cancel_lag_ms,error:finalMeta.provider_cancel_error}});}catch{}
+      if(terminal)await admin.rpc("wake_genjutsu_queue");
+      return terminal;
+    }finally{
+      await admin.from("production_jobs").update({locked_by:null,locked_at:null})
+        .eq("id",job.id).eq("runninghub_task_id",taskId).eq("locked_by",lease);
+    }
   }
   const terminal=(state:any)=>Number(state?.code)===0&&["SUCCESS","FAILED","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
   let state=await rhJson("/task/openapi/status",{taskId});
@@ -337,11 +417,11 @@ Deno.serve(async(req:Request)=>{
       }catch{return null}
     }
 
-    async function rhJson(path:string,body:any){
+    async function rhJson(path:string,body:any,signal?:AbortSignal){
       const r=await fetch(base+path,{
         method:"POST",
         headers:{"Authorization":"Bearer "+apiKey,"Content-Type":"application/json"},
-        body:JSON.stringify({...body,apiKey})
+        body:JSON.stringify(path.startsWith("/openapi/v2/")?body:{...body,apiKey}),signal
       });
       let j:any={};try{j=await r.json()}catch{}
       if(!r.ok)throw new Error(j?.msg||j?.message||("RunningHub HTTP "+r.status));
@@ -476,11 +556,11 @@ Deno.serve(async(req:Request)=>{
       }).eq("id",job.id);
       if((early||protectedMotion||isGenjutsuPreviewJob(job))&&saveError)throw saveError;
       if(reserveResult)await commitMotionStorage(admin,job.id,path,blob.size);
+      if(early)await cancelMotionAfterSave(admin,job.id,rhJson);
       await admin.from("activity_logs").insert({
-        level:"info",event_type:early?"motion_preview_ready":"runninghub_production_ready",message:early?"Vídeo #384 salvo; execução RunningHub continua":"Vídeo do RunningHub finalizado e salvo",
+        level:"info",event_type:early?"motion_preview_ready":"runninghub_production_ready",message:early?"Vídeo salvo no Cloudent":"Vídeo do RunningHub finalizado e salvo",
         meta:{production_job_id:job.id,result_video_id:video.id,credits_used:Number.isFinite(creditsUsed)?creditsUsed:null}
       });
-      if(early)await cancelMotionAfterSave(admin,job.id,rhJson);
     }
 
 
@@ -643,6 +723,7 @@ Deno.serve(async(req:Request)=>{
       wakeMotion:async(key:string="motion_control")=>{if(key==="genjutsu")await admin.rpc("wake_genjutsu_queue");await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-motion-control-worker"+(key==="genjutsu"?"?workflow=genjutsu":""),{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:"{}",signal:AbortSignal.timeout(15000)}).catch(()=>null);}
     });
 
+    EdgeRuntime.waitUntil(reconcileImageCharges(admin,rhJson).catch(()=>null));
     let touched=0;
     const {data:activeFaceSwap,error:faceActiveError}=await admin.from("face_swap_jobs")
       .select("*").in("status",["queued","running"]).order("created_at",{ascending:true}).limit(50);
@@ -947,6 +1028,7 @@ Deno.serve(async(req:Request)=>{
       const {data:missingFaceCosts}=await admin.from("face_swap_jobs")
         .select("id,runninghub_task_id,credits_used,runninghub_cost_money,runninghub_third_party_cost_money,runninghub_runtime_seconds,updated_at")
         .eq("status","ready")
+        .not("meta","cs",'{"pipeline_version":2}')
         .is("credits_used",null)
         .not("runninghub_task_id","is",null)
         .gte("completed_at",cutoff)
