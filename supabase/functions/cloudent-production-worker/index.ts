@@ -231,9 +231,17 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
   if(!["queued","running"].includes(job.status))return false;
   const meta=job.meta||{},taskId=String(job.runninghub_task_id||"");
   if(!taskId||String(meta.motion_preview_file?.task_id)!==taskId||meta.result_node_id!==motionOutputNode(job))throw new Error("Motion Control: cancelamento bloqueado até confirmar a origem do vídeo #384.");
-  const {data:video,error:videoError}=await admin.from("videos").select("id,user_id,status,storage_path,storage_provider,size_bytes,mime_type").eq("id",job.result_video_id).eq("user_id",job.user_id).maybeSingle();
+  const {data:video,error:videoError}=await admin.from("videos").select("id,status,storage_path,original_storage_path,storage_provider,size_bytes,mime_type").eq("id",job.result_video_id).eq("id",job.id).maybeSingle();
   if(videoError)throw videoError;
-  if(!video||video.user_id!==job.user_id||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(meta.result_storage_provider||job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
+  // Cleaner can replace the current path before cancellation. Verify original.
+  const checkpoint=meta.motion_capture_checkpoint;
+  if(video&&video.storage_path!==job.result_storage_path&&video.original_storage_path===job.result_storage_path
+    &&checkpoint?.path===job.result_storage_path&&checkpoint.task_id===taskId&&String(checkpoint.node_id)===motionOutputNode(job)
+    &&checkpoint.sha256===meta.motion_preview_source_sha256&&Number(checkpoint.size_bytes)>0
+    &&String(checkpoint.provider)===String(video.storage_provider||"supabase")){
+    Object.assign(video,{storage_path:checkpoint.path,size_bytes:Number(checkpoint.size_bytes)});
+  }
+  if(!video||video.id!==job.id||video.status!=="ready"||video.storage_path!==job.result_storage_path||!String(video.storage_path).startsWith(job.user_id+"/production-results/")||Number(video.size_bytes)<=0||String(video.storage_provider||"supabase")!==String(meta.result_storage_provider||job.storage_provider||"supabase"))throw new Error("Motion Control: cópia persistida não confirmada. Task preservada.");
   if(!meta.motion_preview_verified_at||!/^[a-f0-9]{64}$/.test(String(meta.motion_preview_sha256||""))||Number(meta.motion_preview_verified_bytes)!==Number(video.size_bytes)){
     let digest:any;
     if(String(video.storage_provider||"supabase")==="r2"){
@@ -324,7 +332,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
           accepted=responseCode===0||responseCode==='0';
           // Retry only explicit transient failures; unknown payloads fail closed.
           permanent=!accepted&&![408,429,500,502,503,504].includes(Number(responseCode));
-          requestError=accepted?null:"RunningHub recusou o cancelamento (code "+String(responseCode)+").";
+          requestError=accepted?null:useUI&&uiProof?.ok&&["SUCCESS","FAILED"].includes(uiProof.status)&&!uiProof.clicked_at?"A tarefa já estava encerrada antes do cancelamento.":"RunningHub recusou o cancelamento (code "+String(responseCode)+").";
         }catch(e){
           const failure=e as any;
           requestError=safeGenjutsuError(e instanceof Error?e.message:String(e));

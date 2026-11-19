@@ -2,14 +2,18 @@ import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
 const cors={'Access-Control-Allow-Origin':'https://cloudent-flow.vercel.app','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-cloudent-worker-secret','Access-Control-Allow-Methods':'POST,OPTIONS'};
 const json=(body:any,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
 export function eligibleUICancel(job:any,video:any,taskId:string,lease:string,owner:string){
-  const m=job?.meta||{};
+  const m=job?.meta||{},cp=m.motion_capture_checkpoint;
+  const original=!!video&&video.storage_path!==job?.result_storage_path&&video.original_storage_path===job.result_storage_path
+    &&cp?.path===job.result_storage_path&&cp.task_id===taskId&&String(cp.node_id)==='482'
+    &&cp.sha256===m.motion_preview_source_sha256&&Number(cp.size_bytes)>0&&String(cp.provider)===String(video.storage_provider);
+  const path=original?video.original_storage_path:video?.storage_path,bytes=original?Number(cp.size_bytes):Number(video?.size_bytes);
   return !!job&&job.user_id===owner&&job.runninghub_task_id===taskId&&job.locked_by===lease&&lease.startsWith('genjutsu-provider-stop-')
     &&['queued','running'].includes(job.status)&&m.workflow_key==='genjutsu'&&String(m.result_node_id)==='482'
     &&m.motion_preview_file?.task_id===taskId&&String(m.motion_preview_file?.node_id)==='482'
     &&!!m.motion_preview_verified_at&&/^[a-f0-9]{64}$/.test(m.motion_preview_sha256||'')&&m.motion_preview_source_sha256===m.motion_preview_sha256
-    &&!!video&&video.status==='ready'&&video.user_id===owner&&video.id===job.result_video_id&&video.storage_path===job.result_storage_path
-    &&String(video.storage_path).startsWith(owner+'/production-results/')
-    &&Number(video.size_bytes)>0&&Number(video.size_bytes)===Number(m.motion_preview_verified_bytes);
+    &&!!video&&video.status==='ready'&&video.id===job.id&&video.id===job.result_video_id&&path===job.result_storage_path
+    &&String(path).startsWith(owner+'/production-results/')
+    &&bytes>0&&bytes===Number(m.motion_preview_verified_bytes);
 }
 Deno.serve(async req=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
@@ -46,7 +50,7 @@ Deno.serve(async req=>{
       const {data:job,error:je}=await admin.from('production_jobs').select('*').eq('id',jobId).eq('user_id',cfg.owner_user_id).eq('runninghub_task_id',taskId).maybeSingle();if(je)throw je;
       if(!job||job.meta?.workflow_key!=='genjutsu'||!['queued','running'].includes(job.status))return json({ok:false,error:'task_not_eligible'},409);
       if(operation==='cancel'){
-        const {data:video}=await admin.from('videos').select('id,user_id,status,size_bytes,storage_path').eq('id',job.result_video_id).eq('user_id',cfg.owner_user_id).maybeSingle();
+        const {data:video}=await admin.from('videos').select('id,status,size_bytes,storage_path,original_storage_path,storage_provider').eq('id',job.result_video_id).eq('id',job.id).maybeSingle();
         if(!eligibleUICancel(job,video,taskId,String(body.lease||''),cfg.owner_user_id))return json({ok:false,error:'unverified_video_or_lease'},409);
       }
     }

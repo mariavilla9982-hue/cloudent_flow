@@ -7,13 +7,15 @@ import {genjutsuExecutionEvent,safeGenjutsuError} from '../supabase/functions/_s
 const source=fs.readFileSync('supabase/functions/cloudent-production-worker/index.ts','utf8');
 const functions=stripTypeScriptTypes(source.slice(source.indexOf('const MOTION_PREVIEW_WORKFLOW'),source.indexOf('Deno.serve')));
 const bytes=new Uint8Array(64);bytes.set(new TextEncoder().encode('ftyp'),4);const blob=new Blob([bytes],{type:'video/mp4'});
+const originalDigest=await motionBlobDigest(blob,64);
 function harness(options={}){
   let row={id:'job',user_id:'owner',status:'running',storage_provider:'r2',runninghub_task_id:'task',result_video_id:'job',result_storage_path:'owner/production-results/job.mp4',
     meta:{workflow_key:'genjutsu',workflow_id:'2117411301344411649',motion_preview_available:true,motion_preview_saved_at:new Date(Date.now()-1000).toISOString(),result_node_id:options.wrongNode?'384':'482',motion_preview_file:{task_id:options.wrongTask?'other':'task',node_id:'482'}}};
   if(options.priorMeta)Object.assign(row.meta,options.priorMeta);
   const events=[],writes=[];let status=0,cancels=0;
   const queue={paused:false,prompt_concurrency:1};
-  const video={id:'job',user_id:options.wrongOwner?'other':'owner',status:'ready',storage_path:row.result_storage_path,storage_provider:'r2',size_bytes:64,mime_type:'video/mp4'};
+  const video={id:options.wrongOwner?'foreign-job':'job',status:'ready',storage_path:row.result_storage_path,storage_provider:'r2',size_bytes:64,mime_type:'video/mp4'};
+  if(options.cleaned){row.meta.motion_preview_source_sha256=originalDigest.sha256;row.meta.motion_capture_checkpoint={path:row.result_storage_path,task_id:options.wrongCheckpoint?'other':'task',node_id:'482',provider:'r2',size_bytes:64,sha256:originalDigest.sha256};Object.assign(video,{original_storage_path:row.result_storage_path,storage_path:'owner/cleaned/video/job.mp4',size_bytes:32});}
   const admin={rpc:async name=>{assert.equal(name,'wake_genjutsu_queue');return {data:true};},from(table){let value;const q={select(){return q;},eq(){return q;},in(){return q;},is(){return q;},update(v){value=v;return q;},async maybeSingle(){if(table==='app_settings')return {data:{value:structuredClone(queue)}};if(value){writes.push(structuredClone(value));Object.assign(row,value);events.push('verify-saved');return {data:{id:row.id}};}return {data:table==='production_jobs'?structuredClone(row):video};},then(resolve){if(value){writes.push(structuredClone(value));if(table==='app_settings')Object.assign(queue,value.value);else Object.assign(row,value);}return Promise.resolve({error:null}).then(resolve);}};return q;}};
   const c=vm.createContext({Date,Number,String,Array,Uint8Array,TextDecoder,crypto,Blob,URL,AbortSignal,Error,Promise,JSON,setTimeout,clearTimeout,setInterval,clearInterval,
     motionVideoDigest,motionBlobDigest,Deno:{env:{get:()=>''}},EdgeRuntime:{waitUntil(){}},genjutsuExecutionEvent,safeGenjutsuError,console,
@@ -55,6 +57,9 @@ for(const options of [{cancelRejected:true,keepRunning:true},{cancelError:true,k
   assert(h.row.meta.provider_cancel_error);assert(h.events.includes('/task/openapi/cancel'));
 }
 console.log('PASS 482 capture checksum before bounded cancellation, immediate request before status, retry, pending, provider errors');
+const cleaned=harness({cleaned:true});assert.equal(await cleaned.c.cancelMotionAfterSave(cleaned.admin,'job',cleaned.rhJson),true);assert.equal(cleaned.row.meta.motion_preview_verified_bytes,64);
+const wrongCheckpoint=harness({cleaned:true,wrongCheckpoint:true});await assert.rejects(()=>wrongCheckpoint.c.cancelMotionAfterSave(wrongCheckpoint.admin,'job',wrongCheckpoint.rhJson));assert(!wrongCheckpoint.events.includes('/task/openapi/cancel'));
+console.log('PASS actual videos schema has no user_id; cleaner path/size race verifies original checkpoint; foreign job/task rejected');
 
 for(const options of [{cancelResponse:{code:817,msg:'APIKEY_TASK_CANCEL_NOT_ALLOWED'}},{httpDenied:true},{sessionExpired:true},{cancelResponse:{unexpected:true}},{cancelResponse:{code:false}}]){
   const h=harness({...options,keepRunning:true});
@@ -88,6 +93,7 @@ for(const scenario of [
   {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'RUNNING',confirmed:false},
   {uiResponse:{ok:false,task_id:'task',error:'authentication_required'},keepRunning:true,confirmed:false},
   {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:false,status:'RUNNING'},keepRunning:true,confirmed:false},
+  {uiResponse:{ok:true,task_id:'task',accepted:false,confirmed:false,status:'SUCCESS',clicked_at:null},nativeStatus:'SUCCESS',confirmed:false},
   {uiResponse:{ok:true,task_id:'other',accepted:true,confirmed:true,status:'CANCEL'},keepRunning:true,confirmed:false},
 ]){
   const h=harness(scenario);await h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson);
@@ -96,6 +102,7 @@ for(const scenario of [
   assert(!h.events.includes('/task/openapi/cancel'));
   assert.equal(h.events.filter(x=>x==='/ui/cancel').length,1);
   assert.equal(h.row.result_video_id,'job');
+  if(scenario.uiResponse.status==='SUCCESS')assert.equal(h.row.meta.provider_cancel_error,'A tarefa já estava encerrada antes do cancelamento.');
   if(!scenario.confirmed)assert(h.queue.paused);
 }
 console.log('PASS UI bridge proof binding, authoritative CANCEL, conflicting SUCCESS, auth refusal, no OpenAPI fallback');
