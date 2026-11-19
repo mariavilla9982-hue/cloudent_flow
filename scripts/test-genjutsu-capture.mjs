@@ -9,8 +9,8 @@ const functions=stripTypeScriptTypes(source.slice(source.indexOf('const MOTION_P
 const bytes=new Uint8Array(64);bytes.set(new TextEncoder().encode('ftyp'),4);const blob=new Blob([bytes],{type:'video/mp4'});
 function harness(options={}){
   let row={id:'job',user_id:'owner',status:'running',storage_provider:'r2',runninghub_task_id:'task',result_video_id:'job',result_storage_path:'owner/production-results/job.mp4',
-    meta:{workflow_key:'genjutsu',workflow_id:'2117411301344411649',motion_preview_available:true,result_node_id:options.wrongNode?'384':'482',motion_preview_file:{task_id:'task',node_id:'482'}}};
-  const events=[],writes=[];let status=0;
+    meta:{workflow_key:'genjutsu',workflow_id:'2117411301344411649',motion_preview_available:true,motion_preview_saved_at:new Date(Date.now()-1000).toISOString(),result_node_id:options.wrongNode?'384':'482',motion_preview_file:{task_id:options.wrongTask?'other':'task',node_id:'482'}}};
+  const events=[],writes=[];let status=0,cancels=0;
   const video={id:'job',status:'ready',storage_path:row.result_storage_path,storage_provider:'r2',size_bytes:64,mime_type:'video/mp4'};
   const admin={rpc:async name=>{assert.equal(name,'wake_genjutsu_queue');return {data:true};},from(table){let value;const q={select(){return q;},eq(){return q;},in(){return q;},is(){return q;},update(v){value=v;return q;},async maybeSingle(){if(value){writes.push(value);Object.assign(row,value);events.push('verify-saved');return {data:{id:row.id}};}return {data:table==='production_jobs'?structuredClone(row):video};},then(resolve){if(value){writes.push(value);Object.assign(row,value);}return Promise.resolve({error:null}).then(resolve);}};return q;}};
   const c=vm.createContext({Date,Number,String,Array,Uint8Array,TextDecoder,crypto,Blob,URL,AbortSignal,Error,Promise,JSON,setTimeout,clearTimeout,setInterval,clearInterval,
@@ -19,7 +19,10 @@ function harness(options={}){
     motionStorageRead:async()=>{events.push('download-copy');return new Response(options.corrupt?new Blob(['bad']):blob);},
     fetch:async()=>Response.json({data:{netWssUrl:'wss://www.runninghub.ai/ws?Rh-Comfy-Auth=private-token'}})
   });vm.runInContext(functions,c);
-  const rhJson=async(path,{taskId})=>{assert.equal(taskId,'task');events.push(path);if(path.endsWith('cancel'))return {code:0};return {code:0,data:++status===1||options.keepRunning?'RUNNING':'FAILED'};};
+  const rhJson=async(path,{taskId},timeoutMs)=>{assert.equal(taskId,'task');assert.equal(timeoutMs,8000);events.push(path);
+    if(path.endsWith('cancel')){cancels++;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
+    if(options.statusError)throw Error('provider unreachable');return {code:0,data:++status===1||options.keepRunning?'RUNNING':'CANCELLED'};
+  };
   return {c,admin,rhJson,events,writes,get row(){return row;}};
 }
 const h=harness();assert.equal(h.c.isMotionPreviewJob(h.row),true);assert.equal(h.c.motionOutputNode(h.row),'482');
@@ -34,10 +37,21 @@ assert.equal(h.c.isMotionPreviewJob({meta:{workflow_key:'genjutsu',workflow_id:'
 assert.equal(await h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson),true);
 assert(h.events.indexOf('download-copy')<h.events.indexOf('/task/openapi/cancel'));
 assert(h.events.indexOf('verify-saved')<h.events.indexOf('/task/openapi/cancel'));
+assert(h.events.indexOf('/task/openapi/cancel')<h.events.indexOf('/task/openapi/status'));
+assert(h.row.meta.provider_cancel_lag_ms>=0&&h.row.meta.provider_cancel_lag_ms<10000);
+assert.equal(h.row.meta.genjutsu_cancel_phase,'PROVIDER_STOPPED');
 assert.equal(h.row.status,'ready');assert.equal(h.row.result_video_id,'job');assert.equal(h.row.meta.motion_preview_verified_bytes,64);
-for(const options of [{wrongNode:true},{corrupt:true},{storageBlocked:true}]){const h=harness(options);await assert.rejects(()=>h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson));assert(!h.events.includes('/task/openapi/cancel'));}
+for(const options of [{wrongNode:true},{wrongTask:true},{corrupt:true},{storageBlocked:true}]){const h=harness(options);await assert.rejects(()=>h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson));assert(!h.events.includes('/task/openapi/cancel'));}
 const pending=harness({keepRunning:true});assert.equal(await pending.c.cancelMotionAfterSave(pending.admin,'job',pending.rhJson),false);assert.equal(pending.row.status,'running');assert.equal(pending.row.meta.provider_task_pending,true);assert.equal(pending.row.result_video_id,'job');
-console.log('PASS 482-only capture origin, task binding, persisted MP4/hash before cancel, storage failure guards and pending-task slot retention');
+assert.equal(pending.row.meta.genjutsu_cancel_phase,'CANCELLING_PROVIDER');
+const recovered=harness({cancelTransient:true});assert.equal(await recovered.c.cancelMotionAfterSave(recovered.admin,'job',recovered.rhJson),true);
+assert.equal(recovered.events.filter(x=>x==='/task/openapi/cancel').length,2);
+for(const options of [{cancelRejected:true,keepRunning:true},{cancelError:true,keepRunning:true},{statusError:true}]){
+  const h=harness(options);assert.equal(await h.c.cancelMotionAfterSave(h.admin,'job',h.rhJson),false);
+  assert.equal(h.row.result_video_id,'job');assert.equal(h.row.status,'running');assert.equal(h.row.meta.provider_task_pending,true);
+  assert(h.row.meta.provider_cancel_error);assert(h.events.includes('/task/openapi/cancel'));
+}
+console.log('PASS 482 capture checksum before bounded cancellation, immediate request before status, retry, pending, provider errors');
 
 // Exercise the actual monitor: 482 is copied in its event handler while channel auth is in memory.
 const monitor=harness();let captured=false,closed=false;monitor.row.result_video_id=null;monitor.row.meta.motion_preview_file=null;
