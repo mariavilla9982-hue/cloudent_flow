@@ -12,7 +12,7 @@ try{
       if(options.auth)return route.fulfill({contentType:'text/html; charset=utf-8',body:'<input type="password">'});
       const rowId=options.foreignTask?'1234567890123456789':task;
       const status=options.status||'Em execução';
-      await route.fulfill({contentType:'text/html; charset=utf-8',body:`<input class="detail-search"><button>Pesquisar</button><p id="clicks">0</p><table><tr><td>${rowId}</td><td class="status-cell">${status}</td><td><a class="cancel-link">Cancelar</a></td></tr></table><div id="messages"></div><script>
+      await route.fulfill({contentType:'text/html; charset=utf-8',body:`<input class="detail-search"><button onclick="document.getElementById('searches').textContent=Number(document.getElementById('searches').textContent)+1">Pesquisar</button><p id="searches">0</p><p id="clicks">0</p><table><tr><td>${rowId}</td><td class="status-cell">${status}</td><td><a class="cancel-link">Cancelar</a></td></tr></table><div id="messages"></div><script>
       document.querySelector('.cancel-link').onclick=()=>{const d=document.createElement('div');d.setAttribute('role','dialog');d.innerHTML='<p>${options.wrongDialog?'1234567890123456789':task}</p><button class="ant-btn-primary">Confirmar</button>';document.body.append(d);d.querySelector('button').onclick=()=>{document.getElementById('clicks').textContent=Number(document.getElementById('clicks').textContent)+1;d.remove();${options.denied?"document.getElementById('messages').textContent='817 APIKEY_TASK_CANCEL_NOT_ALLOWED';":options.toastOnly?"document.getElementById('messages').textContent='Solicitação enviada';":"document.querySelector('.status-cell').textContent='"+(options.natural?'Sucesso':'Cancelado')+"';"}}};</script>`});
     });
     await page.goto(BILLING_URL);
@@ -21,6 +21,7 @@ try{
   for(const options of [{},{natural:true},{toastOnly:true}]){
     const page=await fixture(options),result=await cancelThroughUI(page,{taskId:task,allowClick:true,pollMs:10,timeoutMs:80});
     assert.equal(result.confirmed,!options.natural&&!options.toastOnly);
+    if(!options.toastOnly)assert.equal(await page.locator('#searches').innerText(),'0','loaded exact task avoids a search before click');
     assert.equal(await page.locator('#clicks').innerText(),'1');await page.close();
   }
   for(const options of [{denied:true},{wrongDialog:true},{foreignTask:true},{auth:true},{status:'Resposta desconhecida'}]){
@@ -32,7 +33,7 @@ try{
     const page=await fixture({status});const result=await cancelThroughUI(page,{taskId:task,allowClick:true});
     assert.equal(result.confirmed,status==='Cancelado');assert.equal(await page.locator('#clicks').innerText(),'0');await page.close();
   }
-  const passive=await fixture();assert((await cancelThroughUI(passive,{taskId:task})).ready);assert.equal(await passive.locator('#clicks').innerText(),'0');await passive.close();
+  const passive=await fixture();assert((await cancelThroughUI(passive,{taskId:task})).ready);assert.equal(await passive.locator('#clicks').innerText(),'0');assert.equal(await passive.locator('#searches').innerText(),'1','passive reconciliation refreshes its observation');await passive.close();
   const own=await fixture();assert.equal((await verifyAccount(own,account)).account_id,account);await own.close();
   const foreign=await fixture({foreignAccount:true});await assert.rejects(()=>verifyAccount(foreign,account));await foreign.close();
   for(const restores of [true,false]){
