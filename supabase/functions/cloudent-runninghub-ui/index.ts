@@ -21,7 +21,7 @@ Deno.serve(async req=>{
   const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false}});
   try{
     const body=await req.json(),operation=String(body.operation||'');
-    if(!['setup','probe','record_probe','prepare','cancel'].includes(operation))return json({ok:false,error:'invalid_operation'},400);
+    if(!['setup','probe','record_probe','prepare','cancel','reset_batch_session','arm_budget_watch'].includes(operation))return json({ok:false,error:'invalid_operation'},400);
     const {data:config,error:ce}=await admin.from('app_settings').select('value').eq('key','genjutsu_ui_cancel').maybeSingle();
     if(ce)throw ce;
     const cfg=config?.value;
@@ -34,8 +34,24 @@ Deno.serve(async req=>{
       if(ae||auth?.user?.id!==cfg.owner_user_id)return json({ok:false,error:'unauthorized'},401);
       const {data:member}=await admin.from('app_members').select('role,enabled').eq('user_id',auth.user.id).maybeSingle();
       if(!member?.enabled||member.role!=='admin')return json({ok:false,error:'forbidden'},403);
-      if(['prepare','cancel'].includes(operation))return json({ok:false,error:'worker_required'},403);
+      if(['prepare','cancel','reset_batch_session','arm_budget_watch'].includes(operation))return json({ok:false,error:'worker_required'},403);
     }else if(['setup','record_probe'].includes(operation))return json({ok:false,error:'admin_required'},403);
+    if(['reset_batch_session','arm_budget_watch'].includes(operation)){
+      const {data:batch,error:be}=await admin.from('app_settings').select('value').eq('key','genjutsu_validation_batch').maybeSingle();
+      const b=batch?.value,jobId=String(body.job_id||'');
+      if(be||b?.enabled!==true||b.batch_id!=='cancel-after-capture-20261120'||b.owner_user_id!==cfg.owner_user_id||!Number.isFinite(Date.parse(b.expires_at))||Date.parse(b.expires_at)<=Date.now()
+        ||b.max_total_points!==1200||b.reserve_per_job_points!==600||b.stop_after_seconds!==1310||!Array.isArray(b.job_ids)||b.job_ids.length!==2||!b.job_ids.includes(jobId))return json({ok:false,error:'batch_not_authorized'},409);
+      const {data:job,error:je}=await admin.from('production_jobs').select('*').eq('id',jobId).eq('user_id',cfg.owner_user_id).maybeSingle();
+      if(je||job?.meta?.validation_batch_id!==b.batch_id||job.meta.workflow_key!=='genjutsu')return json({ok:false,error:'batch_job_mismatch'},409);
+      if(operation==='reset_batch_session'){
+        const {count,error:ce}=await admin.from('production_jobs').select('id',{count:'exact',head:true}).in('status',['uploading','queued','running']);
+        if(ce||count!==0||job.status!=='motion_waiting'||job.runninghub_task_id)return json({ok:false,error:'batch_not_idle'},409);
+        return json({ok:true,account_id:cfg.account_id});
+      }
+      const taskId=String(body.task_id||''),submitted=Date.parse(job.meta.authorized_cancel_test?.authorized_at||'');
+      if(!/^\d{15,25}$/.test(taskId)||job.runninghub_task_id!==taskId||!['queued','running'].includes(job.status)||!Number.isFinite(submitted))return json({ok:false,error:'batch_task_mismatch'},409);
+      return json({ok:true,account_id:cfg.account_id,deadline_at:new Date(submitted+1310000).toISOString()});
+    }
     if(operation==='record_probe'){
       const ready=body.ready===true&&body.account_id===cfg.account_id;
       const {error}=await admin.from('app_settings').update({value:{...cfg,enabled:ready,browser_ready:ready,probed_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq('key','genjutsu_ui_cancel');

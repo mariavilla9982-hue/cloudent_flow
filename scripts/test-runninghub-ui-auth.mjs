@@ -9,7 +9,8 @@ job.result_video_id=job.id;
 const video={id:job.id,status:'ready',storage_path:job.result_storage_path,size_bytes:42};
 let handler;
 const cfg={owner_user_id:owner,account_id:'2093283289942581250',enabled:true};
-const admin={rpc:async()=>({data:'master'}),auth:{getUser:async t=>t==='owner-token'?{data:{user:{id:owner}}}:{error:true}},from(table){let filters=[],value;const q={select(){return q;},eq(k,v){filters.push([k,v]);return q;},update(v){value=v;return q;},async maybeSingle(){const row=table==='app_settings'?{value:cfg}:table==='app_members'?{user_id:owner,enabled:true,role:'admin'}:table==='production_jobs'?job:video;return {data:filters.every(([k,v])=>table==='app_settings'||row[k]===v)?structuredClone(row):null};},then(resolve){if(value&&table==='app_settings')Object.assign(cfg,value.value);return Promise.resolve({error:null}).then(resolve);}};return q;}};
+const batch={enabled:true,batch_id:'cancel-after-capture-20261120',owner_user_id:owner,job_ids:[job.id,'11111111-1111-4111-8111-111111111111'],max_total_points:1200,reserve_per_job_points:600,stop_after_seconds:1310,expires_at:new Date(Date.now()+3600000).toISOString()};let activeCount=0;
+const admin={rpc:async()=>({data:'master'}),auth:{getUser:async t=>t==='owner-token'?{data:{user:{id:owner}}}:{error:true}},from(table){let filters=[],value;const q={select(){return q;},in(){return q;},eq(k,v){filters.push([k,v]);return q;},update(v){value=v;return q;},async maybeSingle(){const row=table==='app_settings'?{value:filters.some(([k,v])=>k==='key'&&v==='genjutsu_validation_batch')?batch:cfg}:table==='app_members'?{user_id:owner,enabled:true,role:'admin'}:table==='production_jobs'?job:video;return {data:filters.every(([k,v])=>table==='app_settings'||row[k]===v)?structuredClone(row):null};},then(resolve){if(value&&table==='app_settings')Object.assign(cfg,value.value);return Promise.resolve({error:null,count:activeCount}).then(resolve);}};return q;}};
 const c=vm.createContext({createClient:()=>admin,Deno:{env:{get:()=>''},serve:f=>{handler=f;}},Request,Response,JSON,Date,String,Number,Array,RegExp,Error});vm.runInContext(stripTypeScriptTypes(source),c);
 assert(c.eligibleUICancel(job,video,task,lease,owner));
 for(const [j,v,t,l,o]of [[job,video,'other',lease,owner],[job,video,task,'wrong',owner],[job,video,task,lease,'other'],[job,{...video,id:'other-job'},task,lease,owner],[{...job,meta:{...job.meta,motion_preview_sha256:''}},video,task,lease,owner],[job,{...video,size_bytes:43},task,lease,owner]])assert(!c.eligibleUICancel(j,v,t,l,o));
@@ -27,3 +28,15 @@ assert.equal((await request('cancel',{'x-cloudent-worker-secret':'master'},{leas
 const allowed=await request('cancel',{'x-cloudent-worker-secret':'master'});assert.equal(allowed.status,200);assert(!JSON.stringify(await allowed.json()).includes('master'));
 assert.equal((await request('setup',{Authorization:'Bearer owner-token'})).status,200);
 console.log('PASS UI bridge authorization: admin-only setup, worker-only cancel, exact task/owner/lease/hash/size, no secret response');
+// Test-only browser lifecycle and timer operations never widen ordinary cancellation.
+job.meta.validation_batch_id=batch.batch_id;job.meta.authorized_cancel_test={authorized_at:new Date().toISOString()};
+assert.equal((await request('arm_budget_watch',{Authorization:'Bearer owner-token'})).status,403);
+const watch=await request('arm_budget_watch',{'x-cloudent-worker-secret':'master'},{deadline_at:'2099-01-01T00:00:00Z'});assert.equal(watch.status,200);assert.equal(Date.parse((await watch.json()).deadline_at),Date.parse(job.meta.authorized_cancel_test.authorized_at)+1310000);
+assert.equal((await request('arm_budget_watch',{'x-cloudent-worker-secret':'master'},{job_id:'foreign'})).status,409);
+assert.equal((await request('arm_budget_watch',{'x-cloudent-worker-secret':'master'},{task_id:'1234567890123456789'})).status,409);
+assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,409);
+job.status='motion_waiting';job.runninghub_task_id=null;assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,200);
+activeCount=1;assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,409);activeCount=0;
+batch.expires_at='bad-date';assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,409);
+batch.expires_at=new Date(Date.now()+3600000).toISOString();batch.enabled=false;assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,409);
+console.log('PASS batch browser guards: worker-only, two-job whitelist, derived deadline, exact task, no reset while active, expiry and disabled grant');

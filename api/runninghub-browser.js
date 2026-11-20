@@ -50,9 +50,9 @@ document.getElementById('setup').onclick=()=>run('setup');document.getElementByI
   if(req.method!=='POST')return send(res,405,{ok:false,error:'method_not_allowed'});
   try{
     const body=typeof req.body==='string'?JSON.parse(req.body):req.body||{};
-    if(!['setup','probe','prepare','cancel'].includes(body.operation))return send(res,400,{ok:false,error:'invalid_operation'});
+    if(!['setup','probe','prepare','cancel','reset_batch_session','arm_budget_watch'].includes(body.operation))return send(res,400,{ok:false,error:'invalid_operation'});
     const auth=await authorize(req,body);if(!auth.value.ok)return send(res,auth.status,auth.value);
-    const result=await runninghubBrowser(body.operation,String(body.task_id||''),auth.value.account_id);
+    const result=await runninghubBrowser(body.operation,String(body.task_id||''),auth.value.account_id,auth.value);
     if(body.operation==='probe')await authorize(req,{operation:'record_probe',ready:result.ready===true,account_id:result.account_id});
     return send(res,200,result);
   }catch{return send(res,503,{ok:false,error:'ui_browser_unavailable'});}

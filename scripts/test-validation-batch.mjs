@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {stripTypeScriptTypes} from 'node:module';
+const raw=fs.readFileSync('supabase/functions/cloudent-genjutsu-cancel-test/batch-policy.ts','utf8').replaceAll('export ','');
+const c=vm.createContext({Error,Number,Set});vm.runInContext(stripTypeScriptTypes(raw)+';globalThis.policy=selectValidationJob;globalThis.ids=BATCH_IDS;',c);
+const [a,b]=c.ids;
+const job=id=>({id,status:'motion_waiting',attempt_count:0,runninghub_task_id:null,result_video_id:null,locked_by:null,meta:{}});
+assert.equal(c.policy([job(b),job(a)]).job_id,a);
+for(const status of ['uploading','queued','running'])assert.equal(c.policy([{...job(a),status},job(b)]).phase,'waiting');
+assert.equal(c.policy([{...job(a),status:'ready',runninghub_task_id:'first',result_video_id:a,meta:{provider_task_pending:false}},job(b)]).job_id,b);
+assert.equal(c.policy([{...job(a),status:'ready',runninghub_task_id:'first',meta:{provider_task_pending:true}},job(b)]).phase,'waiting');
+assert.equal(c.policy([{...job(a),status:'cancelled',runninghub_task_id:'first'},job(b)]).job_id,b);
+assert.equal(c.policy([{...job(a),status:'ready',runninghub_task_id:'first'},{...job(b),status:'ready',runninghub_task_id:'second'}]).phase,'complete');
+for(const patch of [{locked_by:'other'},{attempt_count:1},{meta:{pipeline_dispatch_intent:'uncertain'}},{result_video_id:'other'}])assert.equal(c.policy([{...job(a),...patch},job(b)]).phase,'blocked');
+assert.throws(()=>c.policy([job(a),job(a)]));assert.throws(()=>c.policy([job('foreign'),job(b)]));
+console.log('PASS fixed two-job identity, serial order, occupied slots, provider pending, terminal release, uncertain dispatch and no retry');
