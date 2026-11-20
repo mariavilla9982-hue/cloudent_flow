@@ -25,9 +25,10 @@ function harness(options={}){
   });vm.runInContext(functions,c);
   const rhJson=async(path,{taskId},signal)=>{assert.equal(taskId,'task');assert(signal instanceof AbortSignal);events.push(path);
     if(path.endsWith('cancel')){cancels++;assert.equal(row.meta.provider_cancel_audit.at(-1).outcome,'sending');if(options.httpDenied)throw Object.assign(Error('APIKEY_TASK_CANCEL_NOT_ALLOWED'),{httpStatus:500,providerCode:817});if(options.sessionExpired)throw Object.assign(Error('session expired'),{httpStatus:401});if(options.cancelResponse)return options.cancelResponse;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
-    if(options.statusError)throw Error('provider unreachable');return {code:0,data:options.nativeStatus|| (options.naturalSuccess?'SUCCESS':++status===1||options.keepRunning?'RUNNING':'CANCELLED')};
+    if(options.statusError)throw Error('provider unreachable');if(options.nativeMissing)return {code:807};return {code:0,data:options.nativeStatus|| (options.naturalSuccess?'SUCCESS':++status===1||options.keepRunning?'RUNNING':'CANCELLED')};
   };
-  if(options.uiResponse)rhJson.cancelUI=async payload=>{assert.equal(payload.task_id,'task');assert(payload.lease.startsWith('genjutsu-provider-stop-'));events.push('/ui/cancel');return options.uiResponse;};
+  if(options.uiResponse){rhJson.cancelUIAccountId='2093283289942581250';rhJson.cancelUI=async payload=>{assert.equal(payload.task_id,'task');assert(payload.lease.startsWith('genjutsu-provider-stop-'));events.push('/ui/cancel');return {method:'authenticated_ui',account_id:'2093283289942581250',...options.uiResponse};};}
+  if(options.passiveResponse)rhJson.prepareUI=async payload=>{assert.equal(payload.task_id,'task');events.push('/ui/passive');return {method:'authenticated_ui',account_id:'2093283289942581250',...options.passiveResponse};};
   return {c,admin,rhJson,events,writes,queue,get row(){return row;}};
 }
 const h=harness();assert.equal(h.c.isMotionPreviewJob(h.row),true);assert.equal(h.c.motionOutputNode(h.row),'482');
@@ -91,6 +92,9 @@ for(const scenario of [
   {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'FAILED',confirmed:true},
   {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'SUCCESS',confirmed:false},
   {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeStatus:'RUNNING',confirmed:false},
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'},nativeMissing:true,confirmed:true},
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL',account_id:'1234567890123456789'},nativeMissing:true,confirmed:false},
+  {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:false,status:'UNKNOWN'},nativeMissing:true,confirmed:false},
   {uiResponse:{ok:false,task_id:'task',error:'authentication_required'},keepRunning:true,confirmed:false},
   {uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:false,status:'RUNNING'},keepRunning:true,confirmed:false},
   {uiResponse:{ok:true,task_id:'task',accepted:false,confirmed:false,status:'SUCCESS',clicked_at:null},nativeStatus:'SUCCESS',confirmed:false},
@@ -106,6 +110,9 @@ for(const scenario of [
   if(!scenario.confirmed)assert(h.queue.paused);
 }
 console.log('PASS UI bridge proof binding, authoritative CANCEL, conflicting SUCCESS, auth refusal, no OpenAPI fallback');
+const reconciled=harness({uiResponse:{ok:true,task_id:'task',accepted:true,status:'UNKNOWN'},passiveResponse:{ok:true,task_id:'task',confirmed:true,status:'CANCEL'},priorMeta:{provider_cancel_accepted:true,provider_cancel_attempts:1},nativeMissing:true});
+await reconciled.c.cancelMotionAfterSave(reconciled.admin,'job',reconciled.rhJson);assert.equal(reconciled.row.meta.provider_cancel_confirmed,true);assert.equal(reconciled.events.filter(x=>x==='/ui/passive').length,1);assert(!reconciled.events.includes('/ui/cancel'));
+console.log('PASS OpenAPI807 plus exact UI CANCEL confirms stop; foreign account/unknown/active conflicts rejected; restart reconciles without a second click');
 
 // Exercise the actual monitor: 482 is copied in its event handler while channel auth is in memory.
 const monitor=harness();let captured=false,closed=false;monitor.row.result_video_id=null;monitor.row.meta.motion_preview_file=null;

@@ -347,6 +347,12 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         await persistAttempt();
         if(accepted||permanent)break;
       }
+      // An accepted/uncertain UI click is reconciled passively on later passes.
+      // Never submit the cancellation a second time just to refresh its status.
+      if(useUI&&maxAttempts===0&&typeof (rhJson as any).prepareUI==='function'){
+        const observation=await (rhJson as any).prepareUI({job_id:job.id,task_id:taskId}).catch(()=>null);
+        if(observation?.ok&&observation.task_id===taskId)uiProof=observation;
+      }
       let state:any=null,statusError:string|null=null;
       // Confirmação real; aceitação de /cancel não basta para liberar GPU/fila.
       for(let poll=0;poll<(accepted?3:1);poll++){
@@ -356,13 +362,19 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
         if(Number(state?.code)===0&&["SUCCESS","FAILED","CANCEL","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase()))break;
       }
       const nativeTerminal=Number(state?.code)===0&&["SUCCESS","FAILED","CANCEL","CANCELLED","CANCELED"].includes(String(state?.data||"").toUpperCase());
-      const uiTerminal=!!(uiProof?.ok&&uiProof?.task_id===taskId&&['CANCEL','SUCCESS','FAILED'].includes(uiProof?.status));
-      const terminal=nativeTerminal;
+      const uiTerminal=!!(useUI&&/^\d{15,25}$/.test(String((rhJson as any).cancelUIAccountId||''))&&uiProof?.ok&&uiProof?.task_id===taskId&&uiProof.method==='authenticated_ui'
+        &&uiProof.account_id===(rhJson as any).cancelUIAccountId&&['CANCEL','SUCCESS','FAILED'].includes(uiProof?.status));
+      const nativeActive=Number(state?.code)===0&&['QUEUED','RUNNING'].includes(String(state?.data||'').toUpperCase());
+      // Cancelled API-created tasks can disappear from OpenAPI (807/empty V2).
+      // The exact authenticated UI row can confirm CANCEL in that case. A known
+      // active native state or SUCCESS still blocks contradictory UI evidence.
+      const uiCancelWithoutNative=!nativeTerminal&&!nativeActive&&uiTerminal&&uiProof.confirmed===true&&uiProof.status==='CANCEL';
+      const terminal=nativeTerminal||uiCancelWithoutNative;
       const finishedAt=new Date().toISOString();
       const nativeStatus=nativeTerminal?String(state.data).toUpperCase():null;
       const providerStatus=uiTerminal&&nativeStatus!=='SUCCESS'?uiProof.status:nativeStatus;
       // SUCCESS means execution finished; it does NOT prove the cancel request worked.
-      const cancelConfirmed=terminal&&(["CANCEL","CANCELLED","CANCELED"].includes(nativeStatus||'')||
+      const cancelConfirmed=terminal&&(uiCancelWithoutNative||["CANCEL","CANCELLED","CANCELED"].includes(nativeStatus||'')||
         (nativeTerminal&&uiTerminal&&uiProof.confirmed===true&&uiProof.status==='CANCEL'&&nativeStatus!=='SUCCESS'));
       const cancelDenied=Number(responseCode)===817;
       if(!cancelConfirmed){
@@ -530,6 +542,7 @@ Deno.serve(async(req:Request)=>{
         return value;
       };
       (rhJson as any).cancelUI=(payload:any)=>callUI('cancel',payload);
+      (rhJson as any).cancelUIAccountId=String(uiSetting.value.account_id);
       (rhJson as any).prepareUI=(payload:any)=>callUI('prepare',payload);
     }
 

@@ -35,5 +35,15 @@ try{
   const passive=await fixture();assert((await cancelThroughUI(passive,{taskId:task})).ready);assert.equal(await passive.locator('#clicks').innerText(),'0');await passive.close();
   const own=await fixture();assert.equal((await verifyAccount(own,account)).account_id,account);await own.close();
   const foreign=await fixture({foreignAccount:true});await assert.rejects(()=>verifyAccount(foreign,account));await foreign.close();
+  for(const restores of [true,false]){
+    const page=await browser.newPage();
+    await page.route('https://www.runninghub.ai/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<input class="detail-search"><button>Pesquisar</button><p id="clicks">0</p><table><tr><td>${task}</td><td class="status-cell">Em execução</td><td><a class="cancel-link">Cancelar</a></td></tr></table><script>
+      document.querySelector('.cancel-link').onclick=()=>{const d=document.createElement('div');d.setAttribute('role','dialog');d.innerHTML='<p>${task}</p><button class="ant-btn-primary">Confirmar</button>';document.body.append(d);d.querySelector('button').onclick=()=>{document.querySelector('#clicks').textContent='1';d.remove();const row=document.querySelector('tr');row.remove();${restores?"setTimeout(()=>{row.querySelector('.status-cell').textContent='Cancelado';document.querySelector('table').append(row)},60);":""}}};</script>`}));
+    await page.goto(BILLING_URL);
+    const result=await cancelThroughUI(page,{taskId:task,allowClick:true,pollMs:10,timeoutMs:250});
+    assert.equal(result.confirmed,restores);assert.equal(result.accepted,true);assert(result.clicked_at);assert.equal(await page.locator('#clicks').innerText(),'1');
+    if(!restores)assert.equal(result.status,'UNKNOWN');await page.close();
+  }
+  console.log('PASS asynchronous table reload: row disappears after click, later CANCEL is confirmed, permanently absent row stays uncertain without re-click');
   console.log('PASS real browser fixtures: exact task and account, confirmation binding, CANCEL vs SUCCESS, toast not proof, refusal817, expired login, unknown status, passive mode; zero provider requests');
 }finally{await browser.close();}
