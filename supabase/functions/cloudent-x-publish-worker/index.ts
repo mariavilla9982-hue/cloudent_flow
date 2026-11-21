@@ -63,7 +63,7 @@ function s3RegionFromEndpoint(endpoint:string){
   }catch{return "auto"}
 }
 function r2KeyPath(key:string){return String(key||"").split("/").map(encodeURIComponent).join("/")}
-async function r2PresignedUrl(config:CloudentR2Config,method:string,key:string,expires=3600,contentType=""){
+async function r2PresignedUrl(config:CloudentR2Config,method:string,key:string,expires=3600,contentType="",disposition=""){
   const aws=new AwsClient({
     service:"s3",region:s3RegionFromEndpoint(config.endpoint),
     accessKeyId:config.access_key_id,
@@ -72,7 +72,7 @@ async function r2PresignedUrl(config:CloudentR2Config,method:string,key:string,e
   const headers:Record<string,string>={};
   if(contentType)headers["Content-Type"]=contentType;
   const request=new Request(
-    config.endpoint+"/"+encodeURIComponent(config.bucket)+"/"+r2KeyPath(key)+"?X-Amz-Expires="+Math.max(1,Math.min(604800,Number(expires)||3600)),
+    config.endpoint+"/"+encodeURIComponent(config.bucket)+"/"+r2KeyPath(key)+"?X-Amz-Expires="+Math.max(1,Math.min(604800,Number(expires)||3600))+(disposition?"&response-content-disposition="+encodeURIComponent(disposition):""),
     {method,headers}
   );
   const signed=await aws.sign(request,{aws:{signQuery:true}});
@@ -536,10 +536,10 @@ async function serveBufferVideo(admin:any,req:Request,url:URL,master:string){
  const signature=Uint8Array.from(token.match(/../g)!,part=>parseInt(part,16));
  if(!await crypto.subtle.verify("HMAC",await bufferVideoKey(master),signature,bufferVideoClaim(id,expires)))return new Response(null,{status:404});
 
- const {data:post,error}=await admin.from("x_drive_posts").select("user_id,meta").eq("id",id).maybeSingle();
+ const {data:post,error}=await admin.from("x_drive_posts").select("id,user_id,meta").eq("id",id).maybeSingle();
  if(error)return new Response(null,{status:502});
  const path=String(post?.meta?.storage_path||"");
- const mime=post?uploadPathMime(post.user_id,path):"";
+ const mime=post?await readableUploadMime(admin,post):"";
  if(post?.meta?.source!=="upload"||post.meta.storage_provider!=="r2"||!mime)return new Response(null,{status:404});
  const cfg=await getCloudentR2Config(admin);
  if(!cfg)return new Response(null,{status:502});
@@ -571,7 +571,7 @@ async function sendBufferPost(admin:any,file:any,xAccount:any,channelId:string,w
  const channel=await verifiedBufferChannel(channelId,String(xAccount.config?.username||xAccount.account_label||""),key);
  if(xAccount.external_account_id&&String(channel.serviceId)!==String(xAccount.external_account_id))throw new HttpError("O ID do canal do Buffer difere da conta cadastrada no X Studio.",409);
  const path=String(meta.storage_path||"");
- const mime=uploadPathMime(file.user_id,path);
+ const mime=await readableUploadMime(admin,file);
  if(meta.source!=="upload"||meta.storage_provider!=="r2"||!mime)throw new HttpError("Para publicar via Buffer, envie o arquivo pelo X Studio para o armazenamento principal.",409);
  const text=captionValue(file.post_text,true);
  const url=await bufferVideoUrl(file.id,path,master);
@@ -660,7 +660,7 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
     let sourceUrl="",driveToken="";
     if(file.meta?.source==="upload"){
       const path=String(file.meta.storage_path||"");
-      if(!path.startsWith(userId+"/x-uploads/"))throw new HttpError("Caminho do arquivo inválido.",403);
+      if(!(file.meta?.mirror_id?await readableUploadMime(admin,file):path.startsWith(userId+"/x-uploads/")))throw new HttpError("Caminho do arquivo inválido.",403);
       sourceUrl=await uploadReadUrl(admin,String(file.meta.storage_provider||"supabase"),path);
     }else{driveToken=(await usableGoogleToken(admin,userId,master)).token;}
     const mediaId=await uploadVideoX(driveToken,file,xToken,sourceUrl);
@@ -727,6 +727,46 @@ async function xDashboardPayload(admin:any,userId:string,member:any,master:strin
  return {ok:true,accounts:rows};
 }
 
+async function readableUploadMime(admin:any,post:any){
+ const path=String(post.meta?.storage_path||"");
+ if(post.meta?.mirror_id){
+  const {data,error}=await admin.rpc("x_mirror_can_read",{p_user:post.user_id,p_post:post.id});
+  if(error)throw error;
+  if(!data)return "";
+  return uploadPathMime(path.split("/")[0],path);
+ }
+ return uploadPathMime(post.user_id,path);
+}
+
+async function mirrorStatus(admin:any,userId:string){
+ const {data:route,error}=await admin.from("x_media_mirrors").select("id,status,destination_account_id,confirmed_at,last_error").eq("destination_user_id",userId).maybeSingle();
+ if(error)throw error;
+ if(!route)return {route:null,accounts:[]};
+ const {data:accounts,error:ae}=await admin.from("platform_accounts").select("id,account_label,external_account_id,enabled,config").eq("platform","x").eq("owner_user_id",userId);
+ if(ae)throw ae;
+ const candidates=[];
+ for(const a of accounts||[]){
+  if(!a.enabled||a.config?.status!=="connected"||a.config?.publish_provider!=="buffer")continue;
+  const {data:allowed,error:e}=await admin.rpc("cloudent_x_access",{p_user:userId,p_account:a.id});
+  if(e)throw e;if(allowed)candidates.push({id:a.id,label:a.account_label,x_user_id:a.external_account_id});
+ }
+ return {route,accounts:candidates};
+}
+
+async function activateMirror(admin:any,userId:string,master:string,body:any){
+ if(body.confirm!==true)throw new HttpError("Confirme que esta é sua conta de destino.",400);
+ const {data:route,error}=await admin.from("x_media_mirrors").select("id").eq("id",String(body.mirror_id||"")).eq("destination_user_id",userId).maybeSingle();
+ if(error)throw error;if(!route)throw new HttpError("forbidden",403);
+ const a=await resolveXAccount(admin,userId,body),cfg=a.config||{};
+ if(a.owner_user_id!==userId||!a.enabled||cfg.status!=="connected"||cfg.publish_provider!=="buffer"||!cfg.buffer_channel_id||!cfg.buffer_key_cipher||!cfg.buffer_key_iv)throw new HttpError("Conecte sua própria conta pelo Buffer primeiro.",409);
+ const key=await decryptSecret(cfg.buffer_key_cipher,cfg.buffer_key_iv,master);
+ const channel=await verifiedBufferChannel(cfg.buffer_channel_id,String(cfg.username||a.account_label),key);
+ if(String(channel.serviceId)!==String(a.external_account_id))throw new HttpError("O ID do perfil no Buffer não corresponde ao destino.",409);
+ const {data:imported,error:activationError}=await admin.rpc("x_mirror_activate",{p_user:userId,p_mirror:route.id,p_account:a.id});
+ if(activationError)throw new HttpError("Não foi possível ativar este destino.",409);
+ return {ok:true,imported};
+}
+
 async function statusPayload(admin:any,userId:string,master:string,url:URL){
  const member=await requireXMember(admin,userId);
  const {data:all,error}=await admin.from("platform_accounts").select("id,account_label,enabled,config,workspace_id,owner_user_id,external_account_id").eq("platform","x").eq("workspace_id",member.workspace_id).order("created_at");if(error)throw error;
@@ -747,12 +787,12 @@ async function statusPayload(admin:any,userId:string,master:string,url:URL){
  for(const result of [postResult,configResult,captionResult])if(result?.error)throw result.error;
  const posts:any[]=postResult?.data||[],captions:any[]=captionResult?.data||[];
  const cfg=configResult?.data||{enabled:false,interval_minutes:120,daily_slots:["12:00","18:00"]};
- const previewPaths=posts.map(p=>{
+ const previewPaths=await Promise.all(posts.map(async p=>{
   const path=String(p.meta?.storage_path||"");
-  if(p.meta?.source!=="upload"||p.meta?.storage_provider!=="r2"||!path.startsWith(p.user_id+"/x-uploads/"))return "";
+  if(p.meta?.source!=="upload"||p.meta?.storage_provider!=="r2"||!(p.meta?.mirror_id?await readableUploadMime(admin,p):path.startsWith(p.user_id+"/x-uploads/")))return "";
   if(PHOTO_SIGNATURES.has(p.drive_mime_type)&&p.status!=="skipped")return path;
   return p.meta?.thumbnail_path===path+".jpg"?p.meta.thumbnail_path:"";
- });
+ }));
  const thumbConfig=previewPaths.some(Boolean)?await getCloudentR2Config(admin):null;
  if(thumbConfig){
   const urls=new Map<string,Promise<string>>();
@@ -847,6 +887,9 @@ async function reconcileUncertain(admin:any,cfg:any,master:string){
 
 async function runWorker(admin:any,master:string){
   const workerId="xdrive-"+crypto.randomUUID();const now=new Date().toISOString();
+  // Independent of publication: catch up missed uploads, bounded to 100 items per route/tick.
+  const mirrors=await admin.from("x_media_mirrors").select("id").eq("status","ATIVO").limit(20);
+  for(const r of mirrors.data||[])await admin.rpc("x_mirror_backfill",{p_mirror:r.id});
   await admin.rpc("release_stale_x_drive_posts");
   await admin.from("worker_runtime").upsert({worker_name:"x_drive_publisher",last_heartbeat:now,updated_at:now},{onConflict:"worker_name"});
   const {data:configs,error}=await admin.from("x_account_configs").select("*,platform_accounts(config)").eq("enabled",true).order("last_worker_at",{ascending:true,nullsFirst:true}).limit(7);if(error)throw error;
@@ -927,6 +970,7 @@ Deno.serve(async(req:Request)=>{
       if(saved.error)throw saved.error;
       return json({...payload,dashboard_access:dashboardAccess,fixed_replies:Array.isArray(saved.data?.value)?saved.data.value:[]});
     }
+    if(action==="mirror-status")return json(await mirrorStatus(admin,userId));
     if(action==="dashboard"){
       if(req.method!=="GET")return json({error:"method_not_allowed"},405);
       if(!await canUseXDashboard(admin,userId,member))return json({error:"forbidden"},403);
@@ -934,6 +978,7 @@ Deno.serve(async(req:Request)=>{
     }
     if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     const body=await parseBody(req);
+    if(action==="mirror-confirm")return json(await activateMirror(admin,userId,master,body));
     if(action==="save-fixed-replies"){
       if(!Array.isArray(body.replies)||body.replies.length>3||body.replies.some((reply:unknown)=>typeof reply!=="string"||reply.length>2000))
         return json({error:"Salve até 3 comentários fixos."},400);
@@ -1056,11 +1101,20 @@ Deno.serve(async(req:Request)=>{
     }
     if(action==="sync")return json({error:"drive_import_requires_account_migration"},409);
 
-    if(action==="preview"){
-      const {data:p,error}=await admin.from("x_drive_posts").select("meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
+    if(action==="preview"||action==="mirror-download"){
+      const {data:p,error}=await admin.from("x_drive_posts").select("id,user_id,platform_account_id,meta").eq("id",String(body.id||"")).eq("user_id",userId).maybeSingle();
       if(error)throw error;if(!p)return json({error:"not_found"},404);
       const path=String(p.meta?.storage_path||"");
-      if(p.meta?.source!=="upload"||!path.startsWith(userId+"/x-uploads/"))return json({error:"preview_unavailable",user_message:"Prévia indisponível para este arquivo."},409);
+      if(p.meta?.source!=="upload"||!(p.meta?.mirror_id?await readableUploadMime(admin,p):path.startsWith(userId+"/x-uploads/")))return json({error:"preview_unavailable",user_message:"Prévia indisponível para este arquivo."},409);
+      if(action==="mirror-download"){
+       if(!p.meta.mirror_id)return json({error:"not_found"},404);
+       if(p.meta.storage_provider==="r2"){
+        const cfg=await getCloudentR2Config(admin);if(!cfg)throw new HttpError("Armazenamento indisponível.",409);
+        return json({ok:true,url:await r2PresignedUrl(cfg,"GET",path,300,"","attachment")});
+       }
+       const {data,error}=await admin.storage.from("videos").createSignedUrl(path,300,{download:true});if(error)throw error;
+       return json({ok:true,url:data.signedUrl});
+      }
       return json({ok:true,url:await uploadReadUrl(admin,String(p.meta.storage_provider||"supabase"),path)});
     }
     if(action==="schedule"){
