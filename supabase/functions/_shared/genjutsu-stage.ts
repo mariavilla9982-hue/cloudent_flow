@@ -1,3 +1,4 @@
+import {canRecoverGenjutsuDirect,recoverGenjutsuDirect} from './genjutsu-direct-recovery.ts';
 import {prepareGenjutsuPrompt,GenjutsuPromptError,genjutsuExecutionInputs,GENJUTSU_PROMPT_IMAGE_MAX_BYTES} from './genjutsu-gemini.ts';
 import {GENJUTSU_WORKFLOW_ID,validateGenjutsuGraph} from './genjutsu-readiness.ts';
 import {safeGenjutsuError} from './genjutsu-diagnostics.ts';
@@ -33,6 +34,17 @@ export async function prepareGenjutsuStage({admin,job,workerId,key,readBlob,now=
       .eq('id',job.id).eq('user_id',job.user_id).eq('locked_by',workerId).in('status',['motion_waiting','uploading']).is('runninghub_task_id',null).select('id').maybeSingle();
     if(error||!data)throw new Error('Genjutsu: reserva da análise perdida.');job.meta=meta;
   };
+  // Reuse the exact media and instructions after confirmed terminal INTERNAL failures.
+  // A direct request is attempted once; uncertainty or content refusal never replays it.
+  if(job.meta.workflow_id===GENJUTSU_WORKFLOW_ID&&canRecoverGenjutsuDirect(previous)){
+    try{await recoverGenjutsuDirect({state:previous,duration:Number(job.meta.source_duration_seconds),key,checkpoint});return true;}
+    catch(error){
+      const code=String(error?.message||'');
+      if(code==='lease_lost'||!job.meta.genjutsu_prompt?.directRecovery)throw error;
+      const messages:any={content_blocked:'Gemini bloqueou este conteúdo. Envie outro vídeo ou foto de referência.',generation_uncertain:'Gemini não confirmou a resposta direta; repetição automática bloqueada.',invalid_prompt:'Gemini entregou um prompt fora do formato exigido.',direct_provider_failed:'Gemini falhou também na chamada direta. Arquivos preservados.'};
+      throw new GenjutsuPromptError(code,messages[code]||'Falha na recuperação do prompt Gemini.');
+    }
+  }
   const read=async(path:string,mime:string,limit:number)=>{
     if(!String(path||'').startsWith(job.user_id+'/'))throw new Error('Genjutsu: mídia não pertence ao trabalho.');
     return boundedBlob(await readBlob(path),mime,limit);

@@ -64,7 +64,7 @@ Deno.serve(async req=>{
       const taskId=String(body.task_id||''),jobId=String(body.job_id||'');
       if(!/^\d{15,25}$/.test(taskId)||!/^[a-f0-9-]{36}$/i.test(jobId))return json({ok:false,error:'invalid_task'},400);
       const {data:job,error:je}=await admin.from('production_jobs').select('*').eq('id',jobId).eq('user_id',cfg.owner_user_id).eq('runninghub_task_id',taskId).maybeSingle();if(je)throw je;
-      if(!job||job.meta?.workflow_key!=='genjutsu'||!['queued','running'].includes(job.status))return json({ok:false,error:'task_not_eligible'},409);
+      if(!job||!['queued','running'].includes(job.status)||!(job.meta?.workflow_key==='genjutsu'||operation==='prepare'&&job.meta?.workflow_key==='motion_control'))return json({ok:false,error:'task_not_eligible'},409);
       if(operation==='cancel'){
         const {data:video}=await admin.from('videos').select('id,status,size_bytes,storage_path,original_storage_path,storage_provider').eq('id',job.result_video_id).eq('id',job.id).maybeSingle();
         if(!eligibleUICancel(job,video,taskId,String(body.lease||''),cfg.owner_user_id))return json({ok:false,error:'unverified_video_or_lease'},409);

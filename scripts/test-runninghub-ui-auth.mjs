@@ -40,3 +40,10 @@ activeCount=1;assert.equal((await request('reset_batch_session',{'x-cloudent-wor
 batch.expires_at='bad-date';assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,409);
 batch.expires_at=new Date(Date.now()+3600000).toISOString();batch.enabled=false;assert.equal((await request('reset_batch_session',{'x-cloudent-worker-secret':'master'})).status,409);
 console.log('PASS batch browser guards: worker-only, two-job whitelist, derived deadline, exact task, no reset while active, expiry and disabled grant');
+
+job.status='running';job.runninghub_task_id=task;job.meta.workflow_key='motion_control';
+assert.equal((await request('prepare',{'x-cloudent-worker-secret':'master'})).status,200);
+assert.equal((await request('prepare',{Authorization:'Bearer owner-token'})).status,403);
+assert.equal((await request('cancel',{'x-cloudent-worker-secret':'master'})).status,409);
+job.meta.workflow_key='other';assert.equal((await request('prepare',{'x-cloudent-worker-secret':'master'})).status,409);
+console.log('PASS V7 passive inspection: exact owner/task, worker-only; V7 cancel remains denied');

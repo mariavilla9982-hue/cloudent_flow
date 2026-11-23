@@ -38,6 +38,10 @@ try{
  const lost=harness({lost:true});await assert.rejects(()=>lost.run(),/reserva.*perdida/);
  globalThis.fetch=async()=>Response.json({error:'temporary'},{status:503});const transient=harness();assert.equal((await transient.run()).failed,false);assert.equal(transient.row.status,'motion_waiting');assert.equal(transient.row.meta.genjutsu_prompt.interactionId,'accepted-analysis');assert(Date.parse(transient.row.next_attempt_at)>now);
  globalThis.fetch=async()=>Response.json({id:'accepted-analysis',status:'failed',errors:[{code:'INVALID_ARGUMENT'}]});const failed=harness();assert.equal((await failed.run()).failed,true);assert.equal(failed.row.status,'failed');assert.equal(failed.row.locked_by,null);assert.equal(failed.wake,1);
+ const direct=harness();direct.row.meta.workflow_id='2124648844280733698';Object.assign(direct.row.meta.genjutsu_prompt,{status:'provider_waiting',interactionId:undefined,previousInteractionId:'terminal',interactionStatus:'failed',transientAttempts:2,providerFailureCodes:['INTERNAL']});
+ globalThis.fetch=async(url,init)=>{assert(url.endsWith(':generateContent'));return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:prompt}]}}]});};
+ assert.equal((await direct.run()).ready,true);assert.equal(direct.row.meta.genjutsu_prompt.directRecovery.status,'complete');assert.equal(direct.row.meta.genjutsu_prompt.fingerprint,state.fingerprint);assert.equal(direct.row.locked_by,null);
+ console.log('PASS real leased preparation falls back after terminal INTERNAL, reuses media, validates prompt and releases lease');
 }finally{globalThis.fetch=savedFetch;}
 const parent={created_at:new Date(now-120000).toISOString(),status:'waiting',meta:{stage:'control_motion'}};
 const p={status:'running',runninghub_task_id:'task',started_at:new Date(now-60000).toISOString(),meta:{provider_status_task_id:'task',genjutsu_prompt:{status:'complete'},genjutsu_execution:{event:'progress',task_id:'task',value:3,max:10,node_id:'469'}}};

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {recoverGenjutsuDirect,digest} from '../supabase/functions/_shared/genjutsu-direct-recovery.ts';
+import {GENJUTSU_INSTRUCTIONS} from '../supabase/functions/_shared/genjutsu-instructions.ts';
+import {GENJUTSU_MODEL} from '../supabase/functions/_shared/genjutsu-gemini.ts';
+const prompt=fs.readFileSync(new URL('./test-genjutsu-gemini.mjs',import.meta.url),'utf8').match(/const prompt=`([\s\S]*?)`;/)[1];
+const file=(kind)=>({name:'files/'+kind,uri:'https://generativelanguage.googleapis.com/v1beta/files/'+kind,mimeType:kind==='video'?'video/mp4':'image/png',state:'ACTIVE',expirationTime:new Date(Date.now()+3600000).toISOString()});
+const state={fingerprint:'a'.repeat(64),model:GENJUTSU_MODEL,instructionsSha256:await digest(GENJUTSU_INSTRUCTIONS),durationSeconds:10,status:'provider_waiting',interactionStatus:'failed',previousInteractionId:'old-terminal-analysis',providerFailureCodes:['INTERNAL'],transientAttempts:4,video:file('video'),image:file('image')};
+function harness(data,mode){let saved,calls=0;return {get saved(){return saved;},get calls(){return calls;},run(s=state){return recoverGenjutsuDirect({state:s,duration:10,key:'test',checkpoint:async v=>{if(mode==='lease')throw Error('lease_lost');saved=structuredClone(v);},fetcher:async(url,init)=>{calls++;assert(saved?.directRecovery?.status==='started');assert(url.endsWith(':generateContent'));const body=JSON.parse(init.body);assert.equal(body.systemInstruction.parts[0].text,GENJUTSU_INSTRUCTIONS);assert.deepEqual(body.contents[0].parts.slice(0,2).map(p=>p.fileData.fileUri),[state.video.uri,state.image.uri]);assert.equal(body.safetySettings,undefined);if(mode==='timeout')throw Error('timeout');return Response.json(data);}});}};}
+const h=harness({candidates:[{finishReason:'STOP',content:{parts:[{thought:true,text:'do not persist reasoning'},{text:prompt}]}}]});
+assert.equal((await h.run()).status,'complete');assert.equal(h.saved.prompt,prompt);assert.equal(h.saved.fingerprint,state.fingerprint);assert.equal(h.saved.promptSha256,await digest(prompt));
+for(const mutate of [s=>s.interactionId='active',s=>s.providerFailureCodes=['SAFETY'],s=>s.providerFailureCodes=['INTERNAL','SAFETY'],s=>s.instructionsSha256='b'.repeat(64),s=>s.video.uri='https://attacker.test/video',s=>s.video.expirationTime='2020-01-01',s=>s.directRecovery={status:'started'}]){const s=structuredClone(state);mutate(s);const t=harness({});await assert.rejects(()=>t.run(s));assert.equal(t.calls,0);}
+for(const reason of ['PROHIBITED_CONTENT','SAFETY']){const t=harness({promptFeedback:{blockReason:reason}});await assert.rejects(()=>t.run(),/content_blocked/);assert.equal(t.saved.status,'failed');assert.equal(t.saved.directRecovery.finishReason,reason);await assert.rejects(()=>t.run(t.saved));assert.equal(t.calls,1);}
+const timeout=harness({},'timeout');await assert.rejects(()=>timeout.run(),/generation_uncertain/);assert.equal(timeout.saved.status,'generating');await assert.rejects(()=>timeout.run(timeout.saved));assert.equal(timeout.calls,1);
+const lease=harness({},'lease');await assert.rejects(()=>lease.run(),/lease_lost/);assert.equal(lease.calls,0);
+const invalid=harness({candidates:[{finishReason:'STOP',content:{parts:[{text:'not a structured prompt'}]}}]});await assert.rejects(()=>invalid.run(),/invalid_prompt/);assert.equal(invalid.saved.status,'failed');
+console.log('PASS direct recovery: immutable inputs, validated output, refusal, timeout, lease, media origins and no replay');
