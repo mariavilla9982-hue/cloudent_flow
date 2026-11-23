@@ -5447,10 +5447,9 @@ function calendarInstagramAccounts(){
 }
 function calendarEnsureAccount(){
   const accounts=calendarInstagramAccounts();
-  if(!accounts.length)return "";
   if(!accounts.some(a=>calendarAccountId(a)===String(calendarActiveAccountId||""))){
-    calendarActiveAccountId=calendarAccountId(accounts[0]);
-    localStorage.setItem(CALENDAR_ACCOUNT_KEY,calendarActiveAccountId);
+    if(calendarActiveAccountId){calendarActiveAccountId="";localStorage.setItem(CALENDAR_ACCOUNT_KEY,"");}
+    return "";
   }
   return calendarActiveAccountId;
 }
@@ -5548,7 +5547,7 @@ function calendarAccountSwitcher(context="calendar"){
     return '<div class="calendar-scale-group">'+chip(a)+'<div class="calendar-scale-daughters">'+daughters.map(chip).join("")+
       (linked<2?scaleAction(action,"+ Conectar conta filha"):"")+'</div></div>';
   });
-  return '<div class="calendar-account-switcher"><span>Contas</span>'+items.join("")+calendarReconnectButton()+calendarSahryReconnect()+'</div>';
+  return '<div class="calendar-account-switcher"><span>'+(active?'Contas':'Selecione uma conta')+'</span>'+items.join("")+calendarReconnectButton()+calendarSahryReconnect()+'</div>';
 }
 async function selectCalendarAccount(id,context="calendar"){
   id=String(id||"");
@@ -6865,6 +6864,7 @@ async function handleBulkVideoPicker(input){
   const accountId=calendarEnsureAccount();
   const files=[...(input?.files||[])].filter(f=>f.type.startsWith("video/")||/\.(mp4|mov|m4v|webm)$/i.test(f.name));
   if(!files.length)return;
+  if(!accountId){toast("Selecione uma conta do Instagram antes de enviar os vídeos.","warn");return}
   if(bulkPublishUploading){toast("Já existe um envio em andamento.","warn");return}
   bulkPublishUploading=true;bulkPublishProgress={done:0,total:files.length,current:files[0].name};bulkPublishPage();
   // +2 min gives the first upload time to finish; after that there is one publication every minute.

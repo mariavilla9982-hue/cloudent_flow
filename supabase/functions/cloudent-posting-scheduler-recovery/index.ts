@@ -1,3 +1,4 @@
+import {calendarRetryGate} from './calendar-retry.ts';
 import { publishDueFeedPosts } from "./instagram-feed.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -164,12 +165,21 @@ Deno.serve(async(req:Request)=>{
       if(distributionError)results.push({type:"account",state:"retry",error:"instagram_scale_distribution_failed"});
     }
     for(const account of (accounts||[]).filter((account:any)=>account.scale_pilot_child!==true)){
-      const {data:due,error:dueErr}=await admin.from("schedules").select("id").eq("platform","instagram").eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).lte("scheduled_at",now).is("instagram_media_id",null).order("updated_at",{ascending:true,nullsFirst:true}).order("scheduled_at").limit(5);if(dueErr)throw dueErr;
+      const {data:due,error:dueErr}=await admin.from("schedules").select("id,video_id").eq("platform","instagram").eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).lte("scheduled_at",now).is("instagram_media_id",null).order("updated_at",{ascending:true,nullsFirst:true}).order("scheduled_at").limit(5);if(dueErr)throw dueErr;
       if(!due?.length)continue;
       const {data:token,error:tokenError}=await admin.rpc("get_instagram_page_token_for_account",{p_account_id:account.id});
       if(tokenError||!token){results.push({type:"account",id:account.id,state:"blocked",ok:false,error:tokenError?"instagram_token_lookup_failed":"instagram_reconnect_required"});continue;}
+      const {data:queued,error:queueError}=await admin.from("job_queue").select("schedule_id,status,run_at,attempts,max_attempts,locked_at,locked_by,payload").eq("job_type","publish_reel").in("schedule_id",due.map((s:any)=>s.id)).not("status","in","(done,cancelled)").order("created_at",{ascending:true});
+      if(queueError)throw queueError;
+      const queuedBySchedule=new Map((queued||[]).map((j:any)=>[j.schedule_id,j]));
+      const {data:media,error:mediaError}=await admin.from("videos").select("id,storage_provider,storage_path,size_bytes").in("id",due.map((s:any)=>s.video_id).filter(Boolean));
+      if(mediaError)throw mediaError;
+      const mediaById=new Map((media||[]).map((v:any)=>[v.id,JSON.stringify([v.storage_provider,v.storage_path,v.size_bytes])]));
       for(const s of due){
-        try{const rr=await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-instagram-publish-recovery",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:JSON.stringify({schedule_id:s.id}),signal:AbortSignal.timeout(20000)});let j:any={};try{j=await rr.json()}catch{};results.push({type:"normal",id:s.id,http:rr.status,...j});}catch(e:any){results.push({type:"normal",id:s.id,state:"retry",error:e instanceof Error?e.message:String(e)})}
+        const gate=calendarRetryGate(queuedBySchedule.get(s.id),Date.now(),mediaById.get(s.video_id) as string|undefined);
+        try{
+        if(gate){results.push({type:"normal",id:s.id,state:gate==='attempts_exhausted'?'blocked':"waiting",...(gate==='attempts_exhausted'?{ok:false,error:'Tentativas automáticas esgotadas.'}:{})});continue;}
+        const rr=await fetch(Deno.env.get("SUPABASE_URL")+"/functions/v1/cloudent-instagram-publish-recovery",{method:"POST",headers:{"Content-Type":"application/json","x-cloudent-worker-secret":String(expected)},body:JSON.stringify({schedule_id:s.id}),signal:AbortSignal.timeout(20000)});let j:any={};try{j=await rr.json()}catch{};results.push({type:"normal",id:s.id,http:rr.status,...j});}catch(e:any){results.push({type:"normal",id:s.id,state:"retry",error:e instanceof Error?e.message:String(e)})}
         finally{const {error:rotationError}=await admin.from("schedules").update({updated_at:new Date().toISOString()}).eq("id",s.id).eq("platform_account_id",account.id).in("status",["scheduled","processing","failed"]).is("instagram_media_id",null);if(rotationError)results.push({type:"normal",id:s.id,state:"retry",error:"scheduler_rotation_failed"});}
       }
     }

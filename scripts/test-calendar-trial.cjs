@@ -1,10 +1,11 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),{stripTypeScriptTypes}=require('node:module');
 const {webcrypto:crypto}=require('crypto');
+const {calendarRetryGate,calendarFailurePlan}=require('../supabase/functions/cloudent-posting-scheduler-recovery/calendar-retry.ts');
 class Q{
  constructor(db,t){this.db=db;this.t=t;this.f=[];this.patch=null;}select(){return this;}eq(k,v){this.f.push(r=>r[k]===v);return this;}in(k,v){this.f.push(r=>v.includes(r[k]));return this;}is(k,v){return this.eq(k,v);}not(){return this;}lte(k,v){this.f.push(r=>r[k]<=v);return this;}or(){return this;}order(){return this;}limit(){return this;}update(p){this.patch=p;return this;}upsert(){return this;}insert(){return this;}
  async run(){const rows=(this.db[this.t]||[]).filter(r=>this.f.every(f=>f(r)));if(this.patch)rows.forEach(r=>Object.assign(r,this.patch));return {data:rows.map(r=>({...r})),error:null};}then(a,b){return this.run().then(a,b);}throwOnError(){return this;}async maybeSingle(){const r=await this.run();return {...r,data:r.data[0]||null};}single(){return this.maybeSingle();}
 }
-function boot(file,admin,fetch){let handler;const c={console,crypto,URL,URLSearchParams,Request,Response,Headers,AbortSignal,Date,createClient:()=>admin,fetch,Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://test':'key'},serve:f=>handler=f}};vm.createContext(c);vm.runInContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/'+file+'/index.ts','utf8')).replace(/^import .*;\n/gm,''),c);return handler;}
+function boot(file,admin,fetch){let handler;const c={calendarRetryGate,calendarFailurePlan,console,crypto,URL,URLSearchParams,Request,Response,Headers,AbortSignal,Date,createClient:()=>admin,fetch,Deno:{env:{get:k=>k==='SUPABASE_URL'?'https://test':'key'},serve:f=>handler=f}};vm.createContext(c);vm.runInContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/'+file+'/index.ts','utf8')).replace(/^import .*;\n/gm,''),c);return handler;}
 const request=id=>new Request('https://test',{method:'POST',headers:{'x-cloudent-worker-secret':'secret','Content-Type':'application/json'},body:JSON.stringify({schedule_id:id})});
 (async()=>{
  for(const timeout of [false,true]){
@@ -19,5 +20,11 @@ const request=id=>new Request('https://test',{method:'POST',headers:{'x-cloudent
  const handler=boot('cloudent-posting-scheduler-recovery',admin,async(url)=>{if(String(url).includes('/functions/')){normal++;return Response.json({ok:true});}if(String(url).includes('/media_publish')){sent++;throw Error('uncertain response');}return Response.json({status_code:'FINISHED'});});
  await handler(request());await handler(request());assert.equal(sent,mismatch?0:1);assert(normal>=1,'trial failure blocks main');if(!mismatch)assert.equal(db.reel_test_publications[0].status,'publishing');
  }
+ const date=new Date(Date.now()-60000).toISOString(),future=new Date(Date.now()+3600000).toISOString();
+ const db={reel_test_publications:[],schedules:[{id:'cooldown',video_id:'v',platform:'instagram',platform_account_id:'a',status:'failed',scheduled_at:date,updated_at:date,instagram_media_id:null},{id:'ready',video_id:'v',platform:'instagram',platform_account_id:'a',status:'scheduled',scheduled_at:date,updated_at:date,instagram_media_id:null}],platform_accounts:[{id:'a',platform:'instagram',enabled:true,config:{}}],videos:[{id:'v',storage_provider:'r2',storage_path:'owner/v',size_bytes:10}],job_queue:[{id:'cool',schedule_id:'cooldown',job_type:'publish_reel',status:'failed',run_at:future,attempts:1,max_attempts:3,payload:{}},{id:'due',schedule_id:'ready',job_type:'publish_reel',status:'pending',run_at:date,attempts:0,max_attempts:3,payload:{}}]};
+ const calls=[];const admin={from:t=>new Q(db,t),rpc:async(n)=>({data:n==='get_cloudent_worker_secret'?'secret':n==='get_instagram_page_token_for_account'?'token':[]})};
+ const h=boot('cloudent-posting-scheduler-recovery',admin,async(url,opts)=>{assert(String(url).includes('/functions/'));calls.push(JSON.parse(opts.body).schedule_id);return Response.json({ok:true});});
+ await h(request());assert.deepEqual(calls,['ready']);assert(db.schedules.every(row=>row.updated_at!==date),'cooldown schedules must rotate to avoid starving untouched jobs');
+ console.log('PASS cooldown skips external calls while rotating blocked schedules and processing the next eligible item');
  console.log('PASS concurrent claims, uncertain publication replay, trial failure isolation, exact account routing');
 })().catch(e=>{console.error(e);process.exitCode=1;});
