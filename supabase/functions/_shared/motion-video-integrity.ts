@@ -22,7 +22,7 @@ export async function motionBlobDigest(blob:Blob,limit=40*1024*1024){
 
 export function validMotionCheckpoint(job:any){
   const c=job.meta?.motion_capture_checkpoint,f=job.meta?.motion_preview_file;
-  return job.meta?.workflow_key==='genjutsu'&&job.meta?.workflow_id==='2117411301344411649'&&
+  return job.meta?.workflow_key==='genjutsu'&&['2117411301344411649','2124648844280733698'].includes(job.meta?.workflow_id)&&
     c?.task_id===String(job.runninghub_task_id)&&f?.task_id===c.task_id&&f.node_id==='482'&&c.node_id==='482'&&
     c.provider==='r2'&&c.path===job.user_id+'/production-results/'+c.date+'/'+job.id+'.mp4'&&/^\d{4}-\d{2}-\d{2}$/.test(c.date)&&
     /^[a-f0-9]{64}$/.test(c.sha256)&&Number.isSafeInteger(c.size_bytes)&&c.size_bytes>0&&c.size_bytes<=40*1024*1024;

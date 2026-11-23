@@ -3,7 +3,7 @@ import {imagePipelineApi} from '../supabase/functions/_shared/image-pipeline-api
 import {prepareGenjutsuStage,genjutsuInputs} from '../supabase/functions/_shared/genjutsu-stage.ts';
 import {runImagePipeline} from '../supabase/functions/_shared/image-pipeline.ts';
 import {retryPipelineMotion} from '../supabase/functions/_shared/image-pipeline-retry.ts';
-const db={face_swap_jobs:[],production_jobs:[],app_settings:[{key:'genjutsu_readiness',value:{ready:true,workflowId:'2117411301344411649'}}]};
+const db={face_swap_jobs:[],production_jobs:[],app_settings:[{key:'genjutsu_readiness',value:{ready:true,workflowId:'2124648844280733698'}}]};
 let storageWrites=0,wakes=0,mediaCreates=0,failUpload=false;
 const contains=(row,value)=>Object.entries(value).every(([key,expected])=>typeof expected==="object"&&expected!==null?contains(row?.[key],expected):row?.[key]===expected);
 const admin={storage:{from(){storageWrites++;throw Error('manual inputs must use B2');}},from(table){let filters=[],op='select',values,single=false;const q={select(){return q;},eq(k,v){filters.push(r=>r[k]===v);return q;},is(k,v){filters.push(r=>(r[k]??null)===v);return q;},contains(k,v){filters.push(r=>contains(r[k],v));return q;},in(k,v){filters.push(r=>v.includes(r[k]));return q;},order(){return q;},limit(){return q;},insert(v){op='insert';values=v;return q;},update(v){op='update';values=v;return q;},maybeSingle(){single=true;return q;},then(resolve,reject){try{let rows=db[table].filter(r=>filters.every(f=>f(r)));if(op==='insert'){assert(!db[table].some(r=>r.id===values.id),'duplicate insert');const r=structuredClone(values);r.created_at=new Date().toISOString();db[table].push(r);rows=[r];}if(op==='update')for(const r of rows)Object.assign(r,structuredClone(values));return Promise.resolve({data:structuredClone(single?rows[0]||null:rows),error:null}).then(resolve,reject);}catch(e){return Promise.reject(e).then(resolve,reject);}}};return q;},async rpc(name,{p_id,p_worker}){assert.equal(name,'lease_image_pipeline');const j=db.face_swap_jobs.find(r=>r.id===p_id);if(j.locked_by)return {data:[]};j.locked_by=p_worker;return {data:[structuredClone(j)]};}};
@@ -46,7 +46,7 @@ console.log('PASS retry recovers the same accepted background analysis without c
 
 const prompt='  My own prompt <with symbols>\n\nSecond line.  ';
 const objects=new Map([[j.original_storage_path,j.original_size_bytes],[j.frame_storage_path,j.frame_size_bytes]]);
-db.app_settings[0].value={ready:false,runninghub:{available:true},workflowId:'2117411301344411649'};
+db.app_settings[0].value={ready:false,runninghub:{available:true},workflowId:'2124648844280733698'};
 j.status='failed';
 const reused={...body,job_id:'10000000-0000-4000-8000-000000000002',manual_prompt:prompt,reuse:{
   original:{id:j.id,asset:j.original_storage_path},reference:{id:j.id,asset:j.frame_storage_path}}};
@@ -133,7 +133,7 @@ console.log('PASS batch retry: dedupe, partial results, content block, ownership
 // Fixed model replacement: owner-scoped snapshot and one server-side copy, never a reference PUT.
 db.genjutsu_v3_models=[{user_id:'owner',model_key:'jujuh',photo_id:'fixed-photo'}];
 db.genjutsu_v3_model_photos=[{id:'fixed-photo',user_id:'owner',model_key:'jujuh',storage_path:'owner/fixed.png',mime_type:'image/png',size_bytes:120}];
-db.app_settings[0].value={ready:true,workflowId:'2117411301344411649'};
+db.app_settings[0].value={ready:true,workflowId:'2124648844280733698'};
 objects.set('owner/fixed.png',120);
 const fixed={...body,job_id:'10000000-0000-4000-8000-000000000099',model_key:'jujuh',photo_id:'fixed-photo',reference:{name:'tampered.jpg',type:'image/jpeg',size:1}};
 globalThis.fetch=async url=>{const size=objects.get(new URL(url).pathname.slice(1));return size?new Response('x',{status:206,headers:{'Content-Range':'bytes 0-0/'+size}}):new Response(null,{status:404});};

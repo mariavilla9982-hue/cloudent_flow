@@ -19,7 +19,7 @@ export async function stopGenjutsuMotion(admin:any,userId:string,id:string,cance
   };
   const current=await read();
   if(!current)return cancelPipelineMotion(admin,userId,id);
-  if(current.meta?.workflow_key!=='genjutsu'||current.meta?.workflow_id!=='2117411301344411649')return {ok:false,error:'Workflow incompatível.',status:409};
+  if(current.meta?.workflow_key!=='genjutsu'||!['2117411301344411649','2124648844280733698'].includes(current.meta?.workflow_id))return {ok:false,error:'Workflow incompatível.',status:409};
   if(current.result_video_id||current.status==='ready')return {ok:false,error:'O vídeo já foi salvo. Use os controles do resultado.',status:409};
   if(current.status==='cancelled')return {ok:true,stopped:true};
   if(current.status==='failed')return {ok:false,error:'Esta produção já terminou com falha. Não há tarefa ativa para parar.',status:409};

@@ -1,8 +1,8 @@
 import {GENJUTSU_MODEL} from './genjutsu-gemini.ts';
-export const GENJUTSU_WORKFLOW_ID='2117411301344411649';
+export const GENJUTSU_WORKFLOW_ID='2124648844280733698';
 const GOOGLE='https://generativelanguage.googleapis.com';
 const RH='https://www.runninghub.ai';
-const MAPPING=[['970','VHS_LoadVideo','video'],['496','LoadImage','image'],['910','PrimitiveStringMultiline','value'],['482','SaveVideo',null]] as const;
+const MAPPING=[['970','VHS_LoadVideo','video'],['496','LoadImage','image'],['910','PrimitiveStringMultiline','value'],['482','VHS_VideoCombine',null]] as const;
 function graph(raw:any):any{
   for(let i=0;i<5;i++){
     if(typeof raw==='string'){try{raw=JSON.parse(raw);continue;}catch{return null;}}

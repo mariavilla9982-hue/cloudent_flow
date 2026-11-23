@@ -108,7 +108,7 @@ function imageMimeFor(ext:string){
 
 
 const MOTION_PREVIEW_WORKFLOW="2110721194974982146";
-function isGenjutsuPreviewJob(job:any){return job?.meta?.workflow_key==="genjutsu"&&job?.meta?.workflow_id==="2117411301344411649";}
+function isGenjutsuPreviewJob(job:any){return job?.meta?.workflow_key==="genjutsu"&&["2117411301344411649","2124648844280733698"].includes(job?.meta?.workflow_id);}
 function motionOutputNode(job:any){return isGenjutsuPreviewJob(job)?"482":"384";}
 function isMotionPreviewJob(job:any){
   return isGenjutsuPreviewJob(job)||job?.meta?.workflow_key==="motion_control"&&job?.meta?.workflow_id===MOTION_PREVIEW_WORKFLOW;

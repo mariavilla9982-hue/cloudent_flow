@@ -210,7 +210,7 @@
       return;
     }
     const core=document.createElement("script");
-    core.src="/motion-control-core-v6.js?v=llm-restored-1";
+    core.src="/motion-control-core-v6.js?v=genjutsu-zero-1";
     core.async=false;
     core.onload=applyExactVideo7Actions;
     core.onerror=()=>console.error("Motion Control: não foi possível carregar o controlador base.");

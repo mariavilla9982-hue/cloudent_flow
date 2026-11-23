@@ -1,3 +1,4 @@
+import {authorizedGenjutsuTest} from '../_shared/genjutsu-test-authorization.ts';
 import {retryNextFailedGenjutsu} from '../_shared/image-pipeline-retry.ts';
 import {runGenjutsuPreparation} from '../_shared/genjutsu-preparation.ts';
 import {GENJUTSU_CONFIG,isGenjutsuJob,validateGenjutsuWorkflow,prepareGenjutsuStage,genjutsuInputs,genjutsuPromptWait,applyGenjutsuStatus} from '../_shared/genjutsu-stage.ts';
@@ -229,7 +230,12 @@ Deno.serve(async(req:Request)=>{
     const {count:waiting}=await (genjutsu?waitingQuery.in("status",["motion_waiting","uploading"]):waitingQuery.eq("status","motion_waiting")).contains("meta",{workflow_key:workflowKey}).lte("next_attempt_at",new Date().toISOString());
     if(!Number(waiting||0))return out({ok:true,enabled:true,configured:true,processed:0,active,concurrency});
 
-    if(genjutsu&&uiSetting?.value?.mode==='browser_ui'){
+    let authorizedTest=false;
+    if(genjutsu){
+      const head=await admin.rpc('genjutsu_serial_head');
+      if(!head.error&&head.data){const {data:headJob}=await admin.from('production_jobs').select('id,user_id,meta,max_attempts').eq('id',head.data).maybeSingle();authorizedTest=authorizedGenjutsuTest(genjutsuQueue?.value,headJob);}
+    }
+    if(genjutsu&&!authorizedTest&&uiSetting?.value?.mode==='browser_ui'){
       let ready=false;
       if(uiSetting.value.enabled===true&&uiSetting.value.cancellation_proven===true){
         try{
@@ -281,6 +287,7 @@ Deno.serve(async(req:Request)=>{
         const executionOptions=motionExecutionOptions(job,cfg);
         const ultra=executionOptions.instanceType==="ultra";
         const ultraOnce=ultra&&!!job.meta?.execution_ultra_once;
+        if(genjutsu&&authorizedTest&&!authorizedGenjutsuTest(genjutsuQueue?.value,job))throw new Error("GENJUTSU: autorização do teste expirou ou não corresponde ao vídeo.");
         const hardwareMeta={...(job.meta||{}),execution_instance_type:executionOptions.instanceType,execution_instance_used:executionOptions.instanceType,execution_instance_vram_gb:ultra?84:48,execution_instance_policy:genjutsu?"genjutsu_default_84gb":ultraOnce?"motion_ultra_once":ultra?"motion_default_84gb":"motion_default_48gb",execution_instance_authorized:ultra,workflow_id:String(cfg.workflowId)};
         const {error:hardwareError}=await admin.from("production_jobs").update({
           meta:hardwareMeta,

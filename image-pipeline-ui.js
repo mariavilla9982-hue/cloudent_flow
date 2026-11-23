@@ -41,8 +41,8 @@
       el.textContent=elapsedText(el.dataset.pipelineStarted);
   }
   const defaultVideoWorkflow='genjutsu';
-  const videoWorkflows=[{key:'genjutsu',label:'GENJUTSU · LLM'},{key:'motion_control',label:'Motion Control V7'},{key:'standard',label:'Vídeo 7 minutos'}];
-  const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'Genjutsu':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
+  const videoWorkflows=[{key:'genjutsu',label:'GENJUTSU 0'},{key:'motion_control',label:'Motion Control V7'}];
+  const workflowLabel=j=>j.meta?.video_workflow?.key==='genjutsu'?'GENJUTSU 0':videoWorkflows.find(w=>w.key===j.meta?.video_workflow?.key)?.label||'Motion Control V7';
   function workflowSelector(d){
     return '<label class="pipeline-workflow"><b>Workflow após Face Swap</b><select name="video_workflow" '+(d.workflowLocked?'disabled':'')+'>'+videoWorkflows.map(w=>'<option value="'+w.key+'" '+((d.workflow||defaultVideoWorkflow)===w.key?'selected':'')+'>'+w.label+'</option>').join('')+'</select><small>A foto gerada no Face Swap segue diretamente para o vídeo.'+(d.workflowLocked?' Escolha fixada neste envio.':'')+'</small></label>';
   }

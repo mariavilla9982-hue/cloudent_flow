@@ -1,7 +1,7 @@
 import {prepareGenjutsuPrompt,GenjutsuPromptError,genjutsuExecutionInputs,GENJUTSU_PROMPT_IMAGE_MAX_BYTES} from './genjutsu-gemini.ts';
 import {GENJUTSU_WORKFLOW_ID,validateGenjutsuGraph} from './genjutsu-readiness.ts';
 import {safeGenjutsuError} from './genjutsu-diagnostics.ts';
-export const isGenjutsuJob=(job:any)=>job?.meta?.workflow_key==='genjutsu'&&job?.meta?.workflow_id===GENJUTSU_WORKFLOW_ID;
+export const isGenjutsuJob=(job:any)=>job?.meta?.workflow_key==='genjutsu'&&[GENJUTSU_WORKFLOW_ID,'2117411301344411649'].includes(job?.meta?.workflow_id);
 export const GENJUTSU_CONFIG={workflowId:GENJUTSU_WORKFLOW_ID,videoNodeId:'970',videoFieldName:'video',frameNodeId:'496',frameFieldName:'image',outputNodeId:'482',executionInstanceType:'ultra',executionVramGb:84,hardwarePolicy:'genjutsu_default_84gb'};
 export async function validateGenjutsuWorkflow(base:string,key:string){
   if(base!=='https://www.runninghub.ai')throw new Error('Genjutsu: provedor incompatível.');

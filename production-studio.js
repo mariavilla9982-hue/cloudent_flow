@@ -177,7 +177,7 @@
       const empty=root.querySelector('.production-empty b');if(empty)empty.textContent='Nenhum vídeo desta modelo neste fluxo';
     }
     const genjutsu=!!root.querySelector('[data-genjutsu-root]');
-    const head=root.querySelector('.production-head');if(head?.querySelector('h2'))head.querySelector('h2').textContent=genjutsu?'GENJUTSU':'Produção IA';
+    const head=root.querySelector('.production-head');if(head?.querySelector('h2'))head.querySelector('h2').textContent=genjutsu?'GENJUTSU 0':'Produção IA';
     const subtitle=head?.querySelector('p');if(subtitle&&!genjutsu)subtitle.textContent='Prepare seus arquivos, acompanhe a fila e confira o resultado.';
     // Labels belong to each workflow renderer; additional tabs must keep their identity.
     root.querySelectorAll('.production-workflow-tab').forEach(b=>{b.setAttribute('role','tab');b.setAttribute('aria-selected',String(b.classList.contains('active')));});

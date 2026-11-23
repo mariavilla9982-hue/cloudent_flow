@@ -3,7 +3,8 @@ import {runGenjutsuReadiness,validateGenjutsuGraph,GENJUTSU_WORKFLOW_ID} from '.
 import {genjutsuApi} from '../supabase/functions/_shared/genjutsu-api.ts';
 import {GENJUTSU_MODEL} from '../supabase/functions/_shared/genjutsu-gemini.ts';
 const shape={'970':{class_type:'VHS_LoadVideo',inputs:{video:'x'}},'496':{class_type:'LoadImage',inputs:{image:'x'}},
-  '910':{class_type:'PrimitiveStringMultiline',inputs:{value:'example prompt'}},'482':{class_type:'SaveVideo',inputs:{video:['476',0]}}};
+  '910':{class_type:'PrimitiveStringMultiline',inputs:{value:'example prompt'}},'482':{class_type:'VHS_VideoCombine',inputs:{images:['464',0]}}};
+assert.equal(GENJUTSU_WORKFLOW_ID,'2124648844280733698');
 assert.equal(validateGenjutsuGraph({data:{prompt:JSON.stringify(shape)}}).length,4);
 assert.throws(()=>validateGenjutsuGraph({...shape,'910':{class_type:'Other',inputs:{value:'x'}}}),/910/);
 assert.throws(()=>validateGenjutsuGraph({...shape,'496':{class_type:'LoadImage',inputs:{wrong:'x'}}}),/496/);
@@ -52,8 +53,8 @@ for(const secret of [master,key,options.apiKey])assert(!JSON.stringify(data).inc
 assert.equal((await genjutsuApi(new Request('https://example',{method:'OPTIONS'}),env)).status,204);
 console.log('PASS internal secret/admin+active-session auth, X restriction, bounded cache, no generation route or leaked secrets');
 
-for(const value of [0,5,1.5,'2'])assert.equal((await genjutsuApi(post({'x-cloudent-worker-secret':master},{action:'prompt-concurrency',value}),env)).status,400);
-const changed=await genjutsuApi(post({'x-cloudent-worker-secret':master},{action:'prompt-concurrency',value:3}),env);assert.equal(changed.status,200);assert.equal(queueConfig.prompt_concurrency,3);
-const queueStatus=await (await genjutsuApi(new Request(env.supabaseUrl+'/functions/v1/cloudent-genjutsu',{headers:{'x-cloudent-worker-secret':master}}),env)).json();assert.equal(queueStatus.queue.promptConcurrency,3);assert.equal(queueStatus.queue.videoConcurrency,2);
+for(const value of [0,2,3,4,5,1.5,'2'])assert.equal((await genjutsuApi(post({'x-cloudent-worker-secret':master},{action:'prompt-concurrency',value}),env)).status,400);
+const changed=await genjutsuApi(post({'x-cloudent-worker-secret':master},{action:'prompt-concurrency',value:1}),env);assert.equal(changed.status,200);assert.equal(queueConfig.prompt_concurrency,1);
+const queueStatus=await (await genjutsuApi(new Request(env.supabaseUrl+'/functions/v1/cloudent-genjutsu',{headers:{'x-cloudent-worker-secret':master}}),env)).json();assert.equal(queueStatus.queue.promptConcurrency,1);assert.equal(queueStatus.queue.videoConcurrency,1);
 role='x_user';assert.equal((await genjutsuApi(post({Authorization:'Bearer '+token},{action:'prompt-concurrency',value:4}),env)).status,403);
-console.log('PASS admin-only bounded prompt concurrency setting and independent fixed video concurrency');
+console.log('PASS admin-only bounded prompt concurrency setting and strict serial video concurrency');

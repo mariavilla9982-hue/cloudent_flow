@@ -15,7 +15,7 @@
   const STANDARD="standard";
   const GENJUTSU="genjutsu";
   const GENJUTSU_HISTORY="genjutsu_v3_history";
-  let activeMode=[STANDARD,MOTION,GENJUTSU,GENJUTSU_HISTORY].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):GENJUTSU;
+  let activeMode=[MOTION,GENJUTSU].includes(localStorage.getItem(MODE_KEY))?localStorage.getItem(MODE_KEY):GENJUTSU;
   let motionConfig=null;
   let configLoadedAt=0;
   const MOTION_EDGE=(window.CloudentConfig?.supabaseUrl||"")+"/functions/v1/cloudent-motion-control";
@@ -96,7 +96,7 @@
   }
 
   function productionWorkflowTabs(){
-    const workflows=[[STANDARD,"Vídeo 7 minutos"],[MOTION,"Motion Control v7"],[GENJUTSU,"GENJUTSU · LLM"],[GENJUTSU_HISTORY,"Histórico V3"]];
+    const workflows=[[MOTION,"Motion Control V7"],[GENJUTSU,"GENJUTSU 0"]];
     return '<div class="production-workflow-tabs" role="tablist" aria-label="Fluxo da Produção IA">'+
       workflows.map(([key,label])=>'<button type="button" role="tab" aria-selected="'+(activeMode===key)+
         '" class="production-workflow-tab'+(activeMode===key?' active':'')+
@@ -348,7 +348,7 @@
   };
 
   async function setMode(mode){
-    const next=[STANDARD,MOTION,GENJUTSU,GENJUTSU_HISTORY].includes(mode)?mode:STANDARD;
+    const next=[MOTION,GENJUTSU].includes(mode)?mode:GENJUTSU;
     if(next===activeMode)return;
     if(productionUploading||window.CloudentGenjutsu?.busy||window.CloudentGenjutsuV3?.busy){toast("Aguarde o envio terminar antes de trocar de fluxo.","warn");return}
     activeMode=next;

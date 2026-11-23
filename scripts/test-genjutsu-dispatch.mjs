@@ -13,6 +13,7 @@ async function run(options={}){
     if(name==='get_cloudent_worker_secret')return {data:'worker-secret'};
     if(name==='get_cloudent_r2_config')return {data:{access_key_id:'b2-id',secret_access_key:'b2-secret',bucket:'bucket',endpoint:'https://s3.region.backblazeb2.com'}};
     if(name==='wake_genjutsu_queue')return {data:true};
+    if(name==='genjutsu_serial_head')return {data:null};
     assert.equal(name,'claim_genjutsu_job');assert.equal(args.p_limit,1);events.push('claim');
     Object.assign(row,{status:'uploading',attempt_count:1,locked_by:args.p_worker});return {data:[structuredClone(row)]};
   },from(table){let key,values,update=false,filters=[];const q={select(){return q;},eq(k,v){key=v;filters.push(x=>x[k]===v);return q;},is(k,v){filters.push(x=>(x[k]??null)===v);return q;},in(k,v){if(table==='production_jobs'&&k==='status'&&v.includes('queued'))q.count=options.expired?1:0;return q;},lt(){return q;},contains(){return q;},lte(){return q;},limit(){return q;},single(){return q.maybeSingle();},upsert(){return Promise.resolve({error:null});},update(value){values=value;update=true;return q;},async maybeSingle(){

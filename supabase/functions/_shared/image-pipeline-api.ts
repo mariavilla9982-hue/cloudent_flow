@@ -200,7 +200,7 @@ export async function imagePipelineApi(d:any){
       return json({error:'GENJUTSU V3: use MP4, WebM ou MOV de até 30 MiB.'},400);
     if(natural&&workflowKey==='genjutsu'){
       const readiness=check(await admin.from('app_settings').select('value').eq('key','genjutsu_readiness').maybeSingle());
-      if(!(manualPrompt?(readiness?.value?.runninghub?.available??readiness?.value?.ready):readiness?.value?.ready)||readiness.value.workflowId!=='2117411301344411649')return json({error:'Genjutsu ainda não está validado no servidor.'},409);
+      if(!(manualPrompt?(readiness?.value?.runninghub?.available??readiness?.value?.ready):readiness?.value?.ready)||readiness.value.workflowId!=='2124648844280733698')return json({error:'Genjutsu ainda não está validado no servidor.'},409);
       if(!['video/mp4','video/webm','video/quicktime'].includes(first?.type)||Number(first?.size)>30*1024*1024||!Number.isFinite(b.duration_seconds)||b.duration_seconds<=0)return json({error:'Genjutsu: envie um vídeo válido de até 30 MiB, com duração identificável.'},400);
       if(old&&Number(old.meta.source_duration_seconds)!==b.duration_seconds)return json({error:'A duração deste envio já foi fixada. Crie outro envio.'},409);
     }
