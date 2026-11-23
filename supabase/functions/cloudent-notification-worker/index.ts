@@ -29,9 +29,9 @@ Deno.serve(async(req:Request)=>{
     if(settingError)throw settingError;
 
     const publicKey=String(pushSetting?.value?.public_key||"");
-    if(!vapidPrivate||!publicKey)throw new Error("vapid_not_configured");
+    const pushReady=!!(vapidPrivate&&publicKey);
 
-    webpush.setVapidDetails(
+    if(pushReady)webpush.setVapidDetails(
       "https://github.com/mariavilla9982-hue/cloudent_flow",
       publicKey,
       String(vapidPrivate)
@@ -67,6 +67,12 @@ Deno.serve(async(req:Request)=>{
       if(error)throw error;
       return {account:a.account_label,status:problem?"unknown":count===0?"empty":"active",count};
     }));
+    if(!pushReady){
+      const ts=new Date().toISOString();
+      await admin.from("worker_runtime").upsert({worker_name:"notifications",last_heartbeat:ts,
+        last_error:"Notificações internas ativas; falta restaurar a chave de envio Push após a migração.",last_jobs:0,updated_at:ts});
+      return out({ok:false,error:"vapid_not_configured",in_app_generated:true,stories:storyResults});
+    }
     const {data:jobs,error:claimError}=await admin.rpc("claim_due_system_notifications",{p_worker:workerId,p_limit:20});
     if(claimError)throw claimError;
 

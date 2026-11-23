@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
+import {handleInstagramDisconnect} from '../functions/cloudent-api/instagram-disconnect.ts';
+import {instagramScaleAccounts} from '../functions/cloudent-api/instagram-scale.ts';
+import {panelViewApi} from '../functions/cloudent-api/panel-view.ts';
 
 const html=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
 for(const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(script[1]);
@@ -25,8 +28,9 @@ assert.equal(vm.runInContext('calendarFilterQueueRows(rows).length',ctx),0);
 
 let handler;
 let queries=[];
-let account={id:'B'};
-const admin={auth:{getUser:async()=>({data:{user:{id:'USER'}}})},from(table){
+let account={id:'B',enabled:true};
+let rpcCalls=[];
+const admin={rpc:async(name,args)=>{rpcCalls.push({name,args});return {data:name==='cloudent_auth_session_active'?true:name==='instagram_scale_accounts'?(account?[account]:[]):null,error:null}},auth:{getUser:async()=>({data:{user:{id:'USER'}}})},from(table){
   const query={table,filters:[]};queries.push(query);
   const builder=new Proxy({}, {get(_,key){
     if(key==='then')return (resolve)=>resolve({data:[],error:null});
@@ -36,20 +40,21 @@ const admin={auth:{getUser:async()=>({data:{user:{id:'USER'}}})},from(table){
 }};
 const source=readFileSync(new URL('../functions/cloudent-api/index.ts',import.meta.url),'utf8').replace(/^import .*;\s*$/gm,'');
 const code=stripTypeScriptTypes(source,{mode:'transform'});
-new Function('Deno','createClient','AwsClient','defaultCharacterBase64',code)({env:{get:()=>''},serve:fn=>handler=fn},()=>admin,class{},'');
+new Function('Deno','createClient','AwsClient','defaultCharacterBase64','handleInstagramDisconnect','panelViewApi','instagramScaleAccounts',code)({env:{get:n=>n==='SUPABASE_URL'?'https://test.supabase.co':''},serve:fn=>handler=fn},()=>admin,class{},'',handleInstagramDisconnect,panelViewApi,instagramScaleAccounts);
 for(const compact of [false,true]){
   queries=[];
-  const response=await handler(new Request('https://app.test/?resource=queue'+(compact?'&compact=1':''),{headers:{Authorization:'Bearer TEST'}}));
-  assert.equal(response.status,200);
+  const response=await handler(new Request('https://app.test/?resource=queue'+(compact?'&compact=1':''),{headers:{Authorization:'Bearer h.'+Buffer.from(JSON.stringify({iss:'https://test.supabase.co/auth/v1',session_id:'session'})).toString('base64url')+'.s'}}));
+  assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
   assert.ok(queries.find(q=>q.table==='schedules').select[0].split(',').includes('platform_account_id'));
 }
 const resolverCode=stripTypeScriptTypes(source.slice(source.indexOf('async function resolveCalendarInstagramAccount'),source.indexOf('Deno.serve')),{mode:'transform'});
-const resolveAccount=new Function(resolverCode+';return resolveCalendarInstagramAccount')();
+const resolveAccount=new Function('instagramScaleAccounts',resolverCode+';return resolveCalendarInstagramAccount')(instagramScaleAccounts);
 queries=[];
 await assert.rejects(()=>resolveAccount(admin,''),/Selecione explicitamente/);
 assert.equal(queries.length,0);
-assert.equal(await resolveAccount(admin,'B'),'B');
-assert.ok(queries[0].filters.some(f=>f[0]==='eq'&&f[1]==='id'&&f[2]==='B'));
+rpcCalls=[];
+assert.equal(await resolveAccount(admin,'B','USER'),'B');
+assert.equal(rpcCalls[0].name,'instagram_scale_accounts');assert.equal(rpcCalls[0].args.p_actor,'USER');
 account=null;
 await assert.rejects(()=>resolveAccount(admin,'REMOVED'),/não está disponível/);
 console.log('Calendar account isolation, missing-account rejection, compact/full API payloads, removed-account handling and JS/TS syntax: passed.');

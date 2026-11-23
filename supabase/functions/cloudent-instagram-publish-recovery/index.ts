@@ -1,3 +1,4 @@
+import {calendarFailurePlan,calendarRetryGate} from '../cloudent-posting-scheduler-recovery/calendar-retry.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
@@ -73,6 +74,10 @@ Deno.serve(async(req:Request)=>{
     if(blocked?.value?.source_key===mediaFingerprint(v)&&Date.parse(blocked.value.next_retry_at)>Date.now())return out({ok:false,state:"media_required",error:blocked.value.message,next_retry_at:blocked.value.next_retry_at},409);
 
 
+    const {data:queued,error:queueError}=await admin.from("job_queue").select("id,status,run_at,attempts,max_attempts,locked_at,locked_by,payload").eq("schedule_id",scheduleId).eq("job_type","publish_reel").not("status","in","(done,cancelled)").order("created_at",{ascending:false}).limit(1).maybeSingle();
+    if(queueError)throw queueError;
+    const gate=calendarRetryGate(queued,Date.now(),mediaFingerprint(v));
+    if(gate)return out({ok:true,state:gate==='attempts_exhausted'?'blocked':'waiting',reason:gate,next_retry_at:queued?.run_at||null});
     const {data:claims,error:claimError}=await admin.rpc("claim_calendar_publish_schedule",{p_schedule_id:scheduleId,p_worker:worker});if(claimError)throw claimError;
     const j=claims?.[0];if(!j)return out({ok:true,state:"not_due_or_claimed"});leasedJob=j.id;job=j;
     pilotChild=s.instagram_scale_caption!=null;
@@ -102,6 +107,7 @@ Deno.serve(async(req:Request)=>{
     if(!containerId){
       const mediaUrl=await signedMediaUrl(admin,String(v.storage_path),7200);
       await verifyMediaReadable(mediaUrl);
+      delete payload.calendar_media_source_key;
       await admin.from("app_settings").delete().eq("key","calendar_media_block_"+scheduleId);
       const coverOffsetMs=3500;
       const firstCommentMessage=!captionsPaused&&await firstCommentsEnabled(admin)?await pickFirstComment(admin,caption,scheduleId):null;
@@ -117,8 +123,10 @@ Deno.serve(async(req:Request)=>{
 
     if(payload.publish_started_at&&!payload.instagram_media_id){
       if(pilotChild)throw new Error("instagram_publish_confirmation_required");
-      await admin.from("schedules").update({status:"failed",last_error:"Confirmação da publicação necessária antes de repetir."}).eq("id",scheduleId);
-      return out({ok:false,state:"confirmation_required",error:"Publicação enviada; confirmação necessária antes de repetir."},409);
+      const plan=calendarFailurePlan({...j,payload},new Error('instagram_publish_confirmation_required'));
+      await admin.from("job_queue").update({run_at:plan.run_at,last_error:plan.reason,updated_at:new Date().toISOString()}).eq("id",j.id).eq("locked_by",worker).throwOnError();
+      await admin.from("schedules").update({status:"failed",last_error:plan.reason}).eq("id",scheduleId);
+      return out({ok:false,state:plan.state,error:plan.reason,next_retry_at:plan.run_at},409);
     }
     const st=payload.instagram_media_id?{status_code:"FINISHED"}:await graph(base,containerId+"?fields=status_code,status",String(token),"GET");
     const code=String(st.status_code||"");
@@ -169,12 +177,12 @@ Deno.serve(async(req:Request)=>{
       const intent=admin.from("job_queue").update({payload}).eq("id",j.id).eq("locked_by",worker);
       if(pilotChild)await intent.select("id").single().throwOnError();
       else await intent.throwOnError();
-      if(pilotChild){publishUncertain=true;job.payload=payload}
+      publishUncertain=true;job.payload=payload;
       const pub=await graph(base,igId+"/media_publish",String(token),"POST",{creation_id:containerId});
       mediaId=String(pub.id||"");
       if(!mediaId)throw new Error("instagram_publish_receipt_missing");
       payload={...payload,instagram_media_id:mediaId,published_at:new Date().toISOString()};
-      if(pilotChild){publishUncertain=false;job.payload=payload}
+      publishUncertain=false;job.payload=payload;
       await admin.from("job_queue").update({payload,updated_at:new Date().toISOString()}).eq("id",j.id).eq("locked_by",worker).throwOnError();
     }
 
@@ -231,14 +239,24 @@ Deno.serve(async(req:Request)=>{
     if(e instanceof MediaGuardError&&schedule&&video&&leasedJob){
       const now=new Date().toISOString(),key="calendar_media_block_"+schedule.id;
       const {data:previous}=await admin.from("app_settings").select("value").eq("key",key).maybeSingle();
-      const value={code:e.code,message:e.message,source_key:mediaFingerprint(video),checked_at:now,next_retry_at:new Date(Date.now()+5*60000).toISOString()};
+      const value={code:e.code,message:e.message,source_key:mediaFingerprint(video),checked_at:now,next_retry_at:new Date(Date.now()+(e.code==="media_unavailable"?5*60000:6*3600000)).toISOString()};
       await admin.from("app_settings").upsert({key,value,updated_at:now},{onConflict:"key"}).throwOnError();
-      await admin.from("job_queue").update({status:"failed",last_error:e.message,updated_at:now}).eq("id",leasedJob).eq("locked_by",worker).throwOnError();
+      await admin.from("job_queue").update({status:"failed",run_at:value.next_retry_at,payload:{...job.payload,calendar_media_source_key:value.source_key},last_error:e.message,updated_at:now}).eq("id",leasedJob).eq("locked_by",worker).throwOnError();
       await admin.from("schedules").update({status:"failed",last_error:e.message,updated_at:now}).eq("id",schedule.id).is("instagram_media_id",null).throwOnError();
       if(previous?.value?.source_key!==value.source_key||previous?.value?.code!==value.code)await admin.from("activity_logs").insert({level:"error",event_type:"calendar_media_blocked",message:e.message,meta:{schedule_id:schedule.id,video_id:video.id,file_name:video.file_name,error_code:e.code}});
       return out({ok:false,state:"media_required",error:e.message,next_retry_at:value.next_retry_at},409);
     }
-    return out({ok:false,error:e instanceof Error?e.message:String(e),detail:e?.payload||null},500);
+    if(schedule&&job&&leasedJob&&!pilotChild){
+      // Re-read our exact lease: a saved provider receipt must survive local errors.
+      const {data:fresh,error:readError}=await admin.from("job_queue").select("id,payload,attempts,max_attempts").eq("id",leasedJob).eq("locked_by",worker).maybeSingle();
+      if(!readError&&fresh){
+        const plan=calendarFailurePlan(fresh,e),stamp=new Date().toISOString();
+        await admin.from("job_queue").update({status:plan.status,attempts:plan.attempts,run_at:plan.run_at,last_error:plan.reason,updated_at:stamp}).eq("id",leasedJob).eq("locked_by",worker).throwOnError();
+        await admin.from("schedules").update({status:fresh.payload?.instagram_media_id?"processing":"failed",last_error:plan.reason,attempt_count:plan.attempts,updated_at:stamp}).eq("id",schedule.id).is("instagram_media_id",null).throwOnError();
+        return out({ok:false,state:plan.state,error:plan.reason,next_retry_at:plan.run_at},409);
+      }
+    }
+    return out({ok:false,error:"calendar_publish_unavailable"},500);
   }
   finally{if(leasedJob)await admin.from("job_queue").update({locked_at:null,locked_by:null}).eq("id",leasedJob).eq("locked_by",worker);}
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
+import {calendarRetryGate,calendarFailurePlan} from '../supabase/functions/cloudent-posting-scheduler-recovery/calendar-retry.ts';
 
 const source = name => stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/'+name+'/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,''));
 const response = (data,status=200) => new Response(JSON.stringify(data),{status});
@@ -9,7 +10,7 @@ const globals = {URL,URLSearchParams,TextEncoder,TextDecoder,AbortSignal,Request
 function handler(name,admin,fetch){
   let handle;
   vm.runInNewContext(source(name),{
-    ...globals,fetch,createClient:()=>admin,
+    ...globals,calendarRetryGate,calendarFailurePlan,fetch,createClient:()=>admin,
     Deno:{serve(fn){handle=fn},env:{get:key=>({
       SUPABASE_URL:'https://cloudent.test',SUPABASE_SERVICE_ROLE_KEY:'test-server-secret',
       INSTAGRAM_APP_ID:'test-app',INSTAGRAM_APP_SECRET:'test-app-secret'
@@ -20,7 +21,7 @@ function handler(name,admin,fetch){
 function chain(read,write=()=>{}){
   let patch=null;
   const query={
-    select(){return this},eq(){return this},is(){return this},contains(){return this},single(){return this},maybeSingle(){return this},
+    select(){return this},not(){return this},order(){return this},limit(){return this},eq(){return this},is(){return this},contains(){return this},single(){return this},maybeSingle(){return this},
     update(value){patch=value;return this},insert(value){patch=value;return this},upsert(value){patch=value;return this},
     delete(){return this},throwOnError(){return this},
     then(resolve,reject){try{if(patch)write(patch);return Promise.resolve(read()).then(resolve,reject)}catch(e){return Promise.reject(e).then(resolve,reject)}}
@@ -101,6 +102,7 @@ async function runPublish(options={}){
     rpc(name,args){
       if(name==='get_cloudent_worker_secret')return {data:'worker-secret'};
       if(name==='claim_calendar_publish_schedule')return {data:[job]};
+      if(name==='instagram_calendar_captions_paused')return {data:false};
       if(name==='get_instagram_page_token_for_account'){
         assert.equal(args.p_account_id,child);return {data:'child-token'};
       }

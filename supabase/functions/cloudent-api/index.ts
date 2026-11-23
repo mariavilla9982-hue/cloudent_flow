@@ -580,7 +580,15 @@ Deno.serve(async (req: Request) => {
       const settings=Object.fromEntries((settingRows||[]).map((x:any)=>[x.key,x.value]));
       const limits=settings.system_limits||{};
       const now=Date.now();
-      const allWorkers=healthWorkers(workers||[],now);
+      const [{count:genjutsuPending,error:pendingError},{count:genjutsuRunning,error:runningError},{data:genjutsuConfig,error:configError}]=await Promise.all([
+        admin.from("production_jobs").select("id",{count:"exact",head:true}).eq("meta->>workflow_key","genjutsu").in("status",["motion_waiting","uploading"]).is("runninghub_task_id",null).is("hidden_at",null),
+        admin.from("production_jobs").select("id",{count:"exact",head:true}).eq("meta->>workflow_key","genjutsu").in("status",["queued","running"]).not("runninghub_task_id","is",null).is("hidden_at",null),
+        admin.from("app_settings").select("value").eq("key","genjutsu_queue_config").maybeSingle()
+      ]);
+      if(pendingError||runningError||configError)throw pendingError||runningError||configError;
+      // Production monitors accepted videos; the serial prompt worker is idle during that phase.
+      const genjutsuDemand=genjutsuConfig?.value?.paused!==true&&Number(genjutsuPending||0)>0&&Number(genjutsuRunning||0)===0;
+      const allWorkers=healthWorkers(workers||[],now,{genjutsu:genjutsuDemand});
       const normalizedWorkers=allWorkers.filter((w:any)=>!w.retired);
       const {data:failedRows,error:failedError}=await admin.from("job_queue")
         .select("id,job_type,schedule_id,last_error,updated_at").eq("status","failed").order("updated_at",{ascending:false}).limit(200);
