@@ -36,7 +36,7 @@ export async function runImagePipeline(d:any){
         ? {genjutsu_prompt:await createManualGenjutsuPrompt(m.manual_prompt,m.source_duration_seconds,j.id),
           preparation_status:'READY_FOR_VIDEO',prompt_completed_at:new Date().toISOString()}
         : {};
-      check(await admin.from('production_jobs').insert({id:j.id,user_id:j.user_id,storage_provider:j.storage_provider,
+      check(await admin.from('production_jobs').insert({id:j.id,user_id:j.user_id,storage_provider:j.storage_provider,queue_priority_at:j.queue_priority_at||null,
         original_storage_path:j.original_storage_path,original_file_name:j.original_file_name,original_mime_type:j.original_mime_type,original_size_bytes:j.original_size_bytes,
         frame_storage_path:saved.path,frame_file_name:saved.name,frame_mime_type:saved.mime,frame_size_bytes:saved.size,
         status:motion?'motion_waiting':'waiting',progress:0,max_attempts:1,attempt_count:0,
@@ -48,13 +48,13 @@ export async function runImagePipeline(d:any){
   // Lease only serializes polling/storage; dispatch intent is durable and never expires.
   // Independent bounded stage queues: a backlog in Motion cannot hide waiting images.
   const read=(stage?:string)=>{
-    const q=admin.from('face_swap_jobs').select('*').contains('meta',stage?{pipeline_version:2,stage}:{pipeline_version:2});
-    return (stage?q.in('status',['waiting']):q.in('status',['uploading','queued','running'])).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(50);
+    const q=admin.from('face_swap_jobs').select('*').contains('meta',stage?{pipeline_version:2,stage}:{pipeline_version:2}).is('hidden_at',null);
+    return (stage?q.in('status',['waiting']):q.in('status',['uploading','queued','running'])).order('queue_priority_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(50);
   };
   const batches=await Promise.all([read(),read('face_swap'),read('upscale'),read('control_motion'),read('frame_ready')]);
   const rows=batches.flatMap(r=>check(r)||[]);
   const priority=(j:any)=>j.runninghub_task_id||j.meta.stage==='control_motion'?0:j.meta.stage==='face_swap'?1:2;
-  rows.sort((a:any,b:any)=>priority(a)-priority(b)||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
+  rows.sort((a:any,b:any)=>priority(a)-priority(b)||String(b.queue_priority_at||'').localeCompare(String(a.queue_priority_at||''))||String(a.created_at||'').localeCompare(String(b.created_at||''))||a.id.localeCompare(b.id));
   let providerFull=false;
   const handoffs=new Set<string>();
   for(const row of rows||[]){
@@ -85,6 +85,14 @@ export async function runImagePipeline(d:any){
         if(m.input_mode!=='manual_frame'||m.video_workflow?.key!=='genjutsu'||!String(j.frame_storage_path).startsWith(j.user_id+'/'))throw new Error('Frame manual inválido.');
         const saved={path:j.frame_storage_path,name:j.frame_file_name,mime:j.frame_mime_type,size:j.frame_size_bytes};
         await handoffVideo(j,{...m,prepared_frame:saved},saved);
+        continue;
+      }
+      if(m.delete_requested_at&&j.runninghub_task_id){
+        const observed=await rhJson('/task/openapi/status',{taskId:j.runninghub_task_id});
+        const provider=Number(observed?.code)===0?String(observed.data?.status||observed.data||'').toUpperCase():'';
+        if(['SUCCESS','FAILED','CANCEL','CANCELLED','CANCELED'].includes(provider)){
+          await patch(j,{status:'cancelled',completed_at:new Date().toISOString(),last_error:null,meta:{...m,provider_status:provider,dispatch_uncertain:false,delete_confirmed_at:new Date().toISOString()}});
+        }
         continue;
       }
       const stage=m.stage;

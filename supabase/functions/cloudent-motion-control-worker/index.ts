@@ -214,6 +214,11 @@ Deno.serve(async(req:Request)=>{
       admin.from("face_swap_jobs").select("*",{count:"exact",head:true}).in("status",["uploading","queued","running"])
     ]);
     let active=Number(productionActive||0)+Number(faceActive||0);
+    if(genjutsu){
+      const own=await admin.from("production_jobs").select("id",{count:"exact",head:true}).contains("meta",{workflow_key:"genjutsu"}).in("status",["uploading","queued","running"]);
+      if(own.error)throw own.error;
+      active=Number(own.count||0);
+    }
     // An expired pre-create lease owns a local slot already. Reclaim it even at concurrency=1.
     // The RPC still excludes the same row from capacity and rejects existing task/dispatch intent.
     if(genjutsu&&active>=concurrency){
@@ -235,7 +240,7 @@ Deno.serve(async(req:Request)=>{
       const head=await admin.rpc('genjutsu_serial_head');
       if(!head.error&&head.data){const {data:headJob}=await admin.from('production_jobs').select('id,user_id,meta,max_attempts').eq('id',head.data).maybeSingle();authorizedTest=authorizedGenjutsuTest(genjutsuQueue?.value,headJob);}
     }
-    if(genjutsu&&!authorizedTest&&uiSetting?.value?.mode==='browser_ui'){
+    if(genjutsu&&!authorizedTest&&uiSetting?.value?.mode==='browser_ui'&&genjutsuQueue?.value?.auto_cancel_enabled!==false){
       let ready=false;
       if(uiSetting.value.enabled===true&&uiSetting.value.cancellation_proven===true){
         try{
@@ -369,4 +374,3 @@ Deno.serve(async(req:Request)=>{
     return out({ok:false,error:message},500);
   }
 });
-

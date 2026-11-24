@@ -109,6 +109,7 @@ function imageMimeFor(ext:string){
 
 const MOTION_PREVIEW_WORKFLOW="2110721194974982146";
 function isGenjutsuPreviewJob(job:any){return job?.meta?.workflow_key==="genjutsu"&&["2117411301344411649","2124648844280733698"].includes(job?.meta?.workflow_id);}
+function isGenjutsuZeroJob(job:any){return job?.meta?.workflow_key==='genjutsu'&&job?.meta?.workflow_id==='2124648844280733698';}
 function motionOutputNode(job:any){return isGenjutsuPreviewJob(job)?"482":"384";}
 function isMotionPreviewJob(job:any){
   return isGenjutsuPreviewJob(job)||job?.meta?.workflow_key==="motion_control"&&job?.meta?.workflow_id===MOTION_PREVIEW_WORKFLOW;
@@ -260,6 +261,29 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
     Object.assign(meta,{motion_preview_verified_at:new Date().toISOString(),motion_preview_sha256:digest.sha256,motion_preview_verified_bytes:digest.size_bytes});
     const {data:verified,error:verificationError}=await admin.from("production_jobs").update({meta}).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]).select("id").maybeSingle();
     if(verificationError)throw verificationError;if(!verified)return false;
+  }
+  // GENJUTSU 0: never send an automatic cancellation. Preserve the verified
+  // node 482 capture; free the serial lane only on provider terminal status.
+  if(isGenjutsuZeroJob(job)){
+    let providerState:string|null=null;
+    try{
+      const observed=await rhJson("/task/openapi/status",{taskId},AbortSignal.timeout(8000));
+      if(Number(observed?.code)===0)providerState=String(observed?.data||"").toUpperCase();
+    }catch{/* Keep the task active until provider status can be confirmed. */}
+    const finished=!!providerState&&["SUCCESS","FAILED","CANCEL","CANCELLED","CANCELED"].includes(providerState);
+    const checkedAt=new Date().toISOString();
+    const {data:updated,error:checkError}=await admin.from("production_jobs").update({
+      ...(finished?{status:"ready",progress:100,completed_at:checkedAt}:{}),
+      meta:{...meta,genjutsu_cancel_phase:"AUTO_CANCEL_DISABLED",
+        provider_auto_cancel_enabled:false,provider_task_pending:!finished,
+        ...(finished?{provider_terminal_status:providerState}:{}),
+        provider_last_status_checked_at:checkedAt},
+      updated_at:checkedAt
+    }).eq("id",job.id).eq("runninghub_task_id",taskId)
+      .in("status",["queued","running"]).select("id").maybeSingle();
+    if(checkError)throw checkError;
+    if(finished&&updated)await admin.rpc("wake_genjutsu_queue");
+    return !!(finished&&updated);
   }
   // GENJUTSU: a saída 482 já foi copiada e validada acima. Não consultar
   // o status antes de pedir o cancelamento: a consulta introduz atraso.
@@ -462,6 +486,8 @@ Deno.serve(async(req:Request)=>{
     const {data:expected,error:se}=await admin.rpc("get_cloudent_worker_secret");
     if(se)throw se;
     if(!supplied||supplied!==expected)return out({ok:false,error:"unauthorized"},401);
+
+    if(slots<=0)await startFaceSwapJobs();
 
     await admin.from("worker_runtime").upsert({
       worker_name:"production",last_heartbeat:new Date().toISOString(),updated_at:new Date().toISOString()
@@ -971,7 +997,7 @@ Deno.serve(async(req:Request)=>{
           motionState=await readMotionProviderStatus(base,apiKey,String(job.runninghub_task_id));
           const synced=await applyGenjutsuStatus(admin,job,motionState);if(!synced)continue;Object.assign(job,synced);
           if(!['queued','running'].includes(job.status))continue;
-          if(!job.result_video_id&&!job.meta?.provider_cancel_ui_prepared_at&&typeof (rhJson as any).prepareUI==='function'){
+          if(!isGenjutsuZeroJob(job)&&!job.result_video_id&&!job.meta?.provider_cancel_ui_prepared_at&&typeof (rhJson as any).prepareUI==='function'){
             EdgeRuntime.waitUntil((async()=>{
               const proof=await (rhJson as any).prepareUI({job_id:job.id,task_id:job.runninghub_task_id}).catch(()=>null);
               if(!proof?.ok)return;
@@ -1392,6 +1418,3 @@ Deno.serve(async(req:Request)=>{
     return out({ok:false,error:message},500);
   }
 });
-
-
-

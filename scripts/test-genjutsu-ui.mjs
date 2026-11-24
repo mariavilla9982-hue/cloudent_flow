@@ -181,3 +181,22 @@ assert.equal(sent.manual_prompt,'  First line\nSecond line.  ');
 assert.equal(sent.reuse.original.id,'failed-media');assert.equal(sent.reuse.reference.asset,'owner/frame');
 assert.equal(uploads.length,beforeUploads,'reused media does not upload through the browser');
 console.log('PASS manual prompt and card actions: exact text, download, two draft fields, no implicit dispatch or browser re-upload');
+
+// Persisted controls must survive refresh and use real API operations.
+recoveryJob={id:'controls',status:'waiting',created_at:'2026-11-23',meta:{stage:'control_motion',character_id:'jujuh',video_workflow:{key:'genjutsu'}},production:{id:'controls',status:'motion_waiting'}};
+await c.window.CloudentGenjutsu.refresh();
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-priority="controls"/);
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-delete="controls"/);
+await clickAction({priority:'controls'});
+assert.deepEqual(calls.filter(x=>x.path.includes('image-pipeline-priority')).at(-1).body,{id:'controls',prioritized:true});
+recoveryJob.queue_priority_at='2026-11-23T20:00:00Z';
+await c.window.CloudentGenjutsu.refresh();
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/Remover prioridade/);
+await clickAction({priority:'controls'});
+assert(calls.some(x=>x.path.includes('image-pipeline-priority')&&x.body.prioritized===false));
+recoveryJob.production={id:'controls',status:'ready',result_video_id:'saved',scheduled:true,schedule_id:'schedule'};
+await c.window.CloudentGenjutsu.refresh();
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/No calendário/);
+c.window.CloudentGenjutsu.scheduled('controls');
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-gen-job="controls"/);
+console.log('PASS pending deletion, priority/removal API, persistent priority and scheduled card retained');

@@ -2078,6 +2078,12 @@ Deno.serve(async (req: Request) => {
       if(!job)return json({error:"production_job_not_found"},404);
       if(job.status!=="ready"||!job.result_video_id)return json({error:"production_job_not_ready"},409);
 
+      if(job.meta?.workflow_key==="genjutsu"&&job.meta?.workflow_id==="2124648844280733698"){
+        const {data:result,error}=await admin.rpc("schedule_genjutsu_result",{p_id:id,p_user_id:userData.user.id,p_account_id:platformAccountId,p_at:scheduledAt,p_caption:caption});
+        if(error)throw error;
+        return json(result,result?.status||200);
+      }
+
       const {data:existing,error:existingError}=await admin.from("schedules")
         .select("id,scheduled_at,status").eq("video_id",job.result_video_id)
         .neq("status","cancelled").limit(1).maybeSingle();
@@ -4517,5 +4523,3 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: message }, 500);
   }
 });
-
-

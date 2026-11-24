@@ -9757,14 +9757,23 @@ async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=
     if(openingCurrent()){closeModal();toast("Não consegui carregar as contas e vagas: "+friendlyCloudentError(e.message),"err")}
     return;
   }
-  const scheduled=!!job.meta?.scheduled;
-  const linked=queue.find(x=>String(x.id)===String(job.meta?.schedule_id));
+  const scheduled=!!(job.meta?.scheduled||job.scheduled);
+  const linked=queue.find(x=>String(x.id)===String(job.meta?.schedule_id||job.schedule_id));
   const accounts=calendarInstagramAccounts();
   const jujuh=accounts.find(a=>[a.account_label,a.username,a.config?.username].some(value=>
     String(value||"").replace(/^@/,"").toLowerCase()==="jujuhmartinss"));
+  const modelKey=String(job.character_id||job.meta?.character_id||'').toLowerCase();
+  const normalizeModel=value=>String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+  const targetModel=normalizeModel(modelKey);
+  const modelMatches=targetModel?accounts.filter(a=>a.config?.character_id===modelKey||[a.account_label,a.username,a.config?.username].some(value=>{
+    const name=normalizeModel(value);
+    return targetModel.includes('jujuh')?name.includes('jujuh'):targetModel.includes('japah')?name.includes('japah'):false;
+  })):[];
+  const modelAccount=modelMatches.length===1?modelMatches[0]:null;
+  const isGenjutsuZero=job.meta?.workflow_key==='genjutsu'||!!job.genjutsu;
   const accountId=scheduled?calendarRowAccountId(linked)
-    :genjutsuNode?calendarAccountId(jujuh||(accounts.length===1?accounts[0]:null)):calendarEnsureAccount();
-  const scheduledAt=job.meta?.scheduled_at?new Date(job.meta.scheduled_at):null;
+    :isGenjutsuZero?calendarAccountId(modelAccount):genjutsuNode?calendarAccountId(jujuh||(accounts.length===1?accounts[0]:null)):calendarEnsureAccount();
+  const scheduledAt=(job.meta?.scheduled_at||job.scheduled_at)?new Date(job.meta?.scheduled_at||job.scheduled_at):null;
   const today=new Date(),tomorrow=new Date(today);tomorrow.setDate(today.getDate()+1);
   const rows=productionCalendarCapacity(accountId,queue);
   const preferred=localISO(tomorrow);
@@ -9786,6 +9795,7 @@ async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=
         const account=calendarAccountId(a),label=String(a.account_label||a.username||"Instagram").replace(/^@/,"");
         return '<option value="'+esc(account)+'" '+(account===accountId?'selected':'')+'>@'+esc(label)+'</option>';
       }).join("")+'</select></div>'+
+    (isGenjutsuZero&&!accountId?'<p role="status">Nenhuma conta conectada foi associada à TAG. Escolha uma conta válida.</p>':'')+
     '<div id="productionScheduleCapacity">'+productionCalendarCapacityMarkup(initial,!scheduled,accountId)+'</div>'+
     (scheduled
       ? '<div class="production-scheduled-summary"><span>✓</span><div><b>Agendado para '+esc(initial)+' às '+esc(initialTime)+'</b><small>O arquivo gerado continua salvo mesmo se você retirar do calendário.</small></div></div>'+
@@ -9831,7 +9841,7 @@ async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNod
   try{
     const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
     let clean={status:"legacy"};
-    if(!genjutsuNode&&job?.result_video_id){
+    if(!genjutsuNode&&job?.result_video_id&&job.meta?.workflow_key!=='genjutsu'&&!job.genjutsu){
       if(button)button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>Preparando vídeo…</span>';
       clean=await runMediaCleaner("video",job.result_video_id,{quiet:true});
       if(clean?.status==="failed")throw new Error(clean.error||"Media Cleaner falhou.");
@@ -9855,7 +9865,7 @@ async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNod
     if(job){
       job.meta={...(job.meta||{}),scheduled:true,schedule_id:result?.schedule?.id||null,scheduled_at:at.toISOString(),platform_account_id:accountId};
     }
-    if(productionData?.jobs){
+    if(productionData?.jobs&&job?.meta?.workflow_key!=='genjutsu'&&!job?.genjutsu){
       productionData.jobs=productionData.jobs.filter(x=>String(x.id)!==String(id));
     }
     window.CloudentGenjutsu?.scheduled?.(id);
@@ -12725,7 +12735,7 @@ init();
 </script>
 <script src="/runninghub-points.js?v=2"></script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=8"></script>
-<script src="/genjutsu-ui.js?v=19"></script>
+<script src="/genjutsu-ui.js?v=20"></script>
 <script src="/genjutsu-v3-ui.js?v=11"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=26"></script>
 <script src="/production-studio.js?v=9"></script>

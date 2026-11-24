@@ -121,6 +121,8 @@
       retryAll.textContent=retryingAll?'Retomando…':'Tentar todos novamente ('+failedCount+')';
       retryAll.setAttribute('aria-busy',String(retryingAll));
     }
+    const pending=job=>!['ready','failed','cancelled'].includes(job.production?.status||job.status);
+    jobs.sort((a,b)=>pending(a)&&pending(b)?String(b.queue_priority_at||b.production?.queue_priority_at||'').localeCompare(String(a.queue_priority_at||a.production?.queue_priority_at||''))||String(a.created_at).localeCompare(String(b.created_at)):Number(pending(b))-Number(pending(a)));
     const markup=jobs.map((job,i)=>{
       const child=job.production,hasResult=!!child?.result_video_id,failed=child?.status==='failed'||job.status==='failed';
       const retry=canRetry(job),retrying=pendingRetries.has(job.id);
@@ -144,7 +146,9 @@
       const detail=validProgress?'<small class="genjutsu-node-progress">Etapa atual · node '+e(value.node)+' · '+value.value+'/'+value.max+'</small>':'';
       const id=e(job.id),n=jobs.length-i,model=job.meta?.character_name||(job.meta?.input_mode==='manual_frame'?'Frame enviado':'Modelo');
       const media=job.media,hasFrame=media?.frame!==false,hasOriginal=media?.original!==false;
-      const actions=(hasResult?'<button type="button" class="btn" data-download="'+id+'">Baixar vídeo</button>':'')+
+      const prioritized=!!(job.queue_priority_at||child?.queue_priority_at);
+      const canPrioritize=!finished&&!failed&&!['uploading','queued','running'].includes(child?.status)&&(!child||child.status==='motion_waiting');
+      const actions=(canPrioritize?'<button type="button" class="btn" data-priority="'+id+'">'+(prioritized?'Remover prioridade':'Priorizar')+'</button>':'')+(hasResult?'<button type="button" class="btn" data-download="'+id+'">Baixar vídeo</button>':'')+
         (hasFrame?'<button type="button" class="btn studio-frame-action" data-frame="'+id+'">Ver frame</button><button type="button" class="btn" hidden data-verified-frame data-download-frame="'+id+'">Baixar frame</button><small data-missing-frame hidden>Frame indisponível</small>':'<small>Frame indisponível</small>')+
         (hasOriginal?'<button type="button" class="btn" data-original="'+id+'">Vídeo original</button><button type="button" class="btn" hidden data-verified-original data-download-original="'+id+'">Baixar vídeo original</button>':'')+
         (failed&&media?.reuseOriginal?'<button type="button" class="btn" hidden data-verified-original data-use-video="'+id+'">Usar vídeo</button>':'')+
@@ -152,18 +156,18 @@
         '<button type="button" class="btn" data-prompt="'+id+'">Visualizar prompt</button>'+
         (child?.status==='ready'?'<button type="button" class="btn" data-trial="'+id+'">Reels Teste</button><button type="button" class="btn" data-bulk="'+id+'">Mandar para lote</button>':'')+
         (canStop?'<button type="button" class="btn danger" data-stop="'+id+'">Parar</button>':'')+
-        (finished||failed?'<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button>':'');
+        '<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button>';
       const hidden=queueFilter==='ready'?!hasResult:queueFilter==='running'?(finished||failed):false;
       const generated=child?.completed_at||job.completed_at;
       return '<article class="gv3-job genjutsu-card '+(finished?'is-complete':'')+'" '+(hidden?'hidden':'')+' data-studio-state="'+(activity?'active':state==='cancelled'?'failed':state)+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
-        '<header class="gv3-job-header"><div class="gv3-job-identity"><strong class="gv3-job-title">Vídeo '+n+'</strong><span class="gv3-mode-tag studio-identity studio-model-tag" data-character="'+e(job.meta?.character_id||'')+'">'+e(model)+'</span></div><time class="gv3-job-time">'+e(new Date(generated||job.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}))+'</time></header>'+
+        '<header class="gv3-job-header"><div class="gv3-job-identity"><strong class="gv3-job-title">Vídeo '+n+'</strong><span class="gv3-mode-tag studio-identity studio-model-tag" data-character="'+e(job.meta?.character_id||'')+'">'+e(model)+'</span>'+(prioritized?'<small class="gv3-mode-tag">Prioridade</small>':'')+(child?.scheduled?'<small class="gv3-mode-tag">Agendado</small>':'')+'</div><time class="gv3-job-time">'+e(new Date(generated||job.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}))+'</time></header>'+
         '<div class="gv3-showcase"><div class="gv3-feature"><'+(hasResult?'div':'button type="button"')+' class="production-media-cell" '+(hasResult?'data-preview':'data-original')+'="'+id+'" aria-label="'+(hasResult?'Ver resultado':'Ver vídeo original')+' · Vídeo '+n+'" title="'+e(job.meta?.source_file_name||job.original_file_name)+'"><span class="production-media-preview-shell" '+(hasFrame?'data-job-media="'+id+'"':'data-thumb-unavailable')+'><span class="genjutsu-preview-placeholder">'+(hasFrame?'▶':'Sem prévia')+'</span></span></'+(hasResult?'div':'button')+'><span class="gv3-ratio">9:16</span></div>'+
         '<div class="gv3-showcase-controls"><p class="gv3-feature-title">PRÉVIA VERTICAL · 9:16</p><div class="production-job-state">'+bar+
         '<span class="production-status '+state+'" role="status">'+(activity?'<i class="genjutsu-activity" aria-hidden="true"></i>':'')+e(label)+'</span>'+steps+detail+retryMarkup(job)+
         (!finished?'<div class="genjutsu-times">'+elapsedMarkup(job,failed||cancelled)+'</div>':'')+
         (error?'<em role="alert" title="'+e(error)+'">'+e(error)+'</em>':'')+'</div><b class="gv3-option-heading">Versão para agenda</b><div class="gv3-selected-note">Original do RunningHub · qualidade preservada</div>'+
         '<div class="production-job-actions gv3-primary-actions">'+(hasResult?'<button type="button" class="btn" data-preview="'+id+'">Ver resultado</button><button type="button" class="btn" data-download="'+id+'">Baixar</button>':'')+
-        (child?.status==='ready'?'<button type="button" class="btn primary" data-calendar="'+id+'">Adicionar ao calendário</button>':'')+
+        (child?.status==='ready'?'<button type="button" class="btn primary" data-calendar="'+id+'">'+(child?.scheduled?'No calendário':'Adicionar ao calendário')+'</button>':'')+
         (retry?'<button type="button" class="btn" data-retry="'+id+'"'+(retrying?' disabled aria-busy="true"':'')+'>'+(retrying?'Retomando…':'Tentar novamente')+'</button>':'')+
         '<details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></div></div></article>';
     }).join('')||'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
@@ -411,7 +415,7 @@
   }
   async function action(button){
     const menu=button.closest?.('.genjutsu-more');if(menu)menu.open=false;
-    const id=button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt||button.dataset.download||button.dataset.downloadFrame||button.dataset.downloadOriginal||button.dataset.useVideo||button.dataset.useFrame||button.dataset.calendar||button.dataset.trial||button.dataset.bulk||button.dataset.retry||button.dataset.stop||button.dataset.delete;
+    const id=button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt||button.dataset.download||button.dataset.downloadFrame||button.dataset.downloadOriginal||button.dataset.useVideo||button.dataset.useFrame||button.dataset.calendar||button.dataset.trial||button.dataset.bulk||button.dataset.retry||button.dataset.stop||button.dataset.priority||button.dataset.delete;
     if(!id||pendingActions.has(id)||pendingRetries.has(id))return;
     if(button.dataset.retry)return retryJobs([id]);
     pendingActions.add(id);
@@ -441,7 +445,17 @@
         const result=await request('image-pipeline-stop',{id},'PATCH');
         message(result.result_ready?'Vídeo salvo antes da parada.':result.stopped?'Produção parada.':result.already_finished?'A tarefa já terminou.':'Parada solicitada ao RunningHub. Aguarde a confirmação.');
       }
-      else if(button.dataset.delete){if(!confirm('Remover este item da fila? O vídeo já preservado no calendário será mantido.'))return;await request('image-pipeline-job',{id},'DELETE');}
+      else if(button.dataset.priority){
+        const job=jobs.find(j=>j.id===id),prioritized=!!(job?.queue_priority_at||job?.production?.queue_priority_at);
+        await request('image-pipeline-priority',{id,prioritized:!prioritized},'PATCH');
+        message(prioritized?'Prioridade removida.':'Prioridade salva. A geração atual continuará normalmente.');
+      }
+      else if(button.dataset.delete){
+        if(!confirm('Excluir esta produção? Se estiver gerando, a exclusão aguardará o encerramento confirmado no RunningHub. Arquivos usados pelo calendário serão preservados.'))return;
+        const result=await request('image-pipeline-job',{id},'DELETE');
+        if(result.confirmation_pending)message('Exclusão pendente: aguardando confirmação do encerramento no RunningHub.');
+        else {jobs=jobs.filter(job=>job.id!==id);jobsRevision++;drawJobs();message('Produção excluída.');}
+      }
       else if(button.dataset.calendar){
         const job=jobs.find(j=>j.id===id),production=job?.production;
         if(production)await openProductionScheduleModal(production.id||id,jobs.length-jobs.indexOf(job),production);
@@ -538,7 +552,8 @@
   function scheduled(productionId){
     if(!jobs.some(job=>(job.production?.id||job.id)===productionId))return;
     jobsRevision++;
-    jobs=jobs.filter(job=>(job.production?.id||job.id)!==productionId);
+    for(const job of jobs)if((job.production?.id||job.id)===productionId&&job.production)job.production.scheduled=true;
+    void refresh();
     drawJobs();
   }
   window.CloudentGenjutsu={render,refresh,scheduled,get busy(){return busy;}};

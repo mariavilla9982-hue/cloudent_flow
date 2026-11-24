@@ -63,7 +63,7 @@ export async function imagePipelineApi(d:any){
     const rows=check(await query.order('created_at',{ascending:false}).limit(100));
     const childIds=[...new Set((rows||[]).map((j:any)=>j.production_job_id).filter(Boolean))];
     const children=childIds.length?check(await admin.from('production_jobs')
-      .select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds,created_at,updated_at')
+      .select('id,status,progress,result_video_id,last_error,runninghub_task_id,meta,hidden_at,started_at,completed_at,runninghub_runtime_seconds,created_at,updated_at,queue_priority_at')
       .in('id',childIds).eq('user_id',user.id)):[];
     const childrenById=new Map<string,any>((children||[]).map((p:any)=>[p.id,p]));
     for(const j of rows||[]){
@@ -77,10 +77,15 @@ export async function imagePipelineApi(d:any){
       }
       if(j.production_job_id){
         const child=childrenById.get(j.production_job_id);
+        if((child?.meta?.delete_requested_at&&['ready','failed','cancelled'].includes(child.status))||(!child&&j.meta?.delete_requested_at&&['ready','failed','cancelled'].includes(j.status))){
+          const deleted=check(await admin.rpc('genjutsu_queue_action',{p_id:j.id,p_user_id:user.id,p_operation:'delete'}));
+          if(deleted?.ok){j.hidden_at=new Date().toISOString();continue;}
+        }
         j.production=child?{...child}:null;
         if(j.production){
           if(j.meta?.video_workflow?.key==='genjutsu'){
             const p=j.production,m=p.meta||{},prompt=m.genjutsu_prompt,task=p.runninghub_task_id;
+            p.scheduled=!!m.scheduled;p.schedule_id=m.schedule_id||null;p.scheduled_at=m.scheduled_at||null;p.character_id=m.character_id||j.meta?.character_id;p.queue_priority_at=child.queue_priority_at;
             p.execution_confirmed=!!p.started_at&&!!p.runninghub_task_id&&String(m.provider_status_task_id)===String(p.runninghub_task_id);
             const canRetryPrompt=!genjutsuContentBlockMessage(prompt?.verifiedProviderFinishReason)&&!m.pipeline_dispatch_intent&&
               (prompt?.status!=='generating'||!!prompt.interactionId||knownGenjutsu503(p));
@@ -95,7 +100,7 @@ export async function imagePipelineApi(d:any){
       }
     }
     // Scheduled children are hidden by the native calendar transfer.
-    return json({jobs:(rows||[]).filter((j:any)=>!j.production?.hidden_at)});
+    return json({jobs:(rows||[]).filter((j:any)=>!j.hidden_at&&!j.production?.hidden_at)});
   }
   if(req.method==='GET'&&resource==='image-pipeline-prompt'){
     const j=await owner(url.searchParams.get('id')||'');
@@ -312,8 +317,29 @@ export async function imagePipelineApi(d:any){
     if(results.some(result=>result.ok))await wakeAfterRetry(results.filter(result=>result.ok).map(result=>retryQueue(byId.get(result.id))));
     return json({results});
   }
+  if(req.method==='PATCH'&&action==='image-pipeline-priority'){
+    const b=await req.json();
+    if(typeof b.prioritized!=='boolean')return json({error:'Prioridade inválida.'},400);
+    const result=check(await admin.rpc('genjutsu_queue_action',{p_id:String(b.id||''),p_user_id:user.id,p_operation:b.prioritized?'prioritize':'unprioritize'}));
+    if(result?.ok)await wakeAfterRetry(['genjutsu']);
+    return json(result,result?.status||200);
+  }
   if(req.method==='DELETE'&&action==='image-pipeline-job'){
     const b=await req.json(),j=await owner(String(b.id||''));if(!j)return json({error:'Job não encontrado'},404);
+    if(j.meta?.video_workflow?.key==='genjutsu'){
+      let result=check(await admin.rpc('genjutsu_queue_action',{p_id:j.id,p_user_id:user.id,p_operation:'delete'}));
+      if(result?.reason==='remote_active'){
+        const stopped=!j.production_job_id&&j.runninghub_task_id
+          ? await stopGenjutsu(j.runninghub_task_id).then(()=>({ok:true,status:200}))
+          : await stopGenjutsuMotion(admin,user.id,j.id,stopGenjutsu,true);
+        if(!stopped.ok)return json(stopped,stopped.status||409);
+        result=check(await admin.rpc('genjutsu_queue_action',{p_id:j.id,p_user_id:user.id,p_operation:'request_delete'}));
+        if(result?.confirmation_pending)return json({ok:true,confirmation_pending:true},202);
+        if(result?.reason==='remote_active')return json({ok:true,confirmation_pending:true},202);
+      }
+      if(result?.ok)await wakeAfterRetry(['genjutsu']);
+      return json(result,result?.status||200);
+    }
     let child:any=null;
     if(j.production_job_id){
       child=check(await admin.from('production_jobs').select('id,status,meta').eq('id',j.production_job_id).eq('user_id',user.id).maybeSingle());
@@ -336,4 +362,3 @@ export async function imagePipelineApi(d:any){
   }
   return json({error:'Operação inválida'},400);
 }
-
