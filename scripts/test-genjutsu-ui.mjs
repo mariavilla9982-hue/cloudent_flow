@@ -12,7 +12,7 @@ const mediaBoxes={};
 for(const kind of ['original','frame']){const placeholder=node();placeholder.replaceWith=media=>mediaBoxes[kind].media=media;mediaBoxes[kind]={querySelector:()=>placeholder};}
 const target={dataset:{jobMedia:'existing'},isConnected:true,replaceChildren:media=>mediaBoxes.frame.media=media,setAttribute(){},querySelector:s=>s==='.genjutsu-preview-placeholder, img'?{replaceWith:media=>mediaBoxes.frame.media=media}:mediaBoxes[s.includes('original')?'original':'frame']};
 nodes.get('[data-gen-jobs]').querySelectorAll=()=>[target];
-let recoveryJob=null,failedJobs=[],resolveBulk=null;
+let recoveryJob=null,failedJobs=[],resolveBulk=null,deleteReply={ok:true};
 let timer,frameReads=0,uploads=[],calls=[],failUpload=true,uploadedFiles=[],modal=null,resolveResult=null,deferResult=false,previewFailure=false;
 const modalHost=node();Object.defineProperty(modalHost,'innerHTML',{set(value){if(modal){modal.isConnected=false;modal.mediaController?.abort();}this.html=value;if(!value){modal=null;return;}modal=node();modal.isConnected=true;modal.canvas=node();modal.close=node();modal.close.focus=()=>{};modal.querySelector=s=>s==='[data-gen-close]'?modal.close:modal.canvas;modal.querySelectorAll=()=>[modal.close];},get(){return this.html;}});modalHost.querySelector=()=>modal;
 const video=new File(['source video'], 'video.mp4',{type:'video/mp4'});
@@ -22,6 +22,7 @@ const c=vm.createContext({window:{CloudentConfig:{supabaseUrl:'https://project.s
   uploadFaceSwapPart:async(part,file)=>{uploadedFiles.push(file);uploads.push(part.path);if(part.path==='reference'&&failUpload){failUpload=false;throw Error('upload interrupted');}},
   closeModal:()=>{modalHost.innerHTML='';},cloudFetch:async(path,options)=>{
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
+    if(path.includes('action=image-pipeline-job'))return deleteReply;
     if(path.includes('resource=image-pipeline-characters')){assert(path.includes('metadata=1'));return {characters:[{id:'jujuh',name:'Jujuh'}]};}
     if(path.includes('resource=image-pipeline&'))return {jobs:[...failedJobs,...(recoveryJob?[recoveryJob]:[]),{id:'existing',status:'waiting',meta:{video_workflow:{key:'genjutsu'},source_file_name:'<unsafe>',character_name:'Jujuh',stage:'control_motion'},production:{id:'existing',status:'running',result_video_id:'saved',genjutsu:{providerPending:true}}},{id:'other',meta:{video_workflow:{key:'motion_control'}}}]};
     if(path.includes('action=image-pipeline-retry-genjutsu'))return new Promise(resolve=>{resolveBulk=resolve;});
@@ -116,7 +117,23 @@ await clickAction({trial:'existing'});assert.equal(trialId,'existing');
 await clickAction({bulk:'existing'});assert.equal(bulkId,'existing');
 await clickAction({download:'existing'});assert(calls.some(x=>x.path.includes('image-pipeline-result')));
 await clickAction({retry:'existing'});assert(calls.some(x=>x.path.includes('action=image-pipeline-retry')&&x.body.id==='existing'));
-await clickAction({delete:'existing'});assert(calls.some(x=>x.path.includes('action=image-pipeline-job')&&x.body.id==='existing'));
+const deleteCount=()=>calls.filter(x=>x.path.includes('action=image-pipeline-job')).length;
+await clickAction({delete:'existing'});assert.equal(deleteCount(),0,'opening confirmation must not delete');
+assert.match(modalHost.innerHTML,/Excluir produção/);
+modal.onkeydown({key:'Escape',preventDefault(){}});assert.equal(modal,null);assert.equal(deleteCount(),0);
+const confirmDeletion=async()=>{const confirmation=modal;confirmation.onclick({target:{closest:selector=>selector==='[data-confirm-delete]'?{}:null}});await new Promise(setImmediate);await new Promise(setImmediate);};
+c.confirm=()=>{throw Error('native dialogs must not be used for delete');};
+await clickAction({delete:'existing'});await confirmDeletion();assert.equal(deleteCount(),1);
+assert(calls.some(x=>x.path.includes('action=image-pipeline-job')&&x.body.id==='existing'));
+deleteReply={ok:true,confirmation_pending:true};
+await clickAction({delete:'existing'});await confirmDeletion();
+assert.match(nodes.get('[data-gen-status]').textContent,/Exclusão pendente/);
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-gen-job="existing"/);
+deleteReply={ok:false,error:'Exclusão recusada'};
+await clickAction({delete:'existing'});await confirmDeletion();
+assert.equal(nodes.get('[data-gen-error]').textContent,'Exclusão recusada');
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-gen-job="existing"/);
+deleteReply={ok:true};c.confirm=()=>true;
 assert(nodes.get('[data-gen-jobs]').innerHTML.includes('genjutsu-more'));
 const failed=(id,canRetry)=>({id,status:'failed',last_error:'falhou',meta:{video_workflow:{key:'genjutsu'},stage:'control_motion'},production:{status:'failed',genjutsu:{canRetry}}});
 assert.equal(nodes.get('[data-retry-all]').hidden,true);

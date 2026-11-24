@@ -156,8 +156,7 @@
         (failed&&media?.reuseFrame?'<button type="button" class="btn" hidden data-verified-frame data-use-frame="'+id+'">Usar frame</button>':'')+
         '<button type="button" class="btn" data-prompt="'+id+'">Visualizar prompt</button>'+
         (child?.status==='ready'?'<button type="button" class="btn" data-trial="'+id+'">Reels Teste</button><button type="button" class="btn" data-bulk="'+id+'">Mandar para lote</button>':'')+
-        (canStop?'<button type="button" class="btn danger" data-stop="'+id+'">Parar</button>':'')+
-        '<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button>';
+        (canStop?'<button type="button" class="btn danger" data-stop="'+id+'">Parar</button>':'');
       const hidden=queueFilter==='ready'?!hasResult:queueFilter==='running'?(finished||failed):false;
       const generated=child?.completed_at||job.completed_at;
       return '<article class="gv3-job genjutsu-card '+(finished?'is-complete':'')+'" '+(hidden?'hidden':'')+' data-studio-state="'+(activity?'active':state==='cancelled'?'failed':state)+'" data-gen-state="'+e(d?.key||state)+'" data-gen-job="'+id+'">'+
@@ -170,7 +169,7 @@
         '<div class="production-job-actions gv3-primary-actions">'+(hasResult?'<button type="button" class="btn" data-preview="'+id+'">Ver resultado</button><button type="button" class="btn" data-download="'+id+'">Baixar</button>':'')+
         (child?.status==='ready'?'<button type="button" class="btn primary" data-calendar="'+id+'">'+(child?.scheduled?'No calendário':'Adicionar ao calendário')+'</button>':'')+
         (retry?'<button type="button" class="btn" data-retry="'+id+'"'+(retrying?' disabled aria-busy="true"':'')+'>'+(retrying?'Retomando…':'Tentar novamente')+'</button>':'')+
-        '<details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></div></div></article>';
+        '<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button><details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></div></div></article>';
     }).join('')||'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
     if(markup===jobsMarkup&&node.innerHTML)return;
     const openMenu=node.querySelector?.('.genjutsu-more[open]')?.closest?.('[data-gen-job]')?.dataset.genJob;
@@ -414,7 +413,31 @@
     }catch(error){if(rev===revision){message('');message(error.message,true);}}
     finally{if(rev===revision){retryingAll=false;ids.forEach(id=>pendingRetries.delete(id));drawJobs();}}
   }
-  async function action(button){
+  function confirmDelete(button){
+    const id=button.dataset.delete,job=jobs.find(job=>job.id===id),uid=owner,rev=revision;
+    if(!job||pendingActions.has(id))return;
+    const host=document.getElementById('modalHost');if(!host)return;
+    closeModal();
+    host.innerHTML='<div class="modal" data-gen-modal role="dialog" aria-modal="true" aria-label="Excluir produção"><div class="modal-box"><div class="modal-head"><b>Excluir produção?</b></div><p>A produção será removida desta lista. Os arquivos e os agendamentos existentes serão preservados.</p><p>Se houver geração em andamento, a exclusão aguardará o encerramento confirmado no RunningHub.</p><div class="toolbar"><button type="button" class="btn" data-gen-close>Voltar</button><button type="button" class="btn danger" data-confirm-delete>Excluir produção</button></div></div></div>';
+    const modal=host.querySelector('[data-gen-modal]');
+    modal.onclick=event=>{
+      if(event.target===modal||event.target.closest('[data-gen-close]')){closeModal();return;}
+      if(!event.target.closest('[data-confirm-delete]'))return;
+      closeModal();
+      if(uid===cloudSession?.user?.id&&uid===owner&&rev===revision&&active()&&jobs.some(job=>job.id===id))void action(button,true);
+    };
+    modal.onkeydown=event=>{
+      if(event.key==='Escape'){event.preventDefault();closeModal();}
+      if(event.key==='Tab'){
+        const controls=[...modal.querySelectorAll('button')];
+        if(event.shiftKey&&document.activeElement===controls[0]){event.preventDefault();controls.at(-1)?.focus();}
+        else if(!event.shiftKey&&document.activeElement===controls.at(-1)){event.preventDefault();controls[0]?.focus();}
+      }
+    };
+    modal.querySelector('[data-gen-close]')?.focus();
+  }
+  async function action(button,deleteConfirmed=false){
+    if(button.dataset.delete&&!deleteConfirmed)return confirmDelete(button);
     const menu=button.closest?.('.genjutsu-more');if(menu)menu.open=false;
     const id=button.dataset.preview||button.dataset.original||button.dataset.frame||button.dataset.prompt||button.dataset.download||button.dataset.downloadFrame||button.dataset.downloadOriginal||button.dataset.useVideo||button.dataset.useFrame||button.dataset.calendar||button.dataset.trial||button.dataset.bulk||button.dataset.retry||button.dataset.stop||button.dataset.priority||button.dataset.delete;
     if(!id||pendingActions.has(id)||pendingRetries.has(id))return;
@@ -452,8 +475,9 @@
         message(prioritized?'Prioridade removida.':'Prioridade salva. A geração atual continuará normalmente.');
       }
       else if(button.dataset.delete){
-        if(!confirm('Excluir esta produção? Se estiver gerando, a exclusão aguardará o encerramento confirmado no RunningHub. Arquivos usados pelo calendário serão preservados.'))return;
         const result=await request('image-pipeline-job',{id},'DELETE');
+        if(uid!==cloudSession?.user?.id||rev!==revision)return;
+        if(!result?.ok)throw new Error(result?.error||'Não foi possível confirmar a exclusão. Tente novamente.');
         if(result.confirmation_pending)message('Exclusão pendente: aguardando confirmação do encerramento no RunningHub.');
         else {jobs=jobs.filter(job=>job.id!==id);jobsRevision++;drawJobs();message('Produção excluída.');}
       }
