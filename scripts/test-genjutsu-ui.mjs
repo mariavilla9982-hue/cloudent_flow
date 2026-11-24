@@ -192,6 +192,7 @@ assert.deepEqual(calls.filter(x=>x.path.includes('image-pipeline-priority')).at(
 recoveryJob.queue_priority_at='2026-11-23T20:00:00Z';
 await c.window.CloudentGenjutsu.refresh();
 assert.match(nodes.get('[data-gen-jobs]').innerHTML,/Remover prioridade/);
+assert(nodes.get('[data-gen-jobs]').innerHTML.indexOf('data-gen-job="existing"')<nodes.get('[data-gen-jobs]').innerHTML.indexOf('data-gen-job="controls"'),'current generation stays ahead of the next prioritized video');
 await clickAction({priority:'controls'});
 assert(calls.some(x=>x.path.includes('image-pipeline-priority')&&x.body.prioritized===false));
 recoveryJob.production={id:'controls',status:'ready',result_video_id:'saved',scheduled:true,schedule_id:'schedule'};

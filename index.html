@@ -9813,6 +9813,8 @@ async function openProductionScheduleModal(id,number,knownJob=null,genjutsuNode=
   if(modal)modal.scheduleQueue=queue;
   const save=$("#productionScheduleSave");
   if(save)save.onclick=()=>scheduleProductionResult(id,save,job,genjutsuNode);
+  const remove=$("#productionScheduleRemove");
+  if(remove)remove.onclick=()=>removeProductionResultFromCalendar(id,remove,job);
 }
 async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNode=null){
   if(button?.disabled||(genjutsuNode&&genjutsuScheduleInFlight.has(id)))return;
@@ -9884,8 +9886,8 @@ async function scheduleProductionResult(id,button=null,knownJob=null,genjutsuNod
     if(genjutsuNode)genjutsuScheduleInFlight.delete(id);
   }
 }
-async function removeProductionResultFromCalendar(id,button=null){
-  const job=(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
+async function removeProductionResultFromCalendar(id,button=null,knownJob=null){
+  const job=knownJob||(productionData?.jobs||[]).find(x=>String(x.id)===String(id));
   if(!job)return;
   actionButtonBusy(button,true,"Removendo…");
   try{
@@ -9898,6 +9900,7 @@ async function removeProductionResultFromCalendar(id,button=null){
     closeModal();
     if(currentPage==="production")productionPage();
     toast("Vídeo retirado do calendário. O resultado foi preservado.","ok");
+    void window.CloudentGenjutsu?.refresh?.();
     Promise.allSettled([loadProductionData(false),syncFromBackend()]).then(()=>{
       if(currentPage==="production")productionPage();
     });
@@ -12735,7 +12738,7 @@ init();
 </script>
 <script src="/runninghub-points.js?v=2"></script>
 <script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=8"></script>
-<script src="/genjutsu-ui.js?v=20"></script>
+<script src="/genjutsu-ui.js?v=21"></script>
 <script src="/genjutsu-v3-ui.js?v=11"></script>
 <script id="cloudentMotionControlScript" src="/motion-control-production.js?v=26"></script>
 <script src="/production-studio.js?v=9"></script>

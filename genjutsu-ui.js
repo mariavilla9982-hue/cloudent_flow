@@ -122,7 +122,8 @@
       retryAll.setAttribute('aria-busy',String(retryingAll));
     }
     const pending=job=>!['ready','failed','cancelled'].includes(job.production?.status||job.status);
-    jobs.sort((a,b)=>pending(a)&&pending(b)?String(b.queue_priority_at||b.production?.queue_priority_at||'').localeCompare(String(a.queue_priority_at||a.production?.queue_priority_at||''))||String(a.created_at).localeCompare(String(b.created_at)):Number(pending(b))-Number(pending(a)));
+    const queueRank=job=>['uploading','queued','running'].includes(job.production?.status||job.status)?0:pending(job)?1:2;
+    jobs.sort((a,b)=>queueRank(a)-queueRank(b)||(queueRank(a)===1?String(b.queue_priority_at||b.production?.queue_priority_at||'').localeCompare(String(a.queue_priority_at||a.production?.queue_priority_at||''))||String(a.created_at).localeCompare(String(b.created_at)):0));
     const markup=jobs.map((job,i)=>{
       const child=job.production,hasResult=!!child?.result_video_id,failed=child?.status==='failed'||job.status==='failed';
       const retry=canRetry(job),retrying=pendingRetries.has(job.id);

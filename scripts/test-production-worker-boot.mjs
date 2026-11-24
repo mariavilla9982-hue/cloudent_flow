@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {stripTypeScriptTypes} from 'node:module';
+let handler;
+const q={select(){return q},eq(){return q},upsert(){return Promise.resolve({error:null})},maybeSingle(){return Promise.resolve({data:{enabled:false,config:{}}})}};
+const admin={rpc:async()=>({data:'secret'}),from:()=>q};
+const code=stripTypeScriptTypes(fs.readFileSync('supabase/functions/cloudent-production-worker/index.ts','utf8')).replace(/^import .*;\s*$/gm,'');
+vm.runInNewContext(code,{Deno:{env:{get:()=>''},serve:f=>handler=f},createClient:()=>admin,Request,Response,URL,Date,crypto,TextEncoder,TextDecoder,Uint8Array,console});
+const response=await handler(new Request('https://test/',{method:'POST',headers:{'x-cloudent-worker-secret':'secret'}}));
+const body=await response.json();
+assert.equal(response.status,200,JSON.stringify(body));
+assert.equal(body.enabled,false);
+console.log('PASS production worker boots before reading concurrency and handles paused integration');

@@ -487,8 +487,6 @@ Deno.serve(async(req:Request)=>{
     if(se)throw se;
     if(!supplied||supplied!==expected)return out({ok:false,error:"unauthorized"},401);
 
-    if(slots<=0)await startFaceSwapJobs();
-
     await admin.from("worker_runtime").upsert({
       worker_name:"production",last_heartbeat:new Date().toISOString(),updated_at:new Date().toISOString()
     },{onConflict:"worker_name"});
@@ -1403,6 +1401,8 @@ Deno.serve(async(req:Request)=>{
         await startProductionJobs();
       }
     }
+
+    if(slots<=0)await startFaceSwapJobs();
 
     await admin.from("worker_runtime").upsert({
       worker_name:"production",last_heartbeat:new Date().toISOString(),last_success_at:new Date().toISOString(),

@@ -2,6 +2,7 @@
 import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 const tests=[
+  "scripts/test-production-worker-boot.mjs",
   "scripts/test-account-summary.mjs",
   "scripts/test-admin-panel.cjs",
   "scripts/test-auth-recovery.cjs",
