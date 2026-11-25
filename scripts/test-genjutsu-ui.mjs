@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const nodes=new Map();
 function node(){return {innerHTML:'',textContent:'',dataset:{},style:{},disabled:false,value:'',classList:{add(){},remove(){},toggle(){}},setAttribute(k,v){this[k]=v;},removeAttribute(){},replaceChildren(child){this.child=child;},load(){},click(){}};}
 const container=node();let section=null;
-for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-manual-prompt]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-error]','[data-gen-status]','[data-retry-all]'])nodes.set(selector,node());
+for(const selector of ['[data-gen-entries]','[data-send]','input[type=file]','[data-auto-videos]','[data-send-manual]','[data-manual-prompt]','[data-draft-error]','[data-gen-config]','[data-gen-jobs]','[data-gen-count]','[data-gen-error]','[data-gen-status]','[data-retry-all]'])nodes.set(selector,node());
 Object.defineProperty(container,'innerHTML',{set(value){this.html=value;section=node();section.dataset.owner=(value.match(/data-owner="([^"]*)"/)||[])[1];section.querySelector=selector=>nodes.get(selector);},get(){return this.html;}});
 for(const kind of ['video','frame']){const box=node(),parts=new Map(['.production-upload-preview','input','[data-clear]','.production-upload-meta'].map(s=>[s,node()]));box.querySelector=s=>parts.get(s);nodes.set('[data-gen-drop="'+kind+'"]',box);}
 const mediaBoxes={};
@@ -212,9 +212,28 @@ assert.match(nodes.get('[data-gen-jobs]').innerHTML,/Remover prioridade/);
 assert(nodes.get('[data-gen-jobs]').innerHTML.indexOf('data-gen-job="existing"')<nodes.get('[data-gen-jobs]').innerHTML.indexOf('data-gen-job="controls"'),'current generation stays ahead of the next prioritized video');
 await clickAction({priority:'controls'});
 assert(calls.some(x=>x.path.includes('image-pipeline-priority')&&x.body.prioritized===false));
-recoveryJob.production={id:'controls',status:'ready',result_video_id:'saved',scheduled:true,schedule_id:'schedule'};
+// A card leaves only after confirmation, and server state keeps it out after reload.
+recoveryJob.production={id:'controls',status:'ready',result_video_id:'saved',scheduled:false};
 await c.window.CloudentGenjutsu.refresh();
-assert.match(nodes.get('[data-gen-jobs]').innerHTML,/No calendário/);
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-calendar="controls"/);
+assert.equal(nodes.get('[data-gen-count]').textContent,'2 vídeo(s)');
 c.window.CloudentGenjutsu.scheduled('controls');
-assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-gen-job="controls"/);
-console.log('PASS pending deletion, priority/removal API, persistent priority and scheduled card retained');
+assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('data-gen-job="controls"'));
+assert.equal(nodes.get('[data-gen-count]').textContent,'1 vídeo(s)');
+recoveryJob.production.scheduled=true;
+recoveryJob.production.schedule_id='schedule';
+await new Promise(setImmediate);
+await c.window.CloudentGenjutsu.refresh();
+assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('data-gen-job="controls"'));
+// Fresh controller simulates reloading the page without local confirmation state.
+delete c.window.CloudentGenjutsu;
+vm.runInContext(fs.readFileSync('genjutsu-ui.js','utf8'),c);
+c.window.CloudentGenjutsu.render(container);
+await new Promise(setImmediate);await new Promise(setImmediate);
+assert(!nodes.get('[data-gen-jobs]').innerHTML.includes('data-gen-job="controls"'));
+// Removing the schedule makes the preserved result available again.
+recoveryJob.production.scheduled=false;
+await c.window.CloudentGenjutsu.refresh();
+assert.match(nodes.get('[data-gen-jobs]').innerHTML,/data-calendar="controls"/);
+assert.equal(nodes.get('[data-gen-count]').textContent,'2 vídeo(s)');
+console.log('PASS deletion, priority and scheduled cards hidden immediately, on polling and reload; unscheduled results return');

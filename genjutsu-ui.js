@@ -113,18 +113,19 @@
   }
   function drawJobs(){
     const section=root(),node=section?.querySelector('[data-gen-jobs]');if(!node)return;
-    const count=section.querySelector('[data-gen-count]');if(count)count.textContent=jobs.length+' vídeo(s)';
+    const visibleJobs=jobs.filter(job=>job.production?.scheduled!==true);
+    const count=section.querySelector('[data-gen-count]');if(count)count.textContent=visibleJobs.length+' vídeo(s)';
     const retryAll=section.querySelector('[data-retry-all]');
     if(retryAll){
-      const failedCount=jobs.filter(canRetry).length;
+      const failedCount=visibleJobs.filter(canRetry).length;
       retryAll.hidden=!failedCount&&!retryingAll;retryAll.disabled=retryingAll||!!pendingRetries.size;
       retryAll.textContent=retryingAll?'Retomando…':'Tentar todos novamente ('+failedCount+')';
       retryAll.setAttribute('aria-busy',String(retryingAll));
     }
     const pending=job=>!['ready','failed','cancelled'].includes(job.production?.status||job.status);
     const queueRank=job=>['uploading','queued','running'].includes(job.production?.status||job.status)?0:pending(job)?1:2;
-    jobs.sort((a,b)=>queueRank(a)-queueRank(b)||(queueRank(a)===1?String(b.queue_priority_at||b.production?.queue_priority_at||'').localeCompare(String(a.queue_priority_at||a.production?.queue_priority_at||''))||String(a.created_at).localeCompare(String(b.created_at)):0));
-    const markup=jobs.map((job,i)=>{
+    visibleJobs.sort((a,b)=>queueRank(a)-queueRank(b)||(queueRank(a)===1?String(b.queue_priority_at||b.production?.queue_priority_at||'').localeCompare(String(a.queue_priority_at||a.production?.queue_priority_at||''))||String(a.created_at).localeCompare(String(b.created_at)):0));
+    const markup=visibleJobs.map((job,i)=>{
       const child=job.production,hasResult=!!child?.result_video_id,failed=child?.status==='failed'||job.status==='failed';
       const retry=canRetry(job),retrying=pendingRetries.has(job.id);
       const cancelled=job.status==='cancelled'||child?.status==='cancelled';
@@ -578,8 +579,8 @@
     if(!jobs.some(job=>(job.production?.id||job.id)===productionId))return;
     jobsRevision++;
     for(const job of jobs)if((job.production?.id||job.id)===productionId&&job.production)job.production.scheduled=true;
-    void refresh();
     drawJobs();
+    void refresh(true);
   }
   window.CloudentGenjutsu={render,refresh,scheduled,get busy(){return busy;}};
 })();
