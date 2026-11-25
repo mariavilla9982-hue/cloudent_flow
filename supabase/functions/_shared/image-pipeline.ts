@@ -67,7 +67,11 @@ export async function runImagePipeline(d:any){
       if(m.stage==='control_motion'){
         if(m.video_workflow?.key==='genjutsu_v3'){
           const result=check(await admin.from('genjutsu_v3_jobs').select('status,task_id,error').eq('id',j.id).eq('user_id',j.user_id).maybeSingle());
-          if(result?.status==='ready'){
+          if(!result){
+            await patch(j,{status:'failed',last_error:'Produção vinculada não encontrada. Arquivos preservados; verifique o vínculo antes de tentar novamente.',meta:{...m,error_stage:'control_motion',pipeline_status:'CONTROL_MOTION_MISSING',auto_retry_disabled:true,dispatch_uncertain:true}});
+          }else if(result.status==='cancelled'){
+            await patch(j,{status:'cancelled',completed_at:new Date().toISOString(),last_error:result.error,meta:{...m,pipeline_status:'CONTROL_MOTION_CANCELLED',control_motion_task_id:result.task_id}});
+          }else if(result?.status==='ready'){
             await patch(j,{status:'ready',progress:100,completed_at:new Date().toISOString(),last_error:result.error,meta:{...m,pipeline_status:'COMPLETED',control_motion_task_id:result.task_id}});
           }else if(result?.status==='failed'||result?.status==='review'){
             await patch(j,{status:'failed',last_error:result.error,meta:{...m,error_stage:'control_motion',dispatch_uncertain:result.status==='review',pipeline_status:'CONTROL_MOTION_FAILED'}});
@@ -77,7 +81,11 @@ export async function runImagePipeline(d:any){
           continue;
         }
         const p=check(await admin.from('production_jobs').select('id,status,result_video_id,last_error,runninghub_task_id,meta').eq('id',j.id).eq('user_id',j.user_id).maybeSingle());
-        if(p?.status==='ready'&&p.result_video_id)await patch(j,{status:'ready',progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED',control_motion_task_id:p.runninghub_task_id}});
+        // Handoff inserts the child before entering control_motion. A missing
+        // child cannot heal by repeatedly leasing this parent (or recreating work).
+        if(!p)await patch(j,{status:'failed',last_error:'Produção vinculada não encontrada. Arquivos preservados; verifique o vínculo antes de tentar novamente.',meta:{...m,error_stage:'control_motion',pipeline_status:'CONTROL_MOTION_MISSING',auto_retry_disabled:true,dispatch_uncertain:true}});
+        else if(p.status==='cancelled'&&!p.meta?.provider_task_pending&&!p.meta?.pipeline_dispatch_uncertain)await patch(j,{status:'cancelled',completed_at:new Date().toISOString(),last_error:p.last_error,meta:{...m,pipeline_status:'CONTROL_MOTION_CANCELLED',control_motion_task_id:p.runninghub_task_id}});
+        else if(p?.status==='ready'&&p.result_video_id)await patch(j,{status:'ready',progress:100,completed_at:new Date().toISOString(),meta:{...m,pipeline_status:'COMPLETED',control_motion_task_id:p.runninghub_task_id}});
         else if(p?.status==='failed')await patch(j,{status:'failed',last_error:p.last_error,meta:{...m,error_stage:'control_motion',provider_failed:p.meta?.provider_status==='FAILED',dispatch_uncertain:!!p.meta?.pipeline_dispatch_uncertain,pipeline_status:'CONTROL_MOTION_FAILED'}});
         continue;
       }
