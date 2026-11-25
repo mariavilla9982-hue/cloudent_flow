@@ -234,6 +234,59 @@ context.fetch = async (url, options) => {
   assert.equal((await partial.arrayBuffer()).byteLength, 8);
   assert.equal((await context.serveBufferVideo(admin, new Request(url), url, 'other-key')).status, 404);
   context.fetch = bufferFetch;
+  // Virtual deadlines reproduce a receipt arriving after the former 8s cutoff
+  // without real delays or any live provider calls.
+  const budgets = new WeakMap();
+  const signals = [];
+  context.AbortSignal = { timeout(ms) {
+    const controller = new AbortController();
+    budgets.set(controller.signal, ms); signals.push(controller);
+    return controller.signal;
+  } };
+  let mutationCalls = 0;
+  const delayed = { ...structuredClone(batch[1]), id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', status: 'queued', x_post_id: null,
+    meta: { source: 'upload', storage_provider: 'r2', storage_path: file.meta.storage_path } };
+  files.push(delayed);
+  context.fetch = async (url, options) => {
+    const { query } = JSON.parse(options.body);
+    if (!query.startsWith('mutation Send')) {
+      assert.equal(budgets.get(options.signal), 8000);
+      return bufferFetch(url, options);
+    }
+    mutationCalls++;
+    // Buffer completes asset validation and returns the receipt at virtual 12s.
+    if (budgets.get(options.signal) < 12000) {
+      signals.at(-1).abort(); throw new Error('deadline');
+    }
+    return bufferFetch(url, options);
+  };
+  remoteState = 'buffer';
+  assert.equal((await run()).state, 'buffer_processing');
+  assert.equal(delayed.meta.buffer_post_id, 'buffer-post-14');
+  assert.equal(mutationCalls, 1);
+  assert.equal((await run()).state, 'buffer_processing');
+  assert.equal(mutationCalls, 1, 'polling must not recreate the post');
+  remoteState = 'sent'; await run();
+  const uncertain = { ...structuredClone(delayed), id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', status: 'queued', x_post_id: null,
+    meta: { source: 'upload', storage_provider: 'r2', storage_path: file.meta.storage_path } };
+  files.push(uncertain);
+  context.fetch = async (url, options) => {
+    if (!JSON.parse(options.body).query.startsWith('mutation Send')) return bufferFetch(url, options);
+    mutationCalls++;
+    assert.equal(budgets.get(options.signal), 45000);
+    signals.at(-1).abort(); throw new Error('secret transport URL must never persist');
+  };
+  assert.equal((await run()).state, 'failed');
+  assert.equal(uncertain.meta.publish_uncertain, true);
+  assert.equal(uncertain.meta.buffer_failure_kind, 'timeout');
+  assert.equal(uncertain.meta.http_status, 504);
+  assert.equal(uncertain.last_error.includes('secret'), false);
+  assert.equal(await run(), null);
+  assert.equal(mutationCalls, 2, 'uncertain timeout cannot replay the mutation');
+  context.fetch = async () => { throw new Error('sensitive connection detail'); };
+  await assert.rejects(context.bufferGraph('query Test { account { id } }', {}), error =>
+    error.status === 502 && error.uncertain === false && error.payload.buffer_failure_kind === 'transport');
+  context.fetch = bufferFetch;
   delete env.CLOUDENT_X_BUFFER_API_KEY;
   await assert.rejects(run, /Conecte o Buffer/);
   delete env.CLOUDENT_X_BUFFER_CHANNELS;
