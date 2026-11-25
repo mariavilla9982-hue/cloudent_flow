@@ -37,6 +37,7 @@ const tests=[
   "scripts/test-motion-ultra-authorization.cjs",
   "scripts/test-motion-video-integrity.mjs",
   "scripts/test-pipeline-motion-retry.mjs",
+  "scripts/test-pipeline-reconciliation.mjs",
   "scripts/test-points-statement.mjs",
   "scripts/test-publish-media-guard.mjs",
   "scripts/test-route-guard.cjs",
