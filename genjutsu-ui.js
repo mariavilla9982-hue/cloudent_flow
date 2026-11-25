@@ -168,7 +168,7 @@
         (!finished?'<div class="genjutsu-times">'+elapsedMarkup(job,failed||cancelled)+'</div>':'')+
         (error?'<em role="alert" title="'+e(error)+'">'+e(error)+'</em>':'')+'</div><b class="gv3-option-heading">Versão para agenda</b><div class="gv3-selected-note">Original do RunningHub · qualidade preservada</div>'+
         '<div class="production-job-actions gv3-primary-actions">'+(hasResult?'<button type="button" class="btn" data-preview="'+id+'">Ver resultado</button><button type="button" class="btn" data-download="'+id+'">Baixar</button>':'')+
-        (child?.status==='ready'?'<button type="button" class="btn primary" data-calendar="'+id+'">'+(child?.scheduled?'No calendário':'Adicionar ao calendário')+'</button>':'')+
+        (hasResult?'<button type="button" class="btn primary" data-calendar="'+id+'"'+(child.status==='ready'?'':' disabled aria-describedby="gen-calendar-wait-'+id+'"')+'>Adicionar ao calendário</button>'+(child.status==='ready'?'':'<small id="gen-calendar-wait-'+id+'" role="status">O agendamento será liberado quando a finalização da task terminar.</small>'):'')+
         (retry?'<button type="button" class="btn" data-retry="'+id+'"'+(retrying?' disabled aria-busy="true"':'')+'>'+(retrying?'Retomando…':'Tentar novamente')+'</button>':'')+
         '<button type="button" class="btn danger" data-delete="'+id+'">Excluir</button><details class="genjutsu-more"><summary aria-label="Ações do Vídeo '+n+'" title="Mais ações">⋯</summary><div class="genjutsu-menu">'+actions+'</div></details></div></div></div></article>';
     }).join('')||'<div class="production-empty"><span>◎</span><b>Sua fila está vazia</b><small>Adicione vídeo + frame acima para começar.</small></div>';
@@ -303,7 +303,7 @@
     dock.innerHTML='<div class="studio-result-head"><h3>Vídeo '+(jobs.length-jobs.indexOf(job))+'</h3></div>'+
       '<div class="studio-result-canvas" data-gen-dock-media role="status">Carregando prévia…</div>'+
       '<div class="studio-result-actions"><button class="btn" data-download="'+e(id)+'">Baixar</button>'+
-      (job.production.status==='ready'?'<button class="btn primary" data-calendar="'+e(id)+'">Adicionar ao calendário</button>':'')+'</div>';
+      '<button class="btn primary" data-calendar="'+e(id)+'"'+(job.production.status==='ready'?'':' disabled')+'>Adicionar ao calendário</button>'+(job.production.status==='ready'?'':'<small role="status">O agendamento será liberado quando a finalização da task terminar.</small>')+'</div>';
     const canvas=dock.querySelector('[data-gen-dock-media]');
     try{
       const result=await previewURL(id,'result');
