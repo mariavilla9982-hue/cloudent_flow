@@ -428,10 +428,18 @@ function bufferChannelFor(accountId:string):string{
 
 async function bufferGraph(query:string,variables:Record<string,unknown>,write=false,key=Deno.env.get("CLOUDENT_X_BUFFER_API_KEY")){
  if(!key)throw new HttpError("Conecte o Buffer antes de publicar.",409);
+ // createPost fetches/probes the asset before replying. A read-sized deadline
+ // discarded its receipt while Buffer was still processing the accepted write.
+ const timeoutMs=write?45_000:8_000;
+ const signal=AbortSignal.timeout(timeoutMs);
  let response:Response;
  try{
-  response=await fetch("https://api.buffer.com",{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({query,variables}),signal:AbortSignal.timeout(8000)});
- }catch{throw new HttpError("Buffer indisponível. Confira o envio antes de repetir.",502,null,write);}
+  response=await fetch("https://api.buffer.com",{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({query,variables}),signal});
+ }catch{
+  // Never replay a mutation after transport failure, even if the deadline fired.
+  const timeout=signal.aborted;
+  throw new HttpError(timeout?"O Buffer não confirmou a operação no prazo. Confira o envio antes de repetir.":"Falha de conexão com o Buffer. Confira o envio antes de repetir.",timeout?504:502,{buffer_failure_kind:timeout?"timeout":"transport",timeout_ms:timeoutMs},write);
+ }
  if(!response.ok)throw new HttpError("Buffer retornou HTTP "+response.status+".",response.status,null,write&&response.status>=500);
  const result=await response.json().catch(()=>null);
  if(!result?.data||result.errors?.length)throw new HttpError("O Buffer não confirmou a operação.",502,null,write);
@@ -678,7 +686,8 @@ async function publishOne(admin:any,userId:string,config:any,master:string,worke
     const message=cleanError(e);const uncertain=postAccepted||Boolean(e?.uncertain);const final=uncertain||attempt>=Number(file.max_attempts||5)||[400,401,403,409,422].includes(Number(e?.status||0));
     if(bufferChannel&&!uncertain)publicationMeta.publish_request_started=false;
     const next=new Date(Date.now()+backoff(attempt)*60_000).toISOString();
-    await admin.from("x_drive_posts").update({status:final?"failed":"queued",next_attempt_at:final?file.next_attempt_at:next,locked_at:null,locked_by:null,last_error:message,meta:{...publicationMeta,publish_uncertain:uncertain,http_status:Number(e?.status||0)},updated_at:new Date().toISOString()}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing");
+    const bufferFailure=bufferChannel&&e?.payload?.buffer_failure_kind?{buffer_failure_kind:e.payload.buffer_failure_kind,buffer_timeout_ms:e.payload.timeout_ms}:{};
+    await admin.from("x_drive_posts").update({status:final?"failed":"queued",next_attempt_at:final?file.next_attempt_at:next,locked_at:null,locked_by:null,last_error:message,meta:{...publicationMeta,...bufferFailure,publish_uncertain:uncertain,http_status:Number(e?.status||0)},updated_at:new Date().toISOString()}).eq("id",file.id).eq("locked_by",workerId).eq("status","processing");
     await admin.from("x_account_configs").update({last_worker_at:new Date().toISOString(),last_error:message,updated_at:new Date().toISOString()}).eq("platform_account_id",file.platform_account_id);
     await admin.from("activity_logs").insert({level:"error",event_type:"x_drive_post_error",message,meta:{user_id:userId,drive_file_id:file.drive_file_id,drive_file_name:file.drive_file_name,attempt,publish_uncertain:uncertain,http_status:Number(e?.status||0)}});
     return {id:file.id,state:final?"failed":"retry",error:message,uncertain};
