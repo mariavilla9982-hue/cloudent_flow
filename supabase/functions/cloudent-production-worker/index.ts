@@ -262,14 +262,36 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
     const {data:verified,error:verificationError}=await admin.from("production_jobs").update({meta}).eq("id",job.id).eq("runninghub_task_id",taskId).in("status",["queued","running"]).select("id").maybeSingle();
     if(verificationError)throw verificationError;if(!verified)return false;
   }
-  // GENJUTSU 0: never send an automatic cancellation. Preserve the verified
-  // node 482 capture; free the serial lane only on provider terminal status.
-  if(isGenjutsuZeroJob(job)){
+  // Automatic cancellation stays disabled for GENJUTSU 0. An explicit stop
+  // bound to this exact task must still reach the verified cancellation path.
+  const explicitStop=meta.genjutsu_stop_requested_task_id===taskId
+    &&Number.isFinite(Date.parse(meta.genjutsu_stop_requested_at||''));
+  if(isGenjutsuZeroJob(job)&&!explicitStop){
     let providerState:string|null=null;
+    let uiProof:any=null;
     try{
       const observed=await rhJson("/task/openapi/status",{taskId},AbortSignal.timeout(8000));
       if(Number(observed?.code)===0)providerState=String(observed?.data||"").toUpperCase();
     }catch{/* Keep the task active until provider status can be confirmed. */}
+    // OpenAPI may lose API-created tasks (807). Read the exact authenticated
+    // row passively; UNKNOWN or an old/mismatched observation cannot free a slot.
+    const nativeKnown=!!providerState&&['RUNNING','QUEUED','SUCCESS','FAILED','CANCEL','CANCELLED','CANCELED'].includes(providerState);
+    const lastUI=Date.parse(meta.provider_passive_ui_checked_at||'');
+    let uiCheckedAt:string|null=null;
+    if(!nativeKnown&&typeof (rhJson as any).prepareUI==='function'
+      &&(!Number.isFinite(lastUI)||Date.now()-lastUI>=60000)){
+      uiCheckedAt=new Date().toISOString();
+      const proof=await (rhJson as any).prepareUI({job_id:job.id,task_id:taskId}).catch(()=>null);
+      const observed=Date.parse(proof?.observed_at||'');
+      if(proof?.ok===true&&proof.method==='authenticated_ui'&&proof.task_id===taskId
+        &&proof.account_id===(rhJson as any).cancelUIAccountId
+        &&/^\d{15,25}$/.test(proof.account_id||'')
+        &&Number.isFinite(observed)&&observed>=Date.parse(uiCheckedAt)&&observed<=Date.now()+5000
+        &&['SUCCESS','FAILED','CANCEL'].includes(proof.status)){
+        providerState=proof.status;
+        uiProof={method:proof.method,task_id:taskId,account_id:proof.account_id,status:proof.status,observed_at:proof.observed_at};
+      }
+    }
     const finished=!!providerState&&["SUCCESS","FAILED","CANCEL","CANCELLED","CANCELED"].includes(providerState);
     const checkedAt=new Date().toISOString();
     const {data:updated,error:checkError}=await admin.from("production_jobs").update({
@@ -277,9 +299,12 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
       meta:{...meta,genjutsu_cancel_phase:"AUTO_CANCEL_DISABLED",
         provider_auto_cancel_enabled:false,provider_task_pending:!finished,
         ...(finished?{provider_terminal_status:providerState}:{}),
+        ...(uiCheckedAt?{provider_passive_ui_checked_at:uiCheckedAt}:{}),
+        ...(uiProof?{provider_terminal_ui_proof:uiProof,provider_status_source:'authenticated_ui',provider_status:providerState,provider_status_error:null}:{}),
         provider_last_status_checked_at:checkedAt},
       updated_at:checkedAt
     }).eq("id",job.id).eq("runninghub_task_id",taskId)
+      .eq("updated_at",job.updated_at).is("locked_by",null)
       .in("status",["queued","running"]).select("id").maybeSingle();
     if(checkError)throw checkError;
     if(finished&&updated)await admin.rpc("wake_genjutsu_queue");
@@ -393,7 +418,13 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
       // The exact authenticated UI row can confirm CANCEL in that case. A known
       // active native state or SUCCESS still blocks contradictory UI evidence.
       const uiCancelWithoutNative=!nativeTerminal&&!nativeActive&&uiTerminal&&uiProof.confirmed===true&&uiProof.status==='CANCEL';
-      const terminal=nativeTerminal||uiCancelWithoutNative;
+      // An explicitly stopped GENJUTSU 0 task may already have ended naturally.
+      // A fresh exact UI terminal row suffices, without claiming cancellation.
+      const uiObserved=Date.parse(uiProof?.observed_at||'');
+      const zeroFinishedWithoutNative=isGenjutsuZeroJob(job)&&explicitStop&&!nativeTerminal&&!nativeActive&&uiTerminal
+        &&['SUCCESS','FAILED'].includes(uiProof.status)&&Number.isFinite(uiObserved)
+        &&uiObserved>=Date.parse(began)&&uiObserved<=Date.now()+5000;
+      const terminal=nativeTerminal||uiCancelWithoutNative||zeroFinishedWithoutNative;
       const finishedAt=new Date().toISOString();
       const nativeStatus=nativeTerminal?String(state.data).toUpperCase():null;
       const providerStatus=uiTerminal&&nativeStatus!=='SUCCESS'?uiProof.status:nativeStatus;
@@ -401,7 +432,7 @@ async function cancelMotionAfterSave(admin:any,jobId:string,rhJson:(path:string,
       const cancelConfirmed=terminal&&(uiCancelWithoutNative||["CANCEL","CANCELLED","CANCELED"].includes(nativeStatus||'')||
         (nativeTerminal&&uiTerminal&&uiProof.confirmed===true&&uiProof.status==='CANCEL'&&nativeStatus!=='SUCCESS'));
       const cancelDenied=Number(responseCode)===817;
-      if(!cancelConfirmed){
+      if(!cancelConfirmed&&!(isGenjutsuZeroJob(job)&&terminal)){
         // Fail closed: halt NEW GENJUTSU dispatches without disabling existing task monitoring.
         try{
           const {data:queueCfg,error:queueReadError}=await admin.from("app_settings").select("value").eq("key","genjutsu_queue_config").maybeSingle();
