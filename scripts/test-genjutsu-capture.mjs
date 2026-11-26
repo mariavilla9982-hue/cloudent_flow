@@ -11,6 +11,7 @@ const originalDigest=await motionBlobDigest(blob,64);
 function harness(options={}){
   let row={id:'job',user_id:'owner',status:'running',storage_provider:'r2',runninghub_task_id:'task',result_video_id:'job',result_storage_path:'owner/production-results/job.mp4',
     meta:{workflow_key:'genjutsu',workflow_id:'2117411301344411649',motion_preview_available:true,motion_preview_saved_at:new Date(Date.now()-1000).toISOString(),result_node_id:options.wrongNode?'384':'482',motion_preview_file:{task_id:options.wrongTask?'other':'task',node_id:'482'}}};
+  if(options.zero)row.meta.workflow_id='2124648844280733698';
   if(options.priorMeta)Object.assign(row.meta,options.priorMeta);
   const events=[],writes=[];let status=0,cancels=0;
   const queue={paused:false,prompt_concurrency:1};
@@ -27,8 +28,8 @@ function harness(options={}){
     if(path.endsWith('cancel')){cancels++;assert.equal(row.meta.provider_cancel_audit.at(-1).outcome,'sending');if(options.httpDenied)throw Object.assign(Error('APIKEY_TASK_CANCEL_NOT_ALLOWED'),{httpStatus:500,providerCode:817});if(options.sessionExpired)throw Object.assign(Error('session expired'),{httpStatus:401});if(options.cancelResponse)return options.cancelResponse;if(options.cancelError||options.cancelTransient&&cancels===1)throw Error('network unavailable');if(options.cancelRejected)return {code:503,msg:'rejected'};return {code:0,msg:'success'};}
     if(options.statusError)throw Error('provider unreachable');if(options.nativeMissing)return {code:807};return {code:0,data:options.nativeStatus|| (options.naturalSuccess?'SUCCESS':++status===1||options.keepRunning?'RUNNING':'CANCELLED')};
   };
-  if(options.uiResponse){rhJson.cancelUIAccountId='2093283289942581250';rhJson.cancelUI=async payload=>{assert.equal(payload.task_id,'task');assert(payload.lease.startsWith('genjutsu-provider-stop-'));events.push('/ui/cancel');return {method:'authenticated_ui',account_id:'2093283289942581250',...options.uiResponse};};}
-  if(options.passiveResponse)rhJson.prepareUI=async payload=>{assert.equal(payload.task_id,'task');events.push('/ui/passive');return {method:'authenticated_ui',account_id:'2093283289942581250',...options.passiveResponse};};
+  if(options.uiResponse){rhJson.cancelUIAccountId='2093283289942581250';rhJson.cancelUI=async payload=>{assert.equal(payload.task_id,'task');assert(payload.lease.startsWith('genjutsu-provider-stop-'));events.push('/ui/cancel');return {method:'authenticated_ui',account_id:'2093283289942581250',observed_at:new Date().toISOString(),...options.uiResponse};};}
+  if(options.passiveResponse){rhJson.cancelUIAccountId='2093283289942581250';rhJson.prepareUI=async payload=>{assert.equal(payload.task_id,'task');events.push('/ui/passive');return {method:'authenticated_ui',account_id:'2093283289942581250',observed_at:new Date().toISOString(),...options.passiveResponse};};}
   return {c,admin,rhJson,events,writes,queue,get row(){return row;}};
 }
 const h=harness();assert.equal(h.c.isMotionPreviewJob(h.row),true);assert.equal(h.c.motionOutputNode(h.row),'482');
@@ -113,6 +114,49 @@ console.log('PASS UI bridge proof binding, authoritative CANCEL, conflicting SUC
 const reconciled=harness({uiResponse:{ok:true,task_id:'task',accepted:true,status:'UNKNOWN'},passiveResponse:{ok:true,task_id:'task',confirmed:true,status:'CANCEL'},priorMeta:{provider_cancel_accepted:true,provider_cancel_attempts:1},nativeMissing:true});
 await reconciled.c.cancelMotionAfterSave(reconciled.admin,'job',reconciled.rhJson);assert.equal(reconciled.row.meta.provider_cancel_confirmed,true);assert.equal(reconciled.events.filter(x=>x==='/ui/passive').length,1);assert(!reconciled.events.includes('/ui/cancel'));
 console.log('PASS OpenAPI807 plus exact UI CANCEL confirms stop; foreign account/unknown/active conflicts rejected; restart reconciles without a second click');
+
+for(const status of ['SUCCESS','FAILED','CANCEL']){
+  const z=harness({zero:true,nativeMissing:true,passiveResponse:{ok:true,task_id:'task',status}});
+  assert.equal(await z.c.cancelMotionAfterSave(z.admin,'job',z.rhJson),true);
+  assert.equal(z.row.status,'ready');assert.equal(z.row.meta.provider_task_pending,false);
+  assert.equal(z.row.meta.provider_terminal_ui_proof.status,status);
+  assert(!z.events.some(x=>x.endsWith('/cancel')));assert.equal(z.row.result_video_id,'job');
+  assert.equal(z.row.meta.provider_auto_cancel_enabled,false);
+}
+for(const passiveResponse of [
+  {ok:true,task_id:'task',status:'RUNNING'},
+  {ok:true,task_id:'other',status:'SUCCESS'},
+  {ok:true,task_id:'task',account_id:'1234567890123456789',status:'SUCCESS'},
+  {ok:true,task_id:'task',status:'SUCCESS',observed_at:'2026-01-01T00:00:00Z'},
+  {ok:true,task_id:'task',status:'SUCCESS',method:'untrusted'},
+  {ok:false,error:'authentication_required'}
+]){
+  const z=harness({zero:true,nativeMissing:true,passiveResponse});
+  assert.equal(await z.c.cancelMotionAfterSave(z.admin,'job',z.rhJson),false);
+  assert.equal(z.row.status,'running');assert.equal(z.row.meta.provider_task_pending,true);
+  await z.c.cancelMotionAfterSave(z.admin,'job',z.rhJson);
+  assert.equal(z.events.filter(x=>x==='/ui/passive').length,1,'throttle passive reconciliation');
+  assert(!z.events.some(x=>x.endsWith('/cancel')));
+}
+const activeZero=harness({zero:true,nativeStatus:'RUNNING',passiveResponse:{ok:true,task_id:'task',status:'SUCCESS'}});
+assert.equal(await activeZero.c.cancelMotionAfterSave(activeZero.admin,'job',activeZero.rhJson),false);
+assert(!activeZero.events.includes('/ui/passive'));
+const explicitZero=harness({zero:true,nativeMissing:true,
+  priorMeta:{genjutsu_stop_requested_at:new Date().toISOString(),genjutsu_stop_requested_task_id:'task'},
+  uiResponse:{ok:true,task_id:'task',accepted:true,confirmed:true,status:'CANCEL'}});
+assert.equal(await explicitZero.c.cancelMotionAfterSave(explicitZero.admin,'job',explicitZero.rhJson),true);
+assert.equal(explicitZero.events.filter(x=>x==='/ui/cancel').length,1);
+assert.equal(explicitZero.row.meta.provider_cancel_confirmed,true);
+const alreadyFinished=harness({zero:true,nativeMissing:true,
+  priorMeta:{genjutsu_stop_requested_at:new Date().toISOString(),genjutsu_stop_requested_task_id:'task'},
+  uiResponse:{ok:true,task_id:'task',accepted:false,confirmed:false,status:'SUCCESS'}});
+assert.equal(await alreadyFinished.c.cancelMotionAfterSave(alreadyFinished.admin,'job',alreadyFinished.rhJson),true);
+assert.equal(alreadyFinished.row.status,'ready');assert.equal(alreadyFinished.row.meta.provider_cancel_confirmed,false);
+assert.equal(alreadyFinished.queue.paused,false);
+const foreignStop=harness({zero:true,nativeMissing:true,priorMeta:{genjutsu_stop_requested_at:new Date().toISOString(),genjutsu_stop_requested_task_id:'other'}});
+assert.equal(await foreignStop.c.cancelMotionAfterSave(foreignStop.admin,'job',foreignStop.rhJson),false);
+assert(!foreignStop.events.some(x=>x.endsWith('/cancel')));
+console.log('PASS GENJUTSU0 passive terminal recovery, freshness/account/task binding, active conflict, throttle, exact explicit stop without automatic cancel');
 
 // Exercise the actual monitor: 482 is copied in its event handler while channel auth is in memory.
 const monitor=harness();let captured=false,closed=false;monitor.row.result_video_id=null;monitor.row.meta.motion_preview_file=null;
