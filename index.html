@@ -4718,14 +4718,14 @@ function deniedPage(){document.querySelectorAll(".page").forEach(el=>el.classLis
 async function initCloud(verifiedLogin=null){
   await loadCloudConfig();
   try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
-  if(!cloudSession)return;
+  if(!cloudSession){location.replace("/api/auth-recovery?action=form");return;}
   try{
     const claims=JSON.parse(atob(String(cloudSession.access_token||"").split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
     if(claims.iss!==SUPABASE_URL+"/auth/v1")throw new Error("wrong_project");
   }catch{persistCloudSession(null);return;}
 
   if(cloudSession?.expires_at && cloudSession.expires_at*1000<Date.now()+60000){
-    await withTimeout(refreshCloudSession(),4000,"renovação da sessão").catch(()=>false);
+    location.replace("/api/auth-recovery?action=form");return;
   }
   if(!cloudSession)return;
 
@@ -4748,7 +4748,11 @@ async function initCloud(verifiedLogin=null){
       ?{ok:true,user_id:cloudSession.user?.id,role:verifiedLogin.role,workspace_id:verifiedLogin.workspace_id}
       :await authRecoveryRequest("session",{},cloudSession.access_token);
   }
-  catch(error){if([401,403].includes(error.status))persistCloudSession(null);throw error;}
+  catch(error){
+    if([401,403].includes(error.status))persistCloudSession(null);
+    location.replace?.("/api/auth-recovery?action=form");
+    throw error;
+  }
   document.body.classList.toggle("x-only",cloudAccess.role==="x_user");
   nav();
   // Access is verified. Secondary data must not hold the user at the login gate.
@@ -5446,7 +5450,7 @@ async function signOutCloud(){
   syncAuthGate();renderAll();
   localStorage.removeItem("cloudentflow-ai-history");
   // Replace the document to discard all account-bound memory and pending handlers.
-  window.location.replace(window.location.pathname);
+  window.location.replace("/api/auth-recovery?action=form&forget=1");
 }
 
 function queueResourcePath(){
