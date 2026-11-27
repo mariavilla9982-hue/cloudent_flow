@@ -28,7 +28,7 @@ export default async function handler(req,res){
       res.statusCode=200;res.setHeader("Content-Type","text/html; charset=utf-8");res.setHeader("Cache-Control","no-store, max-age=0");return res.end(html);
     }catch{return send(res,503,{ok:false,error:"shell_unavailable"});}
   }
-  if(["form","form-login"].includes(action))return nativeLogin(req,res,handler);
+  if(["form","form-login","owner-link"].includes(action))return nativeLogin(req,res,handler);
   if(!["health","login","logout","session","recover","password"].includes(action))return send(res,404,{ok:false,error:"not_found"});
   if(action==="health"&&req.method!=="GET")return send(res,405,{ok:false,error:"method_not_allowed"});
   if(action!=="health"&&req.method!=="POST")return send(res,405,{ok:false,error:"method_not_allowed"});
