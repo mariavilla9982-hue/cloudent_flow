@@ -1,7 +1,8 @@
 import { supabaseConfig } from "../lib/supabase-config.js";
-const ORIGIN="https://cloudent-flow.vercel.app";
+import { appOrigin } from "../lib/app-origins.js";
 const paths=new Set(["/x-studio","/calendar","/production","/face-swap","/settings","/dashboard","/instagram","/extraction","/metrics"]);
 export default async function handler(req,res){
+  const ORIGIN=appOrigin(req);
   res.setHeader("Cache-Control","no-store");
   const path=String(new URL(req.url,"https://cloudent.invalid").searchParams.get("path")||"");
   if(!paths.has("/"+path)){res.statusCode=404;return res.end();}
