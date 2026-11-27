@@ -6,6 +6,7 @@ const tests=[
   "scripts/test-account-summary.mjs",
   "scripts/test-admin-panel.cjs",
   "scripts/test-auth-recovery.cjs",
+  "scripts/test-login-initialization.cjs",
   "scripts/test-calendar-cover-retries.mjs",
   "scripts/test-calendar-interaction.cjs",
   "scripts/test-calendar-policy.cjs",

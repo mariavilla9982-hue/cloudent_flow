@@ -4630,7 +4630,7 @@ function toggleLoginPassword(){
 async function authRequest(path,options={}){
   if(!SUPABASE_URL||!SUPABASE_KEY)throw new Error("Configuração de acesso indisponível. Tente novamente em instantes.");
   const headers={"apikey":SUPABASE_KEY,"Content-Type":"application/json",...(options.headers||{})};
-  const res=await fetch(SUPABASE_URL+"/auth/v1"+path,{...options,headers});
+  const res=await fetch(SUPABASE_URL+"/auth/v1"+path,{...options,headers,signal:AbortSignal.timeout(15000)});
   let data=null;try{data=await res.json()}catch{}
   if(!res.ok)throw new Error(data?.msg||data?.message||data?.error_description||data?.error||("Erro "+res.status));
   return data;
@@ -4703,9 +4703,13 @@ async function initCloud(){
   if(!cloudSession)return;
 
   try{cloudAccess=await authRecoveryRequest("session",{},cloudSession.access_token)}
-  catch(error){persistCloudSession(null);throw error;}
+  catch(error){if([401,403].includes(error.status))persistCloudSession(null);throw error;}
   document.body.classList.toggle("x-only",cloudAccess.role==="x_user");
   nav();
+  // Access is verified. Secondary data must not hold the user at the login gate.
+  syncAuthGate();
+  setLoginBusy(false);
+  setLoginMessage("");
   if(cloudAccess.role==="x_user"){
     backendOnline=true;currentPage="xStudio";
     history.replaceState(null,"","/x-studio");await loadXPostingStatus();showPage("xStudio");return;
@@ -4715,7 +4719,7 @@ async function initCloud(){
   await withTimeout(testBackend(),12000,"conexão com servidor").catch(()=>{backendOnline=false});
   if(!backendOnline)return;
 
-  await withTimeout(loadPlatformAccounts(),4500,"contas");
+  await withTimeout(loadPlatformAccounts(),4500,"contas").catch(error=>console.warn("Accounts unavailable during boot:",error));
   await Promise.allSettled([
     withTimeout(syncFromBackend(),4500,"calendário"),
     withTimeout(loadDashboardScheduleRows(),6500,"histórico do dashboard"),
@@ -5336,12 +5340,23 @@ async function signUpCloud(){
   }catch(e){toast(friendlyCloudentError(e.message),"err")}
 }
 async function authRecoveryRequest(action,body={},token=""){
+  const controller=new AbortController();
+  const deadline=setTimeout(()=>controller.abort(),20000);
+  try{
   const res=await fetch("/api/auth-recovery?action="+encodeURIComponent(action),{
-    method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify(body),cache:"no-store"
+    method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify(body),cache:"no-store",signal:controller.signal
   });
   const data=await res.json().catch(()=>({}));
-  if(!res.ok)throw new Error(data.error==="invalid_credentials"?"Email ou senha incorretos. Se ainda não definiu a senha no novo acesso, use Recuperar acesso.":data.error==="forbidden"?"Sua conta não tem acesso ativo ao workspace.":data.error==="invalid_session"?"Sua sessão expirou. Entre novamente.":"Não foi possível validar seu acesso. Tente novamente em instantes.");
+  if(!res.ok){
+    const error=new Error(data.error==="invalid_credentials"?"Email ou senha incorretos. Se ainda não definiu a senha no novo acesso, use Recuperar acesso.":data.error==="forbidden"?"Sua conta não tem acesso ativo ao workspace.":data.error==="invalid_session"?"Sua sessão expirou. Entre novamente.":res.status===429?"Muitas tentativas. Aguarde um pouco antes de entrar novamente.":"Não foi possível validar seu acesso. Tente novamente em instantes.");
+    error.status=res.status;throw error;
+  }
+  if(!data?.ok||(action==="login"&&!data.session?.access_token)||(action==="session"&&!["admin","x_user"].includes(data.role)))throw new Error("Resposta de acesso inválida. Tente novamente.");
   return data;
+  }catch(error){
+    if(controller.signal.aborted)throw new Error("A conexão de acesso demorou demais. Clique em entrar para tentar novamente.");
+    throw error;
+  }finally{clearTimeout(deadline);}
 }
 async function signInCloud(){
   const email=$("#loginEmail")?.value?.trim()||$("#authEmail")?.value?.trim(),password=$("#loginPassword")?.value||$("#authPassword")?.value||"";
@@ -5360,10 +5375,11 @@ async function signInCloud(){
     await xPostingRequest("audit-session",{event:"login"}).catch(()=>{});
     setLoginMessage("");
   }catch(e){
-    persistCloudSession(null);
+    if(!cloudAccess||[401,403].includes(e.status))persistCloudSession(null);
     syncAuthGate();
     setLoginMessage(e?.message||"Não foi possível entrar.","error");
   }finally{
+    cloudLoading=false;
     setLoginBusy(false);
   }
 }
