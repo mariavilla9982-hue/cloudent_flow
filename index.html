@@ -4355,7 +4355,7 @@ body.trial-modal-open{overflow:hidden!important}
       </div>
     </section>
     <section class="login-panel">
-      <form class="login-card" onsubmit="event.preventDefault();signInCloud()">
+      <form class="login-card" method="post" action="/api/login" onsubmit="setLoginBusy(true);setLoginMessage('Validando sua conta…')">
         <div class="login-card-top">
           <span>ACESSO CLOUDENTFLOW</span>
           <h2>Bem-vindo de volta</h2>
@@ -4364,11 +4364,11 @@ body.trial-modal-open{overflow:hidden!important}
         <div class="login-form">
           <div class="login-field">
             <label for="loginEmail">Email</label>
-            <div class="login-input-wrap"><input id="loginEmail" type="email" inputmode="email" autocomplete="email" placeholder="seu@email.com" required></div>
+            <div class="login-input-wrap"><input id="loginEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="seu@email.com" required></div>
           </div>
           <div class="login-field">
             <label for="loginPassword">Senha</label>
-            <div class="login-input-wrap password"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" required><button class="login-eye" type="button" onclick="toggleLoginPassword()" aria-label="Mostrar ou ocultar senha">◉</button></div>
+            <div class="login-input-wrap password"><input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required><button class="login-eye" type="button" onclick="toggleLoginPassword()" aria-label="Mostrar ou ocultar senha">◉</button></div>
           </div>
           <div id="loginMessage" class="login-message" aria-live="polite"></div>
           <button id="loginSubmitBtn" class="login-submit" type="submit">Entrar no CloudentFlow</button>
@@ -4518,6 +4518,7 @@ async function loadCloudConfig(){
   IG_FOLLOWERS_STATUS_URL=SUPABASE_URL+"/functions/v1/instagram-followers-status";
   IG_PUBLISH_TEST_URL=SUPABASE_URL+"/functions/v1/instagram-publish-test";
   X_OAUTH_URL=SUPABASE_URL+"/functions/v1/cloudent-x-oauth";
+  X_POSTING_URL=SUPABASE_URL+"/functions/v1/cloudent-x-publish-worker";
 }
 const pageSubtitles={
   accounts:"Gerencie conexões e calendários do Instagram.",
@@ -4743,6 +4744,10 @@ async function initCloud(verifiedLogin=null){
   syncAuthGate();
   setLoginBusy(false);
   setLoginMessage("");
+  if(localStorage.getItem("cloudentflow-login-audit-pending")==="1"){
+    localStorage.removeItem("cloudentflow-login-audit-pending");
+    Promise.resolve().then(()=>xPostingRequest("audit-session",{event:"login"})).catch(()=>{});
+  }
   if(cloudAccess.role==="x_user"){
     backendOnline=true;currentPage="xStudio";
     history.replaceState(null,"","/x-studio");await loadXPostingStatus();showPage("xStudio");return;
@@ -11495,7 +11500,7 @@ function platformStudioPage(platform){
     </div>`;
 }
 
-const X_POSTING_URL=SUPABASE_URL+"/functions/v1/cloudent-x-publish-worker";
+let X_POSTING_URL=SUPABASE_URL+"/functions/v1/cloudent-x-publish-worker";
 let xPostingData=null,xPostingError="",xPostingBusy=false,xPostingLoading=false,xPostingDraft={caption:"",interval:120,start:""},xPostingLoaded=false;
 let xPostingFile=null,xPostingPoll=null,xPostingReload=false;
 let xSelectedAccountId="",xAccountList=[],xAccountGeneration=0,xPostingFiles=[],xTargetAccounts=[],xBatchDrafts=[];
