@@ -14,5 +14,9 @@ function harness(fetch){let timer,cleared=0;const c=vm.createContext({fetch,Abor
  for(const name of ['syncFromBackend','loadDashboardScheduleRows','loadStorageBackendStatus','loadInstagramStatus','loadInstagramWebSessionStatus','loadAutomationStatus','loadFollowerStats','loadTrialReels','loadXPostingStatus','loadXIntegrationConfig','loadNotifications'])c[name]=async()=>events.push('data');
  vm.runInContext(extract('initCloud'),c);await c.initCloud();assert.equal(events[0],'gate');assert(events.includes('data'));assert.equal(c.cloudSession.access_token,session.access_token);
  c.authRecoveryRequest=async()=>{const e=Error('unavailable');e.status=503;throw e};await assert.rejects(c.initCloud(),/unavailable/);assert(c.cloudSession);
+ let validations=0;c.authRecoveryRequest=async()=>{validations++;return {ok:true,role:'admin'}};
+ await c.initCloud({ok:true,session,role:'admin',workspace_id:'workspace'});assert.equal(validations,0,'exact freshly verified login skips duplicate request');
+ await c.initCloud({ok:true,session:{access_token:'different'},role:'admin',workspace_id:'workspace'});assert.equal(validations,1,'foreign token must validate');
+ await c.initCloud();assert.equal(validations,2,'reload must validate');
  console.log('PASS aborted login, credential status, invalid response, successful login, gate before secondary data, account outage and transient session failure');
 })().catch(e=>{console.error(e);process.exit(1)});

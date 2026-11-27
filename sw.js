@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v120";
+const CACHE="cloudentflow-pwa-v121";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -121,14 +121,23 @@ async function handleNavigation(event){
       let response=null;
       try{response=await event.preloadResponse}catch{}
       if(!response)response=await fetch(request,{cache:"no-store"});
-      if(isCacheable(response))await cache.put(APP_SHELL,response.clone());
+      if(isCacheable(response))event.waitUntil(cache.put(APP_SHELL,response.clone()).catch(()=>{}));
       return response;
     }catch{
       return null;
     }
   })();
 
-  const response=(await networkPromise)||cached||Response.error();
+  // Keep checking the network, but a slow connection must not hide a cached shell.
+  let timer;
+  let response;
+  if(cached){
+    event.waitUntil(networkPromise);
+    try{
+      response=await Promise.race([networkPromise,new Promise(resolve=>{timer=setTimeout(()=>resolve(cached),2500);})]);
+    }finally{clearTimeout(timer);}
+  }else response=await networkPromise;
+  response=response||cached||Response.error();
   return injectCalendarPatch(response);
 }
 
