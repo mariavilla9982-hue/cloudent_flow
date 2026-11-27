@@ -9,6 +9,7 @@ const tests=[
   "scripts/test-login-initialization.cjs",
   "scripts/test-navigation-latency.cjs",
   "scripts/test-startup-config.cjs",
+  "scripts/test-native-login.mjs",
   "scripts/test-calendar-cover-retries.mjs",
   "scripts/test-calendar-interaction.cjs",
   "scripts/test-calendar-policy.cjs",
