@@ -4729,6 +4729,17 @@ async function initCloud(verifiedLogin=null){
   }
   if(!cloudSession)return;
 
+  // Consume the just-verified native login once, like the SPA login response.
+  // Later reloads still revalidate; APIs always enforce their own authorization.
+  if(!verifiedLogin){
+    try{
+      const receipt=JSON.parse(sessionStorage.getItem("cloudentflow-native-login")||"null");
+      sessionStorage.removeItem("cloudentflow-native-login");
+      const age=Date.now()-Number(receipt?.issued_at);
+      if(receipt&&age>=0&&age<=60000)verifiedLogin=receipt;
+    }catch{}
+  }
+
   try{
     // Login already checked the live Auth session and workspace membership.
     // Reuse only the exact token returned by that request; reloads still validate.

@@ -18,5 +18,8 @@ function harness(fetch){let timer,cleared=0;const c=vm.createContext({fetch,Abor
  await c.initCloud({ok:true,session,role:'admin',workspace_id:'workspace'});assert.equal(validations,0,'exact freshly verified login skips duplicate request');
  await c.initCloud({ok:true,session:{access_token:'different'},role:'admin',workspace_id:'workspace'});assert.equal(validations,1,'foreign token must validate');
  await c.initCloud();assert.equal(validations,2,'reload must validate');
+ let receipt={ok:true,session,role:'admin',workspace_id:'workspace',issued_at:Date.now()};c.sessionStorage={getItem:()=>receipt?JSON.stringify(receipt):null,removeItem:()=>receipt=null};await c.initCloud();assert.equal(validations,2,'fresh native handoff reuses server verification');assert.equal(receipt,null);await c.initCloud();assert.equal(validations,3,'handoff is consumed once');
+ receipt={ok:true,session,role:'admin',workspace_id:'workspace',issued_at:Date.now()-61000};await c.initCloud();assert.equal(validations,4,'expired handoff must validate');
+ receipt={ok:true,session:{access_token:'foreign'},role:'admin',workspace_id:'workspace',issued_at:Date.now()};await c.initCloud();assert.equal(validations,5,'foreign native token must validate');
  console.log('PASS aborted login, credential status, invalid response, successful login, gate before secondary data, account outage and transient session failure');
 })().catch(e=>{console.error(e);process.exit(1)});

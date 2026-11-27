@@ -16,6 +16,17 @@ export default async function handler(req,res){
   }
 
   const action=String(new URL(req.url||"/","https://cloudent.invalid").searchParams.get("action")||"").trim();
+  if(action==="app"){
+    if(req.method!=="GET")return send(res,405,{ok:false,error:"method_not_allowed"});
+    try{
+      // Public shell only, just like /. API paths bypass stale PWA navigation caches.
+      // All account data still goes through authenticated backend endpoints.
+      const shell=await fetch("https://cloudent-flow.vercel.app/index.html",{cache:"no-store",signal:AbortSignal.timeout(10000)});
+      if(!shell.ok)throw new Error("shell_unavailable");
+      const html=(await shell.text()).replace("<head>",'<head><script>history.replaceState(null,"","/");</script>');
+      res.statusCode=200;res.setHeader("Content-Type","text/html; charset=utf-8");res.setHeader("Cache-Control","no-store, max-age=0");return res.end(html);
+    }catch{return send(res,503,{ok:false,error:"shell_unavailable"});}
+  }
   if(["form","form-login"].includes(action))return nativeLogin(req,res,handler);
   if(!["health","login","logout","session","recover","password"].includes(action))return send(res,404,{ok:false,error:"not_found"});
   if(action==="health"&&req.method!=="GET")return send(res,405,{ok:false,error:"method_not_allowed"});
