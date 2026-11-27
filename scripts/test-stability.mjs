@@ -8,6 +8,7 @@ const tests=[
   "scripts/test-auth-recovery.cjs",
   "scripts/test-login-initialization.cjs",
   "scripts/test-navigation-latency.cjs",
+  "scripts/test-startup-config.cjs",
   "scripts/test-calendar-cover-retries.mjs",
   "scripts/test-calendar-interaction.cjs",
   "scripts/test-calendar-policy.cjs",
