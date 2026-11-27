@@ -4689,7 +4689,7 @@ function responseErrorMessage(data,status){
 let cloudAccess=null;
 function canAccessPage(id){return cloudAccess?.role==="admin"||(cloudAccess?.role==="x_user"&&id==="xStudio");}
 function deniedPage(){document.querySelectorAll(".page").forEach(el=>el.classList.add("hidden"));let el=document.getElementById("accessDenied");if(!el){el=document.createElement("section");el.id="accessDenied";el.className="card";document.getElementById("xStudio").parentElement.appendChild(el);}el.hidden=false;el.innerHTML=`<h2>Acesso negado</h2><p>Você não tem permissão para acessar esta área.</p><button class="btn" onclick="document.getElementById('accessDenied').hidden=true;showPage('xStudio')">Abrir X Studio</button>`;}
-async function initCloud(){
+async function initCloud(verifiedLogin=null){
   try{cloudSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch{cloudSession=null}
   if(!cloudSession)return;
   try{
@@ -4702,7 +4702,14 @@ async function initCloud(){
   }
   if(!cloudSession)return;
 
-  try{cloudAccess=await authRecoveryRequest("session",{},cloudSession.access_token)}
+  try{
+    // Login already checked the live Auth session and workspace membership.
+    // Reuse only the exact token returned by that request; reloads still validate.
+    cloudAccess=verifiedLogin?.session?.access_token===cloudSession.access_token
+      &&verifiedLogin.ok===true&&["admin","x_user"].includes(verifiedLogin.role)&&verifiedLogin.workspace_id
+      ?{ok:true,user_id:cloudSession.user?.id,role:verifiedLogin.role,workspace_id:verifiedLogin.workspace_id}
+      :await authRecoveryRequest("session",{},cloudSession.access_token);
+  }
   catch(error){if([401,403].includes(error.status))persistCloudSession(null);throw error;}
   document.body.classList.toggle("x-only",cloudAccess.role==="x_user");
   nav();
@@ -5367,7 +5374,7 @@ async function signInCloud(){
     const r=await authRecoveryRequest("login",{email,password});
     persistCloudSession(r.session);
     cloudLoading=true;
-    await initCloud();
+    await initCloud(r);
     cloudLoading=false;
     syncAuthGate();
     renderAll();
