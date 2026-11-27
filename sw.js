@@ -1,4 +1,4 @@
-const CACHE="cloudentflow-pwa-v121";
+const CACHE="cloudentflow-pwa-v122";
 const APP_SHELL="/";
 const STATIC=[APP_SHELL,"/manifest.webmanifest","/cloudent-icon.svg","/cloudent-notification-icon.svg"];
 
@@ -14,7 +14,12 @@ async function injectCalendarPatch(response){
     let html=await response.text();
     html=html.replace(/const SUPABASE_URL\s*=\s*["']https:\/\/[^"']+\.supabase\.co["'];/, 'const SUPABASE_URL=window.CloudentConfig?.supabaseUrl||"";')
       .replace(/const SUPABASE_KEY\s*=\s*["'][^"']+["'];/, 'const SUPABASE_KEY=window.CloudentConfig?.publishableKey||"";');
-    if(!html.includes('src="/api/auth-config"'))html=html.replace('<head>','<head><script src="/api/auth-config"></script>');
+    // Older cached SPAs read configuration synchronously; keep their ordering.
+    const configTag=html.includes('async function loadCloudConfig()')
+      ?'<script id="cloudentAuthConfig" src="/api/auth-config" defer></script>'
+      :'<script src="/api/auth-config"></script>';
+    if(html.includes('src="/api/auth-config"'))html=html.replace(/<script\b[^>]*src=["']\/api\/auth-config["'][^>]*><\/script>/i,configTag);
+    else html=html.replace('<head>','<head>'+configTag);
     // Native and cached documents use the same dashboard, after the inline SPA.
     const dashboardTag='<script src="/runninghub-points.js?v=2"></script><script data-cloudent-runtime="dashboard-multi-account" src="/dashboard-multi-account-patch.js?v=8"></script>';
     html=html.replace(/<script\b[^>]*src=["'][^"']*runninghub-points\.js[^"']*["'][^>]*><\/script>/gi,'');
